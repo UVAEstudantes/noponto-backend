@@ -1,5 +1,6 @@
 using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
+using NoPonto.Application.Services;
 
 Env.Load();
 
@@ -14,6 +15,29 @@ static string GetEnv(string key)
 }
 
 var builder = WebApplication.CreateBuilder(args);
+
+var corsOrigins = builder.Configuration.GetSection("CORS:ORIGINS").Get<string[]>() ?? [];
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CorsPadrao", policy =>
+    {
+        if (corsOrigins.Length > 0)
+        {
+            policy
+                .WithOrigins(corsOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+
+            return;
+        }
+
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 
 var connectionString =
     $"Host=localhost;" +
@@ -37,7 +61,12 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.Configuration = redisConnection;
 });
 
+builder.Services.AddHttpClient<ArcGisClientService>();
+builder.Services.AddHostedService<ImportacaoItinerariosService>();
+
 var app = builder.Build();
+
+app.UseCors("CorsPadrao");
 
 app.MapGet("/", () => "Hello World!");
 

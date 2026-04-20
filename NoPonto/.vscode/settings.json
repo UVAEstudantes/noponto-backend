@@ -1,11 +1,15 @@
 {
     "cSpell.words": [
+        "ARCGIS",
         "Codigo",
+        "direcao",
         "Direcao",
+        "extensao",
         "Itinerario",
         "Itinerarios",
         "Localizacao",
         "Npgsql",
+        "Padrao",
         "Posicao",
         "Posicoes",
         "postgis",
