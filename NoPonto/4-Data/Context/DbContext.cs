@@ -29,10 +29,14 @@ public class TransporteDbContext : DbContext
             .Property(x => x.Geometria)
             .HasColumnType("geometry(LineString,4326)");
 
+        modelBuilder.Entity<Itinerario>()
+            .HasIndex(x => x.Geometria)
+            .HasMethod("GIST");
+
         modelBuilder.Entity<PosicaoVeiculo>()
             .Property(x => x.Localizacao)
             .HasColumnType("geometry(Point,4326)");
-            
+
         modelBuilder.Entity<Parada>()
             .Property(x => x.Localizacao)
             .HasColumnType("geometry(Point,4326)");
@@ -48,5 +52,14 @@ public class TransporteDbContext : DbContext
         modelBuilder.Entity<Poi>()
             .HasIndex(x => x.Localizacao)
             .HasMethod("GIST");
+
+        modelBuilder.Entity<ParadaItinerario>()
+            .HasIndex(x => x.ItinerarioId);
+
+        modelBuilder.Entity<ParadaItinerario>()
+            .HasIndex(x => x.ParadaId);
+
+        modelBuilder.Entity<ParadaItinerario>()
+            .HasIndex(x => new { x.ItinerarioId, x.Ordem });
     }
 }

@@ -16,6 +16,8 @@ static string GetEnv(string key)
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddControllers();
+
 var corsOrigins = builder.Configuration.GetSection("CORS:ORIGINS").Get<string[]>() ?? [];
 
 builder.Services.AddCors(options =>
@@ -63,11 +65,15 @@ builder.Services.AddStackExchangeRedisCache(options =>
 
 builder.Services.AddHttpClient<ArcGisClientService>();
 builder.Services.AddScoped<ImportacaoParadasService>();
+builder.Services.AddScoped<RelacionarParadasItinerariosService>();
+builder.Services.AddScoped<RelacionarParadasJob>();
 builder.Services.AddHostedService<ImportacaoItinerariosService>();
 
 var app = builder.Build();
 
 app.UseCors("CorsPadrao");
+
+app.MapControllers();
 
 app.MapGet("/", () => "Hello World!");
 
