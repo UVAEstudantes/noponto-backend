@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -40,13 +41,8 @@ public sealed class ImportacaoParadasService
 
         try
         {
-            var urlImportacao = MontarUrlImportacaoParadas();
             var tamanhoLote = LerTamanhoLoteParadas();
-
-            var colecao = await BuscarParadasGeoJsonAsync(urlImportacao, cancellationToken);
-            var features = colecao.Features;
-
-            _logger.LogInformation("Total de paradas recebidas: {total}", features.Count);
+            var tamanhoPagina = LerTamanhoPaginaParadas();
 
             var codigosExistentes = await _contexto.Paradas
                 .AsNoTracking()
@@ -54,20 +50,35 @@ public sealed class ImportacaoParadasService
                 .ToListAsync(cancellationToken);
 
             var codigosConhecidos = new HashSet<string>(codigosExistentes, StringComparer.OrdinalIgnoreCase);
-            var paradasNovas = new List<Parada>();
 
-            foreach (var feature in features)
+            var pagina = 1;
+            var offset = 0;
+            var totalParadasInseridas = 0;
+
+            while (true)
             {
-                if (!TentarConverterParaParada(feature, out var parada))
-                    continue;
+                cancellationToken.ThrowIfCancellationRequested();
 
-                if (!codigosConhecidos.Add(parada.Codigo))
-                    continue;
+                _logger.LogInformation("Buscando página {pagina} com offset {offset}", pagina, offset);
 
-                paradasNovas.Add(parada);
+                var urlImportacao = MontarUrlParadas(offset);
+                var colecao = await BuscarParadasGeoJsonAsync(urlImportacao, cancellationToken);
+                var features = colecao.Features;
+
+                _logger.LogInformation("Registros recebidos nesta página: {quantidade}", features.Count);
+
+                if (features.Count == 0)
+                    break;
+
+                var paradasNovas = ConverterParadasDaPagina(features, codigosConhecidos);
+                var inseridasNaPagina = await InserirParadasEmLotesAsync(paradasNovas, tamanhoLote, cancellationToken);
+
+                totalParadasInseridas += inseridasNaPagina;
+                offset += tamanhoPagina;
+                pagina++;
             }
 
-            await InserirParadasEmLotesAsync(paradasNovas, tamanhoLote, cancellationToken);
+            _logger.LogInformation("Total de paradas inseridas: {total}", totalParadasInseridas);
 
             _logger.LogInformation("Importação de paradas finalizada.");
         }
@@ -95,40 +106,54 @@ public sealed class ImportacaoParadasService
         return dados ?? new ParadaGeoJsonDTO();
     }
 
-    private async Task InserirParadasEmLotesAsync(
+    private async Task<int> InserirParadasEmLotesAsync(
         List<Parada> paradas,
         int tamanhoLote,
         CancellationToken cancellationToken)
     {
         if (paradas.Count == 0)
         {
-            _logger.LogInformation("Nenhuma parada nova para inserir.");
-            return;
+            return 0;
         }
 
-        var totalLotes = (int)Math.Ceiling((double)paradas.Count / tamanhoLote);
+        var totalInseridas = 0;
 
         for (var indice = 0; indice < paradas.Count; indice += tamanhoLote)
         {
-            var numeroLote = (indice / tamanhoLote) + 1;
             var lote = paradas
                 .Skip(indice)
                 .Take(tamanhoLote)
                 .ToList();
 
-            _logger.LogInformation("Inserindo lote {numero}", numeroLote);
-
             _contexto.Paradas.AddRange(lote);
             await _contexto.SaveChangesAsync(cancellationToken);
             _contexto.ChangeTracker.Clear();
+            totalInseridas += lote.Count;
 
-            _logger.LogInformation(
-                "Lote {numero} inserido com sucesso. Quantidade: {quantidade}",
-                numeroLote,
-                lote.Count);
+            _logger.LogInformation("Lote inserido: {quantidade}", lote.Count);
         }
 
-        _logger.LogInformation("Total de paradas inseridas: {total}", paradas.Count);
+        return totalInseridas;
+    }
+
+    private List<Parada> ConverterParadasDaPagina(
+        IReadOnlyList<ParadaFeatureGeoJsonDTO> features,
+        HashSet<string> codigosConhecidos)
+    {
+        var paradasNovas = new List<Parada>();
+
+        foreach (var feature in features)
+        {
+            if (!TentarConverterParaParada(feature, out var parada))
+                continue;
+
+            if (!codigosConhecidos.Add(parada.Codigo))
+                continue;
+
+            paradasNovas.Add(parada);
+        }
+
+        return paradasNovas;
     }
 
     private bool TentarConverterParaParada(ParadaFeatureGeoJsonDTO feature, out Parada parada)
@@ -168,36 +193,64 @@ public sealed class ImportacaoParadasService
 
     private int LerTamanhoLoteParadas()
     {
-        var valorConfigurado = _configuration["IMPORTACAO_PARADAS_LOTE"];
+        var valorConfigurado = _configuration["IMPORT:BATCH_SIZE"];
 
         if (int.TryParse(valorConfigurado, out var valor) && valor > 0)
             return valor;
 
-        return 1000;
+        throw new InvalidOperationException("Variável IMPORT__BATCH_SIZE não configurada ou inválida.");
     }
 
-    private string MontarUrlImportacaoParadas()
+    private int LerTamanhoPaginaParadas()
     {
-        var urlImportacaoParadas = _configuration["IMPORTACAO_PARADAS_URL"];
+        var valorConfigurado = _configuration["ARCGIS:PARADAS:PAGE_SIZE"];
 
-        if (!string.IsNullOrWhiteSpace(urlImportacaoParadas))
-            return urlImportacaoParadas.Trim().Trim('"');
+        if (int.TryParse(valorConfigurado, out var valor) && valor > 0)
+            return valor;
 
+        throw new InvalidOperationException("Variável ARCGIS__PARADAS__PAGE_SIZE não configurada ou inválida.");
+    }
+
+    private string MontarUrlParadas(int offset)
+    {
         var baseUrlParadas = _configuration["ARCGIS:PARADAS:BASE_URL"];
 
         if (string.IsNullOrWhiteSpace(baseUrlParadas))
-            throw new InvalidOperationException("Variável IMPORTACAO_PARADAS_URL não configurada.");
+            throw new InvalidOperationException("Variável ARCGIS__PARADAS__BASE_URL não configurada.");
 
-        var where = _configuration["ARCGIS:PARADAS:WHERE"] ?? "1=1";
-        var outFields = _configuration["ARCGIS:PARADAS:OUT_FIELDS"] ?? "*";
+        var where = _configuration["ARCGIS:PARADAS:WHERE"];
+
+        if (string.IsNullOrWhiteSpace(where))
+            throw new InvalidOperationException("Variável ARCGIS__PARADAS__WHERE não configurada.");
+
+        var outFields = _configuration["ARCGIS:PARADAS:OUT_FIELDS"];
+
+        if (string.IsNullOrWhiteSpace(outFields))
+            throw new InvalidOperationException("Variável ARCGIS__PARADAS__OUT_FIELDS não configurada.");
+
+        var tamanhoPagina = LerTamanhoPaginaParadas();
         var urlBaseNormalizada = baseUrlParadas.Trim().Trim('"');
+
+        if (Uri.TryCreate(urlBaseNormalizada, UriKind.Absolute, out var uriAbsoluta))
+        {
+            urlBaseNormalizada = uriAbsoluta.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        }
+
+        var indiceInterrogacao = urlBaseNormalizada.IndexOf('?', StringComparison.Ordinal);
+
+        if (indiceInterrogacao >= 0)
+        {
+            urlBaseNormalizada = urlBaseNormalizada[..indiceInterrogacao];
+        }
 
         var parametros = new Dictionary<string, string?>
         {
             ["where"] = where,
             ["outFields"] = outFields,
+            ["returnGeometry"] = "true",
             ["f"] = "geojson",
-            ["returnGeometry"] = "true"
+            ["resultOffset"] = offset.ToString(CultureInfo.InvariantCulture),
+            ["resultRecordCount"] = tamanhoPagina.ToString(CultureInfo.InvariantCulture)
         };
 
         return QueryHelpers.AddQueryString(urlBaseNormalizada, parametros);
