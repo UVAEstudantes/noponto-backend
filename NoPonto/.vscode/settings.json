@@ -5,6 +5,7 @@
         "direcao",
         "Direcao",
         "extensao",
+        "Interrogacao",
         "Itinerario",
         "Itinerarios",
         "Localizacao",
@@ -15,6 +16,7 @@
         "postgis",
         "postgres",
         "postgresql",
+        "srid",
         "Veiculos"
     ]
 }

@@ -152,7 +152,23 @@ public sealed class ArcGisClientService
 
     private static string MontarUrlConsulta(string baseUrl)
     {
-        var url = baseUrl.Trim();
+        var url = baseUrl.Trim().Trim('"');
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uriAbsoluta))
+        {
+            url = uriAbsoluta.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        }
+        else
+        {
+            var indiceInterrogacao = url.IndexOf('?', StringComparison.Ordinal);
+
+            if (indiceInterrogacao >= 0)
+            {
+                url = url[..indiceInterrogacao];
+            }
+
+            url = url.TrimEnd('/');
+        }
 
         if (url.EndsWith("/query", StringComparison.OrdinalIgnoreCase))
             return url;
