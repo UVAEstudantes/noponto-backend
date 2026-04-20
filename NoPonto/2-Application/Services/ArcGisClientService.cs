@@ -22,13 +22,23 @@ public sealed class ArcGisClientService
         _httpClient = httpClient;
         _logger = logger;
 
-        var baseUrl = configuration["ARCGIS:BASE_URL"];
+        var baseUrl =
+            configuration["ARCGIS:ITINERARIOS:BASE_URL"]
+            ?? configuration["ARCGIS:BASE_URL"];
 
         if (string.IsNullOrWhiteSpace(baseUrl))
-            throw new InvalidOperationException("Variável de ambiente ARCGIS__BASE_URL não configurada.");
+            throw new InvalidOperationException("Variável de ambiente ARCGIS__ITINERARIOS__BASE_URL não configurada.");
 
-        _where = configuration["ARCGIS:WHERE"] ?? "tipo_rota='regular'";
-        _outFields = configuration["ARCGIS:OUT_FIELDS"] ?? "servico,destino,direcao,shape_id,consorcio,tipo_dia,extensao";
+        _where =
+            configuration["ARCGIS:ITINERARIOS:WHERE"]
+            ?? configuration["ARCGIS:WHERE"]
+            ?? "tipo_rota='regular'";
+
+        _outFields =
+            configuration["ARCGIS:ITINERARIOS:OUT_FIELDS"]
+            ?? configuration["ARCGIS:OUT_FIELDS"]
+            ?? "servico,destino,direcao,shape_id,consorcio,tipo_dia,extensao";
+
         _urlConsulta = MontarUrlConsulta(baseUrl);
     }
 

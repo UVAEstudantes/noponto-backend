@@ -44,6 +44,7 @@ public sealed class ImportacaoItinerariosService : BackgroundService
 
                 await Task.Delay(tempoEspera, stoppingToken);
                 await ExecutarImportacaoAsync(stoppingToken);
+                await ExecutarImportacaoParadasAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -75,7 +76,10 @@ public sealed class ImportacaoItinerariosService : BackgroundService
         var contexto = escopo.ServiceProvider.GetRequiredService<TransporteDbContext>();
         var arcGisClient = escopo.ServiceProvider.GetRequiredService<ArcGisClientService>();
 
-        var tamanhoPagina = LerInteiroConfiguracao("ARCGIS:PAGE_SIZE", 2000);
+        var tamanhoPagina = LerInteiroConfiguracaoComFallback(
+            "ARCGIS:ITINERARIOS:PAGE_SIZE",
+            "ARCGIS:PAGE_SIZE",
+            2000);
         var tamanhoLote = LerInteiroConfiguracao("IMPORT:BATCH_SIZE", 500);
 
         var metadados = await BuscarTodosMetadadosAsync(arcGisClient, tamanhoPagina, cancellationToken);
@@ -294,6 +298,14 @@ public sealed class ImportacaoItinerariosService : BackgroundService
             cronometro.Elapsed.TotalSeconds.ToString("F2", CultureInfo.InvariantCulture));
     }
 
+    private async Task ExecutarImportacaoParadasAsync(CancellationToken cancellationToken)
+    {
+        using var escopo = _serviceScopeFactory.CreateScope();
+        var importacaoParadasService = escopo.ServiceProvider.GetRequiredService<ImportacaoParadasService>();
+
+        await importacaoParadasService.ExecutarImportacaoAsync(cancellationToken);
+    }
+
     private async Task<int> SalvarLotesPendentesAsync(
         TransporteDbContext contexto,
         List<Modal> modaisPendentes,
@@ -411,10 +423,28 @@ public sealed class ImportacaoItinerariosService : BackgroundService
 
     private TimeSpan LerHorarioImportacao()
     {
-        var horarioConfigurado = _configuration["ARCGIS:HORARIO_IMPORTACAO"];
+        var horaImportacao = _configuration["IMPORTACAO_HORA"];
+        var minutoImportacao = _configuration["IMPORTACAO_MINUTO"];
+
+        if (int.TryParse(horaImportacao, NumberStyles.Integer, CultureInfo.InvariantCulture, out var hora)
+            && int.TryParse(minutoImportacao, NumberStyles.Integer, CultureInfo.InvariantCulture, out var minuto))
+        {
+            if (hora is < 0 or > 23)
+                throw new InvalidOperationException("Valor inválido para IMPORTACAO_HORA. Intervalo esperado: 0-23.");
+
+            if (minuto is < 0 or > 59)
+                throw new InvalidOperationException("Valor inválido para IMPORTACAO_MINUTO. Intervalo esperado: 0-59.");
+
+            return new TimeSpan(hora, minuto, 0);
+        }
+
+        var horarioConfigurado =
+            _configuration["ARCGIS:ITINERARIOS:HORARIO_IMPORTACAO"]
+            ?? _configuration["ARCGIS:HORARIO_IMPORTACAO"];
 
         if (string.IsNullOrWhiteSpace(horarioConfigurado))
-            throw new InvalidOperationException("Variável de ambiente ARCGIS__HORARIO_IMPORTACAO não configurada.");
+            throw new InvalidOperationException(
+                "Defina IMPORTACAO_HORA/IMPORTACAO_MINUTO ou ARCGIS__HORARIO_IMPORTACAO.");
 
         if (TimeSpan.TryParseExact(
                 horarioConfigurado,
@@ -443,6 +473,19 @@ public sealed class ImportacaoItinerariosService : BackgroundService
         }
 
         return valorPadrao;
+    }
+
+    private int LerInteiroConfiguracaoComFallback(string chavePrincipal, string chaveSecundaria, int valorPadrao)
+    {
+        var valorPrincipal = _configuration[chavePrincipal];
+
+        if (int.TryParse(valorPrincipal, NumberStyles.Integer, CultureInfo.InvariantCulture, out var valor)
+            && valor > 0)
+        {
+            return valor;
+        }
+
+        return LerInteiroConfiguracao(chaveSecundaria, valorPadrao);
     }
 
     private static string CriarChaveSentido(Guid linhaId, string nomeSentido)

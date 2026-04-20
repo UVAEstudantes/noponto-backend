@@ -62,6 +62,7 @@ builder.Services.AddStackExchangeRedisCache(options =>
 });
 
 builder.Services.AddHttpClient<ArcGisClientService>();
+builder.Services.AddScoped<ImportacaoParadasService>();
 builder.Services.AddHostedService<ImportacaoItinerariosService>();
 
 var app = builder.Build();
