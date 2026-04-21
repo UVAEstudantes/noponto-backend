@@ -29,6 +29,9 @@ namespace NoPonto.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("Ativo")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -42,7 +45,14 @@ namespace NoPonto.Migrations
                     b.Property<Guid>("SentidoId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Geometria");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geometria"), "GIST");
 
                     b.HasIndex("SentidoId");
 
@@ -55,7 +65,7 @@ namespace NoPonto.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("Ativa")
+                    b.Property<bool>("Ativo")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Codigo")
@@ -71,6 +81,9 @@ namespace NoPonto.Migrations
                     b.Property<string>("Nome")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
@@ -95,6 +108,9 @@ namespace NoPonto.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.ToTable("Modais");
@@ -106,7 +122,7 @@ namespace NoPonto.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("Ativa")
+                    b.Property<bool>("Ativo")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Codigo")
@@ -124,6 +140,9 @@ namespace NoPonto.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Localizacao");
@@ -138,6 +157,9 @@ namespace NoPonto.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("Ativo")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -154,11 +176,19 @@ namespace NoPonto.Migrations
                     b.Property<Guid>("ParadaId")
                         .HasColumnType("uuid");
 
+                    b.Property<double>("PosicaoLinha")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ItinerarioId");
 
                     b.HasIndex("ParadaId");
+
+                    b.HasIndex("ItinerarioId", "Ordem");
 
                     b.ToTable("ParadasItinerario");
                 });
@@ -187,6 +217,9 @@ namespace NoPonto.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Localizacao");
@@ -202,6 +235,9 @@ namespace NoPonto.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("Ativo")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -213,6 +249,9 @@ namespace NoPonto.Migrations
 
                     b.Property<Guid>("PoiId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
@@ -229,6 +268,12 @@ namespace NoPonto.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("Ativo")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<double?>("Direcao")
                         .HasColumnType("double precision");
 
@@ -237,6 +282,9 @@ namespace NoPonto.Migrations
                         .HasColumnType("geometry(Point,4326)");
 
                     b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("VeiculoId")
@@ -258,6 +306,9 @@ namespace NoPonto.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("Ativo")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -267,6 +318,9 @@ namespace NoPonto.Migrations
                     b.Property<string>("Nome")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
@@ -293,6 +347,9 @@ namespace NoPonto.Migrations
 
                     b.Property<Guid>("LinhaId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
