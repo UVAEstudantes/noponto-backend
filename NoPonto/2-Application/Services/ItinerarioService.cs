@@ -33,4 +33,16 @@ public sealed class ItinerarioService : IItinerarioService
 
         return await _itinerarioRepository.ListarPorLinhaAsync(linhaId, cancellationToken);
     }
+
+    public async Task<ItinerarioMapaDTO> BuscarMapaAsync(Guid itinerarioId, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Consultando mapa do itinerário via service. itinerarioId={itinerarioId}", itinerarioId);
+
+        var mapa = await _itinerarioRepository.BuscarMapaAsync(itinerarioId, cancellationToken);
+
+        if (mapa is null)
+            throw new NotFoundException(MensagemErro.ITINERARIO_NAO_ENCONTRADO);
+
+        return mapa;
+    }
 }

@@ -67,6 +67,81 @@ public sealed class LinhaRepository : ILinhaRepository
         return itens;
     }
 
+    public async Task<LinhaDetalhesDTO?> BuscarDetalhesAsync(Guid linhaId, CancellationToken cancellationToken)
+    {
+        var linha = await _contexto.Linhas
+            .AsNoTracking()
+            .Where(item => item.Id == linhaId)
+            .Select(item => new
+            {
+                LinhaId = item.Id,
+                LinhaNome = item.Nome,
+                Codigo = item.Codigo
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (linha is null)
+            return null;
+
+        var sentidos = await _contexto.Sentidos
+            .AsNoTracking()
+            .Where(sentido => sentido.LinhaId == linhaId)
+            .OrderBy(sentido => sentido.Nome)
+            .Select(sentido => new
+            {
+                SentidoId = sentido.Id,
+                SentidoNome = sentido.Nome
+            })
+            .ToListAsync(cancellationToken);
+
+        var itinerarios = await _contexto.Itinerarios
+            .AsNoTracking()
+            .Where(itinerario => itinerario.Sentido.LinhaId == linhaId)
+            .GroupJoin(
+                _contexto.ParadasItinerario.AsNoTracking(),
+                itinerario => itinerario.Id,
+                paradaItinerario => paradaItinerario.ItinerarioId,
+                (itinerario, paradas) => new
+                {
+                    ItinerarioId = itinerario.Id,
+                    SentidoId = itinerario.SentidoId,
+                    DistanciaMetros = itinerario.DistanciaMetros,
+                    QuantidadeParadas = paradas.Count()
+                })
+            .ToListAsync(cancellationToken);
+
+        var itinerariosPorSentido = itinerarios
+            .GroupBy(item => item.SentidoId)
+            .ToDictionary(
+                grupo => grupo.Key,
+                grupo => (IReadOnlyList<LinhaDetalheItinerarioDTO>)grupo
+                    .OrderBy(item => item.ItinerarioId)
+                    .Select(item => new LinhaDetalheItinerarioDTO
+                    {
+                        ItinerarioId = item.ItinerarioId,
+                        DistanciaMetros = item.DistanciaMetros,
+                        QuantidadeParadas = item.QuantidadeParadas
+                    })
+                    .ToList());
+
+        var sentidosDetalhe = sentidos
+            .Select(sentido => new LinhaDetalheSentidoDTO
+            {
+                SentidoId = sentido.SentidoId,
+                Nome = sentido.SentidoNome,
+                Itinerarios = itinerariosPorSentido.GetValueOrDefault(sentido.SentidoId, [])
+            })
+            .ToList();
+
+        return new LinhaDetalhesDTO
+        {
+            LinhaId = linha.LinhaId,
+            LinhaNome = linha.LinhaNome,
+            Codigo = linha.Codigo,
+            Sentidos = sentidosDetalhe
+        };
+    }
+
     public Task<bool> ExistePorIdAsync(Guid linhaId, CancellationToken cancellationToken)
     {
         return _contexto.Linhas

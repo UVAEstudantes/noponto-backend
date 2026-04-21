@@ -50,4 +50,16 @@ public sealed class LinhaService : ILinhaService
 
         return await _linhaRepository.ListarPorParadaAsync(paradaId, cancellationToken);
     }
+
+    public async Task<LinhaDetalhesDTO> BuscarDetalhesAsync(Guid linhaId, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Consultando detalhes da linha via service. linhaId={linhaId}", linhaId);
+
+        var detalhes = await _linhaRepository.BuscarDetalhesAsync(linhaId, cancellationToken);
+
+        if (detalhes is null)
+            throw new NotFoundException(MensagemErro.LINHA_NAO_ENCONTRADA);
+
+        return detalhes;
+    }
 }

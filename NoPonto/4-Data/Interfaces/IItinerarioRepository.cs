@@ -5,6 +5,7 @@ namespace NoPonto.Data.Interfaces
     public interface IItinerarioRepository
     {
         Task<IReadOnlyList<ItinerarioPorLinhaConsultaDTO>> ListarPorLinhaAsync(Guid linhaId, CancellationToken cancellationToken);
+        Task<ItinerarioMapaDTO?> BuscarMapaAsync(Guid itinerarioId, CancellationToken cancellationToken);
         Task<bool> ExistePorIdAsync(Guid itinerarioId, CancellationToken cancellationToken);
     }
 }

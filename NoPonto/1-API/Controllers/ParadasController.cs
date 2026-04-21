@@ -84,4 +84,69 @@ public class ParadasController : ControllerBase
         var resposta = await _service.ListarAsync(nome, page, pageSize, cancellationToken);
         return Ok(resposta);
     }
+
+    /// <summary>
+    /// Lista paradas próximas a uma coordenada geográfica.
+    /// </summary>
+    /// <param name="latitude">Latitude do ponto de consulta (lat).</param>
+    /// <param name="longitude">Longitude do ponto de consulta (lng).</param>
+    /// <param name="raioMetros">Raio da busca em metros (opcional).</param>
+    /// <param name="cancellationToken">Token de cancelamento da requisição.</param>
+    /// <remarks>
+    /// Exemplo de resposta:
+    /// [
+    ///   {
+    ///     "paradaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    ///     "nome": "Terminal Alvorada",
+    ///     "latitude": -22.9999,
+    ///     "longitude": -43.365,
+    ///     "distanciaMetros": 72.5
+    ///   }
+    /// ]
+    /// </remarks>
+    [HttpGet("proximas")]
+    [ProducesResponseType(typeof(IReadOnlyList<ParadaProximaConsultaDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ListarProximas(
+        [FromQuery(Name = "lat")] double latitude,
+        [FromQuery(Name = "lng")] double longitude,
+        [FromQuery(Name = "raio")] double? raioMetros,
+        CancellationToken cancellationToken = default)
+    {
+        var itens = await _service.ListarProximasAsync(latitude, longitude, raioMetros, cancellationToken);
+        return Ok(itens);
+    }
+
+    /// <summary>
+    /// Lista as linhas que passam por uma parada específica.
+    /// </summary>
+    /// <param name="paradaId">Identificador da parada.</param>
+    /// <param name="cancellationToken">Token de cancelamento da requisição.</param>
+    /// <remarks>
+    /// Exemplo de resposta:
+    /// [
+    ///   {
+    ///     "linhaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    ///     "linhaNome": "476 - Gávea",
+    ///     "codigo": "476",
+    ///     "quantidadeItinerarios": 2,
+    ///     "sentidos": [
+    ///       {
+    ///         "sentidoId": "ffffffff-1111-2222-3333-444444444444",
+    ///         "sentidoNome": "IDA"
+    ///       }
+    ///     ]
+    ///   }
+    /// ]
+    /// </remarks>
+    [HttpGet("{paradaId:guid}/linhas")]
+    [ProducesResponseType(typeof(IReadOnlyList<ParadaLinhaConsultaDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ListarLinhas(Guid paradaId, CancellationToken cancellationToken = default)
+    {
+        var itens = await _service.ListarLinhasAsync(paradaId, cancellationToken);
+        return Ok(itens);
+    }
 }

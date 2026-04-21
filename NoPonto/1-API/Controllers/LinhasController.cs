@@ -82,4 +82,40 @@ public class LinhasController : ControllerBase
         var resposta = await _service.ListarPorParadaAsync(paradaId, cancellationToken);
         return Ok(resposta);
     }
+
+    /// <summary>
+    /// Obtém os detalhes completos de uma linha, agrupados por sentido.
+    /// </summary>
+    /// <param name="linhaId">Identificador da linha.</param>
+    /// <param name="cancellationToken">Token de cancelamento da requisição.</param>
+    /// <remarks>
+    /// Exemplo de resposta:
+    /// {
+    ///   "linhaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    ///   "linhaNome": "476 - Gávea",
+    ///   "codigo": "476",
+    ///   "sentidos": [
+    ///     {
+    ///       "sentidoId": "ffffffff-1111-2222-3333-444444444444",
+    ///       "nome": "IDA",
+    ///       "itinerarios": [
+    ///         {
+    ///           "itinerarioId": "99999999-8888-7777-6666-555555555555",
+    ///           "distanciaMetros": 12450.3,
+    ///           "quantidadeParadas": 28
+    ///         }
+    ///       ]
+    ///     }
+    ///   ]
+    /// }
+    /// </remarks>
+    [HttpGet("{linhaId:guid}/detalhes")]
+    [ProducesResponseType(typeof(LinhaDetalhesDTO), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> BuscarDetalhes(Guid linhaId, CancellationToken cancellationToken = default)
+    {
+        var resposta = await _service.BuscarDetalhesAsync(linhaId, cancellationToken);
+        return Ok(resposta);
+    }
 }

@@ -68,6 +68,79 @@ public sealed class ParadaRepository : IParadaRepository
         };
     }
 
+    public async Task<IReadOnlyList<ParadaProximaConsultaDTO>> ListarProximasAsync(
+        double latitude,
+        double longitude,
+        double raioMetros,
+        int limite,
+        CancellationToken cancellationToken)
+    {
+        FormattableString sql = $@"
+SELECT
+    p.""Id"" AS ""ParadaId"",
+    p.""Nome"" AS ""Nome"",
+    ST_Y(p.""Localizacao"") AS ""Latitude"",
+    ST_X(p.""Localizacao"") AS ""Longitude"",
+    ST_Distance(
+        p.""Localizacao""::geography,
+        ST_SetSRID(ST_MakePoint({longitude}, {latitude}), 4326)::geography
+    ) AS ""DistanciaMetros""
+FROM ""Paradas"" p
+WHERE ST_DWithin(
+    p.""Localizacao""::geography,
+    ST_SetSRID(ST_MakePoint({longitude}, {latitude}), 4326)::geography,
+    {raioMetros}
+)
+ORDER BY ""DistanciaMetros""
+LIMIT {limite};";
+
+        var itens = await _contexto.Database
+            .SqlQuery<ParadaProximaConsultaDTO>(sql)
+            .ToListAsync(cancellationToken);
+
+        return itens;
+    }
+
+    public async Task<IReadOnlyList<ParadaLinhaConsultaDTO>> ListarLinhasAsync(Guid paradaId, CancellationToken cancellationToken)
+    {
+        var registros = await _contexto.ParadasItinerario
+            .AsNoTracking()
+            .Where(relacao => relacao.ParadaId == paradaId)
+            .Select(relacao => new
+            {
+                LinhaId = relacao.Itinerario.Sentido.LinhaId,
+                LinhaNome = relacao.Itinerario.Sentido.Linha.Nome,
+                LinhaCodigo = relacao.Itinerario.Sentido.Linha.Codigo,
+                SentidoId = relacao.Itinerario.SentidoId,
+                SentidoNome = relacao.Itinerario.Sentido.Nome,
+                ItinerarioId = relacao.ItinerarioId
+            })
+            .ToListAsync(cancellationToken);
+
+        var itens = registros
+            .GroupBy(item => new { item.LinhaId, item.LinhaNome, item.LinhaCodigo })
+            .OrderBy(grupo => grupo.Key.LinhaNome)
+            .Select(grupo => new ParadaLinhaConsultaDTO
+            {
+                LinhaId = grupo.Key.LinhaId,
+                LinhaNome = grupo.Key.LinhaNome,
+                Codigo = grupo.Key.LinhaCodigo,
+                QuantidadeItinerarios = grupo.Select(item => item.ItinerarioId).Distinct().Count(),
+                Sentidos = grupo
+                    .GroupBy(item => new { item.SentidoId, item.SentidoNome })
+                    .OrderBy(sentido => sentido.Key.SentidoNome)
+                    .Select(sentido => new ParadaLinhaSentidoDTO
+                    {
+                        SentidoId = sentido.Key.SentidoId,
+                        SentidoNome = sentido.Key.SentidoNome
+                    })
+                    .ToList()
+            })
+            .ToList();
+
+        return itens;
+    }
+
     public Task<bool> ExistePorIdAsync(Guid paradaId, CancellationToken cancellationToken)
     {
         return _contexto.Paradas
