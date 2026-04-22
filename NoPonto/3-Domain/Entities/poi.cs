@@ -8,6 +8,6 @@ namespace NoPonto.Domain.Entities
         public string Categoria { get; set; } = null!;
         public Point Localizacao { get; set; } = null!;
 
-        public ICollection<PoiItinerario> PoiItinerarios { get; set; } = new List<PoiItinerario>();
+        public ICollection<PoiParada> PoiParadas { get; set; } = new List<PoiParada>();
     }
 }

@@ -21,7 +21,7 @@ public class TransporteDbContext : DbContext
     public DbSet<ParadaItinerario> ParadasItinerario => Set<ParadaItinerario>();
     public DbSet<Poi> Pois => Set<Poi>();
 
-    public DbSet<PoiItinerario> PoisItinerario => Set<PoiItinerario>();
+    public DbSet<PoiParada> PoiParadas => Set<PoiParada>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,6 +52,17 @@ public class TransporteDbContext : DbContext
         modelBuilder.Entity<Poi>()
             .HasIndex(x => x.Localizacao)
             .HasMethod("GIST");
+
+        modelBuilder.Entity<PoiParada>()
+            .HasIndex(x => x.ParadaId);
+
+        modelBuilder.Entity<PoiParada>()
+            .HasIndex(x => x.PoiId);
+
+        // Garante que um POI não aparece duas vezes na mesma parada
+        modelBuilder.Entity<PoiParada>()
+            .HasIndex(x => new { x.ParadaId, x.PoiId })
+            .IsUnique();
 
         modelBuilder.Entity<ParadaItinerario>()
             .HasIndex(x => x.ItinerarioId);

@@ -160,6 +160,11 @@ builder.Services.AddScoped<RelacionarParadasItinerariosService>();
 builder.Services.AddScoped<RelacionarParadasJob>();
 builder.Services.AddHostedService<ImportacaoItinerariosService>();
 
+builder.Services.AddHttpClient<OverpassClient>();
+builder.Services.AddScoped<PopularPoisService>();
+builder.Services.AddScoped<IPoiRepository, PoiRepository>();
+// IPoiService já deve estar registrado
+
 var app = builder.Build();
 
 app.UseMiddleware<ExceptionMiddleware>();

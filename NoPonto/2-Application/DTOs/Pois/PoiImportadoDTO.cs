@@ -1,8 +1,8 @@
 namespace NoPonto.Application.DTOs.Pois;
 
-public sealed class PoiConsultaDTO
+public sealed class PoiImportadoDTO
 {
-    public Guid Id { get; init; }
+    public long OsmId { get; init; }
     public string Nome { get; init; } = null!;
     public string Categoria { get; init; } = null!;
     public double Latitude { get; init; }
