@@ -12,4 +12,5 @@ public interface IPoiRepository
     Task<List<Poi>> UpsertPoisAsync(IEnumerable<PoiImportadoDTO> importados, int tamanhoLote, CancellationToken cancellationToken);
     Task<HashSet<Guid>> BuscarPoisJaRelacionadosNaParadaAsync(Guid paradaId, CancellationToken cancellationToken);
     Task InserirRelacaoEmLoteAsync(IEnumerable<PoiParada> relacoes, int tamanhoLote, CancellationToken cancellationToken);
+    Task<List<PoiPorItinerarioDTO>> ListarPorItinerarioAsync(Guid itinerarioId, CancellationToken cancellationToken);
 }

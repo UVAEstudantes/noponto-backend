@@ -116,7 +116,7 @@ builder.Services
     .ValidateOnStart();
 
 builder.Services.AddSignalR();
-builder.Services.AddHostedService<GpsPollingService>();
+//builder.Services.AddHostedService<GpsPollingService>();
 
 var connectionString =
     $"Host=localhost;" +

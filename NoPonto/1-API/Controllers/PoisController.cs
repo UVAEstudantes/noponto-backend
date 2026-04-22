@@ -74,6 +74,30 @@ public class PoisController : ControllerBase
         return Ok(await _service.ListarPorPontoAsync(latitude, longitude, raioMetros, cancellationToken));
     }
 
+    /// <summary>
+    /// POIs de um itinerário inteiro, com ordem de aparecimento nas paradas.
+    /// Use o parâmetro sort para ordenação hierárquica:
+    /// campos disponíveis: prioridade, ordemParada, nome, categoria, distanciaMetros.
+    /// Prefixo "-" = decrescente. Exemplo: "prioridade,-distanciaMetros,ordemParada"
+    /// </summary>
+    [HttpGet("por-itinerario/{itinerarioId:guid}")]
+    [ProducesResponseType(typeof(IReadOnlyList<PoiPorItinerarioDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ListarPorItinerario(
+        Guid itinerarioId,
+        [FromQuery] string? sort = "ordemParada,prioridade",
+        CancellationToken cancellationToken = default)
+    {
+        var existe = await _contexto.Itinerarios
+            .AsNoTracking()
+            .AnyAsync(i => i.Id == itinerarioId, cancellationToken);
+
+        if (!existe)
+            return NotFound(new { mensagem = $"Itinerário {itinerarioId} não encontrado." });
+
+        return Ok(await _service.ListarPorItinerarioAsync(itinerarioId, sort, cancellationToken));
+    }
+
     /// <summary>Popula POIs para todas as paradas com itinerário associado.</summary>
     [HttpPost("popular")]
     public async Task<IActionResult> Popular(CancellationToken cancellationToken)

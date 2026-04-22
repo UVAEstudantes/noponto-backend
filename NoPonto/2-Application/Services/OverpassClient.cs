@@ -8,25 +8,26 @@ public sealed class OverpassClient
     private readonly HttpClient _http;
     private readonly ILogger<OverpassClient> _logger;
 
-    private static readonly Dictionary<string, string> TagsParaCategoria = new()
+    // Prioridade: 1 = alta relevância, 2 = média, 3 = baixa
+    private static readonly Dictionary<string, (string Categoria, int Prioridade)> TagsParaCategoria = new()
     {
-        ["amenity=hospital"]    = "Hospital",
-        ["amenity=clinic"]      = "Clínica",
-        ["amenity=university"]  = "Universidade",
-        ["amenity=school"]      = "Escola",
-        ["amenity=college"]     = "Faculdade",
-        ["shop=mall"]           = "Shopping",
-        ["shop=supermarket"]    = "Supermercado",
-        ["amenity=marketplace"] = "Mercado",
-        ["amenity=pharmacy"]    = "Farmácia",
-        ["leisure=park"]        = "Parque",
-        ["amenity=bus_station"] = "Terminal de Ônibus",
-        ["railway=station"]     = "Estação de Trem/Metrô",
+        ["amenity=hospital"]    = ("Hospital",            1),
+        ["amenity=bus_station"] = ("Terminal de Ônibus",  1),
+        ["railway=station"]     = ("Estação de Trem/Metrô", 1),
+        ["shop=mall"]           = ("Shopping",            1),
+        ["amenity=university"]  = ("Universidade",        2),
+        ["amenity=college"]     = ("Faculdade",           2),
+        ["amenity=clinic"]      = ("Clínica",             2),
+        ["shop=supermarket"]    = ("Supermercado",        2),
+        ["amenity=marketplace"] = ("Mercado",             2),
+        ["amenity=pharmacy"]    = ("Farmácia",            2),
+        ["amenity=school"]      = ("Escola",              3),
+        ["leisure=park"]        = ("Parque",              3),
     };
 
     public OverpassClient(HttpClient http, ILogger<OverpassClient> logger)
     {
-        _http = http;
+        _http   = http;
         _logger = logger;
     }
 
@@ -36,21 +37,29 @@ public sealed class OverpassClient
     {
         var bbox = $"{sul},{oeste},{norte},{leste}";
 
-        // Cada filtro gera node + way + relation para capturar todos os tipos OSM.
-        // "out center" devolve o centroide para ways/relations, então sempre temos lat/lon.
+        // Para cada tag: busca node + way + relation com centroide (out center)
+        // Para shoppings especificamente: também busca nodes com entrance=yes
+        // próximos ao polígono, que ficam na calçada e são muito mais úteis.
         var filtros = string.Join("\n", TagsParaCategoria.Keys.Select(tag =>
         {
             var partes = tag.Split('=');
-            var chave  = partes[0];
-            var valor  = partes[1];
+            var k = partes[0];
+            var v = partes[1];
             return $"""
-                    node["{chave}"="{valor}"]({bbox});
-                    way["{chave}"="{valor}"]({bbox});
-                    relation["{chave}"="{valor}"]({bbox});
+                    node["{k}"="{v}"]({bbox});
+                    way["{k}"="{v}"]({bbox});
+                    relation["{k}"="{v}"]({bbox});
                     """;
         }));
 
-        var query = $"[out:json][timeout:60];\n(\n{filtros}\n);\nout center tags;";
+        // Busca entradas de shoppings e terminais como nodes separados
+        // (esses ficam na calçada e resolvem o problema do polígono grande)
+        var filtrosEntrada = $"""
+            node["entrance"]["name"]({bbox});
+            node["entrance"="main"]({bbox});
+            """;
+
+        var query = $"[out:json][timeout:60];\n(\n{filtros}\n{filtrosEntrada}\n);\nout center tags;";
 
         _logger.LogDebug("Overpass query: {query}", query);
 
@@ -65,8 +74,7 @@ public sealed class OverpassClient
         using var doc      = JsonDocument.Parse(json);
         var       elementos = doc.RootElement.GetProperty("elements");
 
-        var resultado   = new List<PoiImportadoDTO>();
-        // Deduplica por OsmId dentro da mesma bbox (relation pode aparecer como way também)
+        var resultado    = new List<PoiImportadoDTO>();
         var osmIdsVistos = new HashSet<string>();
 
         foreach (var el in elementos.EnumerateArray())
@@ -82,10 +90,9 @@ public sealed class OverpassClient
             var nome = ObterNome(tags);
             if (string.IsNullOrWhiteSpace(nome)) continue;
 
-            var categoria = ResolverCategoria(tags);
+            var (categoria, prioridade) = ResolverCategoriaEPrioridade(tags);
             if (categoria is null) continue;
 
-            // nodes têm lat/lon direto; ways/relations têm "center"
             double lat, lon;
             if (tipo == "node")
             {
@@ -97,45 +104,43 @@ public sealed class OverpassClient
                 lat = center.GetProperty("lat").GetDouble();
                 lon = center.GetProperty("lon").GetDouble();
             }
-            else
-            {
-                continue; // sem coordenada, descarta
-            }
+            else continue;
 
             resultado.Add(new PoiImportadoDTO
             {
-                OsmId     = osmId,
-                Nome      = nome,
-                Categoria = categoria,
-                Latitude  = lat,
-                Longitude = lon
+                OsmId      = osmId,
+                Nome       = nome,
+                Categoria  = categoria,
+                Prioridade = prioridade,
+                Latitude   = lat,
+                Longitude  = lon
             });
         }
 
         _logger.LogInformation(
-            "Overpass: {qtd} POIs encontrados na bbox ({s},{w},{n},{e})",
+            "Overpass: {qtd} POIs em ({s:F4},{w:F4},{n:F4},{e:F4})",
             resultado.Count, sul, oeste, norte, leste);
 
         return resultado;
     }
 
-    private static string? ResolverCategoria(JsonElement tags)
+    private static (string? Categoria, int Prioridade) ResolverCategoriaEPrioridade(JsonElement tags)
     {
-        if (tags.ValueKind == JsonValueKind.Undefined) return null;
-        foreach (var (tag, categoria) in TagsParaCategoria)
+        if (tags.ValueKind == JsonValueKind.Undefined) return (null, 0);
+        foreach (var (tag, info) in TagsParaCategoria)
         {
             var partes = tag.Split('=');
             if (tags.TryGetProperty(partes[0], out var val) && val.GetString() == partes[1])
-                return categoria;
+                return (info.Categoria, info.Prioridade);
         }
-        return null;
+        return (null, 0);
     }
 
     private static string? ObterNome(JsonElement tags)
     {
         if (tags.ValueKind == JsonValueKind.Undefined) return null;
         if (tags.TryGetProperty("name:pt", out var pt))  return pt.GetString();
-        if (tags.TryGetProperty("name", out var nome))    return nome.GetString();
+        if (tags.TryGetProperty("name",    out var nome)) return nome.GetString();
         return null;
     }
 }

@@ -1,6 +1,7 @@
 // PoiService.cs
 using NoPonto.Application.DTOs.Compartilhado;
 using NoPonto.Application.DTOs.Pois;
+using NoPonto.Application.Helpers;
 using NoPonto.Application.Interfaces;
 using NoPonto.Data.Interfaces;
 
@@ -19,6 +20,13 @@ public sealed class PoiService : IPoiService
     public Task<List<PoiPorParadaDTO>> ListarPorParadaAsync(
         Guid paradaId, CancellationToken cancellationToken)
         => _repository.ListarPorParadaAsync(paradaId, cancellationToken);
+
+    public async Task<List<PoiPorItinerarioDTO>> ListarPorItinerarioAsync(
+        Guid itinerarioId, string? sort, CancellationToken cancellationToken)
+    {
+        var dados = await _repository.ListarPorItinerarioAsync(itinerarioId, cancellationToken);
+        return OrdenacaoHelper.Ordenar(dados, sort).ToList();
+    }
 
     public Task<List<PoiConsultaDTO>> ListarPorPontoAsync(
         double latitude, double longitude, double raioMetros, CancellationToken cancellationToken)

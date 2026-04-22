@@ -9,3 +9,7 @@
 - melhorar o nome da linha pra ser apenas o "855" e com a desc de "Terminal Magarça <-> Terminal Deodoro"
 
 - melhorar o linhas detalhes pra mostrar valor passagem
+
+- sistema de alertas/notificações com signalR para informar de próximos ônibus
+
+- melhorar veiculos em tempo real

@@ -55,18 +55,50 @@ public sealed class PoiRepository : IPoiRepository
         };
     }
 
+    public async Task<List<PoiPorItinerarioDTO>> ListarPorItinerarioAsync(
+        Guid itinerarioId, CancellationToken cancellationToken)
+    {
+        // Join PoiParadas → ParadaItinerario para trazer ordem da parada no itinerário
+        return await _contexto.PoiParadas
+            .AsNoTracking()
+            .Where(pp =>
+                _contexto.ParadasItinerario
+                    .Any(pi => pi.ParadaId == pp.ParadaId && pi.ItinerarioId == itinerarioId))
+            .Select(pp => new PoiPorItinerarioDTO
+            {
+                PoiId           = pp.PoiId,
+                ParadaId        = pp.ParadaId,
+                OrdemParada     = _contexto.ParadasItinerario
+                                    .Where(pi => pi.ParadaId == pp.ParadaId && pi.ItinerarioId == itinerarioId)
+                                    .Select(pi => pi.Ordem)
+                                    .FirstOrDefault(),
+                NomeParada      = pp.Parada.Nome,
+                Nome            = pp.Poi.Nome,
+                Categoria       = pp.Poi.Categoria,
+                Prioridade      = pp.Poi.Prioridade,
+                Latitude        = pp.Poi.Localizacao.Y,
+                Longitude       = pp.Poi.Localizacao.X,
+                DistanciaMetros = pp.DistanciaMetros
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    // Atualiza ListarPorParadaAsync para incluir ParadaId e Prioridade
     public async Task<List<PoiPorParadaDTO>> ListarPorParadaAsync(
         Guid paradaId, CancellationToken cancellationToken)
     {
         return await _contexto.PoiParadas
             .AsNoTracking()
             .Where(r => r.ParadaId == paradaId)
-            .OrderBy(r => r.DistanciaMetros)
+            .OrderBy(r => r.Poi.Prioridade)
+            .ThenBy(r => r.DistanciaMetros)
             .Select(r => new PoiPorParadaDTO
             {
                 PoiId           = r.PoiId,
+                ParadaId        = r.ParadaId,
                 Nome            = r.Poi.Nome,
                 Categoria       = r.Poi.Categoria,
+                Prioridade      = r.Poi.Prioridade,
                 Latitude        = r.Poi.Localizacao.Y,
                 Longitude       = r.Poi.Localizacao.X,
                 DistanciaMetros = r.DistanciaMetros
@@ -125,6 +157,8 @@ public sealed class PoiRepository : IPoiRepository
             .ToList();
     }
 
+    
+
     public async Task<List<Poi>> UpsertPoisAsync(
         IEnumerable<PoiImportadoDTO> importados,
         int tamanhoLote,
@@ -158,6 +192,7 @@ public sealed class PoiRepository : IPoiRepository
                 Id          = Guid.NewGuid(),
                 Nome        = dto.Nome,
                 Categoria   = dto.Categoria,
+                Prioridade  = dto.Prioridade,   // ← adiciona esta linha
                 Localizacao = _factory.CreatePoint(new Coordinate(dto.Longitude, dto.Latitude))
             };
 

@@ -9,4 +9,6 @@ public interface IPoiService
     Task<PaginacaoRespostaDTO<PoiConsultaDTO>> ListarAsync(string? nome, int page, int pageSize, CancellationToken cancellationToken);
     Task<List<PoiPorParadaDTO>> ListarPorParadaAsync(Guid paradaId, CancellationToken cancellationToken);
     Task<List<PoiConsultaDTO>> ListarPorPontoAsync(double latitude, double longitude, double raioMetros, CancellationToken cancellationToken);
+
+    Task<List<PoiPorItinerarioDTO>> ListarPorItinerarioAsync(Guid itinerarioId, string? sort, CancellationToken cancellationToken);
 }
