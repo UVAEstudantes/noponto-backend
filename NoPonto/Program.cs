@@ -1,7 +1,9 @@
 using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using NoPonto.API.Hubs;
 using NoPonto.API.Middlewares;
+using NoPonto.Application.GPS;
 using NoPonto.Application.Interfaces;
 using NoPonto.Application.Services;
 using NoPonto.Data.Interfaces;
@@ -20,7 +22,33 @@ static string GetEnv(string key)
     return value;
 }
 
+static int GetOptionalPositiveInt(string? value, int defaultValue, string key)
+{
+    if (string.IsNullOrWhiteSpace(value))
+        return defaultValue;
+
+    if (int.TryParse(value, out var parsed) && parsed > 0)
+        return parsed;
+
+    throw new Exception($"Configuração {key} inválida: '{value}'. Use inteiro positivo.");
+}
+
 var builder = WebApplication.CreateBuilder(args);
+
+var gpsApiBaseUrl = builder.Configuration["GPS:API:BASE_URL"]
+    ?? "https://dados.mobilidade.rio/gps/sppo";
+
+if (!Uri.TryCreate(gpsApiBaseUrl, UriKind.Absolute, out var gpsApiBaseUri))
+    throw new Exception("Configuração GPS__API__BASE_URL inválida.");
+
+var gpsHttpTimeoutSeconds = GetOptionalPositiveInt(
+    builder.Configuration["GPS:HTTP_TIMEOUT_SECONDS"],
+    defaultValue: 15,
+    key: "GPS__HTTP_TIMEOUT_SECONDS");
+
+var gpsHubRoute = builder.Configuration["GPS:HUB:ROUTE"] ?? "/hub/gps";
+if (!gpsHubRoute.StartsWith('/'))
+    gpsHubRoute = $"/{gpsHubRoute}";
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -59,17 +87,36 @@ builder.Services.AddCors(options =>
             policy
                 .WithOrigins(corsOrigins)
                 .AllowAnyHeader()
-                .AllowAnyMethod();
+                .AllowAnyMethod()
+                .AllowCredentials();
 
             return;
         }
 
         policy
-            .AllowAnyOrigin()
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials()
+        .SetIsOriginAllowed(_ => true);
+        });
 });
+
+// HttpClient tipado para a API de GPS
+builder.Services.AddHttpClient<GpsSppoClient>(client =>
+{
+    client.BaseAddress = gpsApiBaseUri;
+    client.Timeout = TimeSpan.FromSeconds(gpsHttpTimeoutSeconds);
+});
+
+builder.Services
+    .AddOptions<GpsPollingOptions>()
+    .Bind(builder.Configuration.GetSection(GpsPollingOptions.Secao))
+    .Validate(o => o.IntervaloSegundos > 0, "GpsPolling:IntervaloSegundos deve ser > 0")
+    .Validate(o => o.TtlSegundos > 0, "GpsPolling:TtlSegundos deve ser > 0")
+    .ValidateOnStart();
+
+builder.Services.AddSignalR();
+builder.Services.AddHostedService<GpsPollingService>();
 
 var connectionString =
     $"Host=localhost;" +
@@ -86,7 +133,7 @@ builder.Services.AddDbContext<TransporteDbContext>(options =>
 );
 
 var redisConnection =
-    $"localhost:{Environment.GetEnvironmentVariable("REDIS_PORT")}";
+    $"localhost:{GetEnv("REDIS_PORT")}";
 
 builder.Services.AddStackExchangeRedisCache(options =>
 {
@@ -126,6 +173,7 @@ app.UseSwaggerUI(options =>
 
 app.UseCors("CorsPadrao");
 
+app.MapHub<GpsHub>(gpsHubRoute);
 app.MapControllers();
 
 app.MapGet("/", () => "Hello World!");

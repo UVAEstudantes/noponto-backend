@@ -22,6 +22,7 @@
     "maximo",
     "Npgsql",
     "Onibus",
+    "opcoes",
     "padrao",
     "Padrao",
     "Paginacao",
@@ -29,13 +30,17 @@
     "Perp",
     "posicao",
     "Posicao",
+    "posicoes",
     "Posicoes",
     "postgis",
     "postgres",
     "postgresql",
     "Proximas",
     "relacao",
+    "Secao",
+    "Sppo",
     "srid",
+    "veiculos",
     "Veiculos"
   ]
 }
