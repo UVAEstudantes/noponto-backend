@@ -9,23 +9,24 @@ public sealed class OverpassClient
     private readonly HttpClient _http;
     private readonly ILogger<OverpassClient> _logger;
 
+    // Semáforo global: garante no máximo 1 request simultânea à Overpass
     private static readonly SemaphoreSlim _semaforo = new(1, 1);
 
     // Prioridade: 1 = alta relevância, 2 = média, 3 = baixa
     private static readonly Dictionary<string, (string Categoria, int Prioridade)> TagsParaCategoria = new()
     {
-        ["amenity=hospital"]    = ("Hospital",            1),
-        ["amenity=bus_station"] = ("Terminal de Ônibus",  1),
+        ["amenity=hospital"]    = ("Hospital",              1),
+        ["amenity=bus_station"] = ("Terminal de Ônibus",    1),
         ["railway=station"]     = ("Estação de Trem/Metrô", 1),
-        ["shop=mall"]           = ("Shopping",            1),
-        ["amenity=university"]  = ("Universidade",        2),
-        ["amenity=college"]     = ("Faculdade",           2),
-        ["amenity=clinic"]      = ("Clínica",             2),
-        ["shop=supermarket"]    = ("Supermercado",        2),
-        ["amenity=marketplace"] = ("Mercado",             2),
-        ["amenity=pharmacy"]    = ("Farmácia",            2),
-        ["amenity=school"]      = ("Escola",              3),
-        ["leisure=park"]        = ("Parque",              3),
+        ["shop=mall"]           = ("Shopping",              1),
+        ["amenity=university"]  = ("Universidade",          2),
+        ["amenity=college"]     = ("Faculdade",             2),
+        ["amenity=clinic"]      = ("Clínica",               2),
+        ["shop=supermarket"]    = ("Supermercado",          2),
+        ["amenity=marketplace"] = ("Mercado",               2),
+        ["amenity=pharmacy"]    = ("Farmácia",              2),
+        ["amenity=school"]      = ("Escola",                3),
+        ["leisure=park"]        = ("Parque",                3),
     };
 
     public OverpassClient(HttpClient http, ILogger<OverpassClient> logger)
@@ -34,6 +35,10 @@ public sealed class OverpassClient
         _logger = logger;
     }
 
+    /// <summary>
+    /// Busca POIs dentro de uma bounding box.
+    /// Serializado via semáforo + delay pós-request para respeitar o rate limit da Overpass.
+    /// </summary>
     public async Task<List<PoiImportadoDTO>> BuscarNaAreaAsync(
         double sul, double oeste, double norte, double leste,
         CancellationToken cancellationToken)
@@ -45,7 +50,8 @@ public sealed class OverpassClient
         }
         finally
         {
-            await Task.Delay(TimeSpan.FromSeconds(1.5), cancellationToken);
+            // Aguarda antes de liberar para garantir espaçamento mesmo em paralelo futuro
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
             _semaforo.Release();
         }
     }
@@ -53,9 +59,9 @@ public sealed class OverpassClient
     private async Task<List<PoiImportadoDTO>> BuscarComRetryAsync(
         double sul, double oeste, double norte, double leste,
         CancellationToken cancellationToken,
-        int tentativasMax = 5)  // era 3, agora 5
+        int tentativasMax = 5)
     {
-        var delay = TimeSpan.FromSeconds(30);  // era 10s, começa em 30s
+        var delay = TimeSpan.FromSeconds(30);
 
         for (var tentativa = 1; tentativa <= tentativasMax; tentativa++)
         {
@@ -74,7 +80,7 @@ public sealed class OverpassClient
                     (int?)ex.StatusCode, tentativa, tentativasMax, delay.TotalSeconds);
 
                 await Task.Delay(delay, cancellationToken);
-                delay *= 2; // 30s → 60s → 120s → 240s
+                delay *= 2; // backoff exponencial: 30s → 60s → 120s → 240s
             }
         }
 
@@ -87,18 +93,20 @@ public sealed class OverpassClient
     {
         var bbox = $"{sul},{oeste},{norte},{leste}";
 
+        // node + way + relation para capturar todos os tipos OSM.
+        // "out center tags" devolve centroide de ways/relations, garantindo lat/lon sempre.
         var filtros = string.Join("\n", TagsParaCategoria.Keys.Select(tag =>
         {
             var partes = tag.Split('=');
-            var k = partes[0];
-            var v = partes[1];
             return $"""
-                    node["{k}"="{v}"]({bbox});
-                    way["{k}"="{v}"]({bbox});
-                    relation["{k}"="{v}"]({bbox});
+                    node["{partes[0]}"="{partes[1]}"]({bbox});
+                    way["{partes[0]}"="{partes[1]}"]({bbox});
+                    relation["{partes[0]}"="{partes[1]}"]({bbox});
                     """;
         }));
 
+        // Entradas de estabelecimentos: ficam na calçada, resolvem o problema
+        // de shoppings/hospitais grandes cujo centroide fica longe da parada.
         var filtrosEntrada = $"""
             node["entrance"]["name"]({bbox});
             node["entrance"="main"]({bbox});
@@ -106,7 +114,7 @@ public sealed class OverpassClient
 
         var query = $"[out:json][timeout:60];\n(\n{filtros}\n{filtrosEntrada}\n);\nout center tags;";
 
-        _logger.LogDebug("Overpass query: {query}", query);
+        _logger.LogDebug("Overpass query ({s:F4},{w:F4},{n:F4},{e:F4}): {q}", sul, oeste, norte, leste, query);
 
         var resposta = await _http.PostAsync(
             "https://overpass-api.de/api/interpreter",

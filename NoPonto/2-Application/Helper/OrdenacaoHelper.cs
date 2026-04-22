@@ -1,4 +1,3 @@
-// NoPonto.Application.Helpers/OrdenacaoHelper.cs
 using NoPonto.Application.DTOs.Pois;
 
 namespace NoPonto.Application.Helpers;
@@ -6,9 +5,10 @@ namespace NoPonto.Application.Helpers;
 public static class OrdenacaoHelper
 {
     /// <summary>
-    /// Aplica ordenação hierárquica a partir de uma string como "-prioridade,ordemParada,nome".
-    /// Campos suportados: prioridade, ordemParada, nome, categoria, distanciaMetros.
-    /// Prefixo "-" = decrescente.
+    /// Aplica ordenação hierárquica em <see cref="PoiPorItinerarioDTO"/>.
+    /// Formato: campos separados por vírgula, prefixo "-" para decrescente.
+    /// Campos: prioridade | ordemParada | nome | categoria | distanciaMetros
+    /// Exemplo: "ordemParada,-prioridade"
     /// </summary>
     public static IEnumerable<PoiPorItinerarioDTO> Ordenar(
         IEnumerable<PoiPorItinerarioDTO> fonte,
@@ -23,17 +23,17 @@ public static class OrdenacaoHelper
 
         foreach (var campo in campos)
         {
-            var desc       = campo.StartsWith('-');
-            var nomeCampo  = desc ? campo[1..] : campo;
+            var desc      = campo.StartsWith('-');
+            var nomeCampo = desc ? campo[1..] : campo;
 
             Func<PoiPorItinerarioDTO, object> seletor = nomeCampo.ToLowerInvariant() switch
             {
-                "prioridade"      => p => p.Prioridade,
-                "ordemparada"     => p => p.OrdemParada,
-                "nome"            => p => p.Nome,
-                "categoria"       => p => p.Categoria,
-                "distanciametros" => p => p.DistanciaMetros,
-                _                 => p => p.OrdemParada   // fallback seguro
+                "prioridade"      => p => (object)p.Prioridade,
+                "ordemparada"     => p => (object)p.OrdemParada,
+                "nome"            => p => (object)p.Nome,
+                "categoria"       => p => (object)p.Categoria,
+                "distanciametros" => p => (object)p.DistanciaMetros,
+                _                 => p => (object)p.OrdemParada
             };
 
             ordenado = ordenado is null
@@ -42,5 +42,41 @@ public static class OrdenacaoHelper
         }
 
         return ordenado ?? fonte.OrderBy(p => p.OrdemParada);
+    }
+
+    /// <summary>
+    /// Aplica ordenação em <see cref="PoiContagemPorItinerarioDTO"/>.
+    /// Campos: totalPois | nomeLinha
+    /// Prefixo "-" = decrescente. Exemplo: "-totalPois,nomeLinha"
+    /// </summary>
+    public static IEnumerable<PoiContagemPorItinerarioDTO> OrdenarContagem(
+        IEnumerable<PoiContagemPorItinerarioDTO> fonte,
+        string? sort)
+    {
+        if (string.IsNullOrWhiteSpace(sort))
+            return fonte.OrderByDescending(p => p.TotalPois);
+
+        var campos = sort.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        IOrderedEnumerable<PoiContagemPorItinerarioDTO>? ordenado = null;
+
+        foreach (var campo in campos)
+        {
+            var desc      = campo.StartsWith('-');
+            var nomeCampo = desc ? campo[1..] : campo;
+
+            Func<PoiContagemPorItinerarioDTO, object> seletor = nomeCampo.ToLowerInvariant() switch
+            {
+                "totalpois" => p => (object)p.TotalPois,
+                "nomelinha" => p => (object)p.NomeLinha,
+                _           => p => (object)p.TotalPois
+            };
+
+            ordenado = ordenado is null
+                ? (desc ? fonte.OrderByDescending(seletor) : fonte.OrderBy(seletor))
+                : (desc ? ordenado.ThenByDescending(seletor) : ordenado.ThenBy(seletor));
+        }
+
+        return ordenado ?? fonte.OrderByDescending(p => p.TotalPois);
     }
 }

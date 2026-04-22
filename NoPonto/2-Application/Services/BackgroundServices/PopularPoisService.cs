@@ -1,4 +1,3 @@
-// NoPonto.Application.Services/PopularPoisService.cs
 using System.Diagnostics;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
@@ -23,35 +22,115 @@ public sealed class PopularPoisService
         IConfiguration configuration,
         ILogger<PopularPoisService> logger)
     {
-        _contexto       = contexto;
-        _overpass       = overpass;
-        _poiRepository  = poiRepository;
-        _configuration  = configuration;
-        _logger         = logger;
+        _contexto      = contexto;
+        _overpass      = overpass;
+        _poiRepository = poiRepository;
+        _configuration = configuration;
+        _logger        = logger;
     }
 
-    // -------------------------------------------------------------------------
-    // Resultado público
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // Resultados públicos
+    // =========================================================================
+
     public sealed class ResultadoParada
     {
-        public Guid   ParadaId        { get; init; }
-        public bool   Encontrada      { get; init; }
-        public int    PoisCandidatos  { get; init; }
-        public int    PoisDescartados { get; init; }
-        public int    RelacoesCriadas { get; init; }
-        public long   TempoMs         { get; init; }
+        public Guid ParadaId        { get; init; }
+        public bool Encontrada      { get; init; }
+        public int  PoisCandidatos  { get; init; }
+        public int  PoisDescartados { get; init; }
+        public int  RelacoesCriadas { get; init; }
+        public long TempoMs         { get; init; }
 
-        public static ResultadoParada NaoEncontrada(Guid id) => new()
-        {
-            ParadaId   = id,
-            Encontrada = false
-        };
+        public static ResultadoParada NaoEncontrada(Guid id) => new() { ParadaId = id, Encontrada = false };
     }
 
-    // -------------------------------------------------------------------------
-    // Processa todas as paradas que têm pelo menos um itinerário associado
-    // -------------------------------------------------------------------------
+    public sealed class ResultadoItinerario
+    {
+        public Guid ItinerarioId         { get; init; }
+        public bool Encontrado           { get; init; }
+        public int  TotalParadas         { get; init; }
+        public int  TotalPoisCandidatos  { get; init; }
+        public int  TotalPoisDescartados { get; init; }
+        public int  TotalRelacoesCriadas { get; init; }
+        public long TempoMs              { get; init; }
+    }
+
+    // =========================================================================
+    // FASE 1 — Importação OSM em tiles
+    //
+    // Divide o mapa em células de ~3km × 3km e faz UMA request Overpass por tile.
+    // Para o Rio de Janeiro (~25km × 20km) gera ~60–80 tiles em vez de 800+
+    // requests (uma por itinerário). Resultado: minutos em vez de horas.
+    // =========================================================================
+    public async Task ImportarPoisOsmAsync(CancellationToken cancellationToken = default)
+    {
+        var sw     = Stopwatch.StartNew();
+        var config = LerConfiguracoes();
+
+        // Bounding box de todas as paradas cadastradas
+        var bbox = await _contexto.Paradas
+            .AsNoTracking()
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Sul   = g.Min(p => p.Localizacao.Y),
+                Norte = g.Max(p => p.Localizacao.Y),
+                Oeste = g.Min(p => p.Localizacao.X),
+                Leste = g.Max(p => p.Localizacao.X),
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (bbox is null)
+        {
+            _logger.LogWarning("Nenhuma parada encontrada. Importação OSM cancelada.");
+            return;
+        }
+
+        // Tile de 0.027° ≈ 3km — mantém cada query pequena e rápida
+        const double tamTile = 0.027;
+
+        var tiles = new List<(double Sul, double Oeste, double Norte, double Leste)>();
+        for (var lat = bbox.Sul; lat < bbox.Norte; lat += tamTile)
+        for (var lon = bbox.Oeste; lon < bbox.Leste; lon += tamTile)
+            tiles.Add((lat, lon,
+                       Math.Min(lat + tamTile, bbox.Norte),
+                       Math.Min(lon + tamTile, bbox.Leste)));
+
+        _logger.LogInformation(
+            "Importação OSM — {qtd} tiles de {tam}° (~3km). Bbox: S{s:F4} O{o:F4} N{n:F4} L{l:F4}",
+            tiles.Count, tamTile, bbox.Sul, bbox.Oeste, bbox.Norte, bbox.Leste);
+
+        var totalNovos = 0;
+        for (var i = 0; i < tiles.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var (sul, oeste, norte, leste) = tiles[i];
+            var poisOsm = await _overpass.BuscarNaAreaAsync(sul, oeste, norte, leste, cancellationToken);
+
+            // UpsertPoisAsync só insere os que ainda não existem (por nome+categoria na bbox)
+            var salvos = await _poiRepository.UpsertPoisAsync(poisOsm, config.TamanhoLote, cancellationToken);
+            totalNovos += salvos.Count;
+
+            _logger.LogInformation(
+                "Tile {i}/{total} — OSM: {osm} POIs retornados, {novos} no banco",
+                i + 1, tiles.Count, poisOsm.Count, salvos.Count);
+        }
+
+        sw.Stop();
+        _logger.LogInformation(
+            "Importação OSM concluída. Tiles: {tiles}. Banco: {novos} POIs. Tempo: {s}s",
+            tiles.Count, totalNovos,
+            sw.Elapsed.TotalSeconds.ToString("F2", CultureInfo.InvariantCulture));
+    }
+
+    // =========================================================================
+    // FASE 2 — Matching local (sem nenhuma request HTTP)
+    //
+    // Lê os POIs já importados no banco e distribui para as paradas por distância.
+    // 813 itinerários em ~2 minutos (contra horas com Overpass por itinerário).
+    // =========================================================================
     public async Task ExecutarAsync(CancellationToken cancellationToken = default)
     {
         var sw     = Stopwatch.StartNew();
@@ -62,52 +141,41 @@ public sealed class PopularPoisService
             .Select(i => i.Id)
             .ToListAsync(cancellationToken);
 
-        _logger.LogInformation("Iniciando população de POIs para {qtd} itinerários", itinerarioIds.Count);
+        _logger.LogInformation(
+            "Matching POIs → paradas para {qtd} itinerários (sem Overpass)",
+            itinerarioIds.Count);
 
         var totalRelacoes = 0;
+        var concluidos    = 0;
+
         foreach (var itinerarioId in itinerarioIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var resultado = await ExecutarParaItinerarioAsync(itinerarioId, cancellationToken);
             totalRelacoes += resultado.TotalRelacoesCriadas;
+            concluidos++;
 
-            // Pausa entre itinerários para não bater rate limit da Overpass
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            if (concluidos % 50 == 0)
+                _logger.LogInformation("Matching: {ok}/{total}", concluidos, itinerarioIds.Count);
         }
 
         sw.Stop();
         _logger.LogInformation(
-            "População concluída. Total relações: {rel}. Tempo: {s}s",
+            "Matching concluído. Relações criadas: {rel}. Tempo: {s}s",
             totalRelacoes,
             sw.Elapsed.TotalSeconds.ToString("F2", CultureInfo.InvariantCulture));
     }
 
-    // -------------------------------------------------------------------------
-    // Processa uma parada específica (exposto para o endpoint individual)
-    // -------------------------------------------------------------------------
-    public async Task<ResultadoParada> ExecutarParaParadaAsync(
-        Guid paradaId, CancellationToken cancellationToken = default)
-    {
-        var config = LerConfiguracoes();
-
-        var existe = await _contexto.Paradas
-            .AsNoTracking()
-            .AnyAsync(p => p.Id == paradaId, cancellationToken);
-
-        if (!existe)
-            return ResultadoParada.NaoEncontrada(paradaId);
-
-        return await ProcessarParadaAsync(paradaId, config, cancellationToken);
-    }
-
-    // PopularPoisService.cs — novo método público
+    // =========================================================================
+    // Matching de um único itinerário (usado pelo endpoint individual e pelo ExecutarAsync)
+    // =========================================================================
     public async Task<ResultadoItinerario> ExecutarParaItinerarioAsync(
         Guid itinerarioId, CancellationToken cancellationToken = default)
     {
         var sw     = Stopwatch.StartNew();
         var config = LerConfiguracoes();
 
-        // Busca paradas do itinerário já com localização, ordenadas pela sequência
         var paradas = await _contexto.ParadasItinerario
             .AsNoTracking()
             .Where(r => r.ItinerarioId == itinerarioId)
@@ -122,25 +190,24 @@ public sealed class PopularPoisService
             .ToListAsync(cancellationToken);
 
         if (paradas.Count == 0)
-            return new ResultadoItinerario
-            {
-                ItinerarioId = itinerarioId,
-                Encontrado   = false
-            };
+            return new ResultadoItinerario { ItinerarioId = itinerarioId, Encontrado = false };
 
-        // Uma única bbox cobrindo todas as paradas + margem do raio configurado
+        // Busca POIs do banco dentro da bbox do itinerário — SEM Overpass
         var margem = config.DistanciaMaximaMetros / 111_000.0;
         var sul    = paradas.Min(p => p.Lat) - margem;
         var norte  = paradas.Max(p => p.Lat) + margem;
         var oeste  = paradas.Min(p => p.Lon) - margem;
         var leste  = paradas.Max(p => p.Lon) + margem;
 
-        // Uma única request Overpass para o itinerário inteiro
-        var poisOsm = await _overpass.BuscarNaAreaAsync(sul, oeste, norte, leste, cancellationToken);
+        var poisNaArea = await _contexto.Pois
+            .AsNoTracking()
+            .Where(p =>
+                p.Localizacao.Y >= sul   && p.Localizacao.Y <= norte &&
+                p.Localizacao.X >= oeste && p.Localizacao.X <= leste)
+            .Select(p => new { p.Id, Lat = p.Localizacao.Y, Lon = p.Localizacao.X })
+            .ToListAsync(cancellationToken);
 
-        if (poisOsm.Count == 0)
-        {
-            sw.Stop();
+        if (poisNaArea.Count == 0)
             return new ResultadoItinerario
             {
                 ItinerarioId = itinerarioId,
@@ -148,18 +215,10 @@ public sealed class PopularPoisService
                 TotalParadas = paradas.Count,
                 TempoMs      = (long)sw.Elapsed.TotalMilliseconds
             };
-        }
 
-        // Upsert dos POIs na tabela (uma única passagem)
-        var poisSalvos = await _poiRepository.UpsertPoisAsync(poisOsm, config.TamanhoLote, cancellationToken);
-
-        // Distribui POIs para paradas em memória:
-        // Para cada POI, encontra a parada mais próxima dentro do raio.
-        // Garante que cada POI aparece ligado a no máximo uma parada neste itinerário.
-        var paradaIds   = paradas.Select(p => p.ParadaId).ToList();
-        var poiIds      = poisSalvos.Select(p => p.Id).ToList();
-
-        // Carrega relações já existentes para todas as paradas deste itinerário de uma vez
+        // Carrega relações já existentes de uma vez para evitar queries por POI
+        var paradaIds    = paradas.Select(p => p.ParadaId).ToList();
+        var poiIds       = poisNaArea.Select(p => p.Id).ToList();
         var jaExistentes = await _contexto.PoiParadas
             .AsNoTracking()
             .Where(r => paradaIds.Contains(r.ParadaId) && poiIds.Contains(r.PoiId))
@@ -173,41 +232,35 @@ public sealed class PopularPoisService
         // Para cada POI: qual parada do itinerário está mais próxima dentro do raio?
         var melhorParadaPorPoi = new Dictionary<Guid, (Guid paradaId, double distancia)>();
 
-        foreach (var poi in poisSalvos)
+        foreach (var poi in poisNaArea)
         {
-            var melhorDistancia = double.MaxValue;
-            Guid melhorParadaId = Guid.Empty;
+            var melhorDist   = double.MaxValue;
+            var melhorParada = Guid.Empty;
 
             foreach (var parada in paradas)
             {
-                var dist = HaversineMetros(parada.Lat, parada.Lon, poi.Localizacao.Y, poi.Localizacao.X);
-                if (dist < melhorDistancia && dist <= config.DistanciaMaximaMetros)
+                var dist = HaversineMetros(parada.Lat, parada.Lon, poi.Lat, poi.Lon);
+                if (dist < melhorDist && dist <= config.DistanciaMaximaMetros)
                 {
-                    melhorDistancia = dist;
-                    melhorParadaId  = parada.ParadaId;
+                    melhorDist   = dist;
+                    melhorParada = parada.ParadaId;
                 }
             }
 
-            if (melhorParadaId != Guid.Empty)
-                melhorParadaPorPoi[poi.Id] = (melhorParadaId, melhorDistancia);
+            if (melhorParada != Guid.Empty)
+                melhorParadaPorPoi[poi.Id] = (melhorParada, melhorDist);
         }
 
         var novasRelacoes      = new List<PoiParada>();
         var relacoesPraRemover = new List<Guid>();
-        var descartados        = poisSalvos.Count - melhorParadaPorPoi.Count;
+        var descartados        = poisNaArea.Count - melhorParadaPorPoi.Count;
 
         foreach (var (poiId, (paradaId, distancia)) in melhorParadaPorPoi)
         {
-            // Já existe relação para este POI em alguma parada deste itinerário?
             if (existentesPorPoi.TryGetValue(poiId, out var existente))
             {
-                if (existente.ParadaId == paradaId)
-                    continue; // já está na parada certa
-
-                if (existente.DistanciaMetros <= distancia)
-                    continue; // a relação existente já é mais próxima
-
-                // Esta parada é mais próxima — substitui
+                if (existente.ParadaId == paradaId) continue;
+                if (existente.DistanciaMetros <= distancia) continue;
                 relacoesPraRemover.Add(existente.Id);
             }
 
@@ -229,45 +282,39 @@ public sealed class PopularPoisService
 
         sw.Stop();
         _logger.LogInformation(
-            "Itinerário {id} — paradas: {p}, POIs candidatos: {c}, descartados: {d}, relações criadas: {r}",
-            itinerarioId, paradas.Count, poisSalvos.Count, descartados, novasRelacoes.Count);
+            "Itinerário {id} — paradas: {p}, candidatos: {c}, descartados: {d}, relações: {r}",
+            itinerarioId, paradas.Count, poisNaArea.Count, descartados, novasRelacoes.Count);
 
         return new ResultadoItinerario
         {
             ItinerarioId         = itinerarioId,
             Encontrado           = true,
             TotalParadas         = paradas.Count,
-            TotalPoisCandidatos  = poisSalvos.Count,
+            TotalPoisCandidatos  = poisNaArea.Count,
             TotalPoisDescartados = descartados,
             TotalRelacoesCriadas = novasRelacoes.Count,
             TempoMs              = (long)sw.Elapsed.TotalMilliseconds
         };
     }
 
-    public async Task<List<Guid>> ListarItinerarioIdsAsync(CancellationToken cancellationToken = default)
+    // =========================================================================
+    // Parada individual — útil para debug/calibração (ainda usa Overpass)
+    // =========================================================================
+    public async Task<ResultadoParada> ExecutarParaParadaAsync(
+        Guid paradaId, CancellationToken cancellationToken = default)
     {
-        return await _contexto.ParadasItinerario
+        var config = LerConfiguracoes();
+
+        var existe = await _contexto.Paradas
             .AsNoTracking()
-            .Select(pi => pi.ItinerarioId)
-            .Distinct()
-            .ToListAsync(cancellationToken);
+            .AnyAsync(p => p.Id == paradaId, cancellationToken);
+
+        if (!existe)
+            return ResultadoParada.NaoEncontrada(paradaId);
+
+        return await ProcessarParadaAsync(paradaId, config, cancellationToken);
     }
 
-    // Adiciona junto com ResultadoParada no mesmo arquivo
-    public sealed class ResultadoItinerario
-    {
-        public Guid ItinerarioId         { get; init; }
-        public bool Encontrado           { get; init; }
-        public int  TotalParadas         { get; init; }
-        public int  TotalPoisCandidatos  { get; init; }
-        public int  TotalPoisDescartados { get; init; }
-        public int  TotalRelacoesCriadas { get; init; }
-        public long TempoMs              { get; init; }
-    }
-
-    // -------------------------------------------------------------------------
-    // Núcleo: processa uma parada
-    // -------------------------------------------------------------------------
     private async Task<ResultadoParada> ProcessarParadaAsync(
         Guid paradaId, Configuracoes config, CancellationToken cancellationToken)
     {
@@ -276,38 +323,30 @@ public sealed class PopularPoisService
         var parada = await _contexto.Paradas
             .AsNoTracking()
             .Where(p => p.Id == paradaId)
-            .Select(p => new { p.Id, p.Localizacao })
+            .Select(p => new { p.Id, Lat = p.Localizacao.Y, Lon = p.Localizacao.X })
             .FirstOrDefaultAsync(cancellationToken);
 
         if (parada is null)
             return ResultadoParada.NaoEncontrada(paradaId);
 
-        var lat = parada.Localizacao.Y;
-        var lon = parada.Localizacao.X;
-
-        // Bounding box quadrada em graus ao redor da parada
         var margem = config.DistanciaMaximaMetros / 111_000.0;
 
         var poisOsm = await _overpass.BuscarNaAreaAsync(
-            sul:   lat - margem,
-            oeste: lon - margem,
-            norte: lat + margem,
-            leste: lon + margem,
+            parada.Lat - margem, parada.Lon - margem,
+            parada.Lat + margem, parada.Lon + margem,
             cancellationToken);
 
         if (poisOsm.Count == 0)
             return new ResultadoParada { ParadaId = paradaId, Encontrada = true };
 
-        // Upsert na tabela Pois (sem duplicar por nome+categoria)
         var poisSalvos = await _poiRepository.UpsertPoisAsync(poisOsm, config.TamanhoLote, cancellationToken);
 
-        // Filtra pelo raio real (Haversine) e garante unicidade por itinerário
         var (criadas, descartados) = await RelacionarComParadaAsync(
-            paradaId, lat, lon, poisSalvos, config, cancellationToken);
+            paradaId, parada.Lat, parada.Lon, poisSalvos, config, cancellationToken);
 
         sw.Stop();
         _logger.LogInformation(
-            "Parada {id} — candidatos: {c}, descartados: {d}, relações criadas: {r}",
+            "Parada {id} — candidatos: {c}, descartados: {d}, relações: {r}",
             paradaId, poisSalvos.Count, descartados, criadas);
 
         return new ResultadoParada
@@ -321,39 +360,20 @@ public sealed class PopularPoisService
         };
     }
 
-    // -------------------------------------------------------------------------
-    // Relacionamento POI → Parada
-    //
-    // Regra de unicidade por itinerário:
-    //   Um POI deve aparecer ligado a no máximo uma parada por itinerário —
-    //   a parada mais próxima dele. Para garantir isso:
-    //
-    //   1. Busca os itinerários que passam por esta parada.
-    //   2. Para cada POI candidato, verifica se já existe uma relação
-    //      com qualquer outra parada do mesmo itinerário.
-    //   3. Se existir e a distância anterior for menor, descarta.
-    //      Se esta parada for mais próxima, remove a relação anterior e cria aqui.
-    // -------------------------------------------------------------------------
     private async Task<(int criadas, int descartados)> RelacionarComParadaAsync(
-        Guid paradaId,
-        double lat,
-        double lon,
-        List<Poi> candidatos,
-        Configuracoes config,
+        Guid paradaId, double lat, double lon,
+        List<Poi> candidatos, Configuracoes config,
         CancellationToken cancellationToken)
     {
-        // Itinerários que passam por esta parada
         var itinerarioIds = await _contexto.ParadasItinerario
             .AsNoTracking()
             .Where(r => r.ParadaId == paradaId)
             .Select(r => r.ItinerarioId)
             .ToListAsync(cancellationToken);
 
-        // POIs já ligados a esta parada (para não duplicar)
-        var jaNestaParada = await _poiRepository.BuscarPoisJaRelacionadosNaParadaAsync(paradaId, cancellationToken);
+        var jaNestaParada = await _poiRepository
+            .BuscarPoisJaRelacionadosNaParadaAsync(paradaId, cancellationToken);
 
-        // Para cada itinerário que passa aqui, quais POIs já têm relação com OUTRA parada?
-        // Estrutura: dicionário poiId → (paradaId existente, distância existente)
         var poiIds = candidatos.Select(p => p.Id).ToList();
 
         var relacoesConcorrentes = await _contexto.PoiParadas
@@ -368,40 +388,22 @@ public sealed class PopularPoisService
 
         var concorrentesPorPoi = relacoesConcorrentes
             .GroupBy(r => r.PoiId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.OrderBy(r => r.DistanciaMetros).First()); // pega a mais próxima já existente
+            .ToDictionary(g => g.Key, g => g.OrderBy(r => r.DistanciaMetros).First());
 
         var novasRelacoes      = new List<PoiParada>();
-        var relacoesPraRemover = new List<Guid>(); // ids de PoiParada a substituir
+        var relacoesPraRemover = new List<Guid>();
         var descartados        = 0;
 
         foreach (var poi in candidatos)
         {
-            // Distância real em metros desta parada até o POI
             var distancia = HaversineMetros(lat, lon, poi.Localizacao.Y, poi.Localizacao.X);
 
-            if (distancia > config.DistanciaMaximaMetros)
-            {
-                descartados++;
-                continue;
-            }
+            if (distancia > config.DistanciaMaximaMetros) { descartados++; continue; }
+            if (jaNestaParada.Contains(poi.Id)) continue;
 
-            // Já está ligado a esta mesma parada — pula
-            if (jaNestaParada.Contains(poi.Id))
-                continue;
-
-            // Verifica se já existe relação com outra parada do mesmo itinerário
             if (concorrentesPorPoi.TryGetValue(poi.Id, out var existente))
             {
-                if (existente.DistanciaMetros <= distancia)
-                {
-                    // A parada existente já é mais próxima — descarta
-                    descartados++;
-                    continue;
-                }
-
-                // Esta parada é mais próxima — remove a relação anterior
+                if (existente.DistanciaMetros <= distancia) { descartados++; continue; }
                 relacoesPraRemover.Add(existente.Id);
             }
 
@@ -414,19 +416,30 @@ public sealed class PopularPoisService
             });
         }
 
-        // Remove relações substituídas
         if (relacoesPraRemover.Count > 0)
-        {
             await _contexto.PoiParadas
                 .Where(r => relacoesPraRemover.Contains(r.Id))
                 .ExecuteDeleteAsync(cancellationToken);
-        }
 
         await _poiRepository.InserirRelacaoEmLoteAsync(novasRelacoes, config.TamanhoLote, cancellationToken);
 
         return (novasRelacoes.Count, descartados);
     }
 
+    // =========================================================================
+    // Auxiliar para o Worker
+    // =========================================================================
+    public async Task<List<Guid>> ListarItinerarioIdsAsync(CancellationToken cancellationToken = default)
+    {
+        return await _contexto.Itinerarios
+            .AsNoTracking()
+            .Select(i => i.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    // =========================================================================
+    // Haversine + Configurações
+    // =========================================================================
     private static double HaversineMetros(double lat1, double lon1, double lat2, double lon2)
     {
         const double R = 6_371_000;
@@ -438,9 +451,6 @@ public sealed class PopularPoisService
         return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
     }
 
-    // -------------------------------------------------------------------------
-    // Configurações
-    // -------------------------------------------------------------------------
     private Configuracoes LerConfiguracoes() => new()
     {
         DistanciaMaximaMetros = LerDoubleOpcional("POI__DISTANCIA_MAXIMA_METROS", 150.0),
