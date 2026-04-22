@@ -244,6 +244,15 @@ public sealed class PopularPoisService
         };
     }
 
+    public async Task<List<Guid>> ListarItinerarioIdsAsync(CancellationToken cancellationToken = default)
+    {
+        return await _contexto.ParadasItinerario
+            .AsNoTracking()
+            .Select(pi => pi.ItinerarioId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
     // Adiciona junto com ResultadoParada no mesmo arquivo
     public sealed class ResultadoItinerario
     {

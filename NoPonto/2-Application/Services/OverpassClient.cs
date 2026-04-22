@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using NoPonto.Application.DTOs.Pois;
 
@@ -7,6 +8,8 @@ public sealed class OverpassClient
 {
     private readonly HttpClient _http;
     private readonly ILogger<OverpassClient> _logger;
+
+    private static readonly SemaphoreSlim _semaforo = new(1, 1);
 
     // Prioridade: 1 = alta relevância, 2 = média, 3 = baixa
     private static readonly Dictionary<string, (string Categoria, int Prioridade)> TagsParaCategoria = new()
@@ -35,11 +38,55 @@ public sealed class OverpassClient
         double sul, double oeste, double norte, double leste,
         CancellationToken cancellationToken)
     {
+        await _semaforo.WaitAsync(cancellationToken);
+        try
+        {
+            return await BuscarComRetryAsync(sul, oeste, norte, leste, cancellationToken);
+        }
+        finally
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1.5), cancellationToken);
+            _semaforo.Release();
+        }
+    }
+
+    private async Task<List<PoiImportadoDTO>> BuscarComRetryAsync(
+        double sul, double oeste, double norte, double leste,
+        CancellationToken cancellationToken,
+        int tentativasMax = 5)  // era 3, agora 5
+    {
+        var delay = TimeSpan.FromSeconds(30);  // era 10s, começa em 30s
+
+        for (var tentativa = 1; tentativa <= tentativasMax; tentativa++)
+        {
+            try
+            {
+                return await BuscarInternoAsync(sul, oeste, norte, leste, cancellationToken);
+            }
+            catch (HttpRequestException ex) when (
+                ex.StatusCode == HttpStatusCode.TooManyRequests ||
+                ex.StatusCode == HttpStatusCode.GatewayTimeout)
+            {
+                if (tentativa == tentativasMax) throw;
+
+                _logger.LogWarning(
+                    "Overpass {status} — tentativa {t}/{max}. Aguardando {s}s...",
+                    (int?)ex.StatusCode, tentativa, tentativasMax, delay.TotalSeconds);
+
+                await Task.Delay(delay, cancellationToken);
+                delay *= 2; // 30s → 60s → 120s → 240s
+            }
+        }
+
+        throw new InvalidOperationException("Não deveria chegar aqui.");
+    }
+
+    private async Task<List<PoiImportadoDTO>> BuscarInternoAsync(
+        double sul, double oeste, double norte, double leste,
+        CancellationToken cancellationToken)
+    {
         var bbox = $"{sul},{oeste},{norte},{leste}";
 
-        // Para cada tag: busca node + way + relation com centroide (out center)
-        // Para shoppings especificamente: também busca nodes com entrance=yes
-        // próximos ao polígono, que ficam na calçada e são muito mais úteis.
         var filtros = string.Join("\n", TagsParaCategoria.Keys.Select(tag =>
         {
             var partes = tag.Split('=');
@@ -52,8 +99,6 @@ public sealed class OverpassClient
                     """;
         }));
 
-        // Busca entradas de shoppings e terminais como nodes separados
-        // (esses ficam na calçada e resolvem o problema do polígono grande)
         var filtrosEntrada = $"""
             node["entrance"]["name"]({bbox});
             node["entrance"="main"]({bbox});

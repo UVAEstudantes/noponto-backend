@@ -156,8 +156,7 @@ public sealed class PoiRepository : IPoiRepository
             .Select(x => x.Dto)
             .ToList();
     }
-
-    
+ 
 
     public async Task<List<Poi>> UpsertPoisAsync(
         IEnumerable<PoiImportadoDTO> importados,
@@ -224,13 +223,33 @@ public sealed class PoiRepository : IPoiRepository
         return new HashSet<Guid>(ids);
     }
 
+
     public async Task InserirRelacaoEmLoteAsync(
         IEnumerable<PoiParada> relacoes, int tamanhoLote, CancellationToken cancellationToken)
     {
         var lista = relacoes.ToList();
-        for (var i = 0; i < lista.Count; i += tamanhoLote)
+
+        // Filtra relações que já existem no banco
+        var paradaIds = lista.Select(r => r.ParadaId).Distinct().ToList();
+        var jaExistentes = await _contexto.PoiParadas
+            .AsNoTracking()
+            .Where(r => paradaIds.Contains(r.ParadaId))
+            .Select(r => new { r.PoiId, r.ParadaId })
+            .ToListAsync(cancellationToken);
+
+        var chaveExistentes = jaExistentes
+            .Select(r => $"{r.PoiId}|{r.ParadaId}")
+            .ToHashSet();
+
+        var novas = lista
+            .Where(r => !chaveExistentes.Contains($"{r.PoiId}|{r.ParadaId}"))
+            .ToList();
+
+        if (novas.Count == 0) return;
+
+        for (var i = 0; i < novas.Count; i += tamanhoLote)
         {
-            var lote = lista.Skip(i).Take(tamanhoLote).ToList();
+            var lote = novas.Skip(i).Take(tamanhoLote).ToList();
             _contexto.PoiParadas.AddRange(lote);
             await _contexto.SaveChangesAsync(cancellationToken);
             _contexto.ChangeTracker.Clear();

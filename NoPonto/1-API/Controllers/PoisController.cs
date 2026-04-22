@@ -5,6 +5,7 @@ using NoPonto.Application.DTOs.Compartilhado;
 using NoPonto.Application.DTOs.Pois;
 using NoPonto.Application.Interfaces;
 using NoPonto.Application.Services;
+using NoPonto.Application.Services.BackgroundServices;
 
 namespace NoPonto.API.Controllers;
 
@@ -15,15 +16,18 @@ public class PoisController : ControllerBase
     private readonly IPoiService _service;
     private readonly PopularPoisService _popularService;
     private readonly TransporteDbContext _contexto;
+    private readonly PopularPoisQueue _popularQueue;
 
     public PoisController(
         IPoiService service,
         PopularPoisService popularService,
-        TransporteDbContext contexto)
+        TransporteDbContext contexto,
+        PopularPoisQueue popularPoisQueue)
     {
         _service        = service;
         _popularService = popularService;
         _contexto       = contexto;
+        _popularQueue = popularPoisQueue;
     }
 
     /// <summary>Lista POIs com filtro opcional por nome e paginação.</summary>
@@ -100,10 +104,10 @@ public class PoisController : ControllerBase
 
     /// <summary>Popula POIs para todas as paradas com itinerário associado.</summary>
     [HttpPost("popular")]
-    public async Task<IActionResult> Popular(CancellationToken cancellationToken)
+    public IActionResult Popular()
     {
-        await _popularService.ExecutarAsync(cancellationToken);
-        return Ok(new { mensagem = "POIs populados com sucesso." });
+        _popularQueue.Enfileirar(); // dispara sem await
+        return Accepted(new { mensagem = "Populando POIs em background. Acompanhe os logs." });
     }
 
     /// <summary>

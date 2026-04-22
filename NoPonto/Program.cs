@@ -6,6 +6,7 @@ using NoPonto.API.Middlewares;
 using NoPonto.Application.GPS;
 using NoPonto.Application.Interfaces;
 using NoPonto.Application.Services;
+using NoPonto.Application.Services.BackgroundServices;
 using NoPonto.Data.Interfaces;
 using NoPonto.Data.Repositories;
 using System.Reflection;
@@ -163,7 +164,9 @@ builder.Services.AddHostedService<ImportacaoItinerariosService>();
 builder.Services.AddHttpClient<OverpassClient>();
 builder.Services.AddScoped<PopularPoisService>();
 builder.Services.AddScoped<IPoiRepository, PoiRepository>();
-// IPoiService já deve estar registrado
+
+builder.Services.AddSingleton<PopularPoisQueue>();
+builder.Services.AddHostedService<PopularPoisWorker>();
 
 var app = builder.Build();
 

@@ -13,3 +13,5 @@
 - sistema de alertas/notificações com signalR para informar de próximos ônibus
 
 - melhorar veiculos em tempo real
+
+- get count pois por itinerario, retornar itinerarioId e count, sort de quantidade
