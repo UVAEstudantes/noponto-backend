@@ -95,11 +95,11 @@ builder.Services.AddCors(options =>
         }
 
         policy
-        .AllowAnyHeader()
-        .AllowAnyMethod()
-        .AllowCredentials()
-        .SetIsOriginAllowed(_ => true);
-        });
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials()
+            .SetIsOriginAllowed(_ => true);
+    });
 });
 
 // HttpClient tipado para a API de GPS
@@ -113,11 +113,23 @@ builder.Services
     .AddOptions<GpsPollingOptions>()
     .Bind(builder.Configuration.GetSection(GpsPollingOptions.Secao))
     .Validate(o => o.IntervaloSegundos > 0, "GpsPolling:IntervaloSegundos deve ser > 0")
-    .Validate(o => o.TtlSegundos > 0, "GpsPolling:TtlSegundos deve ser > 0")
+    .Validate(o => o.TtlAtivoSegundos > 0, "GpsPolling:TtlAtivoSegundos deve ser > 0")
+    .Validate(o => o.TtlRecenteSegundos >= o.TtlAtivoSegundos,
+        "GpsPolling:TtlRecenteSegundos deve ser ≥ TtlAtivoSegundos")
+    .Validate(o => o.VelocidadeMaximaKmh > 0, "GpsPolling:VelocidadeMaximaKmh deve ser > 0")
+    .Validate(o => o.JanelaVelocidadeLeituras > 0, "GpsPolling:JanelaVelocidadeLeituras deve ser > 0")
+    .Validate(o => o.DistanciaMaximaRotaMetros > 0, "GpsPolling:DistanciaMaximaRotaMetros deve ser > 0")
     .ValidateOnStart();
 
 builder.Services.AddSignalR();
-//builder.Services.AddHostedService<GpsPollingService>();
+builder.Services.AddHostedService<GpsPollingService>();
+
+// ── GPS: enriquecimento geoespacial ──────────────────────────────────────────
+// GpsItinerarioRepository é Scoped pois depende do DbContext.
+// GpsEnriquecimentoService também é Scoped pelo mesmo motivo.
+// O GpsPollingService (Singleton) cria um scope por ciclo via IServiceScopeFactory.
+builder.Services.AddScoped<IGpsItinerarioRepository, GpsItinerarioRepository>();
+builder.Services.AddScoped<GpsEnriquecimentoService>();
 
 var connectionString =
     $"Host=localhost;" +

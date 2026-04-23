@@ -1,6 +1,3 @@
-// ============================================================
-// VeiculosController.cs
-// ============================================================
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Distributed;
@@ -18,39 +15,59 @@ public sealed class VeiculosController : ControllerBase
     };
 
     private readonly IDistributedCache _cache;
+    private readonly IGpsItinerarioRepository _gpsItinerarioRepo;
 
-    public VeiculosController(IDistributedCache cache)
+    public VeiculosController(
+        IDistributedCache cache,
+        IGpsItinerarioRepository gpsItinerarioRepo)
     {
         _cache = cache;
+        _gpsItinerarioRepo = gpsItinerarioRepo;
     }
 
     /// <summary>
     /// Retorna a posição mais recente de um veículo pelo código (campo "ordem" da API).
-    /// Retorna 404 se o veículo não tiver enviado posição nos últimos 90s.
+    ///
+    /// Status possíveis no retorno:
+    ///   Ativo    → reportou no ciclo atual (≤ TtlAtivoSegundos atrás)
+    ///   SemSinal → não veio no último ciclo mas ainda está dentro do TtlRecenteSegundos
+    ///   404      → TTL longo expirado — veículo sumiu do sistema
     /// </summary>
     [HttpGet("{ordem}")]
     public async Task<IActionResult> GetVeiculo(string ordem, CancellationToken ct)
     {
-        var chave = GpsPollingService.ChaveVeiculo(ordem.ToUpperInvariant());
-        var json = await _cache.GetStringAsync(chave, ct);
+        var ordemNorm = ordem.ToUpperInvariant();
 
-        if (json is null)
-            return NotFound(new { mensagem = $"Veículo {ordem} sem posição recente." });
+        // Tenta chave :ativo primeiro
+        var jsonAtivo = await _cache.GetStringAsync(GpsPollingService.ChaveVeiculoAtivo(ordemNorm), ct);
+        if (jsonAtivo is not null)
+        {
+            var posicao = JsonSerializer.Deserialize<PosicaoVeiculoDto>(jsonAtivo, JsonOptions);
+            if (posicao is not null)
+                return Ok(posicao);
+        }
 
-        var posicao = JsonSerializer.Deserialize<PosicaoVeiculoDto>(json, JsonOptions);
-        if (posicao is null)
-            return NotFound(new { mensagem = $"Veículo {ordem} sem posição recente." });
+        // Tenta chave :recente (SemSinal)
+        var jsonRecente = await _cache.GetStringAsync(GpsPollingService.ChaveVeiculoRecente(ordemNorm), ct);
+        if (jsonRecente is not null)
+        {
+            var posicao = JsonSerializer.Deserialize<PosicaoVeiculoDto>(jsonRecente, JsonOptions);
+            if (posicao is not null)
+                return Ok(posicao with { Status = StatusVeiculo.SemSinal });
+        }
 
-        return Ok(posicao);
+        return NotFound(new { mensagem = $"Veículo {ordem} sem posição recente." });
     }
 
     /// <summary>
     /// Retorna as posições mais recentes de todos os veículos ativos em uma linha.
+    /// Inclui veículos com status SemSinal (sem sinal temporário mas dentro do TTL longo).
     /// </summary>
     [HttpGet("linha/{codigoLinha}")]
     public async Task<IActionResult> GetVeiculosPorLinha(string codigoLinha, CancellationToken ct)
     {
-        var chaveLinha = GpsPollingService.ChaveLinha(codigoLinha.ToUpperInvariant());
+        var linhaNorm = codigoLinha.ToUpperInvariant();
+        var chaveLinha = GpsPollingService.ChaveLinha(linhaNorm);
         var ordensRaw = await _cache.GetStringAsync(chaveLinha, ct);
 
         if (ordensRaw is null)
@@ -60,12 +77,28 @@ public sealed class VeiculosController : ControllerBase
         if (ordens.Length == 0)
             return NotFound(new { mensagem = $"Nenhum veículo ativo para a linha {codigoLinha}." });
 
-        // Busca paralela de todos os veículos da linha
+        // Busca paralela — tenta :ativo primeiro, fallback para :recente (SemSinal)
         var tarefas = ordens.Select(async ordem =>
         {
-            var chave = GpsPollingService.ChaveVeiculo(ordem);
-            var json = await _cache.GetStringAsync(chave, ct);
-            return json is null ? null : JsonSerializer.Deserialize<PosicaoVeiculoDto>(json, JsonOptions);
+            var jsonAtivo = await _cache.GetStringAsync(GpsPollingService.ChaveVeiculoAtivo(ordem), ct);
+            if (jsonAtivo is not null)
+            {
+                try { return JsonSerializer.Deserialize<PosicaoVeiculoDto>(jsonAtivo, JsonOptions); }
+                catch { /* corrompido */ }
+            }
+
+            var jsonRecente = await _cache.GetStringAsync(GpsPollingService.ChaveVeiculoRecente(ordem), ct);
+            if (jsonRecente is not null)
+            {
+                try
+                {
+                    var dto = JsonSerializer.Deserialize<PosicaoVeiculoDto>(jsonRecente, JsonOptions);
+                    return dto is null ? null : dto with { Status = StatusVeiculo.SemSinal };
+                }
+                catch { /* corrompido */ }
+            }
+
+            return null;
         });
 
         var resultados = await Task.WhenAll(tarefas);
@@ -75,7 +108,40 @@ public sealed class VeiculosController : ControllerBase
         {
             codigoLinha,
             totalVeiculos = posicoes.Count,
+            totalAtivos = posicoes.Count(p => p!.Status == StatusVeiculo.Ativo),
+            totalSemSinal = posicoes.Count(p => p!.Status == StatusVeiculo.SemSinal),
             posicoes
+        });
+    }
+
+    /// <summary>
+    /// Retorna a geometria GeoJSON de um itinerário.
+    ///
+    /// O frontend deve chamar este endpoint uma vez por itinerário assinado
+    /// e usar a LineString localmente (Turf.js) para interpolar a posição do
+    /// veículo entre os updates de 20s — dead-reckoning.
+    ///
+    /// Resposta:
+    /// {
+    ///   "itinerarioId": "...",
+    ///   "geoJson": { "type": "LineString", "coordinates": [[lon, lat], ...] }
+    /// }
+    /// </summary>
+    [HttpGet("itinerario/{itinerarioId:guid}/geometria")]
+    public async Task<IActionResult> GetGeometriaItinerario(Guid itinerarioId, CancellationToken ct)
+    {
+        var geoJson = await _gpsItinerarioRepo.BuscarGeometriaGeoJsonAsync(itinerarioId, ct);
+
+        if (geoJson is null)
+            return NotFound(new { mensagem = $"Itinerário {itinerarioId} não encontrado." });
+
+        // Deserializa para object para que a resposta seja JSON limpo (não string escapada)
+        var geoJsonObj = JsonSerializer.Deserialize<object>(geoJson, JsonOptions);
+
+        return Ok(new
+        {
+            itinerarioId,
+            geoJson = geoJsonObj
         });
     }
 }
