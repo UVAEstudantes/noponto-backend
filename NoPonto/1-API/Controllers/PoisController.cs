@@ -92,15 +92,30 @@ public class PoisController : ControllerBase
     /// <summary>
     /// Contagem de POIs por itinerário — diagnóstico de cobertura.
     /// Campos de sort: totalPois | nomeLinha
-    /// Prefixo "-" = decrescente. Padrão: "-totalPois" (mais cobertura primeiro).
-    /// Exemplo para ver os menos cobertos: "totalPois,nomeLinha"
+    /// Prefixo "-" = decrescente.
     /// </summary>
     [HttpGet("contagem-por-itinerario")]
-    [ProducesResponseType(typeof(IReadOnlyList<PoiContagemPorItinerarioDTO>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ListarContagemPorItinerario(
-        [FromQuery] string? sort = "-totalPois",
-        CancellationToken cancellationToken = default)
-        => Ok(await _service.ListarContagemPorItinerarioAsync(sort, cancellationToken));
+    [ProducesResponseType(
+        typeof(PaginacaoRespostaDTO<PoiContagemPorItinerarioDTO>),
+        StatusCodes.Status200OK)]
+    public async Task<IActionResult>
+        ListarContagemPorItinerario(
+            [FromQuery] string? nomeLinha,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? sort = "-totalPois",
+            CancellationToken cancellationToken = default)
+    {
+        var resultado = await _service
+            .ListarContagemPorItinerarioAsync(
+                nomeLinha,
+                page,
+                pageSize,
+                sort,
+                cancellationToken);
+
+        return Ok(resultado);
+    }
 
     /// <summary>
     /// POIs próximos a um ponto geográfico arbitrário (lat/lng + raio).

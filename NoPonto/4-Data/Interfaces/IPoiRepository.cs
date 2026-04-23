@@ -15,7 +15,11 @@ public interface IPoiRepository
     Task<List<PoiPorItinerarioDTO>> ListarPorItinerarioAsync(
         Guid itinerarioId, CancellationToken cancellationToken);
 
-    Task<List<PoiContagemPorItinerarioDTO>> ListarContagemPorItinerarioAsync(
+    Task<PaginacaoRespostaDTO<PoiContagemPorItinerarioDTO>> ListarContagemPorItinerarioAsync(
+        string? nomeLinha,
+        int page,
+        int pageSize,
+        string? sort,
         CancellationToken cancellationToken);
 
     Task<List<PoiConsultaDTO>> ListarPorPontoAsync(

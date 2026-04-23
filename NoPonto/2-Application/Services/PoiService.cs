@@ -27,14 +27,33 @@ public sealed class PoiService : IPoiService
         return OrdenacaoHelper.Ordenar(dados, sort).ToList();
     }
 
-    public async Task<List<PoiContagemPorItinerarioDTO>> ListarContagemPorItinerarioAsync(
-        string? sort, CancellationToken cancellationToken)
+    public async Task<PaginacaoRespostaDTO<PoiContagemPorItinerarioDTO>>
+    ListarContagemPorItinerarioAsync(
+            string? nomeLinha,
+            int page,
+            int pageSize,
+            string? sort,
+            CancellationToken cancellationToken)
     {
-        var dados = await _repository.ListarContagemPorItinerarioAsync(cancellationToken);
-        return OrdenacaoHelper.OrdenarContagem(dados, sort).ToList();
+        var dados = await _repository
+            .ListarContagemPorItinerarioAsync(
+                nomeLinha,
+                page,
+                pageSize,
+                sort,
+                cancellationToken);
+
+        dados.Itens = OrdenacaoHelper
+            .OrdenarContagem(dados.Itens, sort)
+            .ToList();
+
+        return dados;
     }
 
     public Task<List<PoiConsultaDTO>> ListarPorPontoAsync(
         double latitude, double longitude, double raioMetros, CancellationToken cancellationToken)
         => _repository.ListarPorPontoAsync(latitude, longitude, raioMetros, cancellationToken);
+
+    
+
 }

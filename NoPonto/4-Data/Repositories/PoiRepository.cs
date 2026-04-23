@@ -116,47 +116,93 @@ public sealed class PoiRepository : IPoiRepository
     // -------------------------------------------------------------------------
     // Contagem de POIs por itinerário — para diagnóstico de cobertura
     // -------------------------------------------------------------------------
-    public async Task<List<PoiContagemPorItinerarioDTO>> ListarContagemPorItinerarioAsync(
-        CancellationToken cancellationToken)
+    public async Task<PaginacaoRespostaDTO<PoiContagemPorItinerarioDTO>> ListarContagemPorItinerarioAsync(
+            string? nomeLinha,
+            int page,
+            int pageSize,
+            string? sort,
+            CancellationToken cancellationToken)
     {
-        // Busca todos os itinerários com seus dados de linha/sentido
-        var itinerarios = await _contexto.Itinerarios
+        var queryItinerarios = _contexto.Itinerarios
             .AsNoTracking()
             .Select(i => new
             {
                 i.Id,
-                LinhaId    = i.Sentido.LinhaId,
-                NomeLinha  = i.Sentido.Linha.Nome,
-                SentidoId  = i.SentidoId,
-                NomeSentido = i.Sentido.Nome
-            })
+                LinhaId      = i.Sentido.LinhaId,
+                NomeLinha    = i.Sentido.Linha.Nome,
+                SentidoId    = i.SentidoId,
+                NomeSentido  = i.Sentido.Nome
+            });
+
+        // Filtro por nome da linha
+        if (!string.IsNullOrWhiteSpace(nomeLinha))
+        {
+            nomeLinha = nomeLinha.Trim();
+
+            queryItinerarios = queryItinerarios
+                .Where(i =>
+                    EF.Functions.Like(
+                        i.NomeLinha,
+                        $"%{nomeLinha}%"));
+        }
+
+        // Total antes da paginação
+        var totalRegistros = await queryItinerarios
+            .CountAsync(cancellationToken);
+
+        var itinerarios = await queryItinerarios
+            .OrderBy(i => i.NomeLinha)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync(cancellationToken);
 
-        // Paradas de cada itinerário
+        var itinerarioIds = itinerarios
+            .Select(i => i.Id)
+            .ToList();
+
+        // Buscar apenas paradas dos itinerários paginados
         var paradaPorItinerario = await _contexto.ParadasItinerario
             .AsNoTracking()
+            .Where(pi => itinerarioIds.Contains(pi.ItinerarioId))
             .Select(pi => new { pi.ItinerarioId, pi.ParadaId })
             .ToListAsync(cancellationToken);
 
-        // Contagem de PoiParadas por ParadaId
+        var paradaIds = paradaPorItinerario
+            .Select(p => p.ParadaId)
+            .Distinct()
+            .ToList();
+
+        // Contagem apenas das paradas necessárias
         var contagemPorParada = await _contexto.PoiParadas
             .AsNoTracking()
+            .Where(pp => paradaIds.Contains(pp.ParadaId))
             .GroupBy(pp => pp.ParadaId)
-            .Select(g => new { ParadaId = g.Key, Total = g.Count() })
+            .Select(g => new
+            {
+                ParadaId = g.Key,
+                Total = g.Count()
+            })
             .ToListAsync(cancellationToken);
 
-        // Agrupa em memória: soma os POIs de todas as paradas de cada itinerário
-        var totalPorParada = contagemPorParada.ToDictionary(x => x.ParadaId, x => x.Total);
+        var totalPorParada = contagemPorParada
+            .ToDictionary(x => x.ParadaId, x => x.Total);
 
         var paradasPorItinerario = paradaPorItinerario
             .GroupBy(x => x.ItinerarioId)
-            .ToDictionary(g => g.Key, g => g.Select(x => x.ParadaId).ToList());
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.ParadaId).ToList());
 
-        return itinerarios
+        var itens = itinerarios
             .Select(i =>
             {
-                var paradas = paradasPorItinerario.GetValueOrDefault(i.Id, []);
-                var total   = paradas.Sum(pid => totalPorParada.GetValueOrDefault(pid, 0));
+                var paradas = paradasPorItinerario
+                    .GetValueOrDefault(i.Id, []);
+
+                var total = paradas
+                    .Sum(pid =>
+                        totalPorParada
+                            .GetValueOrDefault(pid, 0));
 
                 return new PoiContagemPorItinerarioDTO
                 {
@@ -169,6 +215,17 @@ public sealed class PoiRepository : IPoiRepository
                 };
             })
             .ToList();
+
+        return new PaginacaoRespostaDTO<PoiContagemPorItinerarioDTO>
+        {
+            Pagina         = page,
+            TamanhoPagina  = pageSize,
+            TotalRegistros = totalRegistros,
+            TotalPaginas   =
+                (int)Math.Ceiling(
+                    totalRegistros / (double)pageSize),
+            Itens = itens
+        };
     }
 
     // -------------------------------------------------------------------------
@@ -228,7 +285,13 @@ public sealed class PoiRepository : IPoiRepository
         int tamanhoLote,
         CancellationToken cancellationToken)
     {
-        var lista = importados.ToList();
+        // Deduplica a entrada antes de qualquer coisa:
+        // se o mesmo tile trouxer dois POIs com nome+categoria idênticos, fica só o primeiro
+        var lista = importados
+            .GroupBy(p => ChavePoi(p.Nome, p.Categoria))
+            .Select(g => g.First())
+            .ToList();
+
         if (lista.Count == 0) return [];
 
         var latMin = lista.Min(p => p.Latitude)  - 0.001;
@@ -242,10 +305,12 @@ public sealed class PoiRepository : IPoiRepository
                 p.Localizacao.X >= lonMin && p.Localizacao.X <= lonMax)
             .ToListAsync(cancellationToken);
 
+        // Aqui também usa GroupBy por segurança (banco pode ter duplicatas legadas)
         var existentesPorChave = existentes
-            .ToDictionary(p => ChavePoi(p.Nome, p.Categoria));
+            .GroupBy(p => ChavePoi(p.Nome, p.Categoria))
+            .ToDictionary(g => g.Key, g => g.First());
 
-        var novos    = new List<Poi>();
+        var novos     = new List<Poi>();
         var resultado = new List<Poi>();
 
         foreach (var dto in lista)
@@ -268,7 +333,7 @@ public sealed class PoiRepository : IPoiRepository
             };
 
             novos.Add(novo);
-            existentesPorChave[chave] = novo;
+            existentesPorChave[chave] = novo; // evita duplicar dentro do mesmo lote
             resultado.Add(novo);
         }
 
