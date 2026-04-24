@@ -45,4 +45,73 @@ public sealed class ItinerarioService : IItinerarioService
 
         return mapa;
     }
+
+    public async Task<ItinerarioMapaLinhaDTO> BuscarMapaPorLinhaAsync(Guid linhaId, bool incluirParadas, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation(
+            "Consultando mapa completo da linha via service. linhaId={linhaId}, incluirParadas={incluirParadas}",
+            linhaId,
+            incluirParadas);
+
+        var linhaExiste = await _linhaRepository.ExistePorIdAsync(linhaId, cancellationToken);
+
+        if (!linhaExiste)
+            throw new NotFoundException(MensagemErro.LINHA_NAO_ENCONTRADA);
+
+        var itinerarios = await _itinerarioRepository.ListarPorLinhaAsync(linhaId, cancellationToken);
+
+        if (itinerarios.Count == 0)
+            throw new NotFoundException(MensagemErro.ITINERARIO_NAO_ENCONTRADO);
+
+        var itinerariosMapa = new List<ItinerarioMapaDTO>(itinerarios.Count);
+
+        foreach (var itinerario in itinerarios)
+        {
+            var mapa = await _itinerarioRepository.BuscarMapaAsync(itinerario.Id, cancellationToken);
+            if (mapa is not null)
+                itinerariosMapa.Add(mapa);
+        }
+
+        if (itinerariosMapa.Count == 0)
+            throw new NotFoundException(MensagemErro.ITINERARIO_NAO_ENCONTRADO);
+
+        var linhaNome = itinerariosMapa[0].LinhaNome;
+
+        var geometria = itinerariosMapa
+            .SelectMany(itinerario => itinerario.Geometria)
+            .Select((coordenada, indice) => new ItinerarioMapaCoordenadaDTO
+            {
+                Ordem = indice + 1,
+                Latitude = coordenada.Latitude,
+                Longitude = coordenada.Longitude
+            })
+            .ToList();
+
+        IReadOnlyList<ItinerarioMapaParadaDTO> paradas = [];
+
+        if (incluirParadas)
+        {
+            paradas = itinerariosMapa
+                .SelectMany(itinerario => itinerario.Paradas)
+                .Select((parada, indice) => new ItinerarioMapaParadaDTO
+                {
+                    ParadaId = parada.ParadaId,
+                    Nome = parada.Nome,
+                    Ordem = indice + 1,
+                    Latitude = parada.Latitude,
+                    Longitude = parada.Longitude,
+                    PosicaoLinha = parada.PosicaoLinha
+                })
+                .ToList();
+        }
+
+        return new ItinerarioMapaLinhaDTO
+        {
+            LinhaId = linhaId,
+            LinhaNome = linhaNome,
+            ItinerariosIds = itinerariosMapa.Select(itinerario => itinerario.ItinerarioId).ToList(),
+            Geometria = geometria,
+            Paradas = paradas
+        };
+    }
 }
