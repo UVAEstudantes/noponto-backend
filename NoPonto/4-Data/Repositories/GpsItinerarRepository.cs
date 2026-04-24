@@ -7,25 +7,27 @@ using NoPonto.Application.GPS;
 namespace NoPonto.Data.Repositories;
 
 /// <summary>
-/// Implementação de <see cref="IGpsItinerarioRepository"/> usando NpgsqlCommand
-/// direto (sem passar pelo pipeline do EF Core) para evitar o wrap em subquery
-/// que causa conflito de case nos aliases PostgreSQL.
+/// Implementação de IGpsItinerarioRepository.
 ///
-/// Estratégia de seleção do itinerário (ida vs. volta):
-///   Para cada linha há dois itinerários. Usamos o bearing do veículo para
-///   desambiguar: selecionamos o itinerário cuja direção (ST_Azimuth entre
-///   início e fim da LineString) é mais próxima do bearing do veículo.
-///   Confirmamos com ST_Distance para descartar rotas muito distantes.
+/// Usa NpgsqlDataSource injetado diretamente em vez de pegar a conexão
+/// do DbContext. Isso garante que cada chamada paralela abre sua própria
+/// conexão do pool do Npgsql, eliminando o NpgsqlOperationInProgressException
+/// que ocorria quando múltiplos veículos eram enriquecidos em paralelo.
 /// </summary>
 public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
 {
+    private readonly NpgsqlDataSource _dataSource;
     private readonly TransporteDbContext _db;
     private readonly ILogger<GpsItinerarioRepository> _logger;
 
-    public GpsItinerarioRepository(TransporteDbContext db, ILogger<GpsItinerarioRepository> logger)
+    public GpsItinerarioRepository(
+        NpgsqlDataSource dataSource,
+        TransporteDbContext db,
+        ILogger<GpsItinerarioRepository> logger)
     {
-        _db = db;
-        _logger = logger;
+        _dataSource = dataSource;
+        _db         = db;
+        _logger     = logger;
     }
 
     public async Task<EnriquecimentoRotaDto?> BuscarEnriquecimentoAsync(
@@ -36,20 +38,6 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
         double distanciaMaximaMetros,
         CancellationToken cancellationToken = default)
     {
-        /*
-         * A query faz o seguinte em uma única round-trip:
-         *
-         * 1. Busca os itinerários da linha via JOIN Sentidos → Linhas.
-         * 2. Para cada itinerário calcula:
-         *    - ST_Distance(geography): distância do veículo à rota em metros.
-         *    - ST_Azimuth: bearing da rota (início → fim).
-         *    - ST_LineLocatePoint: posição na rota (0.0 → 1.0).
-         *    - ST_Length(geography): comprimento total em metros.
-         * 3. Filtra rotas além de distanciaMaximaMetros.
-         * 4. Ordena por alinhamento de bearing (menor diferença angular),
-         *    depois por distância — escolhe o itinerário mais plausível.
-         * 5. LEFT JOIN com a próxima parada à frente do veículo.
-         */
         const string sql = """
             WITH veiculo AS (
                 SELECT ST_SetSRID(ST_MakePoint(@lon, @lat), 4326)::geography AS ponto,
@@ -106,19 +94,19 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
 
         try
         {
-            var conn = (NpgsqlConnection)_db.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync(cancellationToken);
+            // Abre conexão própria do pool — não compartilha com nenhuma outra query
+            await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
+            await using var cmd  = conn.CreateCommand();
 
-            await using var cmd = conn.CreateCommand();
             cmd.CommandText = sql;
-            cmd.Parameters.AddWithValue("lat", latitude);
-            cmd.Parameters.AddWithValue("lon", longitude);
-            cmd.Parameters.AddWithValue("codigo", codigoLinha);
-            cmd.Parameters.AddWithValue("bearing", bearing);
+            cmd.Parameters.AddWithValue("lat",      latitude);
+            cmd.Parameters.AddWithValue("lon",      longitude);
+            cmd.Parameters.AddWithValue("codigo",   codigoLinha);
+            cmd.Parameters.AddWithValue("bearing",  bearing);
             cmd.Parameters.AddWithValue("dist_max", distanciaMaximaMetros);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+
             if (!await reader.ReadAsync(cancellationToken))
                 return null;
 
@@ -161,15 +149,14 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
 
         try
         {
-            var conn = (NpgsqlConnection)_db.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync(cancellationToken);
+            await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
+            await using var cmd  = conn.CreateCommand();
 
-            await using var cmd = conn.CreateCommand();
             cmd.CommandText = sql;
             cmd.Parameters.AddWithValue("id", itinerarioId);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+
             if (!await reader.ReadAsync(cancellationToken))
                 return null;
 
@@ -177,7 +164,8 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Falha ao buscar geometria GeoJSON do itinerário {id}", itinerarioId);
+            _logger.LogWarning(ex,
+                "Falha ao buscar geometria GeoJSON do itinerário {id}", itinerarioId);
             return null;
         }
     }

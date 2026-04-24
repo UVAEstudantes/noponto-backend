@@ -15,3 +15,14 @@
 - melhorar veiculos em tempo real
 
 - get count pois por itinerario, retornar itinerarioId e count, sort de quantidade
+
+
+problemas com o GPS:
+
+- veiculos somem e surgem em posições aleatorias da linha e dps voltam pra posição real
+
+- esta pegando veiculos "fantasmas", provavelmente veiculos q ficaram sem gps horas atras (eles ficam em loop na tela)
+
+- ainda erra muito na distancia percorrida durante o tempo sem dados da API
+
+- um erro absurdo q eu percebi é quando uso o endpoint de itinerario pra mapear a via e isso muda a direção de alguns veiculos

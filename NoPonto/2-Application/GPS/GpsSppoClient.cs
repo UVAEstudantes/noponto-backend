@@ -6,11 +6,18 @@ namespace NoPonto.Application.GPS;
 
 /// <summary>
 /// Cliente HTTP tipado para a API pública de GPS da Mobilidade Rio.
-/// Registre como AddHttpClient&lt;GpsSppoClient&gt; no DI.
+///
+/// A API filtra por datahoraenvio (quando o GPS comunicou à central),
+/// não por datahora (timestamp real do GPS). Para evitar perder posições
+/// que chegaram com atraso, usamos uma janela com overlap retroativo:
+///   dataInicial = agora - JanelaSegundos (default: 60s)
+///   dataFinal   = agora
+///
+/// O deduplicador no PollingService (GroupBy + OrderByDescending) garante
+/// que só fica a posição mais recente por veículo.
 /// </summary>
 public sealed class GpsSppoClient
 {
-    // Formato exigido pela API: "AAAA-MM-DD+HH:MM:SS"
     private const string FormatoData = "yyyy-MM-dd+HH:mm:ss";
 
     private readonly HttpClient _http;
@@ -22,16 +29,41 @@ public sealed class GpsSppoClient
         _logger = logger;
     }
 
+    /// <summary>
+    /// Busca posições com janela de overlap.
+    /// dataInicial = ate - janelaSegundos
+    /// dataFinal   = ate
+    /// </summary>
     public async Task<IReadOnlyList<PosicaoVeiculoDto>> BuscarPosicoesPorIntervaloAsync(
         DateTimeOffset de,
         DateTimeOffset ate,
         CancellationToken cancellationToken = default)
     {
-        var dataInicial = de.ToLocalTime().ToString(FormatoData, CultureInfo.InvariantCulture);
-        var dataFinal   = ate.ToLocalTime().ToString(FormatoData, CultureInfo.InvariantCulture);
+        // Ignora o parâmetro "de" — usamos sempre uma janela fixa retroativa
+        // para garantir que posições com atraso de envio não sejam perdidas.
+        // O deduplicador no PollingService já descarta duplicatas.
+        _ = de;
+
+        return await BuscarComJanelaAsync(ate, cancellationToken);
+    }
+
+    /// <summary>
+    /// Busca usando janela retroativa a partir de "referencia".
+    /// janelaSegundos deve ser ao menos 2× o intervalo de polling.
+    /// </summary>
+    public async Task<IReadOnlyList<PosicaoVeiculoDto>> BuscarComJanelaAsync(
+        DateTimeOffset referencia,
+        CancellationToken cancellationToken = default,
+        int janelaSegundos = 60)
+    {
+        var inicio = referencia.AddSeconds(-janelaSegundos);
+        var fim    = referencia;
+
+        var dataInicial = inicio.ToLocalTime().ToString(FormatoData, CultureInfo.InvariantCulture);
+        var dataFinal   = fim.ToLocalTime().ToString(FormatoData, CultureInfo.InvariantCulture);
         var url = $"?dataInicial={dataInicial}&dataFinal={dataFinal}";
 
-        _logger.LogDebug("Buscando GPS SPPO: {url}", url);
+        _logger.LogDebug("Buscando GPS SPPO janela {janela}s: {url}", janelaSegundos, url);
 
         try
         {
@@ -39,12 +71,19 @@ public sealed class GpsSppoClient
 
             if (raw is null || raw.Count == 0)
             {
-                _logger.LogWarning("API GPS retornou resposta vazia para o intervalo {de} → {ate}", de, ate);
+                _logger.LogWarning("API GPS retornou resposta vazia para janela [{inicio}, {fim}]", inicio, fim);
                 return [];
             }
 
-            _logger.LogInformation("API GPS retornou {total} posições", raw.Count);
-            return raw.Select(Normalizar).Where(p => p is not null).Cast<PosicaoVeiculoDto>().ToList();
+            _logger.LogInformation(
+                "API GPS retornou {total} posições (janela {janela}s)",
+                raw.Count, janelaSegundos);
+
+            return raw
+                .Select(Normalizar)
+                .Where(p => p is not null)
+                .Cast<PosicaoVeiculoDto>()
+                .ToList();
         }
         catch (Exception ex)
         {
@@ -58,7 +97,8 @@ public sealed class GpsSppoClient
         if (!TryParseDecimalBr(dto.Latitude, out var lat) ||
             !TryParseDecimalBr(dto.Longitude, out var lon))
         {
-            _logger.LogWarning("Coordenada inválida para veículo {ordem}: lat={lat} lon={lon}",
+            _logger.LogWarning(
+                "Coordenada inválida para veículo {ordem}: lat={lat} lon={lon}",
                 dto.Ordem, dto.Latitude, dto.Longitude);
             return null;
         }
@@ -75,7 +115,6 @@ public sealed class GpsSppoClient
             Velocidade        = velocidade,
             TimestampGps      = UnixMsParaDateTimeOffset(dto.DataHora),
             TimestampServidor = UnixMsParaDateTimeOffset(dto.DataHoraServidor),
-            // Posição anterior é preenchida pelo GpsPollingService, não aqui
         };
     }
 

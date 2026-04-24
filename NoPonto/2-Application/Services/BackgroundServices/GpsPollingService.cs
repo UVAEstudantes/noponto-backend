@@ -9,26 +9,6 @@ using NoPonto.API.Hubs;
 
 namespace NoPonto.Application.GPS;
 
-/// <summary>
-/// Background service que puxa a API de GPS a cada N segundos,
-/// normaliza, enriquece com histórico e dados de rota, e salva no Redis.
-/// Após salvar, faz broadcast via SignalR apenas das linhas com assinantes ativos.
-///
-/// Estrutura no Redis:
-///   veiculo:{ORDEM}:ativo     → PosicaoVeiculoDto (TTL curto: TtlAtivoSegundos)
-///   veiculo:{ORDEM}:recente   → PosicaoVeiculoDto (TTL longo: TtlRecenteSegundos)
-///   linha:{CODIGO}:veiculos   → CSV de ordens ativas nessa linha (TTL: TtlLinhaSegundos)
-///
-/// TTL duplo:
-///   - :ativo expira depois de ~2 ciclos sem reportar → status SemSinal
-///   - :recente expira depois de ~9 ciclos → status Inativo (remove do mapa)
-///   Isso elimina o "piscar" de veículos em semáforos ou com falha momentânea de GPS.
-///
-/// Enriquecimento (apenas para linhas com assinantes):
-///   - Bearing calculado localmente (posição anterior → atual)
-///   - Velocidade média filtrada (descarta leituras espúrias acima de VelocidadeMaximaKmh)
-///   - Posição na rota, comprimento, próxima parada — via PostGIS (GpsEnriquecimentoService)
-/// </summary>
 public sealed class GpsPollingService : BackgroundService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -43,11 +23,11 @@ public sealed class GpsPollingService : BackgroundService
     private readonly GpsPollingOptions _opcoes;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    // Histórico de velocidades em memória — persiste entre ciclos do mesmo processo.
-    // Chave: Ordem do veículo. Valor: fila circular das últimas N velocidades válidas.
-    private readonly Dictionary<string, Queue<double>> _historicoVelocidades = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Queue<double>> _historicoVelocidades =
+        new(StringComparer.OrdinalIgnoreCase);
 
-    private DateTimeOffset _ultimaBusca;
+    private readonly Dictionary<string, string> _linhaPorVeiculo =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public GpsPollingService(
         GpsSppoClient cliente,
@@ -57,32 +37,33 @@ public sealed class GpsPollingService : BackgroundService
         IOptions<GpsPollingOptions> opcoes,
         IServiceScopeFactory scopeFactory)
     {
-        _cliente = cliente;
-        _cache = cache;
-        _hubContext = hubContext;
-        _logger = logger;
-        _opcoes = opcoes.Value;
+        _cliente      = cliente;
+        _cache        = cache;
+        _hubContext   = hubContext;
+        _logger       = logger;
+        _opcoes       = opcoes.Value;
         _scopeFactory = scopeFactory;
-        _ultimaBusca = DateTimeOffset.UtcNow.AddSeconds(-_opcoes.IntervaloSegundos);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation(
-            "GpsPollingService iniciado — intervalo: {intervalo}s | TTL ativo: {ativo}s | TTL recente: {recente}s | vel. máxima: {vmax} km/h | janela: {janela} leituras",
+            "GpsPollingService iniciado — intervalo: {intervalo}s | TTL ativo: {ativo}s | " +
+            "TTL recente: {recente}s | janela retroativa: {janela}s | " +
+            "max idade GPS: {maxIdade}s | vel. máxima: {vmax} km/h",
             _opcoes.IntervaloSegundos,
             _opcoes.TtlAtivoSegundos,
             _opcoes.TtlRecenteSegundos,
-            _opcoes.VelocidadeMaximaKmh,
-            _opcoes.JanelaVelocidadeLeituras);
+            _opcoes.JanelaRetroativaSegundos,
+            _opcoes.MaxIdadeGpsSegundos,
+            _opcoes.VelocidadeMaximaKmh);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             var agora = DateTimeOffset.UtcNow;
             try
             {
-                await ProcessarCicloAsync(_ultimaBusca, agora, stoppingToken);
-                _ultimaBusca = agora;
+                await ProcessarCicloAsync(agora, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -90,7 +71,7 @@ public sealed class GpsPollingService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Falha no ciclo de polling GPS; novo ciclo no próximo intervalo.");
+                _logger.LogError(ex, "Falha no ciclo de polling GPS.");
             }
 
             try
@@ -106,41 +87,148 @@ public sealed class GpsPollingService : BackgroundService
         _logger.LogInformation("GpsPollingService encerrado.");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private async Task ProcessarCicloAsync(
-        DateTimeOffset de,
-        DateTimeOffset ate,
-        CancellationToken ct)
+    private async Task ProcessarCicloAsync(DateTimeOffset agora, CancellationToken ct)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
-        var posicoes = await _cliente.BuscarPosicoesPorIntervaloAsync(de, ate, ct);
+        var posicoes = await _cliente.BuscarComJanelaAsync(
+            agora, ct, _opcoes.JanelaRetroativaSegundos);
+
         if (posicoes.Count == 0) return;
 
-        // Mais recente por veículo neste ciclo
+        // ── Mais recente por veículo ──────────────────────────────────────────
         var maisRecentes = posicoes
-            .GroupBy(p => p.Ordem)
+            .GroupBy(p => p.Ordem, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.OrderByDescending(p => p.TimestampGps).First())
             .ToList();
 
-        // ── 1. Leitura paralela das posições "ativas" anteriores no Redis ──────
-        var chavesAtivas = maisRecentes.Select(p => ChaveVeiculoAtivo(p.Ordem)).ToList();
+        // ── Filtra posições com timestamp GPS muito antigo ────────────────────
+        // Elimina veículos fantasma: ônibus que ficaram sem sinal e a central
+        // despejou horas de posições acumuladas de uma vez.
+        // MaxIdadeGpsSegundos padrão: 300s (5 min). Ajuste conforme a linha —
+        // linhas com GPS confiável podem usar 180s; linhas problemáticas, 600s.
+        var idadeMaxima = TimeSpan.FromSeconds(_opcoes.MaxIdadeGpsSegundos);
+        var descartadosPorIdade = 0;
+
+        var maisRecentesFiltrados = maisRecentes
+            .Where(p =>
+            {
+                var idade = agora - p.TimestampGps;
+                if (idade > idadeMaxima)
+                {
+                    descartadosPorIdade++;
+                    _logger.LogDebug(
+                        "Veículo {ordem} descartado: GPS {idade:F0}s atrás (máx {max}s)",
+                        p.Ordem, idade.TotalSeconds, _opcoes.MaxIdadeGpsSegundos);
+                    return false;
+                }
+                return true;
+            })
+            .ToList();
+
+        if (descartadosPorIdade > 0)
+        {
+            _logger.LogInformation(
+                "Descartados {qtd} veículos com GPS > {max}s atrás",
+                descartadosPorIdade, _opcoes.MaxIdadeGpsSegundos);
+        }
+
+        if (maisRecentesFiltrados.Count == 0) return;
+
+        // ── 1. Leitura paralela dos estados anteriores no Redis ───────────────
         var leiturasAnteriores = await Task.WhenAll(
-            chavesAtivas.Select(c => _cache.GetStringAsync(c, ct)));
+            maisRecentesFiltrados.Select(p =>
+                _cache.GetStringAsync(ChaveVeiculoAtivo(p.Ordem), ct)));
 
-        // ── 2. Linhas com assinantes — enriquecer apenas estas ────────────────
+        // ── 2. Filtra novas e detecta trocas de linha ─────────────────────────
         var linhasComAssinantes = GpsHub.LinhasComAssinantes;
+        var paraProcessar       = new List<(PosicaoVeiculoDto Nova, PosicaoVeiculoDto? Anterior)>();
+        var trocouDeLinha       = new List<(string Ordem, string LinhaAntiga)>();
 
-        // Cria scope para acessar GpsEnriquecimentoService (DbContext é Scoped)
+        for (int i = 0; i < maisRecentesFiltrados.Count; i++)
+        {
+            var nova = maisRecentesFiltrados[i];
+            PosicaoVeiculoDto? anterior = null;
+
+            if (leiturasAnteriores[i] is not null)
+            {
+                try
+                {
+                    anterior = JsonSerializer.Deserialize<PosicaoVeiculoDto>(
+                        leiturasAnteriores[i]!, JsonOptions);
+                }
+                catch { }
+            }
+
+            // Descarta se não é mais novo que o Redis
+            if (anterior is not null && nova.TimestampGps <= anterior.TimestampGps)
+                continue;
+
+            // Detecta troca de linha
+            if (_linhaPorVeiculo.TryGetValue(nova.Ordem, out var linhaAnterior)
+                && !string.Equals(linhaAnterior, nova.CodigoLinha, StringComparison.OrdinalIgnoreCase))
+            {
+                trocouDeLinha.Add((nova.Ordem, linhaAnterior));
+            }
+            _linhaPorVeiculo[nova.Ordem] = nova.CodigoLinha;
+
+            paraProcessar.Add((nova, anterior));
+        }
+
+        if (trocouDeLinha.Count > 0)
+            await LimparVeiculosDeLinhasAntigasAsync(trocouDeLinha, ct);
+
+        // ── 3. Separa para enriquecimento ─────────────────────────────────────
+        var paraEnriquecer    = paraProcessar
+            .Where(x => linhasComAssinantes.Contains(x.Nova.CodigoLinha))
+            .ToList();
+        var semEnriquecimento = paraProcessar
+            .Where(x => !linhasComAssinantes.Contains(x.Nova.CodigoLinha))
+            .ToList();
+
         await using var scope = _scopeFactory.CreateAsyncScope();
         var enriquecedor = scope.ServiceProvider.GetRequiredService<GpsEnriquecimentoService>();
 
-        // ── 3. Enriquece com histórico e escreve de volta ─────────────────────
-        var tarefasEscrita = new List<Task>();
-        var enriquecidas = new List<PosicaoVeiculoDto>(maisRecentes.Count);
-        var ativosPorLinha = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (nova, anterior) in semEnriquecimento)
+            enriquecedor.AtualizarHistoricoVelocidade(
+                MontarComHistorico(nova, anterior), _historicoVelocidades);
 
+        // ── 4. Enriquecimento PostGIS paralelo ────────────────────────────────
+        PosicaoVeiculoDto[] resultadosEnriquecidos;
+
+        if (paraEnriquecer.Count == 0)
+        {
+            resultadosEnriquecidos = [];
+        }
+        else
+        {
+            var grau     = Math.Min(paraEnriquecer.Count, _opcoes.GrauParalelismoEnriquecimento);
+            var semaforo = new SemaphoreSlim(grau, grau);
+
+            resultadosEnriquecidos = await Task.WhenAll(
+                paraEnriquecer.Select(async x =>
+                {
+                    await semaforo.WaitAsync(ct);
+                    try
+                    {
+                        return await enriquecedor.EnriquecerAsync(
+                            MontarComHistorico(x.Nova, x.Anterior),
+                            _historicoVelocidades, ct);
+                    }
+                    finally { semaforo.Release(); }
+                }));
+        }
+
+        var resultadosSemEnriquecimento = semEnriquecimento
+            .Select(x => enriquecedor.AtualizarHistoricoVelocidade(
+                MontarComHistorico(x.Nova, x.Anterior), _historicoVelocidades))
+            .ToList();
+
+        var todosProcessados = resultadosEnriquecidos
+            .Concat(resultadosSemEnriquecimento)
+            .ToList();
+
+        // ── 5. Escrita no Redis ───────────────────────────────────────────────
         var opcoesAtivo = new DistributedCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(_opcoes.TtlAtivoSegundos)
@@ -150,61 +238,26 @@ public sealed class GpsPollingService : BackgroundService
             AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(_opcoes.TtlRecenteSegundos)
         };
 
-        for (int i = 0; i < maisRecentes.Count; i++)
+        var ativosPorLinha = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var tarefasEscrita = new List<Task>();
+
+        foreach (var final in todosProcessados)
         {
-            var nova = maisRecentes[i];
-            var jsonAnt = leiturasAnteriores[i];
-            PosicaoVeiculoDto? anterior = null;
-
-            if (jsonAnt is not null)
-            {
-                try { anterior = JsonSerializer.Deserialize<PosicaoVeiculoDto>(jsonAnt, JsonOptions); }
-                catch { /* corrompido — ignora */ }
-            }
-
-            // Copia posição anterior para interpolação linear
-            var comHistorico = nova with
-            {
-                LatitudeAnterior = anterior?.Latitude,
-                LongitudeAnterior = anterior?.Longitude,
-                TimestampAnterior = anterior?.TimestampGps,
-                Status = StatusVeiculo.Ativo,
-            };
-
-            PosicaoVeiculoDto final;
-
-            // Enriquece com bearing/velocidade/rota somente para linhas assinadas
-            if (linhasComAssinantes.Contains(nova.CodigoLinha))
-            {
-                final = await enriquecedor.EnriquecerAsync(comHistorico, _historicoVelocidades, ct);
-            }
-            else
-            {
-                // Mesmo sem assinantes, mantemos o histórico de velocidades para
-                // quando o cliente assinar e o enriquecimento começar a ser necessário.
-                final = comHistorico;
-            }
-
-            enriquecidas.Add(final);
-
             var jsonFinal = JsonSerializer.Serialize(final, JsonOptions);
+            tarefasEscrita.Add(_cache.SetStringAsync(
+                ChaveVeiculoAtivo(final.Ordem),   jsonFinal, opcoesAtivo,   ct));
+            tarefasEscrita.Add(_cache.SetStringAsync(
+                ChaveVeiculoRecente(final.Ordem), jsonFinal, opcoesRecente, ct));
 
-            // TTL duplo: chave :ativo (curta) e :recente (longa)
-            tarefasEscrita.Add(_cache.SetStringAsync(ChaveVeiculoAtivo(nova.Ordem), jsonFinal, opcoesAtivo, ct));
-            tarefasEscrita.Add(_cache.SetStringAsync(ChaveVeiculoRecente(nova.Ordem), jsonFinal, opcoesRecente, ct));
-
-            // Agrupa para os sets de linha
-            if (!ativosPorLinha.TryGetValue(nova.CodigoLinha, out var set))
+            if (!ativosPorLinha.TryGetValue(final.CodigoLinha, out var set))
             {
                 set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                ativosPorLinha[nova.CodigoLinha] = set;
+                ativosPorLinha[final.CodigoLinha] = set;
             }
-            set.Add(nova.Ordem);
+            set.Add(final.Ordem);
         }
 
-        // ── 4. Merge dos sets de linha com o que já existe no Redis ───────────
-        // Veículos que pararam de reportar mas ainda estão dentro do TTL recente
-        // permanecem no set com status SemSinal — não piscam.
+        // ── 6. Merge sets de linha ────────────────────────────────────────────
         var leiturasSets = await Task.WhenAll(
             ativosPorLinha.Keys.Select(l => _cache.GetStringAsync(ChaveLinha(l), ct)));
 
@@ -219,57 +272,60 @@ public sealed class GpsPollingService : BackgroundService
             var existente = leiturasSets[idx++];
             if (!string.IsNullOrWhiteSpace(existente))
             {
-                var ordensExistentes = existente.Split(',',
-                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-                // Mantém ordens anteriores que ainda têm chave :recente válida
-                // (verificação em batch para evitar N round-trips ao Redis)
                 var verificacoes = await Task.WhenAll(
-                    ordensExistentes.Select(async o =>
-                    {
-                        var existe = await _cache.GetStringAsync(ChaveVeiculoRecente(o), ct);
-                        return (ordem: o, existe: existe is not null);
-                    }));
+                    existente
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(async o =>
+                        {
+                            var existe = await _cache.GetStringAsync(ChaveVeiculoRecente(o), ct);
+                            return (ordem: o, existe: existe is not null);
+                        }));
 
                 foreach (var (ordem, existe) in verificacoes)
-                {
-                    if (existe)
-                        ativosPorLinha[linha].Add(ordem); // HashSet ignora duplicatas
-                }
+                    if (existe) ativosPorLinha[linha].Add(ordem);
             }
 
             tarefasEscrita.Add(_cache.SetStringAsync(
                 ChaveLinha(linha),
                 string.Join(',', ativosPorLinha[linha]),
-                opcoesLinha,
-                ct));
+                opcoesLinha, ct));
         }
 
         await Task.WhenAll(tarefasEscrita);
 
-        // ── 5. Marcar veículos SemSinal e broadcast via SignalR ───────────────
-        if (linhasComAssinantes.Count > 0)
+        // ── 7. Linhas assinadas sem veículos novos → carrega do Redis ─────────
+        foreach (var linha in GpsHub.LinhasComAssinantes)
         {
-            // Para cada linha assinada, inclui também os veículos SemSinal
-            // (não vieram neste ciclo mas ainda estão no set :recente)
+            if (ativosPorLinha.ContainsKey(linha)) continue;
+
+            var raw = await _cache.GetStringAsync(ChaveLinha(linha), ct);
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+
+            ativosPorLinha[linha] = new HashSet<string>(
+                raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        // ── 8. Broadcast SignalR ──────────────────────────────────────────────
+        var linhasParaBroadcast = GpsHub.LinhasComAssinantes;
+
+        if (linhasParaBroadcast.Count > 0)
+        {
             var broadcastTasks = new List<Task>();
 
-            foreach (var linha in linhasComAssinantes)
+            foreach (var linha in linhasParaBroadcast)
             {
-                if (!ativosPorLinha.TryGetValue(linha, out var todasOrdens))
-                    continue;
+                if (!ativosPorLinha.TryGetValue(linha, out var todasOrdens)) continue;
 
                 var veiculosDaLinha = new List<PosicaoVeiculoDto>();
+                veiculosDaLinha.AddRange(todosProcessados.Where(p => p.CodigoLinha == linha));
 
-                // Veículos que vieram neste ciclo (Ativo)
-                veiculosDaLinha.AddRange(enriquecidas.Where(p => p.CodigoLinha == linha));
-
-                // Veículos do set que NÃO vieram neste ciclo — status SemSinal
                 var ordensDoCiclo = new HashSet<string>(
-                    enriquecidas.Where(p => p.CodigoLinha == linha).Select(p => p.Ordem),
+                    veiculosDaLinha.Select(p => p.Ordem),
                     StringComparer.OrdinalIgnoreCase);
 
                 var ordensSemSinal = todasOrdens.Where(o => !ordensDoCiclo.Contains(o)).ToList();
+
                 if (ordensSemSinal.Count > 0)
                 {
                     var dadosSemSinal = await Task.WhenAll(
@@ -302,26 +358,67 @@ public sealed class GpsPollingService : BackgroundService
 
         sw.Stop();
         _logger.LogInformation(
-            "Ciclo GPS: {veiculos} veículos em {linhas} linhas | {ms}ms",
-            maisRecentes.Count, ativosPorLinha.Count, sw.ElapsedMilliseconds);
+            "Ciclo GPS: {janela} na janela → {filtrados} válidos → {novas} novas | " +
+            "descartados (idade): {stale_desc} | enriq.: {enr}/{assin_v} | " +
+            "sem enriq.: {sem} | stale(>60s): {stale} | {ms}ms",
+            maisRecentes.Count,
+            maisRecentesFiltrados.Count,
+            paraProcessar.Count,
+            descartadosPorIdade,
+            resultadosEnriquecidos.Count(p => p.PosicaoNaRota.HasValue),
+            paraEnriquecer.Count,
+            semEnriquecimento.Count,
+            todosProcessados.Count(p => (agora - p.TimestampGps).TotalSeconds > 60),
+            sw.ElapsedMilliseconds);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static PosicaoVeiculoDto MontarComHistorico(
+        PosicaoVeiculoDto nova, PosicaoVeiculoDto? anterior) => nova with
+    {
+        LatitudeAnterior  = anterior?.Latitude,
+        LongitudeAnterior = anterior?.Longitude,
+        TimestampAnterior = anterior?.TimestampGps,
+        Bearing           = anterior?.Bearing,
+        Status            = StatusVeiculo.Ativo,
+    };
+
+    private async Task LimparVeiculosDeLinhasAntigasAsync(
+        List<(string Ordem, string LinhaAntiga)> trocas,
+        CancellationToken ct)
+    {
+        var porLinha = trocas.GroupBy(t => t.LinhaAntiga, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var grupo in porLinha)
+        {
+            var chave = ChaveLinha(grupo.Key);
+            var raw   = await _cache.GetStringAsync(chave, ct);
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+
+            var ordens = new HashSet<string>(
+                raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (ordem, _) in grupo)
+                ordens.Remove(ordem);
+
+            if (ordens.Count == 0)
+                await _cache.RemoveAsync(chave, ct);
+            else
+                await _cache.SetStringAsync(chave, string.Join(',', ordens),
+                    new DistributedCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow =
+                            TimeSpan.FromSeconds(_opcoes.TtlLinhaSegundos)
+                    }, ct);
+        }
     }
 
     // ── Chaves Redis ──────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Chave de curto prazo: veículo ativo no ciclo atual.
-    /// Expira após TtlAtivoSegundos — quando expira, status passa para SemSinal.
-    /// </summary>
-    public static string ChaveVeiculoAtivo(string ordem) => $"veiculo:{ordem}:ativo";
-
-    /// <summary>
-    /// Chave de longo prazo: mantém os dados do veículo mesmo fora de ciclo.
-    /// Expira após TtlRecenteSegundos — quando expira, status passa para Inativo.
-    /// </summary>
+    public static string ChaveVeiculoAtivo(string ordem)   => $"veiculo:{ordem}:ativo";
     public static string ChaveVeiculoRecente(string ordem) => $"veiculo:{ordem}:recente";
-
-    /// <summary>Retrocompatibilidade: aponta para a chave :ativo.</summary>
-    public static string ChaveVeiculo(string ordem) => ChaveVeiculoAtivo(ordem);
-
-    public static string ChaveLinha(string codigoLinha) => $"linha:{codigoLinha}:veiculos";
+    public static string ChaveVeiculo(string ordem)        => ChaveVeiculoAtivo(ordem);
+    public static string ChaveLinha(string codigoLinha)    => $"linha:{codigoLinha}:veiculos";
 }

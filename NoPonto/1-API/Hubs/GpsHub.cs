@@ -7,31 +7,34 @@ namespace NoPonto.API.Hubs;
 /// Hub SignalR para streaming de posições GPS em tempo real.
 ///
 /// Protocolo cliente → servidor:
-///   InscreverseLinha(codigoLinha)    — entra no grupo da linha
-///   CancelarLinha(codigoLinha)       — sai do grupo da linha
+///   InscreverseLinha(codigoLinha)  — entra no grupo da linha
+///   CancelarLinha(codigoLinha)     — sai do grupo da linha
 ///
 /// Protocolo servidor → cliente:
-///   PosicaoAtualizada(posicoes[])    — lista de PosicaoVeiculoDto da linha
+///   PosicaoAtualizada(posicoes[])  — lista de PosicaoVeiculoDto da linha
 /// </summary>
 public sealed class GpsHub : Hub
 {
-    // Contador de assinantes por linha — lido pelo GpsPollingService
-    private static readonly ConcurrentDictionary<string, int> _contadorPorLinha =
-        new(StringComparer.OrdinalIgnoreCase);
-
-    // Linhas assinadas por cada connectionId — para cleanup no disconnect
+    // Rastreia quais linhas cada conexão assinou.
+    // Chave: connectionId → conjunto de códigos de linha.
     private static readonly ConcurrentDictionary<string, HashSet<string>> _linhasPorConexao =
         new();
 
-    /// <summary>Linhas que têm pelo menos 1 cliente conectado agora.</summary>
-    public static IReadOnlyCollection<string> LinhasComAssinantes => [.. _contadorPorLinha.Keys];
+    // Conjunto de linhas que têm pelo menos 1 conexão ativa.
+    // Recalculado a partir de _linhasPorConexao para evitar race conditions
+    // de contadores que ficam negativos ou pulam para zero erroneamente.
+    private static readonly ConcurrentDictionary<string, byte> _linhasAtivas =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Linhas com pelo menos 1 cliente conectado agora.
+    /// Lido pelo GpsPollingService para decidir quais linhas enriquecer/broadcastar.
+    /// </summary>
+    public static IReadOnlyCollection<string> LinhasComAssinantes =>
+        (IReadOnlyCollection<string>)_linhasAtivas.Keys;
 
     // ── Chamadas do cliente ───────────────────────────────────────────────────
 
-    /// <summary>
-    /// Assina uma linha. O cliente receberá PosicaoAtualizada a cada ciclo de ~20s.
-    /// Limite recomendado: 5–8 linhas por cliente.
-    /// </summary>
     public async Task InscreverseLinha(string codigoLinha)
     {
         if (string.IsNullOrWhiteSpace(codigoLinha))
@@ -41,15 +44,14 @@ public sealed class GpsHub : Hub
 
         await Groups.AddToGroupAsync(Context.ConnectionId, GrupoLinha(linha));
 
-        _contadorPorLinha.AddOrUpdate(linha, 1, (_, n) => n + 1);
-
         _linhasPorConexao.AddOrUpdate(
             Context.ConnectionId,
             _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase) { linha },
             (_, set) => { lock (set) { set.Add(linha); } return set; });
+
+        _linhasAtivas[linha] = 1;
     }
 
-    /// <summary>Cancela a assinatura de uma linha específica.</summary>
     public async Task CancelarLinha(string codigoLinha)
     {
         if (string.IsNullOrWhiteSpace(codigoLinha))
@@ -58,20 +60,17 @@ public sealed class GpsHub : Hub
         var linha = codigoLinha.Trim().ToUpperInvariant();
 
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, GrupoLinha(linha));
-        DecrementarContador(linha);
 
         if (_linhasPorConexao.TryGetValue(Context.ConnectionId, out var set))
             lock (set) { set.Remove(linha); }
-    }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
+        RecalcularLinhasAtivas();
+    }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        if (_linhasPorConexao.TryRemove(Context.ConnectionId, out var linhas))
-            foreach (var linha in linhas)
-                DecrementarContador(linha);
-
+        _linhasPorConexao.TryRemove(Context.ConnectionId, out _);
+        RecalcularLinhasAtivas();
         await base.OnDisconnectedAsync(exception);
     }
 
@@ -79,10 +78,33 @@ public sealed class GpsHub : Hub
 
     public static string GrupoLinha(string codigoLinha) => $"linha:{codigoLinha}";
 
-    private static void DecrementarContador(string linha)
+    /// <summary>
+    /// Reconstrói _linhasAtivas a partir do estado real de _linhasPorConexao.
+    /// Evita race conditions de contadores que vão a zero momentaneamente.
+    /// </summary>
+    private static void RecalcularLinhasAtivas()
     {
-        _contadorPorLinha.AddOrUpdate(linha, 0, (_, n) => Math.Max(0, n - 1));
-        if (_contadorPorLinha.TryGetValue(linha, out var atual) && atual == 0)
-            _contadorPorLinha.TryRemove(new KeyValuePair<string, int>(linha, 0));
+        // Coleta todas as linhas que ainda têm pelo menos uma conexão
+        var linhasComConexao = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var set in _linhasPorConexao.Values)
+        {
+            lock (set)
+            {
+                foreach (var linha in set)
+                    linhasComConexao.Add(linha);
+            }
+        }
+
+        // Remove do dicionário linhas que não têm mais conexões
+        foreach (var linha in _linhasAtivas.Keys)
+        {
+            if (!linhasComConexao.Contains(linha))
+                _linhasAtivas.TryRemove(linha, out _);
+        }
+
+        // Garante que linhas com conexão estão no dicionário
+        foreach (var linha in linhasComConexao)
+            _linhasAtivas[linha] = 1;
     }
 }

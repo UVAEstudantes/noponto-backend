@@ -1,6 +1,8 @@
 using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Models;
+using Npgsql;
 using NoPonto.API.Hubs;
 using NoPonto.API.Middlewares;
 using NoPonto.Application.GPS;
@@ -137,6 +139,12 @@ var connectionString =
     $"Database={GetEnv("POSTGRES_DB")};" +
     $"Username={GetEnv("POSTGRES_USER")};" +
     $"Password={GetEnv("POSTGRES_PASSWORD")}";
+
+// NpgsqlDataSource: pool de conexões independente do EF Core.
+// Usado pelo GpsItinerarioRepository para queries paralelas sem conflito de conexão.
+// Registra explicitamente um `NpgsqlDataSource` para uso fora do EF Core.
+// Isso evita depender de um método de extensão ausente em algumas versões.
+builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 
 builder.Services.AddDbContext<TransporteDbContext>(options =>
     options.UseNpgsql(
