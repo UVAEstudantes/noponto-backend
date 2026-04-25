@@ -18,100 +18,81 @@ public sealed class ItinerarioService : IItinerarioService
         ILogger<ItinerarioService> logger)
     {
         _itinerarioRepository = itinerarioRepository;
-        _linhaRepository = linhaRepository;
-        _logger = logger;
+        _linhaRepository      = linhaRepository;
+        _logger               = logger;
     }
 
-    public async Task<IReadOnlyList<ItinerarioPorLinhaConsultaDTO>> ListarPorLinhaAsync(Guid linhaId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ItinerarioPorLinhaConsultaDTO>> ListarPorLinhaAsync(
+        Guid linhaId, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Consultando itinerários por linha via service. linhaId={linhaId}", linhaId);
+        _logger.LogInformation(
+            "Consultando itinerários por linha via service. linhaId={linhaId}", linhaId);
 
         var linhaExiste = await _linhaRepository.ExistePorIdAsync(linhaId, cancellationToken);
-
         if (!linhaExiste)
             throw new NotFoundException(MensagemErro.LINHA_NAO_ENCONTRADA);
 
         return await _itinerarioRepository.ListarPorLinhaAsync(linhaId, cancellationToken);
     }
 
-    public async Task<ItinerarioMapaDTO> BuscarMapaAsync(Guid itinerarioId, CancellationToken cancellationToken)
+    public async Task<ItinerarioMapaDTO> BuscarMapaAsync(
+        Guid itinerarioId, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Consultando mapa do itinerário via service. itinerarioId={itinerarioId}", itinerarioId);
+        _logger.LogInformation(
+            "Consultando mapa do itinerário via service. itinerarioId={itinerarioId}", itinerarioId);
 
         var mapa = await _itinerarioRepository.BuscarMapaAsync(itinerarioId, cancellationToken);
-
         if (mapa is null)
             throw new NotFoundException(MensagemErro.ITINERARIO_NAO_ENCONTRADO);
 
         return mapa;
     }
 
-    public async Task<ItinerarioMapaLinhaDTO> BuscarMapaPorLinhaAsync(Guid linhaId, bool incluirParadas, CancellationToken cancellationToken)
+    public async Task<ItinerarioMapaLinhaDTO> BuscarMapaPorLinhaAsync(
+        Guid linhaId, bool incluirParadas, CancellationToken cancellationToken)
     {
         _logger.LogInformation(
-            "Consultando mapa completo da linha via service. linhaId={linhaId}, incluirParadas={incluirParadas}",
-            linhaId,
-            incluirParadas);
+            "Consultando mapa completo da linha via service. linhaId={linhaId}, " +
+            "incluirParadas={incluirParadas}", linhaId, incluirParadas);
 
         var linhaExiste = await _linhaRepository.ExistePorIdAsync(linhaId, cancellationToken);
-
         if (!linhaExiste)
             throw new NotFoundException(MensagemErro.LINHA_NAO_ENCONTRADA);
 
         var itinerarios = await _itinerarioRepository.ListarPorLinhaAsync(linhaId, cancellationToken);
-
         if (itinerarios.Count == 0)
             throw new NotFoundException(MensagemErro.ITINERARIO_NAO_ENCONTRADO);
 
         var itinerariosMapa = new List<ItinerarioMapaDTO>(itinerarios.Count);
 
-        foreach (var itinerario in itinerarios)
+        foreach (var it in itinerarios)
         {
-            var mapa = await _itinerarioRepository.BuscarMapaAsync(itinerario.Id, cancellationToken);
-            if (mapa is not null)
-                itinerariosMapa.Add(mapa);
+            var mapa = await _itinerarioRepository.BuscarMapaAsync(it.Id, cancellationToken);
+            if (mapa is null) continue;
+
+            if (!incluirParadas)
+            {
+                mapa = new ItinerarioMapaDTO
+                {
+                    ItinerarioId = mapa.ItinerarioId,
+                    LinhaNome    = mapa.LinhaNome,
+                    SentidoNome  = mapa.SentidoNome,
+                    Geometria    = mapa.Geometria,
+                    Paradas      = [],
+                };
+            }
+
+            itinerariosMapa.Add(mapa);
         }
 
         if (itinerariosMapa.Count == 0)
             throw new NotFoundException(MensagemErro.ITINERARIO_NAO_ENCONTRADO);
 
-        var linhaNome = itinerariosMapa[0].LinhaNome;
-
-        var geometria = itinerariosMapa
-            .SelectMany(itinerario => itinerario.Geometria)
-            .Select((coordenada, indice) => new ItinerarioMapaCoordenadaDTO
-            {
-                Ordem = indice + 1,
-                Latitude = coordenada.Latitude,
-                Longitude = coordenada.Longitude
-            })
-            .ToList();
-
-        IReadOnlyList<ItinerarioMapaParadaDTO> paradas = [];
-
-        if (incluirParadas)
-        {
-            paradas = itinerariosMapa
-                .SelectMany(itinerario => itinerario.Paradas)
-                .Select((parada, indice) => new ItinerarioMapaParadaDTO
-                {
-                    ParadaId = parada.ParadaId,
-                    Nome = parada.Nome,
-                    Ordem = indice + 1,
-                    Latitude = parada.Latitude,
-                    Longitude = parada.Longitude,
-                    PosicaoLinha = parada.PosicaoLinha
-                })
-                .ToList();
-        }
-
         return new ItinerarioMapaLinhaDTO
         {
-            LinhaId = linhaId,
-            LinhaNome = linhaNome,
-            ItinerariosIds = itinerariosMapa.Select(itinerario => itinerario.ItinerarioId).ToList(),
-            Geometria = geometria,
-            Paradas = paradas
+            LinhaId     = linhaId,
+            LinhaNome   = itinerariosMapa[0].LinhaNome,
+            Itinerarios = itinerariosMapa,
         };
     }
 }

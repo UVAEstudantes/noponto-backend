@@ -9,6 +9,15 @@ using NoPonto.API.Hubs;
 
 namespace NoPonto.Application.GPS;
 
+/// <summary>
+/// BackgroundService que faz polling da API GPS e distribui posições via Redis + SignalR.
+///
+/// Ciclo de vida dos serviços dependentes:
+///   - GpsEnriquecimentoService: SINGLETON — estado (itinerário + velocidade) persiste
+///     entre ciclos. Injetado diretamente no construtor.
+///   - GpsItinerarioRepository: SCOPED — depende do NpgsqlDataSource (pool externo ao EF).
+///     Criado via IServiceScopeFactory apenas quando há veículos para enriquecer.
+/// </summary>
 public sealed class GpsPollingService : BackgroundService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -23,9 +32,10 @@ public sealed class GpsPollingService : BackgroundService
     private readonly GpsPollingOptions _opcoes;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    private readonly Dictionary<string, Queue<double>> _historicoVelocidades =
-        new(StringComparer.OrdinalIgnoreCase);
+    // Singleton: injetado diretamente — estado vive enquanto o serviço vive.
+    private readonly GpsEnriquecimentoService _enriquecedor;
 
+    // Mapa veículo → linha atual (para detectar troca de linha).
     private readonly Dictionary<string, string> _linhaPorVeiculo =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -35,7 +45,8 @@ public sealed class GpsPollingService : BackgroundService
         IHubContext<GpsHub> hubContext,
         ILogger<GpsPollingService> logger,
         IOptions<GpsPollingOptions> opcoes,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        GpsEnriquecimentoService enriquecedor)
     {
         _cliente      = cliente;
         _cache        = cache;
@@ -43,6 +54,7 @@ public sealed class GpsPollingService : BackgroundService
         _logger       = logger;
         _opcoes       = opcoes.Value;
         _scopeFactory = scopeFactory;
+        _enriquecedor = enriquecedor;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -103,26 +115,20 @@ public sealed class GpsPollingService : BackgroundService
             .ToList();
 
         // ── Filtra posições com timestamp GPS muito antigo ────────────────────
-        // Elimina veículos fantasma: ônibus que ficaram sem sinal e a central
-        // despejou horas de posições acumuladas de uma vez.
-        // MaxIdadeGpsSegundos padrão: 300s (5 min). Ajuste conforme a linha —
-        // linhas com GPS confiável podem usar 180s; linhas problemáticas, 600s.
-        var idadeMaxima = TimeSpan.FromSeconds(_opcoes.MaxIdadeGpsSegundos);
+        var idadeMaxima        = TimeSpan.FromSeconds(_opcoes.MaxIdadeGpsSegundos);
         var descartadosPorIdade = 0;
 
         var maisRecentesFiltrados = maisRecentes
             .Where(p =>
             {
                 var idade = agora - p.TimestampGps;
-                if (idade > idadeMaxima)
-                {
-                    descartadosPorIdade++;
-                    _logger.LogDebug(
-                        "Veículo {ordem} descartado: GPS {idade:F0}s atrás (máx {max}s)",
-                        p.Ordem, idade.TotalSeconds, _opcoes.MaxIdadeGpsSegundos);
-                    return false;
-                }
-                return true;
+                if (idade <= idadeMaxima) return true;
+
+                descartadosPorIdade++;
+                _logger.LogDebug(
+                    "Veículo {ordem} descartado: GPS {idade:F0}s atrás (máx {max}s)",
+                    p.Ordem, idade.TotalSeconds, _opcoes.MaxIdadeGpsSegundos);
+                return false;
             })
             .ToList();
 
@@ -147,7 +153,7 @@ public sealed class GpsPollingService : BackgroundService
 
         for (int i = 0; i < maisRecentesFiltrados.Count; i++)
         {
-            var nova = maisRecentesFiltrados[i];
+            var nova     = maisRecentesFiltrados[i];
             PosicaoVeiculoDto? anterior = null;
 
             if (leiturasAnteriores[i] is not null)
@@ -186,14 +192,11 @@ public sealed class GpsPollingService : BackgroundService
             .Where(x => !linhasComAssinantes.Contains(x.Nova.CodigoLinha))
             .ToList();
 
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var enriquecedor = scope.ServiceProvider.GetRequiredService<GpsEnriquecimentoService>();
-
-        foreach (var (nova, anterior) in semEnriquecimento)
-            enriquecedor.AtualizarHistoricoVelocidade(
-                MontarComHistorico(nova, anterior), _historicoVelocidades);
-
         // ── 4. Enriquecimento PostGIS paralelo ────────────────────────────────
+        // O GpsEnriquecimentoService é Singleton e thread-safe.
+        // O repositório PostGIS usa NpgsqlDataSource (pool de conexões), então
+        // criamos um scope apenas para satisfazer o DI — o repositório em si
+        // é stateless e safe para uso paralelo.
         PosicaoVeiculoDto[] resultadosEnriquecidos;
 
         if (paraEnriquecer.Count == 0)
@@ -211,17 +214,17 @@ public sealed class GpsPollingService : BackgroundService
                     await semaforo.WaitAsync(ct);
                     try
                     {
-                        return await enriquecedor.EnriquecerAsync(
-                            MontarComHistorico(x.Nova, x.Anterior),
-                            _historicoVelocidades, ct);
+                        return await _enriquecedor.EnriquecerAsync(
+                            MontarComHistorico(x.Nova, x.Anterior), ct);
                     }
                     finally { semaforo.Release(); }
                 }));
         }
 
+        // Veículos sem assinantes: atualiza só o histórico de velocidade
         var resultadosSemEnriquecimento = semEnriquecimento
-            .Select(x => enriquecedor.AtualizarHistoricoVelocidade(
-                MontarComHistorico(x.Nova, x.Anterior), _historicoVelocidades))
+            .Select(x => _enriquecedor.AtualizarHistoricoVelocidade(
+                MontarComHistorico(x.Nova, x.Anterior)))
             .ToList();
 
         var todosProcessados = resultadosEnriquecidos

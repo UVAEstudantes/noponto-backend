@@ -123,16 +123,6 @@ builder.Services
     .Validate(o => o.DistanciaMaximaRotaMetros > 0, "GpsPolling:DistanciaMaximaRotaMetros deve ser > 0")
     .ValidateOnStart();
 
-builder.Services.AddSignalR();
-builder.Services.AddHostedService<GpsPollingService>();
-
-// ── GPS: enriquecimento geoespacial ──────────────────────────────────────────
-// GpsItinerarioRepository é Scoped pois depende do DbContext.
-// GpsEnriquecimentoService também é Scoped pelo mesmo motivo.
-// O GpsPollingService (Singleton) cria um scope por ciclo via IServiceScopeFactory.
-builder.Services.AddScoped<IGpsItinerarioRepository, GpsItinerarioRepository>();
-builder.Services.AddScoped<GpsEnriquecimentoService>();
-
 var connectionString =
     $"Host=localhost;" +
     $"Port={GetEnv("POSTGRES_PORT")};" +
@@ -142,8 +132,6 @@ var connectionString =
 
 // NpgsqlDataSource: pool de conexões independente do EF Core.
 // Usado pelo GpsItinerarioRepository para queries paralelas sem conflito de conexão.
-// Registra explicitamente um `NpgsqlDataSource` para uso fora do EF Core.
-// Isso evita depender de um método de extensão ausente em algumas versões.
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 
 builder.Services.AddDbContext<TransporteDbContext>(options =>
@@ -152,6 +140,26 @@ builder.Services.AddDbContext<TransporteDbContext>(options =>
         x => x.UseNetTopologySuite()
     )
 );
+
+// ── GPS: enriquecimento geoespacial ──────────────────────────────────────────
+//
+// GpsItinerarioRepository é Scoped porque recebe TransporteDbContext (Scoped).
+// Mas nas queries GPS ele usa NpgsqlDataSource diretamente (pool externo) —
+// pode ser resolvido via scope criado pelo controlador ou pelo repositório Scoped normal.
+//
+// GpsEnriquecimentoService é SINGLETON:
+//   - Mantém _itinerarioAtual e _historicoVelocidades entre ciclos de polling.
+//   - Usa IGpsItinerarioRepository via IServiceScopeFactory internamente
+//     (se precisar de scope) — mas atualmente recebe o repositório no construtor,
+//     então o repositório também precisa ser Singleton ou usar NpgsqlDataSource diretamente.
+//
+// Como GpsItinerarioRepository usa apenas NpgsqlDataSource (sem DbContext) nas queries GPS,
+// registramos ele como Singleton também — é stateless e thread-safe via pool de conexões.
+builder.Services.AddSingleton<IGpsItinerarioRepository, GpsItinerarioRepository>();
+builder.Services.AddSingleton<GpsEnriquecimentoService>();
+
+builder.Services.AddSignalR();
+builder.Services.AddHostedService<GpsPollingService>();
 
 var redisConnection =
     $"localhost:{GetEnv("REDIS_PORT")}";
