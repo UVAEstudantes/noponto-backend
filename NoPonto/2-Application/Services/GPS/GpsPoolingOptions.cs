@@ -36,4 +36,10 @@ public sealed class GpsPollingOptions
         get => TtlAtivoSegundos;
         set => TtlAtivoSegundos = value;
     }
+
+    /// <summary>
+    /// Habilita a coleta de histórico de passagens para ML.
+    /// Desative em ambientes de teste para não acumular dados desnecessários.
+    /// </summary>
+    public bool HistoricoHabilitado { get; set; } = true;
 }

@@ -12,6 +12,7 @@ using NoPonto.Application.Services.BackgroundServices;
 using NoPonto.Data.Interfaces;
 using NoPonto.Data.Repositories;
 using System.Reflection;
+using Microsoft.Extensions.Options;
 
 Env.Load();
 
@@ -195,6 +196,16 @@ builder.Services.AddScoped<IPoiRepository, PoiRepository>();
 
 builder.Services.AddSingleton<PopularPoisQueue>();
 builder.Services.AddHostedService<PopularPoisWorker>();
+
+// Histórico de passagens para ML
+builder.Services
+    .AddOptions<GpsHistoricoOptions>()
+    .Bind(builder.Configuration.GetSection(GpsHistoricoOptions.Secao));
+
+builder.Services.AddSingleton<GpsHistoricoOptions>(sp =>
+    sp.GetRequiredService<IOptions<GpsHistoricoOptions>>().Value);
+
+builder.Services.AddSingleton<GpsHistoricoService>();
 
 var app = builder.Build();
 

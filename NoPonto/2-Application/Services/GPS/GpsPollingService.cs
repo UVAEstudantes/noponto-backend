@@ -39,6 +39,8 @@ public sealed class GpsPollingService : BackgroundService
     private readonly Dictionary<string, string> _linhaPorVeiculo =
         new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly GpsHistoricoService _historicoService;
+
     public GpsPollingService(
         GpsSppoClient cliente,
         IDistributedCache cache,
@@ -46,7 +48,8 @@ public sealed class GpsPollingService : BackgroundService
         ILogger<GpsPollingService> logger,
         IOptions<GpsPollingOptions> opcoes,
         IServiceScopeFactory scopeFactory,
-        GpsEnriquecimentoService enriquecedor)
+        GpsEnriquecimentoService enriquecedor,
+        GpsHistoricoService historicoService)
     {
         _cliente      = cliente;
         _cache        = cache;
@@ -55,6 +58,7 @@ public sealed class GpsPollingService : BackgroundService
         _opcoes       = opcoes.Value;
         _scopeFactory = scopeFactory;
         _enriquecedor = enriquecedor;
+        _historicoService = historicoService;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -258,6 +262,12 @@ public sealed class GpsPollingService : BackgroundService
                 ativosPorLinha[final.CodigoLinha] = set;
             }
             set.Add(final.Ordem);
+        }
+
+        // ── 5.5. Coleta histórico de passagens (só veículos enriquecidos) ─────────
+        if (_opcoes.HistoricoHabilitado)
+        {
+            await _historicoService.ProcessarLoteAsync(resultadosEnriquecidos, ct);
         }
 
         // ── 6. Merge sets de linha ────────────────────────────────────────────

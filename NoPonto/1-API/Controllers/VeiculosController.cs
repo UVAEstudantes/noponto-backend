@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using NoPonto.Application.GPS;
 
@@ -16,29 +17,26 @@ public sealed class VeiculosController : ControllerBase
 
     private readonly IDistributedCache _cache;
     private readonly IGpsItinerarioRepository _gpsItinerarioRepo;
+    private readonly TransporteDbContext _db;
 
     public VeiculosController(
         IDistributedCache cache,
-        IGpsItinerarioRepository gpsItinerarioRepo)
+        IGpsItinerarioRepository gpsItinerarioRepo,
+        TransporteDbContext db)
     {
-        _cache = cache;
+        _cache             = cache;
         _gpsItinerarioRepo = gpsItinerarioRepo;
+        _db                = db;
     }
 
     /// <summary>
     /// Retorna a posição mais recente de um veículo pelo código (campo "ordem" da API).
-    ///
-    /// Status possíveis no retorno:
-    ///   Ativo    → reportou no ciclo atual (≤ TtlAtivoSegundos atrás)
-    ///   SemSinal → não veio no último ciclo mas ainda está dentro do TtlRecenteSegundos
-    ///   404      → TTL longo expirado — veículo sumiu do sistema
     /// </summary>
     [HttpGet("{ordem}")]
     public async Task<IActionResult> GetVeiculo(string ordem, CancellationToken ct)
     {
         var ordemNorm = ordem.ToUpperInvariant();
 
-        // Tenta chave :ativo primeiro
         var jsonAtivo = await _cache.GetStringAsync(GpsPollingService.ChaveVeiculoAtivo(ordemNorm), ct);
         if (jsonAtivo is not null)
         {
@@ -47,7 +45,6 @@ public sealed class VeiculosController : ControllerBase
                 return Ok(posicao);
         }
 
-        // Tenta chave :recente (SemSinal)
         var jsonRecente = await _cache.GetStringAsync(GpsPollingService.ChaveVeiculoRecente(ordemNorm), ct);
         if (jsonRecente is not null)
         {
@@ -61,14 +58,13 @@ public sealed class VeiculosController : ControllerBase
 
     /// <summary>
     /// Retorna as posições mais recentes de todos os veículos ativos em uma linha.
-    /// Inclui veículos com status SemSinal (sem sinal temporário mas dentro do TTL longo).
     /// </summary>
     [HttpGet("linha/{codigoLinha}")]
     public async Task<IActionResult> GetVeiculosPorLinha(string codigoLinha, CancellationToken ct)
     {
-        var linhaNorm = codigoLinha.ToUpperInvariant();
+        var linhaNorm  = codigoLinha.ToUpperInvariant();
         var chaveLinha = GpsPollingService.ChaveLinha(linhaNorm);
-        var ordensRaw = await _cache.GetStringAsync(chaveLinha, ct);
+        var ordensRaw  = await _cache.GetStringAsync(chaveLinha, ct);
 
         if (ordensRaw is null)
             return NotFound(new { mensagem = $"Nenhum veículo ativo para a linha {codigoLinha}." });
@@ -77,14 +73,13 @@ public sealed class VeiculosController : ControllerBase
         if (ordens.Length == 0)
             return NotFound(new { mensagem = $"Nenhum veículo ativo para a linha {codigoLinha}." });
 
-        // Busca paralela — tenta :ativo primeiro, fallback para :recente (SemSinal)
         var tarefas = ordens.Select(async ordem =>
         {
             var jsonAtivo = await _cache.GetStringAsync(GpsPollingService.ChaveVeiculoAtivo(ordem), ct);
             if (jsonAtivo is not null)
             {
                 try { return JsonSerializer.Deserialize<PosicaoVeiculoDto>(jsonAtivo, JsonOptions); }
-                catch { /* corrompido */ }
+                catch { }
             }
 
             var jsonRecente = await _cache.GetStringAsync(GpsPollingService.ChaveVeiculoRecente(ordem), ct);
@@ -95,37 +90,27 @@ public sealed class VeiculosController : ControllerBase
                     var dto = JsonSerializer.Deserialize<PosicaoVeiculoDto>(jsonRecente, JsonOptions);
                     return dto is null ? null : dto with { Status = StatusVeiculo.SemSinal };
                 }
-                catch { /* corrompido */ }
+                catch { }
             }
 
             return null;
         });
 
         var resultados = await Task.WhenAll(tarefas);
-        var posicoes = resultados.Where(p => p is not null).ToList();
+        var posicoes   = resultados.Where(p => p is not null).ToList();
 
         return Ok(new
         {
             codigoLinha,
             totalVeiculos = posicoes.Count,
-            totalAtivos = posicoes.Count(p => p!.Status == StatusVeiculo.Ativo),
+            totalAtivos   = posicoes.Count(p => p!.Status == StatusVeiculo.Ativo),
             totalSemSinal = posicoes.Count(p => p!.Status == StatusVeiculo.SemSinal),
             posicoes
         });
     }
 
     /// <summary>
-    /// Retorna a geometria GeoJSON de um itinerário.
-    ///
-    /// O frontend deve chamar este endpoint uma vez por itinerário assinado
-    /// e usar a LineString localmente (Turf.js) para interpolar a posição do
-    /// veículo entre os updates de 20s — dead-reckoning.
-    ///
-    /// Resposta:
-    /// {
-    ///   "itinerarioId": "...",
-    ///   "geoJson": { "type": "LineString", "coordinates": [[lon, lat], ...] }
-    /// }
+    /// Retorna a geometria GeoJSON de um itinerário para dead-reckoning no frontend.
     /// </summary>
     [HttpGet("itinerario/{itinerarioId:guid}/geometria")]
     public async Task<IActionResult> GetGeometriaItinerario(Guid itinerarioId, CancellationToken ct)
@@ -135,13 +120,44 @@ public sealed class VeiculosController : ControllerBase
         if (geoJson is null)
             return NotFound(new { mensagem = $"Itinerário {itinerarioId} não encontrado." });
 
-        // Deserializa para object para que a resposta seja JSON limpo (não string escapada)
         var geoJsonObj = JsonSerializer.Deserialize<object>(geoJson, JsonOptions);
+
+        return Ok(new { itinerarioId, geoJson = geoJsonObj });
+    }
+
+    /// <summary>
+    /// Estatísticas do histórico de passagens coletado para ML.
+    /// </summary>
+    [HttpGet("historico/stats")]
+    public async Task<IActionResult> GetHistoricoStats(
+        [FromQuery] int ultimasHoras = 24,
+        CancellationToken ct = default)
+    {
+        var desde = DateTimeOffset.UtcNow.AddHours(-ultimasHoras);
+
+        var stats = await _db.HistoricoPassagens
+            .AsNoTracking()
+            .Where(h => h.TimestampRegistro >= desde)
+            .GroupBy(h => h.CodigoLinha)
+            .Select(g => new
+            {
+                Linha          = g.Key,
+                TotalPassagens = g.Count(),
+                ComTempo       = g.Count(h => h.TempoDesdeParadaAnteriorSegundos != null),
+                TempoMedioMin  = g.Where(h => h.TempoDesdeParadaAnteriorSegundos != null)
+                                  .Average(h => (double?)h.TempoDesdeParadaAnteriorSegundos!.Value) / 60,
+            })
+            .OrderByDescending(x => x.TotalPassagens)
+            .Take(20)
+            .ToListAsync(ct);
 
         return Ok(new
         {
-            itinerarioId,
-            geoJson = geoJsonObj
+            periodoHoras   = ultimasHoras,
+            desde,
+            totalLinhas    = stats.Count,
+            totalPassagens = stats.Sum(s => s.TotalPassagens),
+            porLinha       = stats
         });
     }
 }

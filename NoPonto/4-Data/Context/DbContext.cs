@@ -20,7 +20,7 @@ public class TransporteDbContext : DbContext
     public DbSet<Parada> Paradas => Set<Parada>();
     public DbSet<ParadaItinerario> ParadasItinerario => Set<ParadaItinerario>();
     public DbSet<Poi> Pois => Set<Poi>();
-
+    public DbSet<HistoricoPassagem> HistoricoPassagens => Set<HistoricoPassagem>();
     public DbSet<PoiParada> PoiParadas => Set<PoiParada>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -72,5 +72,19 @@ public class TransporteDbContext : DbContext
 
         modelBuilder.Entity<ParadaItinerario>()
             .HasIndex(x => new { x.ItinerarioId, x.Ordem });
+
+        // Índices para consultas de ML e diagnóstico
+        modelBuilder.Entity<HistoricoPassagem>()
+            .HasIndex(h => new { h.CodigoLinha, h.ItinerarioId, h.TimestampGps });
+
+        modelBuilder.Entity<HistoricoPassagem>()
+            .HasIndex(h => new { h.Ordem, h.TimestampGps });
+
+        modelBuilder.Entity<HistoricoPassagem>()
+            .HasIndex(h => new { h.ParadaId, h.TimestampGps });
+
+        // TimestampGps como índice para range queries (consultas por período)
+        modelBuilder.Entity<HistoricoPassagem>()
+            .HasIndex(h => h.TimestampGps);
     }
 }
