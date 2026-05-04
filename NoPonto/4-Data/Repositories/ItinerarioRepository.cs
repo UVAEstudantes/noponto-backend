@@ -30,7 +30,8 @@ public sealed class ItinerarioRepository : IItinerarioRepository
         return itens;
     }
 
-    public async Task<ItinerarioMapaDTO?> BuscarMapaAsync(Guid itinerarioId, CancellationToken cancellationToken)
+    public async Task<ItinerarioMapaDTO?> BuscarMapaAsync(
+        Guid itinerarioId, bool incluirParadas, CancellationToken cancellationToken)
     {
         var cabecalho = await _contexto.Itinerarios
             .AsNoTracking()
@@ -47,20 +48,22 @@ public sealed class ItinerarioRepository : IItinerarioRepository
         if (cabecalho is null)
             return null;
 
-        var paradas = await _contexto.ParadasItinerario
-            .AsNoTracking()
-            .Where(relacao => relacao.ItinerarioId == itinerarioId)
-            .OrderBy(relacao => relacao.Ordem)
-            .Select(relacao => new ItinerarioMapaParadaDTO
-            {
-                ParadaId = relacao.ParadaId,
-                Nome = relacao.Parada.Nome,
-                Ordem = relacao.Ordem,
-                Latitude = relacao.Parada.Localizacao.Y,
-                Longitude = relacao.Parada.Localizacao.X,
-                PosicaoLinha = relacao.PosicaoLinha
-            })
-            .ToListAsync(cancellationToken);
+        var paradas = incluirParadas
+            ? await _contexto.ParadasItinerario
+                .AsNoTracking()
+                .Where(relacao => relacao.ItinerarioId == itinerarioId)
+                .OrderBy(relacao => relacao.Ordem)
+                .Select(relacao => new ItinerarioMapaParadaDTO
+                {
+                    ParadaId = relacao.ParadaId,
+                    Nome = relacao.Parada.Nome,
+                    Ordem = relacao.Ordem,
+                    Latitude = relacao.Parada.Localizacao.Y,
+                    Longitude = relacao.Parada.Localizacao.X,
+                    PosicaoLinha = relacao.PosicaoLinha
+                })
+                .ToListAsync(cancellationToken)
+            : [];
 
         var geometria = cabecalho.Geometria.Coordinates
             .Select((coordenada, indice) => new ItinerarioMapaCoordenadaDTO

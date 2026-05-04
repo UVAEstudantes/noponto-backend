@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NoPonto.Migrations
 {
     [DbContext(typeof(TransporteDbContext))]
-    partial class TransporteDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260422030346_PoiItinerarioNovosCampos")]
+    partial class PoiItinerarioNovosCampos
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,80 +25,6 @@ namespace NoPonto.Migrations
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.HistoricoPassagem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("CodigoLinha")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("DiaSemana")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("DistanciaParadaMetros")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("DistanciaTrechoMetros")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("HoraDia")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("ItinerarioId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Ordem")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ParadaId")
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("PosicaoNaRota")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("TempoDesdeParadaAnteriorSegundos")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTimeOffset>("TimestampGps")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("TimestampRegistro")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<double>("VelocidadeInstantanea")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("VelocidadeMedia")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ItinerarioId");
-
-                    b.HasIndex("TimestampGps");
-
-                    b.HasIndex("Ordem", "TimestampGps");
-
-                    b.HasIndex("ParadaId", "TimestampGps");
-
-                    b.HasIndex("CodigoLinha", "ItinerarioId", "TimestampGps");
-
-                    b.ToTable("HistoricoPassagens");
-                });
 
             modelBuilder.Entity("NoPonto.Domain.Entities.Itinerario", b =>
                 {
@@ -291,9 +220,6 @@ namespace NoPonto.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("Prioridade")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -306,7 +232,7 @@ namespace NoPonto.Migrations
                     b.ToTable("Pois");
                 });
 
-            modelBuilder.Entity("NoPonto.Domain.Entities.PoiParada", b =>
+            modelBuilder.Entity("NoPonto.Domain.Entities.PoiItinerario", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -321,25 +247,28 @@ namespace NoPonto.Migrations
                     b.Property<double>("DistanciaMetros")
                         .HasColumnType("double precision");
 
-                    b.Property<Guid>("ParadaId")
+                    b.Property<Guid>("ItinerarioId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("PoiId")
                         .HasColumnType("uuid");
+
+                    b.Property<double>("PosicaoLinha")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("Score")
+                        .HasColumnType("double precision");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ParadaId");
+                    b.HasIndex("ItinerarioId");
 
                     b.HasIndex("PoiId");
 
-                    b.HasIndex("ParadaId", "PoiId")
-                        .IsUnique();
-
-                    b.ToTable("PoiParadas");
+                    b.ToTable("PoiItinerarios");
                 });
 
             modelBuilder.Entity("NoPonto.Domain.Entities.PosicaoVeiculo", b =>
@@ -438,25 +367,6 @@ namespace NoPonto.Migrations
                     b.ToTable("Veiculos");
                 });
 
-            modelBuilder.Entity("NoPonto.Domain.Entities.HistoricoPassagem", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.Itinerario", "Itinerario")
-                        .WithMany()
-                        .HasForeignKey("ItinerarioId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("NoPonto.Domain.Entities.Parada", "Parada")
-                        .WithMany()
-                        .HasForeignKey("ParadaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Itinerario");
-
-                    b.Navigation("Parada");
-                });
-
             modelBuilder.Entity("NoPonto.Domain.Entities.Itinerario", b =>
                 {
                     b.HasOne("NoPonto.Domain.Entities.Sentido", "Sentido")
@@ -498,21 +408,21 @@ namespace NoPonto.Migrations
                     b.Navigation("Parada");
                 });
 
-            modelBuilder.Entity("NoPonto.Domain.Entities.PoiParada", b =>
+            modelBuilder.Entity("NoPonto.Domain.Entities.PoiItinerario", b =>
                 {
-                    b.HasOne("NoPonto.Domain.Entities.Parada", "Parada")
+                    b.HasOne("NoPonto.Domain.Entities.Itinerario", "Itinerario")
                         .WithMany()
-                        .HasForeignKey("ParadaId")
+                        .HasForeignKey("ItinerarioId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("NoPonto.Domain.Entities.Poi", "Poi")
-                        .WithMany("PoiParadas")
+                        .WithMany("PoiItinerarios")
                         .HasForeignKey("PoiId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Parada");
+                    b.Navigation("Itinerario");
 
                     b.Navigation("Poi");
                 });
@@ -569,7 +479,7 @@ namespace NoPonto.Migrations
 
             modelBuilder.Entity("NoPonto.Domain.Entities.Poi", b =>
                 {
-                    b.Navigation("PoiParadas");
+                    b.Navigation("PoiItinerarios");
                 });
 
             modelBuilder.Entity("NoPonto.Domain.Entities.Sentido", b =>

@@ -1,11 +1,14 @@
 {
   "cSpell.words": [
     "ARCGIS",
+    "bbox",
     "codigo",
     "Codigo",
     "codigos",
     "colecao",
     "conexao",
+    "confianca",
+    "Confianca",
     "Configuracao",
     "Deduplica",
     "direcao",
@@ -22,6 +25,9 @@
     "maximo",
     "Npgsql",
     "Onibus",
+    "opcoes",
+    "Ordenacao",
+    "Orfaos",
     "padrao",
     "Padrao",
     "Paginacao",
@@ -29,13 +35,17 @@
     "Perp",
     "posicao",
     "Posicao",
+    "posicoes",
     "Posicoes",
     "postgis",
     "postgres",
     "postgresql",
     "Proximas",
     "relacao",
+    "Secao",
+    "Sppo",
     "srid",
+    "veiculos",
     "Veiculos"
   ]
 }

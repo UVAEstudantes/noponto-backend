@@ -20,8 +20,8 @@ public class TransporteDbContext : DbContext
     public DbSet<Parada> Paradas => Set<Parada>();
     public DbSet<ParadaItinerario> ParadasItinerario => Set<ParadaItinerario>();
     public DbSet<Poi> Pois => Set<Poi>();
-
-    public DbSet<PoiItinerario> PoisItinerario => Set<PoiItinerario>();
+    public DbSet<HistoricoPassagem> HistoricoPassagens => Set<HistoricoPassagem>();
+    public DbSet<PoiParada> PoiParadas => Set<PoiParada>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -53,6 +53,17 @@ public class TransporteDbContext : DbContext
             .HasIndex(x => x.Localizacao)
             .HasMethod("GIST");
 
+        modelBuilder.Entity<PoiParada>()
+            .HasIndex(x => x.ParadaId);
+
+        modelBuilder.Entity<PoiParada>()
+            .HasIndex(x => x.PoiId);
+
+        // Garante que um POI não aparece duas vezes na mesma parada
+        modelBuilder.Entity<PoiParada>()
+            .HasIndex(x => new { x.ParadaId, x.PoiId })
+            .IsUnique();
+
         modelBuilder.Entity<ParadaItinerario>()
             .HasIndex(x => x.ItinerarioId);
 
@@ -61,5 +72,19 @@ public class TransporteDbContext : DbContext
 
         modelBuilder.Entity<ParadaItinerario>()
             .HasIndex(x => new { x.ItinerarioId, x.Ordem });
+
+        // Índices para consultas de ML e diagnóstico
+        modelBuilder.Entity<HistoricoPassagem>()
+            .HasIndex(h => new { h.CodigoLinha, h.ItinerarioId, h.TimestampGps });
+
+        modelBuilder.Entity<HistoricoPassagem>()
+            .HasIndex(h => new { h.Ordem, h.TimestampGps });
+
+        modelBuilder.Entity<HistoricoPassagem>()
+            .HasIndex(h => new { h.ParadaId, h.TimestampGps });
+
+        // TimestampGps como índice para range queries (consultas por período)
+        modelBuilder.Entity<HistoricoPassagem>()
+            .HasIndex(h => h.TimestampGps);
     }
 }
