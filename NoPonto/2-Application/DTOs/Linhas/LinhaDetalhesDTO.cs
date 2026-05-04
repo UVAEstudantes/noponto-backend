@@ -1,3 +1,5 @@
+using NoPonto.Application.DTOs.Tarifas;
+
 namespace NoPonto.Application.DTOs.Linhas;
 
 /// <summary>
@@ -19,6 +21,11 @@ public sealed class LinhaDetalhesDTO
     /// Código operacional da linha.
     /// </summary>
     public string Codigo { get; set; } = null!;
+
+    /// <summary>
+    /// Tarifa vigente para a linha.
+    /// </summary>
+    public TarifaResumoDTO? TarifaAtual { get; set; }
 
     /// <summary>
     /// Sentidos e itinerários associados à linha.

@@ -8,6 +8,7 @@ namespace NoPonto.Data.Interfaces
         Task<PaginacaoRespostaDTO<LinhaConsultaDTO>> ListarAsync(string? nome, int page, int pageSize, CancellationToken cancellationToken);
         Task<IReadOnlyList<LinhaPorParadaConsultaDTO>> ListarPorParadaAsync(Guid paradaId, CancellationToken cancellationToken);
         Task<LinhaDetalhesDTO?> BuscarDetalhesAsync(Guid linhaId, CancellationToken cancellationToken);
+        Task<Guid?> BuscarModalIdAsync(Guid linhaId, CancellationToken cancellationToken);
         Task<bool> ExistePorIdAsync(Guid linhaId, CancellationToken cancellationToken);
     }
 }
