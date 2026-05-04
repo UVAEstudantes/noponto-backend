@@ -41,6 +41,8 @@ public sealed class GpsPollingService : BackgroundService
 
     private readonly GpsHistoricoService _historicoService;
 
+    private readonly GpsEtaClient _etaClient;
+
     public GpsPollingService(
         GpsSppoClient cliente,
         IDistributedCache cache,
@@ -49,7 +51,8 @@ public sealed class GpsPollingService : BackgroundService
         IOptions<GpsPollingOptions> opcoes,
         IServiceScopeFactory scopeFactory,
         GpsEnriquecimentoService enriquecedor,
-        GpsHistoricoService historicoService)
+        GpsHistoricoService historicoService,
+        GpsEtaClient etaClient)
     {
         _cliente      = cliente;
         _cache        = cache;
@@ -59,6 +62,7 @@ public sealed class GpsPollingService : BackgroundService
         _scopeFactory = scopeFactory;
         _enriquecedor = enriquecedor;
         _historicoService = historicoService;
+        _etaClient = etaClient;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -234,6 +238,31 @@ public sealed class GpsPollingService : BackgroundService
         var todosProcessados = resultadosEnriquecidos
             .Concat(resultadosSemEnriquecimento)
             .ToList();
+
+
+        // ── 4.5. Predição de ETA via modelo ML ───────────────────────────────────
+        // Só para veículos enriquecidos (que têm próxima parada identificada)
+        if (resultadosEnriquecidos.Length > 0)
+        {
+            var predicoes = await _etaClient.PredizirLoteAsync(resultadosEnriquecidos, ct);
+
+            if (predicoes.Count > 0)
+            {
+                resultadosEnriquecidos = resultadosEnriquecidos
+                    .Select(v =>
+                    {
+                        if (!predicoes.TryGetValue(v.Ordem, out var eta))
+                            return v;
+
+                        return v with
+                        {
+                            EtaProximaParadaSegundos = eta.EtaSegundos,
+                            EtaConfianca             = eta.Confianca,
+                        };
+                    })
+                    .ToArray();
+            }
+        }
 
         // ── 5. Escrita no Redis ───────────────────────────────────────────────
         var opcoesAtivo = new DistributedCacheEntryOptions

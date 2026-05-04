@@ -22,6 +22,7 @@ public class ItinerariosController : ControllerBase
     /// Lista itinerários vinculados a uma linha.
     /// </summary>
     /// <param name="linhaId">Identificador da linha.</param>
+    /// <param name="incluirParadas">Define se as paradas serão retornadas no payload.</param>
     /// <param name="cancellationToken">Token de cancelamento da requisição.</param>
     /// <remarks>
     /// Exemplo de resposta:
@@ -77,9 +78,12 @@ public class ItinerariosController : ControllerBase
     [ProducesResponseType(typeof(ItinerarioMapaDTO), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> BuscarMapa(Guid itinerarioId, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> BuscarMapa(
+        Guid itinerarioId,
+        [FromQuery] bool incluirParadas = true,
+        CancellationToken cancellationToken = default)
     {
-        var resultado = await _service.BuscarMapaAsync(itinerarioId, cancellationToken);
+        var resultado = await _service.BuscarMapaAsync(itinerarioId, incluirParadas, cancellationToken);
         return Ok(resultado);
     }
 

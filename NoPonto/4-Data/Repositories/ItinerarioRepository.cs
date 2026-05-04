@@ -1,53 +1,55 @@
-    using Microsoft.EntityFrameworkCore;
-    using NoPonto.Application.DTOs.Itinerarios;
-    using NoPonto.Data.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using NoPonto.Application.DTOs.Itinerarios;
+using NoPonto.Data.Interfaces;
 
-    namespace NoPonto.Data.Repositories;
+namespace NoPonto.Data.Repositories;
 
-    public sealed class ItinerarioRepository : IItinerarioRepository
+public sealed class ItinerarioRepository : IItinerarioRepository
+{
+    private readonly TransporteDbContext _contexto;
+
+    public ItinerarioRepository(TransporteDbContext contexto)
     {
-        private readonly TransporteDbContext _contexto;
+        _contexto = contexto;
+    }
 
-        public ItinerarioRepository(TransporteDbContext contexto)
-        {
-            _contexto = contexto;
-        }
+    public async Task<IReadOnlyList<ItinerarioPorLinhaConsultaDTO>> ListarPorLinhaAsync(Guid linhaId, CancellationToken cancellationToken)
+    {
+        var itens = await _contexto.Itinerarios
+            .AsNoTracking()
+            .Where(itinerario => itinerario.Sentido.LinhaId == linhaId)
+            .OrderBy(itinerario => itinerario.SentidoId)
+            .Select(itinerario => new ItinerarioPorLinhaConsultaDTO
+            {
+                Id = itinerario.Id,
+                LinhaId = itinerario.Sentido.LinhaId,
+                SentidoId = itinerario.SentidoId
+            })
+            .ToListAsync(cancellationToken);
 
-        public async Task<IReadOnlyList<ItinerarioPorLinhaConsultaDTO>> ListarPorLinhaAsync(Guid linhaId, CancellationToken cancellationToken)
-        {
-            var itens = await _contexto.Itinerarios
-                .AsNoTracking()
-                .Where(itinerario => itinerario.Sentido.LinhaId == linhaId)
-                .OrderBy(itinerario => itinerario.SentidoId)
-                .Select(itinerario => new ItinerarioPorLinhaConsultaDTO
-                {
-                    Id = itinerario.Id,
-                    LinhaId = itinerario.Sentido.LinhaId,
-                    SentidoId = itinerario.SentidoId
-                })
-                .ToListAsync(cancellationToken);
+        return itens;
+    }
 
-            return itens;
-        }
+    public async Task<ItinerarioMapaDTO?> BuscarMapaAsync(
+        Guid itinerarioId, bool incluirParadas, CancellationToken cancellationToken)
+    {
+        var cabecalho = await _contexto.Itinerarios
+            .AsNoTracking()
+            .Where(itinerario => itinerario.Id == itinerarioId)
+            .Select(itinerario => new
+            {
+                ItinerarioId = itinerario.Id,
+                LinhaNome = itinerario.Sentido.Linha.Nome,
+                SentidoNome = itinerario.Sentido.Nome,
+                Geometria = itinerario.Geometria
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        public async Task<ItinerarioMapaDTO?> BuscarMapaAsync(Guid itinerarioId, CancellationToken cancellationToken)
-        {
-            var cabecalho = await _contexto.Itinerarios
-                .AsNoTracking()
-                .Where(itinerario => itinerario.Id == itinerarioId)
-                .Select(itinerario => new
-                {
-                    ItinerarioId = itinerario.Id,
-                    LinhaNome = itinerario.Sentido.Linha.Nome,
-                    SentidoNome = itinerario.Sentido.Nome,
-                    Geometria = itinerario.Geometria
-                })
-                .FirstOrDefaultAsync(cancellationToken);
+        if (cabecalho is null)
+            return null;
 
-            if (cabecalho is null)
-                return null;
-
-            var paradas = await _contexto.ParadasItinerario
+        var paradas = incluirParadas
+            ? await _contexto.ParadasItinerario
                 .AsNoTracking()
                 .Where(relacao => relacao.ItinerarioId == itinerarioId)
                 .OrderBy(relacao => relacao.Ordem)
@@ -60,31 +62,32 @@
                     Longitude = relacao.Parada.Localizacao.X,
                     PosicaoLinha = relacao.PosicaoLinha
                 })
-                .ToListAsync(cancellationToken);
+                .ToListAsync(cancellationToken)
+            : [];
 
-            var geometria = cabecalho.Geometria.Coordinates
-                .Select((coordenada, indice) => new ItinerarioMapaCoordenadaDTO
-                {
-                    Ordem = indice + 1,
-                    Latitude = coordenada.Y,
-                    Longitude = coordenada.X
-                })
-                .ToList();
-
-            return new ItinerarioMapaDTO
+        var geometria = cabecalho.Geometria.Coordinates
+            .Select((coordenada, indice) => new ItinerarioMapaCoordenadaDTO
             {
-                ItinerarioId = cabecalho.ItinerarioId,
-                LinhaNome = cabecalho.LinhaNome,
-                SentidoNome = cabecalho.SentidoNome,
-                Geometria = geometria,
-                Paradas = paradas
-            };
-        }
+                Ordem = indice + 1,
+                Latitude = coordenada.Y,
+                Longitude = coordenada.X
+            })
+            .ToList();
 
-        public Task<bool> ExistePorIdAsync(Guid itinerarioId, CancellationToken cancellationToken)
+        return new ItinerarioMapaDTO
         {
-            return _contexto.Itinerarios
-                .AsNoTracking()
-                .AnyAsync(itinerario => itinerario.Id == itinerarioId, cancellationToken);
-        }
+            ItinerarioId = cabecalho.ItinerarioId,
+            LinhaNome = cabecalho.LinhaNome,
+            SentidoNome = cabecalho.SentidoNome,
+            Geometria = geometria,
+            Paradas = paradas
+        };
     }
+
+    public Task<bool> ExistePorIdAsync(Guid itinerarioId, CancellationToken cancellationToken)
+    {
+        return _contexto.Itinerarios
+            .AsNoTracking()
+            .AnyAsync(itinerario => itinerario.Id == itinerarioId, cancellationToken);
+    }
+}

@@ -18,8 +18,8 @@ public sealed class ItinerarioService : IItinerarioService
         ILogger<ItinerarioService> logger)
     {
         _itinerarioRepository = itinerarioRepository;
-        _linhaRepository      = linhaRepository;
-        _logger               = logger;
+        _linhaRepository = linhaRepository;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<ItinerarioPorLinhaConsultaDTO>> ListarPorLinhaAsync(
@@ -36,12 +36,14 @@ public sealed class ItinerarioService : IItinerarioService
     }
 
     public async Task<ItinerarioMapaDTO> BuscarMapaAsync(
-        Guid itinerarioId, CancellationToken cancellationToken)
+        Guid itinerarioId, bool incluirParadas, CancellationToken cancellationToken)
     {
         _logger.LogInformation(
-            "Consultando mapa do itinerário via service. itinerarioId={itinerarioId}", itinerarioId);
+            "Consultando mapa do itinerário via service. itinerarioId={itinerarioId}, " +
+            "incluirParadas={incluirParadas}", itinerarioId, incluirParadas);
 
-        var mapa = await _itinerarioRepository.BuscarMapaAsync(itinerarioId, cancellationToken);
+        var mapa = await _itinerarioRepository.BuscarMapaAsync(
+            itinerarioId, incluirParadas, cancellationToken);
         if (mapa is null)
             throw new NotFoundException(MensagemErro.ITINERARIO_NAO_ENCONTRADO);
 
@@ -67,20 +69,9 @@ public sealed class ItinerarioService : IItinerarioService
 
         foreach (var it in itinerarios)
         {
-            var mapa = await _itinerarioRepository.BuscarMapaAsync(it.Id, cancellationToken);
+            var mapa = await _itinerarioRepository.BuscarMapaAsync(
+                it.Id, incluirParadas, cancellationToken);
             if (mapa is null) continue;
-
-            if (!incluirParadas)
-            {
-                mapa = new ItinerarioMapaDTO
-                {
-                    ItinerarioId = mapa.ItinerarioId,
-                    LinhaNome    = mapa.LinhaNome,
-                    SentidoNome  = mapa.SentidoNome,
-                    Geometria    = mapa.Geometria,
-                    Paradas      = [],
-                };
-            }
 
             itinerariosMapa.Add(mapa);
         }
@@ -90,8 +81,8 @@ public sealed class ItinerarioService : IItinerarioService
 
         return new ItinerarioMapaLinhaDTO
         {
-            LinhaId     = linhaId,
-            LinhaNome   = itinerariosMapa[0].LinhaNome,
+            LinhaId = linhaId,
+            LinhaNome = itinerariosMapa[0].LinhaNome,
             Itinerarios = itinerariosMapa,
         };
     }

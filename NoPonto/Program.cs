@@ -170,6 +170,14 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.Configuration = redisConnection;
 });
 
+// Cliente HTTP para o serviço de ML (FastAPI local)
+var mlBaseUrl = builder.Configuration["ML:ETA:BASE_URL"] ?? "http://localhost:5200";
+builder.Services.AddHttpClient<GpsEtaClient>(client =>
+{
+    client.BaseAddress = new Uri(mlBaseUrl);
+    client.Timeout     = TimeSpan.FromSeconds(3); // timeout curto — não pode travar o ciclo GPS
+});
+
 builder.Services.AddScoped<ILinhaRepository, LinhaRepository>();
 builder.Services.AddScoped<ISentidoRepository, SentidoRepository>();
 builder.Services.AddScoped<IItinerarioRepository, ItinerarioRepository>();

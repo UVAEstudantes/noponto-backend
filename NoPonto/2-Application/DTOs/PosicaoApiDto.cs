@@ -140,6 +140,18 @@ public sealed record PosicaoVeiculoDto
     public string? ProximaParadaNome { get; init; }
     public double? DistanciaProximaParadaMetros { get; init; }
 
+    /// <summary>
+    /// ETA até a próxima parada em segundos, calculado pelo modelo ML.
+    /// Null quando não há próxima parada identificada ou o serviço ML está indisponível.
+    /// </summary>
+    public double? EtaProximaParadaSegundos { get; init; }
+
+    /// <summary>
+    /// Confiança da predição de ETA: "alta", "media" ou "baixa".
+    /// Baseada na distância até a próxima parada.
+    /// </summary>
+    public string? EtaConfianca { get; init; }
+
     // ── Status ────────────────────────────────────────────────────────────────
 
     /// <summary>

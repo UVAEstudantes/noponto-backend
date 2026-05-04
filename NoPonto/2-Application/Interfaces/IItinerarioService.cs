@@ -8,7 +8,7 @@ public interface IItinerarioService
         Guid linhaId, CancellationToken cancellationToken);
 
     Task<ItinerarioMapaDTO> BuscarMapaAsync(
-        Guid itinerarioId, CancellationToken cancellationToken);
+        Guid itinerarioId, bool incluirParadas, CancellationToken cancellationToken);
 
     Task<ItinerarioMapaLinhaDTO> BuscarMapaPorLinhaAsync(
         Guid linhaId, bool incluirParadas, CancellationToken cancellationToken);
