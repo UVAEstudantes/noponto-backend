@@ -9,5 +9,6 @@ namespace NoPonto.Domain.Entities
 
         public ICollection<Sentido> Sentidos { get; set; } = new List<Sentido>();
         public ICollection<Veiculo> Veiculos { get; set; } = new List<Veiculo>();
+        public ICollection<Tarifa> Tarifas { get; set; } = new List<Tarifa>();
     }
 }

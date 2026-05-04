@@ -94,6 +94,12 @@ public class LinhasController : ControllerBase
     ///   "linhaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
     ///   "linhaNome": "476 - Gávea",
     ///   "codigo": "476",
+    ///   "tarifaAtual": {
+    ///     "tarifa": 4.4,
+    ///     "validoDe": "2024-01-01T00:00:00Z",
+    ///     "validoAte": null,
+    ///     "fonte": "manual"
+    ///   },
     ///   "sentidos": [
     ///     {
     ///       "sentidoId": "ffffffff-1111-2222-3333-444444444444",

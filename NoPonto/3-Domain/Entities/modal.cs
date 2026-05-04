@@ -5,5 +5,6 @@ namespace NoPonto.Domain.Entities
         public string Nome { get; set; } = null!;
 
         public ICollection<Linha> Linhas { get; set; } = new List<Linha>();
+        public ICollection<Tarifa> Tarifas { get; set; } = new List<Tarifa>();
     }
 }

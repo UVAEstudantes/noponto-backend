@@ -235,11 +235,6 @@ public sealed class GpsPollingService : BackgroundService
                 MontarComHistorico(x.Nova, x.Anterior)))
             .ToList();
 
-        var todosProcessados = resultadosEnriquecidos
-            .Concat(resultadosSemEnriquecimento)
-            .ToList();
-
-
         // ── 4.5. Predição de ETA via modelo ML ───────────────────────────────────
         // Só para veículos enriquecidos (que têm próxima parada identificada)
         if (resultadosEnriquecidos.Length > 0)
@@ -263,6 +258,10 @@ public sealed class GpsPollingService : BackgroundService
                     .ToArray();
             }
         }
+
+        var todosProcessados = resultadosEnriquecidos
+            .Concat(resultadosSemEnriquecimento)
+            .ToList();
 
         // ── 5. Escrita no Redis ───────────────────────────────────────────────
         var opcoesAtivo = new DistributedCacheEntryOptions

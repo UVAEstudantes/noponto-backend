@@ -175,7 +175,7 @@ var mlBaseUrl = builder.Configuration["ML:ETA:BASE_URL"] ?? "http://localhost:52
 builder.Services.AddHttpClient<GpsEtaClient>(client =>
 {
     client.BaseAddress = new Uri(mlBaseUrl);
-    client.Timeout     = TimeSpan.FromSeconds(3); // timeout curto — não pode travar o ciclo GPS
+    client.Timeout = TimeSpan.FromSeconds(3); // timeout curto — não pode travar o ciclo GPS
 });
 
 builder.Services.AddScoped<ILinhaRepository, LinhaRepository>();
@@ -184,6 +184,7 @@ builder.Services.AddScoped<IItinerarioRepository, ItinerarioRepository>();
 builder.Services.AddScoped<IParadaRepository, ParadaRepository>();
 builder.Services.AddScoped<IPoiRepository, PoiRepository>();
 builder.Services.AddScoped<IModalRepository, ModalRepository>();
+builder.Services.AddScoped<ITarifaRepository, TarifaRepository>();
 
 builder.Services.AddScoped<ILinhaService, LinhaService>();
 builder.Services.AddScoped<ISentidoService, SentidoService>();
@@ -191,6 +192,7 @@ builder.Services.AddScoped<IItinerarioService, ItinerarioService>();
 builder.Services.AddScoped<IParadaService, ParadaService>();
 builder.Services.AddScoped<IPoiService, PoiService>();
 builder.Services.AddScoped<IModalService, ModalService>();
+builder.Services.AddScoped<ITarifaService, TarifaService>();
 
 builder.Services.AddHttpClient<ArcGisClientService>();
 builder.Services.AddScoped<ImportacaoParadasService>();

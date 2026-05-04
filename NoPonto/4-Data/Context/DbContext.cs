@@ -22,6 +22,7 @@ public class TransporteDbContext : DbContext
     public DbSet<Poi> Pois => Set<Poi>();
     public DbSet<HistoricoPassagem> HistoricoPassagens => Set<HistoricoPassagem>();
     public DbSet<PoiParada> PoiParadas => Set<PoiParada>();
+    public DbSet<Tarifa> Tarifas => Set<Tarifa>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -72,6 +73,19 @@ public class TransporteDbContext : DbContext
 
         modelBuilder.Entity<ParadaItinerario>()
             .HasIndex(x => new { x.ItinerarioId, x.Ordem });
+
+        modelBuilder.Entity<Tarifa>()
+            .Property(tarifa => tarifa.Valor)
+            .HasColumnName("Tarifa");
+
+        modelBuilder.Entity<Tarifa>()
+            .HasIndex(x => x.LinhaId);
+
+        modelBuilder.Entity<Tarifa>()
+            .HasIndex(x => x.ModalId);
+
+        modelBuilder.Entity<Tarifa>()
+            .HasIndex(x => new { x.LinhaId, x.ValidoDe });
 
         // Índices para consultas de ML e diagnóstico
         modelBuilder.Entity<HistoricoPassagem>()

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using NoPonto.Application.DTOs.Compartilhado;
 using NoPonto.Application.DTOs.Linhas;
+using NoPonto.Application.DTOs.Tarifas;
 using NoPonto.Data.Interfaces;
 
 namespace NoPonto.Data.Repositories;
@@ -133,13 +134,40 @@ public sealed class LinhaRepository : ILinhaRepository
             })
             .ToList();
 
+        var agora = DateTime.UtcNow;
+
+        var tarifaAtual = await _contexto.Tarifas
+            .AsNoTracking()
+            .Where(tarifa => tarifa.LinhaId == linhaId
+                && tarifa.ValidoDe <= agora
+                && (tarifa.ValidoAte == null || tarifa.ValidoAte >= agora))
+            .OrderByDescending(tarifa => tarifa.ValidoDe)
+            .Select(tarifa => new TarifaResumoDTO
+            {
+                Tarifa = tarifa.Valor,
+                ValidoDe = tarifa.ValidoDe,
+                ValidoAte = tarifa.ValidoAte,
+                Fonte = tarifa.Fonte
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
         return new LinhaDetalhesDTO
         {
             LinhaId = linha.LinhaId,
             LinhaNome = linha.LinhaNome,
             Codigo = linha.Codigo,
+            TarifaAtual = tarifaAtual,
             Sentidos = sentidosDetalhe
         };
+    }
+
+    public Task<Guid?> BuscarModalIdAsync(Guid linhaId, CancellationToken cancellationToken)
+    {
+        return _contexto.Linhas
+            .AsNoTracking()
+            .Where(linha => linha.Id == linhaId)
+            .Select(linha => (Guid?)linha.ModalId)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public Task<bool> ExistePorIdAsync(Guid linhaId, CancellationToken cancellationToken)
