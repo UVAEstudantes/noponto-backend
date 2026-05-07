@@ -105,6 +105,9 @@ builder.Services.AddCors(options =>
     });
 });
 
+var postgresHost = builder.Configuration["POSTGRES_HOST"] ?? "localhost";
+var redisHost = builder.Configuration["REDIS_HOST"] ?? "localhost";
+
 // HttpClient tipado para a API de GPS
 builder.Services.AddHttpClient<GpsSppoClient>(client =>
 {
@@ -125,7 +128,7 @@ builder.Services
     .ValidateOnStart();
 
 var connectionString =
-    $"Host=localhost;" +
+    $"Host={postgresHost};" +
     $"Port={GetEnv("POSTGRES_PORT")};" +
     $"Database={GetEnv("POSTGRES_DB")};" +
     $"Username={GetEnv("POSTGRES_USER")};" +
@@ -163,7 +166,7 @@ builder.Services.AddSignalR();
 builder.Services.AddHostedService<GpsPollingService>();
 
 var redisConnection =
-    $"localhost:{GetEnv("REDIS_PORT")}";
+    $"{redisHost}:{GetEnv("REDIS_PORT")}";
 
 builder.Services.AddStackExchangeRedisCache(options =>
 {
