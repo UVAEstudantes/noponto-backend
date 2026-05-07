@@ -31,8 +31,28 @@ services:
 
     restart: unless-stopped
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: noponto_api
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      - postgres
+      - redis
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Redis__Connection: redis:6379
+
+    restart: unless-stopped
 
 volumes:
-
   postgres_data:
   redis_data:
