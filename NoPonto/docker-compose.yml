@@ -49,16 +49,16 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       TZ: America/Sao_Paulo
 
-      POSTGRES_HOST: 192.168.1.44
-      POSTGRES_PORT: 5432
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: ${REDIS_PORT}
 
-      ConnectionStrings__DefaultConnection: Host=192.168.1.44;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__DefaultConnection: Host=${POSTGRES_HOST};Port=${POSTGRES_PORT};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       Redis__Connection: redis:6379
 
     restart: unless-stopped
