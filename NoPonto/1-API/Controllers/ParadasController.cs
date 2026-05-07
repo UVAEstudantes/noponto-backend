@@ -149,4 +149,39 @@ public class ParadasController : ControllerBase
         var itens = await _service.ListarLinhasAsync(paradaId, cancellationToken);
         return Ok(itens);
     }
+
+    /// <summary>
+    /// Lista os próximos veículos para uma parada específica.
+    /// </summary>
+    /// <param name="paradaId">Identificador da parada.</param>
+    /// <param name="cancellationToken">Token de cancelamento da requisição.</param>
+    /// <remarks>
+    /// Exemplo de resposta:
+    /// [
+    ///   {
+    ///     "ordem": "A12345",
+    ///     "codigoLinha": "476",
+    ///     "status": "Ativo",
+    ///     "itinerarioId": "99999999-8888-7777-6666-555555555555",
+    ///     "latitude": -22.9999,
+    ///     "longitude": -43.365,
+    ///     "timestampGps": "2026-05-04T12:34:56Z",
+    ///     "proximaParadaNome": "Terminal Alvorada",
+    ///     "distanciaProximaParadaMetros": 210.5,
+    ///     "etaProximaParadaSegundos": 95.2,
+    ///     "etaConfianca": "alta",
+    ///     "distanciaParadaMetros": 210.5,
+    ///     "etaParadaSegundos": 95.2
+    ///   }
+    /// ]
+    /// </remarks>
+    [HttpGet("{paradaId:guid}/proximos-veiculos")]
+    [ProducesResponseType(typeof(IReadOnlyList<ParadaProximoVeiculoDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ListarProximosVeiculos(Guid paradaId, CancellationToken cancellationToken = default)
+    {
+        var itens = await _service.ListarProximosVeiculosAsync(paradaId, cancellationToken);
+        return Ok(itens);
+    }
 }
