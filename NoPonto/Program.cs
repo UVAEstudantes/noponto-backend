@@ -222,6 +222,12 @@ builder.Services.AddSingleton<GpsHistoricoService>();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
+    db.Database.Migrate();
+}
+
 app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseSwagger();
