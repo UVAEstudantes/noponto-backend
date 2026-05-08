@@ -9,4 +9,5 @@ public interface IParadaService
     Task<PaginacaoRespostaDTO<ParadaConsultaDTO>> ListarAsync(string? nome, int page, int pageSize, CancellationToken cancellationToken);
     Task<IReadOnlyList<ParadaProximaConsultaDTO>> ListarProximasAsync(double latitude, double longitude, double? raioMetros, CancellationToken cancellationToken);
     Task<IReadOnlyList<ParadaLinhaConsultaDTO>> ListarLinhasAsync(Guid paradaId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<ParadaProximoVeiculoDTO>> ListarProximosVeiculosAsync(Guid paradaId, CancellationToken cancellationToken);
 }

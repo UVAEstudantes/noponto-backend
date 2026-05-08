@@ -147,4 +147,36 @@ LIMIT {limite};";
             .AsNoTracking()
             .AnyAsync(parada => parada.Id == paradaId, cancellationToken);
     }
+
+    public async Task<string?> BuscarNomeAsync(Guid paradaId, CancellationToken cancellationToken)
+    {
+        return await _contexto.Paradas
+            .AsNoTracking()
+            .Where(parada => parada.Id == paradaId)
+            .Select(parada => parada.Nome)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ParadaItinerarioPosicaoDTO>> ListarPosicoesPorItinerariosAsync(
+        Guid paradaId,
+        IReadOnlyCollection<Guid> itinerarioIds,
+        CancellationToken cancellationToken)
+    {
+        if (itinerarioIds.Count == 0)
+            return [];
+
+        var itens = await _contexto.ParadasItinerario
+            .AsNoTracking()
+            .Where(pi => pi.ParadaId == paradaId && itinerarioIds.Contains(pi.ItinerarioId))
+            .Select(pi => new ParadaItinerarioPosicaoDTO
+            {
+                ItinerarioId = pi.ItinerarioId,
+                CodigoLinha = pi.Itinerario.Sentido.Linha.Codigo,
+                PosicaoLinha = pi.PosicaoLinha,
+                DistanciaMetros = pi.DistanciaMetros
+            })
+            .ToListAsync(cancellationToken);
+
+        return itens;
+    }
 }

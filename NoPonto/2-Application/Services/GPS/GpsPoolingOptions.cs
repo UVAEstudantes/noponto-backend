@@ -17,17 +17,12 @@ public sealed class GpsPollingOptions
 
     /// <summary>
     /// Velocidade mínima em km/h para considerar o bearing do veículo confiável.
-    /// Abaixo disso o veículo é tratado como parado: bearing é herdado do ciclo
-    /// anterior e não é usado para trocar de itinerário.
-    /// Padrão: 3 km/h (captura GPS lento, não "zero puro").
     /// </summary>
     public double VelocidadeMinimaBearingKmh { get; set; } = 3;
 
     /// <summary>
     /// Número de ciclos consecutivos sem encontrar uma rota antes de descartar
-    /// o último itinerário confirmado. Útil para terminais onde o veículo fica
-    /// parado e às vezes sai da geometria da rota.
-    /// Padrão: 3 ciclos (~60s).
+    /// o último itinerário confirmado.
     /// </summary>
     public int MaxCiclosSemRota { get; set; } = 3;
 
@@ -39,7 +34,13 @@ public sealed class GpsPollingOptions
 
     /// <summary>
     /// Habilita a coleta de histórico de passagens para ML.
-    /// Desative em ambientes de teste para não acumular dados desnecessários.
     /// </summary>
     public bool HistoricoHabilitado { get; set; } = true;
+
+    /// <summary>
+    /// Se true, enriquece todos os veículos via PostGIS independente de
+    /// terem assinantes no SignalR. Aumenta carga no banco mas coleta
+    /// histórico de todas as linhas para o ML.
+    /// </summary>
+    public bool EnriquecerTodasLinhas { get; set; } = false;
 }

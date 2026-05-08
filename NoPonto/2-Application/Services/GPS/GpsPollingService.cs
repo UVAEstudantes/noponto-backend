@@ -9,15 +9,6 @@ using NoPonto.API.Hubs;
 
 namespace NoPonto.Application.GPS;
 
-/// <summary>
-/// BackgroundService que faz polling da API GPS e distribui posições via Redis + SignalR.
-///
-/// Ciclo de vida dos serviços dependentes:
-///   - GpsEnriquecimentoService: SINGLETON — estado (itinerário + velocidade) persiste
-///     entre ciclos. Injetado diretamente no construtor.
-///   - GpsItinerarioRepository: SCOPED — depende do NpgsqlDataSource (pool externo ao EF).
-///     Criado via IServiceScopeFactory apenas quando há veículos para enriquecer.
-/// </summary>
 public sealed class GpsPollingService : BackgroundService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -31,16 +22,10 @@ public sealed class GpsPollingService : BackgroundService
     private readonly ILogger<GpsPollingService> _logger;
     private readonly GpsPollingOptions _opcoes;
     private readonly IServiceScopeFactory _scopeFactory;
-
-    // Singleton: injetado diretamente — estado vive enquanto o serviço vive.
     private readonly GpsEnriquecimentoService _enriquecedor;
-
-    // Mapa veículo → linha atual (para detectar troca de linha).
     private readonly Dictionary<string, string> _linhaPorVeiculo =
         new(StringComparer.OrdinalIgnoreCase);
-
     private readonly GpsHistoricoService _historicoService;
-
     private readonly GpsEtaClient _etaClient;
 
     public GpsPollingService(
@@ -54,15 +39,15 @@ public sealed class GpsPollingService : BackgroundService
         GpsHistoricoService historicoService,
         GpsEtaClient etaClient)
     {
-        _cliente      = cliente;
-        _cache        = cache;
-        _hubContext   = hubContext;
-        _logger       = logger;
-        _opcoes       = opcoes.Value;
-        _scopeFactory = scopeFactory;
-        _enriquecedor = enriquecedor;
+        _cliente          = cliente;
+        _cache            = cache;
+        _hubContext       = hubContext;
+        _logger           = logger;
+        _opcoes           = opcoes.Value;
+        _scopeFactory     = scopeFactory;
+        _enriquecedor     = enriquecedor;
         _historicoService = historicoService;
-        _etaClient = etaClient;
+        _etaClient        = etaClient;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -70,13 +55,15 @@ public sealed class GpsPollingService : BackgroundService
         _logger.LogInformation(
             "GpsPollingService iniciado — intervalo: {intervalo}s | TTL ativo: {ativo}s | " +
             "TTL recente: {recente}s | janela retroativa: {janela}s | " +
-            "max idade GPS: {maxIdade}s | vel. máxima: {vmax} km/h",
+            "max idade GPS: {maxIdade}s | vel. máxima: {vmax} km/h | " +
+            "enriquecerTodas: {todas}",
             _opcoes.IntervaloSegundos,
             _opcoes.TtlAtivoSegundos,
             _opcoes.TtlRecenteSegundos,
             _opcoes.JanelaRetroativaSegundos,
             _opcoes.MaxIdadeGpsSegundos,
-            _opcoes.VelocidadeMaximaKmh);
+            _opcoes.VelocidadeMaximaKmh,
+            _opcoes.EnriquecerTodasLinhas);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -123,7 +110,7 @@ public sealed class GpsPollingService : BackgroundService
             .ToList();
 
         // ── Filtra posições com timestamp GPS muito antigo ────────────────────
-        var idadeMaxima        = TimeSpan.FromSeconds(_opcoes.MaxIdadeGpsSegundos);
+        var idadeMaxima         = TimeSpan.FromSeconds(_opcoes.MaxIdadeGpsSegundos);
         var descartadosPorIdade = 0;
 
         var maisRecentesFiltrados = maisRecentes
@@ -131,7 +118,6 @@ public sealed class GpsPollingService : BackgroundService
             {
                 var idade = agora - p.TimestampGps;
                 if (idade <= idadeMaxima) return true;
-
                 descartadosPorIdade++;
                 _logger.LogDebug(
                     "Veículo {ordem} descartado: GPS {idade:F0}s atrás (máx {max}s)",
@@ -141,11 +127,9 @@ public sealed class GpsPollingService : BackgroundService
             .ToList();
 
         if (descartadosPorIdade > 0)
-        {
             _logger.LogInformation(
                 "Descartados {qtd} veículos com GPS > {max}s atrás",
                 descartadosPorIdade, _opcoes.MaxIdadeGpsSegundos);
-        }
 
         if (maisRecentesFiltrados.Count == 0) return;
 
@@ -174,11 +158,9 @@ public sealed class GpsPollingService : BackgroundService
                 catch { }
             }
 
-            // Descarta se não é mais novo que o Redis
             if (anterior is not null && nova.TimestampGps <= anterior.TimestampGps)
                 continue;
 
-            // Detecta troca de linha
             if (_linhaPorVeiculo.TryGetValue(nova.Ordem, out var linhaAnterior)
                 && !string.Equals(linhaAnterior, nova.CodigoLinha, StringComparison.OrdinalIgnoreCase))
             {
@@ -193,18 +175,27 @@ public sealed class GpsPollingService : BackgroundService
             await LimparVeiculosDeLinhasAntigasAsync(trocouDeLinha, ct);
 
         // ── 3. Separa para enriquecimento ─────────────────────────────────────
-        var paraEnriquecer    = paraProcessar
-            .Where(x => linhasComAssinantes.Contains(x.Nova.CodigoLinha))
-            .ToList();
-        var semEnriquecimento = paraProcessar
-            .Where(x => !linhasComAssinantes.Contains(x.Nova.CodigoLinha))
-            .ToList();
+        // Se EnriquecerTodasLinhas=true, enriquece tudo independente de assinantes.
+        // Útil para coletar histórico de passagens para o ML.
+        List<(PosicaoVeiculoDto Nova, PosicaoVeiculoDto? Anterior)> paraEnriquecer;
+        List<(PosicaoVeiculoDto Nova, PosicaoVeiculoDto? Anterior)> semEnriquecimento;
+
+        if (_opcoes.EnriquecerTodasLinhas)
+        {
+            paraEnriquecer    = paraProcessar;
+            semEnriquecimento = new List<(PosicaoVeiculoDto, PosicaoVeiculoDto?)>();
+        }
+        else
+        {
+            paraEnriquecer = paraProcessar
+                .Where(x => linhasComAssinantes.Contains(x.Nova.CodigoLinha))
+                .ToList();
+            semEnriquecimento = paraProcessar
+                .Where(x => !linhasComAssinantes.Contains(x.Nova.CodigoLinha))
+                .ToList();
+        }
 
         // ── 4. Enriquecimento PostGIS paralelo ────────────────────────────────
-        // O GpsEnriquecimentoService é Singleton e thread-safe.
-        // O repositório PostGIS usa NpgsqlDataSource (pool de conexões), então
-        // criamos um scope apenas para satisfazer o DI — o repositório em si
-        // é stateless e safe para uso paralelo.
         PosicaoVeiculoDto[] resultadosEnriquecidos;
 
         if (paraEnriquecer.Count == 0)
@@ -229,14 +220,13 @@ public sealed class GpsPollingService : BackgroundService
                 }));
         }
 
-        // Veículos sem assinantes: atualiza só o histórico de velocidade
+        // Veículos sem enriquecimento: atualiza só o histórico de velocidade
         var resultadosSemEnriquecimento = semEnriquecimento
             .Select(x => _enriquecedor.AtualizarHistoricoVelocidade(
                 MontarComHistorico(x.Nova, x.Anterior)))
             .ToList();
 
-        // ── 4.5. Predição de ETA via modelo ML ───────────────────────────────────
-        // Só para veículos enriquecidos (que têm próxima parada identificada)
+        // ── 4.5. Predição de ETA via modelo ML ───────────────────────────────
         if (resultadosEnriquecidos.Length > 0)
         {
             var predicoes = await _etaClient.PredizirLoteAsync(resultadosEnriquecidos, ct);
@@ -259,6 +249,7 @@ public sealed class GpsPollingService : BackgroundService
             }
         }
 
+        // ── Reconstrói todosProcessados com ETA aplicado ──────────────────────
         var todosProcessados = resultadosEnriquecidos
             .Concat(resultadosSemEnriquecimento)
             .ToList();
@@ -273,8 +264,8 @@ public sealed class GpsPollingService : BackgroundService
             AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(_opcoes.TtlRecenteSegundos)
         };
 
-        var ativosPorLinha = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        var tarefasEscrita = new List<Task>();
+        var ativosPorLinha  = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var tarefasEscrita  = new List<Task>();
 
         foreach (var final in todosProcessados)
         {
@@ -292,8 +283,8 @@ public sealed class GpsPollingService : BackgroundService
             set.Add(final.Ordem);
         }
 
-        // ── 5.5. Coleta histórico de passagens (só veículos enriquecidos) ─────────
-        if (_opcoes.HistoricoHabilitado)
+        // ── 5.5. Coleta histórico de passagens ────────────────────────────────
+        if (_opcoes.HistoricoHabilitado && resultadosEnriquecidos.Length > 0)
         {
             await _historicoService.ProcessarLoteAsync(resultadosEnriquecidos, ct);
         }
@@ -400,7 +391,7 @@ public sealed class GpsPollingService : BackgroundService
         sw.Stop();
         _logger.LogInformation(
             "Ciclo GPS: {janela} na janela → {filtrados} válidos → {novas} novas | " +
-            "descartados (idade): {stale_desc} | enriq.: {enr}/{assin_v} | " +
+            "descartados (idade): {stale_desc} | enriq.: {enr}/{total_enr} | " +
             "sem enriq.: {sem} | stale(>60s): {stale} | {ms}ms",
             maisRecentes.Count,
             maisRecentesFiltrados.Count,

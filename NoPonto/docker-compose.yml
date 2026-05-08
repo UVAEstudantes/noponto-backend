@@ -5,34 +5,127 @@ services:
   postgres:
     image: postgis/postgis:16-3.4
     container_name: transporte_postgres
-
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-
     ports:
       - "${POSTGRES_PORT}:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7
     container_name: transporte_redis
-
     ports:
       - "${REDIS_PORT}:6379"
-
     volumes:
       - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  ml:
+    build:
+      context: ../../ml
+      dockerfile: Dockerfile
+    container_name: noponto_ml
+    restart: unless-stopped
+    ports:
+      - "5200:5200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5200/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: noponto_api
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ml:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      TZ: America/Sao_Paulo
+
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      ML__ETA__BASE_URL: http://ml:5200
+
+      GPS__API__BASE_URL: ${GPS__API__BASE_URL}
+      GPS__HTTP_TIMEOUT_SECONDS: ${GPS__HTTP_TIMEOUT_SECONDS}
+      GPS__HUB__ROUTE: ${GPS__HUB__ROUTE}
+
+      GpsPolling__IntervaloSegundos: ${GpsPolling__IntervaloSegundos}
+      GpsPolling__TtlAtivoSegundos: ${GpsPolling__TtlAtivoSegundos}
+      GpsPolling__TtlRecenteSegundos: ${GpsPolling__TtlRecenteSegundos}
+      GpsPolling__TtlLinhaSegundos: ${GpsPolling__TtlLinhaSegundos}
+      GpsPolling__VelocidadeMaximaKmh: ${GpsPolling__VelocidadeMaximaKmh}
+      GpsPolling__JanelaVelocidadeLeituras: ${GpsPolling__JanelaVelocidadeLeituras}
+      GpsPolling__DistanciaMaximaRotaMetros: ${GpsPolling__DistanciaMaximaRotaMetros}
+      GpsPolling__EnriquecerTodasLinhas: ${GpsPolling__EnriquecerTodasLinhas}
+      GpsPolling__JanelaRetroativaSegundos: ${GpsPolling__JanelaRetroativaSegundos}
+      GpsPolling__GrauParalelismoEnriquecimento: ${GpsPolling__GrauParalelismoEnriquecimento}
+      GpsPolling__MaxIdadeGpsSegundos: ${GpsPolling__MaxIdadeGpsSegundos}
+      GpsPolling__VelocidadeMinimaBearingKmh: ${GpsPolling__VelocidadeMinimaBearingKmh}
+      GpsPolling__MaxCiclosSemRota: ${GpsPolling__MaxCiclosSemRota}
+
+      GpsHistorico__Habilitado: ${GpsHistorico__Habilitado}
+      GpsHistorico__DistanciaRegistroMetros: ${GpsHistorico__DistanciaRegistroMetros}
+      GpsHistorico__MaxTempoEntreParadasSegundos: ${GpsHistorico__MaxTempoEntreParadasSegundos}
+
+      ARCGIS__ITINERARIOS__BASE_URL: ${ARCGIS__ITINERARIOS__BASE_URL}
+      ARCGIS__ITINERARIOS__WHERE: ${ARCGIS__ITINERARIOS__WHERE}
+      ARCGIS__ITINERARIOS__OUT_FIELDS: ${ARCGIS__ITINERARIOS__OUT_FIELDS}
+      ARCGIS__ITINERARIOS__PAGE_SIZE: ${ARCGIS__ITINERARIOS__PAGE_SIZE}
+      ARCGIS__PARADAS__BASE_URL: ${ARCGIS__PARADAS__BASE_URL}
+      ARCGIS__PARADAS__WHERE: ${ARCGIS__PARADAS__WHERE}
+      ARCGIS__PARADAS__OUT_FIELDS: ${ARCGIS__PARADAS__OUT_FIELDS}
+      ARCGIS__PARADAS__PAGE_SIZE: ${ARCGIS__PARADAS__PAGE_SIZE}
+
+      IMPORTACAO_HORA: ${IMPORTACAO_HORA}
+      IMPORTACAO_MINUTO: ${IMPORTACAO_MINUTO}
+
+      RELACIONAMENTO__DISTANCIA_MAXIMA_METROS: ${RELACIONAMENTO__DISTANCIA_MAXIMA_METROS}
+      RELACIONAMENTO__DISTANCIA_PERP_MAX_METROS: ${RELACIONAMENTO__DISTANCIA_PERP_MAX_METROS}
+      RELACIONAMENTO__FATOR_RAIO_TERMINAL: ${RELACIONAMENTO__FATOR_RAIO_TERMINAL}
+      RELACIONAMENTO__SCORE_MINIMO: ${RELACIONAMENTO__SCORE_MINIMO}
+      RELACIONAMENTO__PESO_DISTANCIA: ${RELACIONAMENTO__PESO_DISTANCIA}
+      RELACIONAMENTO__PESO_PERPENDICULAR: ${RELACIONAMENTO__PESO_PERPENDICULAR}
+
+      POI__DISTANCIA_MAXIMA_METROS: ${POI__DISTANCIA_MAXIMA_METROS}
+      IMPORT__BATCH_SIZE: ${IMPORT__BATCH_SIZE}
+
+      CORS__ORIGINS__0: ${CORS__ORIGINS__0}
+      CORS__ORIGINS__1: ${CORS__ORIGINS__1}
 
     restart: unless-stopped
 
-
 volumes:
-
   postgres_data:
   redis_data:
