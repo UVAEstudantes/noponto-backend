@@ -35,9 +35,7 @@ services:
       retries: 5
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/guilhermedesales/noponto-api:latest
     container_name: noponto_api
     ports:
       - "8080:8080"
