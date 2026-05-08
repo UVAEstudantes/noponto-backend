@@ -36,7 +36,7 @@ services:
 
   ml:
     build:
-      context: ./ml
+      context: ../../ml
       dockerfile: Dockerfile
     container_name: noponto_ml
     restart: unless-stopped
