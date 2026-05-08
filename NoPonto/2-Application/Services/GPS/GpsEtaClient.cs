@@ -29,9 +29,11 @@ public sealed class GpsEtaClient
 
         var elegíveis = veiculos
             .Where(v =>
-                v.DistanciaProximaParadaMetros is > 0 and < 5000 &&
-                v.VelocidadeMedia is >= 0 &&
-                v.PosicaoNaRota is >= 0 and <= 1)
+                v.DistanciaProximaParadaMetros is > 10 and < 5000 &&
+                v.VelocidadeMedia.HasValue &&
+                v.VelocidadeMedia >= 0 &&
+                v.PosicaoNaRota is > 0 and < 1 &&
+                !string.IsNullOrEmpty(v.CodigoLinha))
             .ToList();
 
         if (elegíveis.Count == 0)
