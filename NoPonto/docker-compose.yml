@@ -34,20 +34,6 @@ services:
       timeout: 3s
       retries: 5
 
-  ml:
-    build:
-      context: ../../ml
-      dockerfile: Dockerfile
-    container_name: noponto_ml
-    restart: unless-stopped
-    ports:
-      - "5200:5200"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5200/health || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
   api:
     build:
       context: .
@@ -59,8 +45,6 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      ml:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -75,7 +59,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
 
-      ML__ETA__BASE_URL: http://ml:5200
+      ML__ETA__BASE_URL: http://noponto_ml:5200
 
       GPS__API__BASE_URL: ${GPS__API__BASE_URL}
       GPS__HTTP_TIMEOUT_SECONDS: ${GPS__HTTP_TIMEOUT_SECONDS}
@@ -125,6 +109,13 @@ services:
       CORS__ORIGINS__1: ${CORS__ORIGINS__1}
 
     restart: unless-stopped
+    networks:
+      - default
+      - noponto_ml_default
+
+networks:
+  noponto_ml_default:
+    external: true
 
 volumes:
   postgres_data:
