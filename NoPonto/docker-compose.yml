@@ -107,13 +107,6 @@ services:
       CORS__ORIGINS__1: ${CORS__ORIGINS__1}
 
     restart: unless-stopped
-    networks:
-      - default
-      - noponto_ml_default
-
-networks:
-  noponto_ml_default:
-    external: true
 
 volumes:
   postgres_data:
