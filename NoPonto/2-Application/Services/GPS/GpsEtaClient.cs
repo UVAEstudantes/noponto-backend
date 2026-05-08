@@ -11,6 +11,7 @@ public sealed class GpsEtaClient
 
     private DateTimeOffset _proximaTentativa = DateTimeOffset.MinValue;
     private static readonly TimeSpan _intervaloRetry = TimeSpan.FromSeconds(30);
+    private const int ChunkSize = 200;
 
     public GpsEtaClient(HttpClient http, ILogger<GpsEtaClient> logger)
     {
@@ -43,40 +44,53 @@ public sealed class GpsEtaClient
         var horaDia   = agora.Hour;
         var diaSemana = (int)agora.DayOfWeek;
 
-        var payload = elegíveis.Select(v => new
+        var jsonOptions = new System.Text.Json.JsonSerializerOptions
         {
-            linha            = v.CodigoLinha,
-            hora_dia         = horaDia,
-            dia_semana       = diaSemana,
-            distancia_metros = v.DistanciaProximaParadaMetros!.Value,
-            velocidade_media = v.VelocidadeMedia ?? 0,
-            posicao_na_rota  = v.PosicaoNaRota!.Value,
-        }).ToList();
+            PropertyNameCaseInsensitive = true,
+        };
+
+        // Divide em chunks para não estourar o limite do ML
+        var chunks = elegíveis
+            .Select((v, i) => new { v, i })
+            .GroupBy(x => x.i / ChunkSize)
+            .Select(g => g.Select(x => x.v).ToList())
+            .ToList();
 
         try
         {
-            var resposta = await _http.PostAsJsonAsync("/eta/batch", payload, ct);
-            resposta.EnsureSuccessStatusCode();
-
-            // Usa JsonSerializerOptions com snake_case para deserializar
-            var jsonOptions = new System.Text.Json.JsonSerializerOptions
+            foreach (var chunk in chunks)
             {
-                PropertyNameCaseInsensitive = true,
-            };
+                var payloadChunk = chunk.Select(v => new
+                {
+                    linha            = v.CodigoLinha,
+                    hora_dia         = horaDia,
+                    dia_semana       = diaSemana,
+                    distancia_metros = v.DistanciaProximaParadaMetros!.Value,
+                    velocidade_media = v.VelocidadeMedia ?? 0,
+                    posicao_na_rota  = v.PosicaoNaRota!.Value,
+                }).ToList();
 
-            var predicoes = await resposta.Content
-                .ReadFromJsonAsync<List<EtaRespostaDto>>(jsonOptions, cancellationToken: ct);
+                var resposta = await _http.PostAsJsonAsync("/eta/batch", payloadChunk, ct);
+                resposta.EnsureSuccessStatusCode();
 
-            if (predicoes is null || predicoes.Count != elegíveis.Count)
-                return resultado;
+                var predicoes = await resposta.Content
+                    .ReadFromJsonAsync<List<EtaRespostaDto>>(jsonOptions, cancellationToken: ct);
 
-            for (int i = 0; i < elegíveis.Count; i++)
-            {
-                resultado[elegíveis[i].Ordem] = (
-                    predicoes[i].EtaSegundos,
-                    predicoes[i].Confianca
-                );
+                if (predicoes is null || predicoes.Count != chunk.Count)
+                    continue;
+
+                for (int i = 0; i < chunk.Count; i++)
+                {
+                    resultado[chunk[i].Ordem] = (
+                        predicoes[i].EtaSegundos,
+                        predicoes[i].Confianca
+                    );
+                }
             }
+
+            _logger.LogDebug(
+                "ETA predito para {total} veículos em {chunks} chunks",
+                resultado.Count, chunks.Count);
 
             return resultado;
         }
@@ -90,11 +104,6 @@ public sealed class GpsEtaClient
             return resultado;
         }
     }
-
-    // ── DTO interno ───────────────────────────────────────────────────────────
-    // Usa PropertyNameCaseInsensitive=true no JsonSerializerOptions acima,
-    // então "eta_segundos" do Python casa com "EtaSegundos" sem precisar
-    // de JsonPropertyName em cada campo.
 
     private sealed class EtaRespostaDto
     {
