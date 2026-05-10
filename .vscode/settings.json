@@ -1,3 +1,25 @@
 {
-    "dotnet.defaultSolution": "NoPonto.sln"
+    "dotnet.defaultSolution": "NoPonto.sln",
+    "cSpell.words": [
+        "ARCGIS",
+        "codigo",
+        "Codigo",
+        "codigos",
+        "Configuracao",
+        "direcao",
+        "frescao",
+        "Importacao",
+        "IMPORTACAO",
+        "isready",
+        "itinerario",
+        "Itinerario",
+        "itinerarios",
+        "ITINERARIOS",
+        "Onibus",
+        "Padrao",
+        "postgis",
+        "postgres",
+        "postgresql",
+        "srid"
+    ]
 }

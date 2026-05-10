@@ -7,8 +7,6 @@ namespace NoPonto.Application.Services;
 
 public sealed class ImportacaoItinerariosService : BackgroundService
 {
-    private const string NomeModalOnibus = "Ônibus";
-
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ImportacaoItinerariosService> _logger;
@@ -86,86 +84,102 @@ public sealed class ImportacaoItinerariosService : BackgroundService
 
         _logger.LogInformation("Total de registros recebidos: {TotalRegistros}", metadados.Count);
 
-        var linhasCriadas = 0;
-        var sentidosCriados = 0;
-        var itinerariosCriados = 0;
+        var linhasCriadas        = 0;
+        var linhasAtualizadas    = 0;
+        var sentidosCriados      = 0;
+        var itinerariosCriados   = 0;
         var totalRegistrosSalvos = 0;
 
-        var modaisPendentes = new List<Modal>();
-        var linhasPendentes = new List<Linha>();
-        var sentidosPendentes = new List<Sentido>();
+        var modaisPendentes      = new List<Modal>();
+        var linhasPendentes      = new List<Linha>();
+        var sentidosPendentes    = new List<Sentido>();
         var itinerariosPendentes = new List<Itinerario>();
 
-        var modalOnibusId = await contexto.Modais
+        // ── Modais ────────────────────────────────────────────────────────────
+        var modaisExistentes = await contexto.Modais
             .AsNoTracking()
-            .Where(modal => modal.Nome == NomeModalOnibus)
-            .Select(modal => modal.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+            .ToDictionaryAsync(m => m.Nome, m => m.Id, cancellationToken);
 
-        if (modalOnibusId == Guid.Empty)
+        Guid ObterOuCriarModal(string tipoRota)
         {
-            modalOnibusId = Guid.NewGuid();
-
-            var modalOnibus = new Modal
+            var nomeModal = tipoRota.ToLowerInvariant() switch
             {
-                Id = modalOnibusId,
-                Nome = NomeModalOnibus
+                "brt" => "BRT",
+                _     => "Ônibus"
             };
 
-            modaisPendentes.Add(modalOnibus);
+            if (modaisExistentes.TryGetValue(nomeModal, out var id))
+                return id;
+
+            var novoId = Guid.NewGuid();
+            modaisPendentes.Add(new Modal { Id = novoId, Nome = nomeModal });
+            modaisExistentes[nomeModal] = novoId;
+            return novoId;
         }
 
+        // ── Linhas existentes ─────────────────────────────────────────────────
+        //
+        // REGRA CRÍTICA: NÃO usar .Select() nem .AsNoTracking() aqui.
+        //
+        // O EF só gera UPDATE quando compara o valor atual da propriedade com o
+        // "snapshot" original que ele gravou no momento do carregamento.
+        // Se usarmos .Select(new { Id, Codigo }), o snapshot só tem Id e Codigo;
+        // quando mudamos TipoRota, o EF não sabe o valor original e não detecta
+        // mudança — o SaveChanges não emite nenhum UPDATE.
+        //
+        // Com .ToListAsync() sem projeção, o EF carrega a entidade completa e
+        // rastreia todos os campos corretamente.
+        //
         var codigosLinhas = metadados
-            .Select(item => item.Servico.Trim())
-            .Where(codigo => !string.IsNullOrWhiteSpace(codigo))
+            .Select(m => m.Servico.Trim())
+            .Where(c => !string.IsNullOrWhiteSpace(c))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var linhasExistentes = codigosLinhas.Count == 0
+        var linhasExistentesTracked = codigosLinhas.Count == 0
             ? []
             : await contexto.Linhas
-                .AsNoTracking()
-                .Where(linha => codigosLinhas.Contains(linha.Codigo))
-                .Select(linha => new { linha.Id, linha.Codigo })
-                .ToListAsync(cancellationToken);
+                .Where(l => codigosLinhas.Contains(l.Codigo))
+                .ToListAsync(cancellationToken); // sem .Select() e sem .AsNoTracking()
 
-        var linhasPorCodigo = linhasExistentes.ToDictionary(
-            linha => linha.Codigo.Trim(),
-            linha => linha.Id,
+        var linhasPorCodigo = linhasExistentesTracked.ToDictionary(
+            l => l.Codigo.Trim(),
+            l => l,
             StringComparer.OrdinalIgnoreCase);
 
-        var linhasIdsExistentes = linhasExistentes.Select(item => item.Id).ToList();
+        // ── Sentidos existentes ───────────────────────────────────────────────
+        var linhasIdsExistentes = linhasExistentesTracked.Select(l => l.Id).ToList();
+
         var sentidosExistentes = linhasIdsExistentes.Count == 0
             ? []
             : await contexto.Sentidos
                 .AsNoTracking()
-                .Where(sentido => linhasIdsExistentes.Contains(sentido.LinhaId))
-                .Select(sentido => new { sentido.Id, sentido.LinhaId, sentido.Nome })
+                .Where(s => linhasIdsExistentes.Contains(s.LinhaId))
+                .Select(s => new { s.Id, s.LinhaId, s.Nome })
                 .ToListAsync(cancellationToken);
 
         var sentidosPorChave = sentidosExistentes.ToDictionary(
-            sentido => CriarChaveSentido(sentido.LinhaId, sentido.Nome),
-            sentido => sentido.Id,
+            s => CriarChaveSentido(s.LinhaId, s.Nome),
+            s => s.Id,
             StringComparer.Ordinal);
 
-        var sentidosIdsExistentes = sentidosExistentes.Select(item => item.Id).ToList();
+        // ── Itinerários existentes ────────────────────────────────────────────
+        var sentidosIdsExistentes = sentidosExistentes.Select(s => s.Id).ToList();
         var chavesItinerariosExistentes = new HashSet<string>(StringComparer.Ordinal);
 
         if (sentidosIdsExistentes.Count > 0)
         {
             var itinerariosExistentes = await contexto.Itinerarios
                 .AsNoTracking()
-                .Where(itinerario => sentidosIdsExistentes.Contains(itinerario.SentidoId))
-                .Select(itinerario => new { itinerario.SentidoId, itinerario.DistanciaMetros })
+                .Where(i => sentidosIdsExistentes.Contains(i.SentidoId))
+                .Select(i => new { i.SentidoId, i.DistanciaMetros })
                 .ToListAsync(cancellationToken);
 
-            foreach (var itinerarioExistente in itinerariosExistentes)
-            {
-                chavesItinerariosExistentes.Add(
-                    CriarChaveItinerario(itinerarioExistente.SentidoId, itinerarioExistente.DistanciaMetros));
-            }
+            foreach (var ie in itinerariosExistentes)
+                chavesItinerariosExistentes.Add(CriarChaveItinerario(ie.SentidoId, ie.DistanciaMetros));
         }
 
+        // ── Loop principal ────────────────────────────────────────────────────
         var alteracoesPendentes = modaisPendentes.Count;
 
         foreach (var metadado in metadados)
@@ -173,9 +187,11 @@ public sealed class ImportacaoItinerariosService : BackgroundService
             cancellationToken.ThrowIfCancellationRequested();
 
             var codigoLinha = metadado.Servico.Trim();
-            var destino = metadado.Destino.Trim();
-            var direcao = metadado.Direcao.Trim();
-            var shapeId = metadado.ShapeId.Trim();
+            var destino     = metadado.Destino.Trim();
+            var direcao     = metadado.Direcao.Trim();
+            var shapeId     = metadado.ShapeId.Trim();
+            var tipoRota    = metadado.TipoRota?.Trim().ToLowerInvariant() ?? "regular";
+            var consorcio   = metadado.Consorcio?.Trim();
 
             if (string.IsNullOrWhiteSpace(codigoLinha)
                 || string.IsNullOrWhiteSpace(destino)
@@ -185,46 +201,94 @@ public sealed class ImportacaoItinerariosService : BackgroundService
                 continue;
             }
 
-            if (!linhasPorCodigo.TryGetValue(codigoLinha, out var linhaId))
-            {
-                linhaId = Guid.NewGuid();
+            Guid linhaId;
 
-                var linha = new Linha
+            if (!linhasPorCodigo.TryGetValue(codigoLinha, out var linhaExistente))
+            {
+                // ── NOVA linha ────────────────────────────────────────────────
+                var modalId = ObterOuCriarModal(tipoRota);
+
+                var novaLinha = new Linha
                 {
-                    Id = linhaId,
-                    Codigo = codigoLinha,
-                    Nome = $"{codigoLinha} - {destino}",
-                    ModalId = modalOnibusId
+                    Id        = Guid.NewGuid(),
+                    Codigo    = codigoLinha,
+                    Nome      = $"{codigoLinha} - {destino}",
+                    ModalId   = modalId,
+                    TipoRota  = tipoRota,
+                    Consorcio = consorcio
                 };
 
-                linhasPendentes.Add(linha);
+                linhasPendentes.Add(novaLinha);
+                linhasPorCodigo[codigoLinha] = novaLinha;
 
-                linhasPorCodigo[codigoLinha] = linhaId;
+                linhaId = novaLinha.Id;
                 linhasCriadas++;
                 alteracoesPendentes++;
             }
+            else
+            {
+                // ── EXISTENTE — detecta e aplica mudanças ─────────────────────
+                linhaId = linhaExistente.Id;
 
-            var nomeSentido = $"{destino} ({direcao})";
+                var modalIdNovo = ObterOuCriarModal(tipoRota);
+                var nomeNovo    = $"{codigoLinha} - {destino}";
+                var mudou       = false;
+
+                if (!string.Equals(linhaExistente.TipoRota, tipoRota, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation(
+                        "Linha {Codigo}: TipoRota '{Antigo}' → '{Novo}'.",
+                        codigoLinha, linhaExistente.TipoRota, tipoRota);
+                    linhaExistente.TipoRota = tipoRota;
+                    mudou = true;
+                }
+
+                if (linhaExistente.ModalId != modalIdNovo)
+                {
+                    linhaExistente.ModalId = modalIdNovo;
+                    mudou = true;
+                }
+
+                if (!string.Equals(linhaExistente.Nome, nomeNovo, StringComparison.OrdinalIgnoreCase))
+                {
+                    linhaExistente.Nome = nomeNovo;
+                    mudou = true;
+                }
+
+                if (!string.Equals(linhaExistente.Consorcio, consorcio, StringComparison.OrdinalIgnoreCase))
+                {
+                    linhaExistente.Consorcio = consorcio;
+                    mudou = true;
+                }
+
+                if (mudou)
+                {
+                    linhasAtualizadas++;
+                    alteracoesPendentes++;
+                }
+            }
+
+            // ── Sentido ───────────────────────────────────────────────────────
+            var nomeSentido  = $"{destino} ({direcao})";
             var chaveSentido = CriarChaveSentido(linhaId, nomeSentido);
 
             if (!sentidosPorChave.TryGetValue(chaveSentido, out var sentidoId))
             {
                 sentidoId = Guid.NewGuid();
 
-                var sentido = new Sentido
+                sentidosPendentes.Add(new Sentido
                 {
-                    Id = sentidoId,
+                    Id      = sentidoId,
                     LinhaId = linhaId,
-                    Nome = nomeSentido
-                };
-
-                sentidosPendentes.Add(sentido);
+                    Nome    = nomeSentido
+                });
 
                 sentidosPorChave[chaveSentido] = sentidoId;
                 sentidosCriados++;
                 alteracoesPendentes++;
             }
 
+            // ── Itinerário ────────────────────────────────────────────────────
             var chaveItinerario = CriarChaveItinerario(sentidoId, metadado.DistanciaMetros);
 
             if (chavesItinerariosExistentes.Contains(chaveItinerario))
@@ -236,19 +300,17 @@ public sealed class ImportacaoItinerariosService : BackgroundService
 
                 if (geometria is null)
                 {
-                    _logger.LogError("Erro ao importar shape_id: {shapeId}", shapeId);
+                    _logger.LogError("Geometria nula para shape_id: {ShapeId}", shapeId);
                     continue;
                 }
 
-                var itinerario = new Itinerario
+                itinerariosPendentes.Add(new Itinerario
                 {
-                    Id = Guid.NewGuid(),
-                    SentidoId = sentidoId,
+                    Id              = Guid.NewGuid(),
+                    SentidoId       = sentidoId,
                     DistanciaMetros = metadado.DistanciaMetros,
-                    Geometria = geometria
-                };
-
-                itinerariosPendentes.Add(itinerario);
+                    Geometria       = geometria
+                });
 
                 chavesItinerariosExistentes.Add(chaveItinerario);
                 itinerariosCriados++;
@@ -256,11 +318,16 @@ public sealed class ImportacaoItinerariosService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao importar shape_id: {shapeId}", shapeId);
+                _logger.LogError(ex, "Erro ao importar shape_id: {ShapeId}", shapeId);
             }
 
             if (alteracoesPendentes >= tamanhoLote)
             {
+                // Persiste UPDATEs das linhas rastreadas ANTES do ChangeTracker.Clear()
+                // que acontece dentro de SalvarLotesPendentesAsync.
+                if (linhasAtualizadas > 0)
+                    await contexto.SaveChangesAsync(cancellationToken);
+
                 totalRegistrosSalvos += await SalvarLotesPendentesAsync(
                     contexto,
                     modaisPendentes,
@@ -271,11 +338,18 @@ public sealed class ImportacaoItinerariosService : BackgroundService
                     cancellationToken);
 
                 alteracoesPendentes =
-                    modaisPendentes.Count +
-                    linhasPendentes.Count +
-                    sentidosPendentes.Count +
+                    modaisPendentes.Count      +
+                    linhasPendentes.Count      +
+                    sentidosPendentes.Count    +
                     itinerariosPendentes.Count;
             }
+        }
+
+        // Persiste UPDATEs finais das linhas rastreadas
+        if (linhasAtualizadas > 0)
+        {
+            await contexto.SaveChangesAsync(cancellationToken);
+            totalRegistrosSalvos += linhasAtualizadas;
         }
 
         totalRegistrosSalvos += await SalvarLotesPendentesAsync(
@@ -290,6 +364,7 @@ public sealed class ImportacaoItinerariosService : BackgroundService
         cronometro.Stop();
 
         _logger.LogInformation("Linhas criadas: {LinhasCriadas}", linhasCriadas);
+        _logger.LogInformation("Linhas atualizadas: {LinhasAtualizadas}", linhasAtualizadas);
         _logger.LogInformation("Sentidos criados: {SentidosCriados}", sentidosCriados);
         _logger.LogInformation("Itinerários criados: {ItinerariosCriados}", itinerariosCriados);
         _logger.LogInformation("Total de registros salvos: {TotalRegistrosSalvos}", totalRegistrosSalvos);
@@ -302,7 +377,6 @@ public sealed class ImportacaoItinerariosService : BackgroundService
     {
         using var escopo = _serviceScopeFactory.CreateScope();
         var importacaoParadasService = escopo.ServiceProvider.GetRequiredService<ImportacaoParadasService>();
-
         await importacaoParadasService.ExecutarImportacaoAsync(cancellationToken);
     }
 
@@ -315,37 +389,12 @@ public sealed class ImportacaoItinerariosService : BackgroundService
         int tamanhoLote,
         CancellationToken cancellationToken)
     {
-        var totalRegistrosSalvos = 0;
-
-        totalRegistrosSalvos += await SalvarEntidadesEmLotesAsync(
-            contexto,
-            modaisPendentes,
-            tamanhoLote,
-            "Modais",
-            cancellationToken);
-
-        totalRegistrosSalvos += await SalvarEntidadesEmLotesAsync(
-            contexto,
-            linhasPendentes,
-            tamanhoLote,
-            "Linhas",
-            cancellationToken);
-
-        totalRegistrosSalvos += await SalvarEntidadesEmLotesAsync(
-            contexto,
-            sentidosPendentes,
-            tamanhoLote,
-            "Sentidos",
-            cancellationToken);
-
-        totalRegistrosSalvos += await SalvarEntidadesEmLotesAsync(
-            contexto,
-            itinerariosPendentes,
-            tamanhoLote,
-            "Itinerários",
-            cancellationToken);
-
-        return totalRegistrosSalvos;
+        var total = 0;
+        total += await SalvarEntidadesEmLotesAsync(contexto, modaisPendentes,       tamanhoLote, "Modais",       cancellationToken);
+        total += await SalvarEntidadesEmLotesAsync(contexto, linhasPendentes,       tamanhoLote, "Linhas",       cancellationToken);
+        total += await SalvarEntidadesEmLotesAsync(contexto, sentidosPendentes,     tamanhoLote, "Sentidos",     cancellationToken);
+        total += await SalvarEntidadesEmLotesAsync(contexto, itinerariosPendentes,  tamanhoLote, "Itinerários",  cancellationToken);
+        return total;
     }
 
     private async Task<int> SalvarEntidadesEmLotesAsync<TEntity>(
@@ -360,36 +409,30 @@ public sealed class ImportacaoItinerariosService : BackgroundService
             return 0;
 
         var totalLotes = (int)Math.Ceiling((double)entidadesPendentes.Count / tamanhoLote);
-        var totalRegistrosSalvos = 0;
+        var totalSalvos = 0;
 
         for (var indice = 0; indice < entidadesPendentes.Count; indice += tamanhoLote)
         {
             var loteAtual = (indice / tamanhoLote) + 1;
-            var lote = entidadesPendentes
-                .Skip(indice)
-                .Take(tamanhoLote)
-                .ToList();
+            var lote = entidadesPendentes.Skip(indice).Take(tamanhoLote).ToList();
 
             _logger.LogInformation(
-                "Salvando lote {LoteAtual} de {TotalLotes} ({NomeEntidade})...",
-                loteAtual,
-                totalLotes,
-                nomeEntidade);
+                "Salvando lote {LoteAtual}/{TotalLotes} ({NomeEntidade})...",
+                loteAtual, totalLotes, nomeEntidade);
 
             contexto.AddRange(lote);
             await contexto.SaveChangesAsync(cancellationToken);
-            contexto.ChangeTracker.Clear();
+            contexto.ChangeTracker.Clear(); // limpa tracking após cada lote de INSERTs
 
-            totalRegistrosSalvos += lote.Count;
+            totalSalvos += lote.Count;
 
             _logger.LogInformation(
-                "Lote salvo com sucesso ({NomeEntidade}): {Quantidade} registros.",
-                nomeEntidade,
-                lote.Count);
+                "Lote salvo ({NomeEntidade}): {Quantidade} registros.",
+                nomeEntidade, lote.Count);
         }
 
         entidadesPendentes.Clear();
-        return totalRegistrosSalvos;
+        return totalSalvos;
     }
 
     private async Task<List<MetadadoItinerarioArcGis>> BuscarTodosMetadadosAsync(
@@ -402,10 +445,7 @@ public sealed class ImportacaoItinerariosService : BackgroundService
 
         while (true)
         {
-            var pagina = await arcGisClient.BuscarMetadadosAsync(
-                resultOffset,
-                tamanhoPagina,
-                cancellationToken);
+            var pagina = await arcGisClient.BuscarMetadadosAsync(resultOffset, tamanhoPagina, cancellationToken);
 
             if (pagina.Count == 0)
                 break;
@@ -423,15 +463,14 @@ public sealed class ImportacaoItinerariosService : BackgroundService
 
     private TimeSpan LerHorarioImportacao()
     {
-        var horaImportacao = _configuration["IMPORTACAO_HORA"];
-        var minutoImportacao = _configuration["IMPORTACAO_MINUTO"];
+        var horaStr   = _configuration["IMPORTACAO_HORA"];
+        var minutoStr = _configuration["IMPORTACAO_MINUTO"];
 
-        if (int.TryParse(horaImportacao, NumberStyles.Integer, CultureInfo.InvariantCulture, out var hora)
-            && int.TryParse(minutoImportacao, NumberStyles.Integer, CultureInfo.InvariantCulture, out var minuto))
+        if (int.TryParse(horaStr,   NumberStyles.Integer, CultureInfo.InvariantCulture, out var hora)
+         && int.TryParse(minutoStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var minuto))
         {
             if (hora is < 0 or > 23)
                 throw new InvalidOperationException("Valor inválido para IMPORTACAO_HORA. Intervalo esperado: 0-23.");
-
             if (minuto is < 0 or > 59)
                 throw new InvalidOperationException("Valor inválido para IMPORTACAO_MINUTO. Intervalo esperado: 0-59.");
 
@@ -446,17 +485,11 @@ public sealed class ImportacaoItinerariosService : BackgroundService
             throw new InvalidOperationException(
                 "Defina IMPORTACAO_HORA/IMPORTACAO_MINUTO ou ARCGIS__HORARIO_IMPORTACAO.");
 
-        if (TimeSpan.TryParseExact(
-                horarioConfigurado,
-                @"hh\:mm",
-                CultureInfo.InvariantCulture,
-                out var horarioImportacao))
-        {
-            return horarioImportacao;
-        }
+        if (TimeSpan.TryParseExact(horarioConfigurado, @"hh\:mm", CultureInfo.InvariantCulture, out var ts))
+            return ts;
 
-        if (TimeSpan.TryParse(horarioConfigurado, CultureInfo.InvariantCulture, out horarioImportacao))
-            return new TimeSpan(horarioImportacao.Hours, horarioImportacao.Minutes, 0);
+        if (TimeSpan.TryParse(horarioConfigurado, CultureInfo.InvariantCulture, out ts))
+            return new TimeSpan(ts.Hours, ts.Minutes, 0);
 
         throw new InvalidOperationException(
             "Valor inválido para ARCGIS__HORARIO_IMPORTACAO. Formato esperado: HH:mm.");
@@ -464,37 +497,23 @@ public sealed class ImportacaoItinerariosService : BackgroundService
 
     private int LerInteiroConfiguracao(string chave, int valorPadrao)
     {
-        var valorConfigurado = _configuration[chave];
-
-        if (int.TryParse(valorConfigurado, NumberStyles.Integer, CultureInfo.InvariantCulture, out var valor)
-            && valor > 0)
-        {
-            return valor;
-        }
-
-        return valorPadrao;
+        var v = _configuration[chave];
+        return int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var valor) && valor > 0
+            ? valor
+            : valorPadrao;
     }
 
     private int LerInteiroConfiguracaoComFallback(string chavePrincipal, string chaveSecundaria, int valorPadrao)
     {
-        var valorPrincipal = _configuration[chavePrincipal];
-
-        if (int.TryParse(valorPrincipal, NumberStyles.Integer, CultureInfo.InvariantCulture, out var valor)
-            && valor > 0)
-        {
-            return valor;
-        }
-
-        return LerInteiroConfiguracao(chaveSecundaria, valorPadrao);
+        var v = _configuration[chavePrincipal];
+        return int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var valor) && valor > 0
+            ? valor
+            : LerInteiroConfiguracao(chaveSecundaria, valorPadrao);
     }
 
     private static string CriarChaveSentido(Guid linhaId, string nomeSentido)
-    {
-        return $"{linhaId:N}|{nomeSentido.Trim().ToUpperInvariant()}";
-    }
+        => $"{linhaId:N}|{nomeSentido.Trim().ToUpperInvariant()}";
 
     private static string CriarChaveItinerario(Guid sentidoId, double distanciaMetros)
-    {
-        return $"{sentidoId:N}|{distanciaMetros.ToString("G17", CultureInfo.InvariantCulture)}";
-    }
+        => $"{sentidoId:N}|{distanciaMetros.ToString("G17", CultureInfo.InvariantCulture)}";
 }
