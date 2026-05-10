@@ -80,15 +80,22 @@ public sealed class ArcGisClientService
                 continue;
             }
 
-            var servico = LerString(atributos, "servico");
-            var destino = LerString(atributos, "destino");
-            var direcao = LerString(atributos, "direcao");
-            var shapeId = LerString(atributos, "shape_id");
+            var servico   = LerString(atributos, "servico");
+            var destino   = LerString(atributos, "destino");
+            var direcao   = LerString(atributos, "direcao");
+            var tipoRota  = LerString(atributos, "tipo_rota")?.Trim().ToLowerInvariant() ?? "regular";
+            var shapeId   = LerString(atributos, "shape_id");
             var distancia = LerDouble(atributos, "extensao");
+            var consorcio = LerString(atributos, "consorcio");
+
+            _logger.LogInformation(
+            "servico={Servico} tipo_rota={TipoRota} consorcio={Consorcio}",
+            LerString(atributos, "servico"), tipoRota, consorcio ?? "(null)");
 
             if (string.IsNullOrWhiteSpace(servico)
                 || string.IsNullOrWhiteSpace(destino)
                 || string.IsNullOrWhiteSpace(direcao)
+                || string.IsNullOrWhiteSpace(tipoRota)
                 || string.IsNullOrWhiteSpace(shapeId)
                 || !distancia.HasValue)
             {
@@ -97,11 +104,13 @@ public sealed class ArcGisClientService
 
             metadados.Add(new MetadadoItinerarioArcGis
             {
-                Servico = servico,
-                Destino = destino,
-                Direcao = direcao,
-                ShapeId = shapeId,
-                DistanciaMetros = distancia.Value
+                Servico         = servico,
+                Destino         = destino,
+                Direcao         = direcao,
+                TipoRota        = tipoRota,  // ← estava faltando no Add
+                ShapeId         = shapeId,
+                DistanciaMetros = distancia.Value,
+                Consorcio       = consorcio  // ← estava faltando no Add
             });
         }
 
@@ -302,11 +311,58 @@ public sealed class ArcGisClientService
     }
 }
 
+// ── MUDANÇA 1: MetadadoItinerarioArcGis — adicionar Consorcio ─────────────────
+// Ao final do arquivo ArcGisClientService.cs, substituir a classe por:
+
 public sealed class MetadadoItinerarioArcGis
 {
     public required string Servico { get; init; }
     public required string Destino { get; init; }
     public required string Direcao { get; init; }
+    public required string TipoRota { get; set; } = "regular";
     public required string ShapeId { get; init; }
     public required double DistanciaMetros { get; init; }
+    public string? Consorcio { get; init; }  // NOVO
 }
+
+// ── MUDANÇA 2: BuscarMetadadosAsync — ler o campo consorcio ──────────────────
+// Dentro do foreach de features, após a leitura de distancia, adicionar:
+//
+//   var consorcio = LerString(atributos, "consorcio");
+//
+// E no metadados.Add(...), incluir:
+//
+//   Consorcio = consorcio
+//
+// O bloco completo do Add fica assim:
+
+/*
+    var servico   = LerString(atributos, "servico");
+    var destino   = LerString(atributos, "destino");
+    var direcao   = LerString(atributos, "direcao");
+    var tipoRota  = LerString(atributos, "tipo_rota")?.Trim().ToLowerInvariant() ?? "regular";
+    var shapeId   = LerString(atributos, "shape_id");
+    var distancia = LerDouble(atributos, "extensao");
+    var consorcio = LerString(atributos, "consorcio");   // <-- NOVO
+
+    if (string.IsNullOrWhiteSpace(servico)
+        || string.IsNullOrWhiteSpace(destino)
+        || string.IsNullOrWhiteSpace(direcao)
+        || string.IsNullOrWhiteSpace(tipoRota)
+        || string.IsNullOrWhiteSpace(shapeId)
+        || !distancia.HasValue)
+    {
+        continue;
+    }
+
+    metadados.Add(new MetadadoItinerarioArcGis
+    {
+        Servico         = servico,
+        Destino         = destino,
+        Direcao         = direcao,
+        TipoRota        = tipoRota,
+        ShapeId         = shapeId,
+        DistanciaMetros = distancia.Value,
+        Consorcio       = consorcio        // <-- NOVO
+    });
+*/

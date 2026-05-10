@@ -48,8 +48,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       TZ: America/Sao_Paulo
 
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -107,13 +107,6 @@ services:
       CORS__ORIGINS__1: ${CORS__ORIGINS__1}
 
     restart: unless-stopped
-    networks:
-      - default
-      - noponto_ml_default
-
-networks:
-  noponto_ml_default:
-    external: true
 
 volumes:
   postgres_data:
