@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NoPonto.Migrations
 {
     [DbContext(typeof(TransporteDbContext))]
-    partial class TransporteDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260510013245_AddTipoRotaETempoRealLinha")]
+    partial class AddTipoRotaETempoRealLinha
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -144,9 +147,6 @@ namespace NoPonto.Migrations
 
                     b.Property<string>("Codigo")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Consorcio")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
