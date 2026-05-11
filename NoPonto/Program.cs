@@ -62,7 +62,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "NoPonto API",
         Version = "v1",
-        Description = "API para consulta e importação de dados de transporte público (linhas, sentidos, itinerários, paradas e POIs). (Teste do deploy no railway v7.0)"
+        Description = "API para consulta e importação de dados de transporte público (linhas, sentidos, itinerários, paradas e POIs). (Teste do deploy no railway v8.0)"
     });
 
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
