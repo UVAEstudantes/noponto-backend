@@ -110,4 +110,8 @@ services:
 
 volumes:
   postgres_data:
+    external: true
+    name: noponto_postgres_data
   redis_data:
+    external: true
+    name: noponto_redis_data
