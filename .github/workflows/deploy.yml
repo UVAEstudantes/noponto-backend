@@ -76,4 +76,4 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             export GHCR_TOKEN="${{ secrets.GHCR_TOKEN }}"
-            bash /home/guilherme/deploy.sh
+            bash /home/guilherme/deploy.sh noponto api noponto_api
