@@ -148,7 +148,7 @@ public sealed class VeiculosController : ControllerBase
                                   .Average(h => (double?)h.TempoDesdeParadaAnteriorSegundos!.Value) / 60,
             })
             .OrderByDescending(x => x.TotalPassagens)
-            .Take(20)
+            //.Take(20)
             .ToListAsync(ct);
 
         return Ok(new
