@@ -30,9 +30,11 @@ jobs:
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
           BASE=ghcr.io/${{ secrets.GHCR_USER }}/noponto-api
+
           TAGS="${BASE}:latest"
           TAGS="${TAGS},${BASE}:${TIMESTAMP}-${SHORT_SHA}"
           TAGS="${TAGS},${BASE}:build-${{ github.run_number }}"
+
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
           echo "version=build-${{ github.run_number }}-${SHORT_SHA}" >> $GITHUB_OUTPUT
 
@@ -60,12 +62,26 @@ jobs:
     needs: build
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Conecta no Tailscale
         uses: tailscale/github-action@v2
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
           tags: tag:ci
+
+      - name: Copia compose pro servidor
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_TAILSCALE_IP }}
+          port: 22
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: docker-compose.yml
+          target: /opt/stacks/noponto/
+          overwrite: true
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
@@ -76,4 +92,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             export GHCR_TOKEN="${{ secrets.GHCR_TOKEN }}"
+
+            sudo mv /opt/stacks/noponto/docker-compose.yml /opt/stacks/noponto/compose.yaml 2>/dev/null || true
+
             bash /home/guilherme/deploy.sh noponto api noponto_api
