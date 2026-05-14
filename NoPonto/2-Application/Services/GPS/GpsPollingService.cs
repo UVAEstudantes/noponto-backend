@@ -39,15 +39,15 @@ public sealed class GpsPollingService : BackgroundService
         GpsHistoricoService historicoService,
         GpsEtaClient etaClient)
     {
-        _cliente          = cliente;
-        _cache            = cache;
-        _hubContext       = hubContext;
-        _logger           = logger;
-        _opcoes           = opcoes.Value;
-        _scopeFactory     = scopeFactory;
-        _enriquecedor     = enriquecedor;
+        _cliente = cliente;
+        _cache = cache;
+        _hubContext = hubContext;
+        _logger = logger;
+        _opcoes = opcoes.Value;
+        _scopeFactory = scopeFactory;
+        _enriquecedor = enriquecedor;
         _historicoService = historicoService;
-        _etaClient        = etaClient;
+        _etaClient = etaClient;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -110,7 +110,7 @@ public sealed class GpsPollingService : BackgroundService
             .ToList();
 
         // ── Filtra posições com timestamp GPS muito antigo ────────────────────
-        var idadeMaxima         = TimeSpan.FromSeconds(_opcoes.MaxIdadeGpsSegundos);
+        var idadeMaxima = TimeSpan.FromSeconds(_opcoes.MaxIdadeGpsSegundos);
         var descartadosPorIdade = 0;
 
         var maisRecentesFiltrados = maisRecentes
@@ -140,12 +140,12 @@ public sealed class GpsPollingService : BackgroundService
 
         // ── 2. Filtra novas e detecta trocas de linha ─────────────────────────
         var linhasComAssinantes = GpsHub.LinhasComAssinantes;
-        var paraProcessar       = new List<(PosicaoVeiculoDto Nova, PosicaoVeiculoDto? Anterior)>();
-        var trocouDeLinha       = new List<(string Ordem, string LinhaAntiga)>();
+        var paraProcessar = new List<(PosicaoVeiculoDto Nova, PosicaoVeiculoDto? Anterior)>();
+        var trocouDeLinha = new List<(string Ordem, string LinhaAntiga)>();
 
         for (int i = 0; i < maisRecentesFiltrados.Count; i++)
         {
-            var nova     = maisRecentesFiltrados[i];
+            var nova = maisRecentesFiltrados[i];
             PosicaoVeiculoDto? anterior = null;
 
             if (leiturasAnteriores[i] is not null)
@@ -182,7 +182,7 @@ public sealed class GpsPollingService : BackgroundService
 
         if (_opcoes.EnriquecerTodasLinhas)
         {
-            paraEnriquecer    = paraProcessar;
+            paraEnriquecer = paraProcessar;
             semEnriquecimento = new List<(PosicaoVeiculoDto, PosicaoVeiculoDto?)>();
         }
         else
@@ -204,7 +204,7 @@ public sealed class GpsPollingService : BackgroundService
         }
         else
         {
-            var grau     = Math.Min(paraEnriquecer.Count, _opcoes.GrauParalelismoEnriquecimento);
+            var grau = Math.Min(paraEnriquecer.Count, _opcoes.GrauParalelismoEnriquecimento);
             var semaforo = new SemaphoreSlim(grau, grau);
 
             resultadosEnriquecidos = await Task.WhenAll(
@@ -242,11 +242,19 @@ public sealed class GpsPollingService : BackgroundService
                         return v with
                         {
                             EtaProximaParadaSegundos = eta.EtaSegundos,
-                            EtaConfianca             = eta.Confianca,
+                            EtaConfianca = eta.Confianca,
                         };
                     })
                     .ToArray();
             }
+        }
+
+        // ── 4.6. Compensação de defasagem GPS ───────────────────────────────
+        if (resultadosEnriquecidos.Length > 0)
+        {
+            resultadosEnriquecidos = resultadosEnriquecidos
+                .Select(v => CompensarDefasagem(v, agora))
+                .ToArray();
         }
 
         // ── Reconstrói todosProcessados com ETA aplicado ──────────────────────
@@ -264,14 +272,14 @@ public sealed class GpsPollingService : BackgroundService
             AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(_opcoes.TtlRecenteSegundos)
         };
 
-        var ativosPorLinha  = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        var tarefasEscrita  = new List<Task>();
+        var ativosPorLinha = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var tarefasEscrita = new List<Task>();
 
         foreach (var final in todosProcessados)
         {
             var jsonFinal = JsonSerializer.Serialize(final, JsonOptions);
             tarefasEscrita.Add(_cache.SetStringAsync(
-                ChaveVeiculoAtivo(final.Ordem),   jsonFinal, opcoesAtivo,   ct));
+                ChaveVeiculoAtivo(final.Ordem), jsonFinal, opcoesAtivo, ct));
             tarefasEscrita.Add(_cache.SetStringAsync(
                 ChaveVeiculoRecente(final.Ordem), jsonFinal, opcoesRecente, ct));
 
@@ -408,13 +416,55 @@ public sealed class GpsPollingService : BackgroundService
 
     private static PosicaoVeiculoDto MontarComHistorico(
         PosicaoVeiculoDto nova, PosicaoVeiculoDto? anterior) => nova with
+        {
+            LatitudeAnterior = anterior?.Latitude,
+            LongitudeAnterior = anterior?.Longitude,
+            TimestampAnterior = anterior?.TimestampGps,
+            Bearing = anterior?.Bearing,
+            Status = StatusVeiculo.Ativo,
+        };
+
+    private PosicaoVeiculoDto CompensarDefasagem(PosicaoVeiculoDto posicao, DateTimeOffset agora)
     {
-        LatitudeAnterior  = anterior?.Latitude,
-        LongitudeAnterior = anterior?.Longitude,
-        TimestampAnterior = anterior?.TimestampGps,
-        Bearing           = anterior?.Bearing,
-        Status            = StatusVeiculo.Ativo,
-    };
+        if (!posicao.TemDadosRota)
+            return posicao;
+
+        var velocidadeMedia = posicao.VelocidadeMedia!.Value;
+        if (velocidadeMedia < 2)
+            return posicao;
+
+        var posicaoNaRota = posicao.PosicaoNaRota!.Value;
+        if (posicaoNaRota >= 0.98)
+            return posicao;
+
+        var comprimento = posicao.ComprimentoRotaMetros!.Value;
+        if (comprimento <= 0)
+            return posicao;
+
+        var defasagemSegundos = (agora - posicao.TimestampGps).TotalSeconds;
+        if (defasagemSegundos <= 0)
+            return posicao;
+
+        if (defasagemSegundos > 60)
+        {
+            _logger.LogWarning(
+                "Defasagem GPS alta: veiculo {ordem} linha {linha} com {defasagem:F0}s",
+                posicao.Ordem, posicao.CodigoLinha, defasagemSegundos);
+        }
+
+        if (defasagemSegundos <= 5 || defasagemSegundos >= 120)
+            return posicao;
+
+        var avanco = (velocidadeMedia / 3.6 * defasagemSegundos) / comprimento;
+        if (avanco <= 0)
+            return posicao;
+
+        var posicaoEstimada = Math.Min(1.0, posicaoNaRota + avanco);
+        if (posicaoEstimada <= posicaoNaRota)
+            return posicao;
+
+        return posicao with { PosicaoNaRota = posicaoEstimada };
+    }
 
     private async Task LimparVeiculosDeLinhasAntigasAsync(
         List<(string Ordem, string LinhaAntiga)> trocas,
@@ -425,7 +475,7 @@ public sealed class GpsPollingService : BackgroundService
         foreach (var grupo in porLinha)
         {
             var chave = ChaveLinha(grupo.Key);
-            var raw   = await _cache.GetStringAsync(chave, ct);
+            var raw = await _cache.GetStringAsync(chave, ct);
             if (string.IsNullOrWhiteSpace(raw)) continue;
 
             var ordens = new HashSet<string>(
@@ -449,8 +499,8 @@ public sealed class GpsPollingService : BackgroundService
 
     // ── Chaves Redis ──────────────────────────────────────────────────────────
 
-    public static string ChaveVeiculoAtivo(string ordem)   => $"veiculo:{ordem}:ativo";
+    public static string ChaveVeiculoAtivo(string ordem) => $"veiculo:{ordem}:ativo";
     public static string ChaveVeiculoRecente(string ordem) => $"veiculo:{ordem}:recente";
-    public static string ChaveVeiculo(string ordem)        => ChaveVeiculoAtivo(ordem);
-    public static string ChaveLinha(string codigoLinha)    => $"linha:{codigoLinha}:veiculos";
+    public static string ChaveVeiculo(string ordem) => ChaveVeiculoAtivo(ordem);
+    public static string ChaveLinha(string codigoLinha) => $"linha:{codigoLinha}:veiculos";
 }

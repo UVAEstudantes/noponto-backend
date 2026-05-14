@@ -2,11 +2,14 @@
   "dotnet.defaultSolution": "NoPonto.sln",
   "cSpell.words": [
     "ARCGIS",
+    "avanco",
     "codigo",
     "Codigo",
     "codigos",
+    "Confianca",
     "Configuracao",
     "direcao",
+    "enriq",
     "frescao",
     "Importacao",
     "IMPORTACAO",
@@ -17,10 +20,19 @@
     "ITINERARIOS",
     "noponto",
     "Onibus",
+    "opcoes",
     "Padrao",
+    "posicao",
+    "posicoes",
     "postgis",
     "postgres",
     "postgresql",
-    "srid"
+    "predicoes",
+    "Predizir",
+    "Sppo",
+    "srid",
+    "veiculos",
+    "Veiculos",
+    "vmax"
   ]
 }
