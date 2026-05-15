@@ -10,18 +10,26 @@ public sealed class PopularPoisQueue
         ImportacaoOsm,
 
         /// <summary>Fase 2 — faz o matching POI → parada sem nenhuma request HTTP.</summary>
-        Matching
+        Matching,
+
+        /// <summary>Reprocessa uma parada especifica via Overpass.</summary>
+        Parada
     }
 
-    private readonly Channel<TipoJob> _channel = Channel.CreateBounded<TipoJob>(
-        new BoundedChannelOptions(2) { FullMode = BoundedChannelFullMode.DropOldest });
+    public sealed record Job(TipoJob Tipo, Guid? ParadaId = null);
+
+    private readonly Channel<Job> _channel = Channel.CreateBounded<Job>(
+        new BoundedChannelOptions(20) { FullMode = BoundedChannelFullMode.DropOldest });
 
     /// <summary>Enfileira a importação OSM (Fase 1).</summary>
-    public void EnfileirarImportacao() => _channel.Writer.TryWrite(TipoJob.ImportacaoOsm);
+    public void EnfileirarImportacao() => _channel.Writer.TryWrite(new Job(TipoJob.ImportacaoOsm));
 
     /// <summary>Enfileira o matching POI → parada (Fase 2).</summary>
-    public void EnfileirarMatching() => _channel.Writer.TryWrite(TipoJob.Matching);
+    public void EnfileirarMatching() => _channel.Writer.TryWrite(new Job(TipoJob.Matching));
 
-    public IAsyncEnumerable<TipoJob> LerAsync(CancellationToken ct)
+    /// <summary>Enfileira reprocessamento de uma parada especifica.</summary>
+    public void EnfileirarParada(Guid paradaId) => _channel.Writer.TryWrite(new Job(TipoJob.Parada, paradaId));
+
+    public IAsyncEnumerable<Job> LerAsync(CancellationToken ct)
         => _channel.Reader.ReadAllAsync(ct);
 }

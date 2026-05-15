@@ -2,6 +2,7 @@
   "dotnet.defaultSolution": "NoPonto.sln",
   "cSpell.words": [
     "ARCGIS",
+    "atualizacao",
     "avanco",
     "codigo",
     "Codigo",
@@ -19,6 +20,7 @@
     "itinerarios",
     "ITINERARIOS",
     "noponto",
+    "Npgsql",
     "Onibus",
     "opcoes",
     "Padrao",
