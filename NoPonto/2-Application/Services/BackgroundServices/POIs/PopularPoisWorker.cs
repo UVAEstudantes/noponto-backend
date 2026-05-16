@@ -13,21 +13,21 @@ public sealed class PopularPoisWorker : BackgroundService
         IServiceScopeFactory scopeFactory,
         ILogger<PopularPoisWorker> logger)
     {
-        _queue        = queue;
+        _queue = queue;
         _scopeFactory = scopeFactory;
-        _logger       = logger;
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var tipo in _queue.LerAsync(stoppingToken))
+        await foreach (var job in _queue.LerAsync(stoppingToken))
         {
             var swTotal = Stopwatch.StartNew();
 
-            await using var scope   = _scopeFactory.CreateAsyncScope();
-            var             service = scope.ServiceProvider.GetRequiredService<PopularPoisService>();
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var service = scope.ServiceProvider.GetRequiredService<PopularPoisService>();
 
-            if (tipo == PopularPoisQueue.TipoJob.ImportacaoOsm)
+            if (job.Tipo == PopularPoisQueue.TipoJob.ImportacaoOsm)
             {
                 _logger.LogInformation("Worker — Iniciando Fase 1: importação OSM em tiles");
                 try
@@ -42,6 +42,37 @@ public sealed class PopularPoisWorker : BackgroundService
                     _logger.LogError(ex, "Worker — Falha na Fase 1 (importação OSM)");
                 }
             }
+            else if (job.Tipo == PopularPoisQueue.TipoJob.Parada)
+            {
+                if (job.ParadaId is null)
+                {
+                    _logger.LogWarning("Worker — Job de parada sem ParadaId.");
+                    continue;
+                }
+
+                _logger.LogInformation("Worker — Reprocessando parada {id}", job.ParadaId);
+
+                try
+                {
+                    var resultado = await service.ExecutarParaParadaAsync(job.ParadaId.Value, stoppingToken);
+                    if (!resultado.Encontrada)
+                    {
+                        _logger.LogWarning("Worker — Parada {id} nao encontrada.", job.ParadaId);
+                        continue;
+                    }
+
+                    _logger.LogInformation(
+                        "Worker — Parada {id}: candidatos={c}, descartados={d}, relacoes={r}",
+                        job.ParadaId,
+                        resultado.PoisCandidatos,
+                        resultado.PoisDescartados,
+                        resultado.RelacoesCriadas);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Worker — Falha ao reprocessar parada {id}", job.ParadaId);
+                }
+            }
             else
             {
                 _logger.LogInformation("Worker — Iniciando Fase 2: matching POI → parada");
@@ -49,9 +80,9 @@ public sealed class PopularPoisWorker : BackgroundService
                 var itinerarioIds = await service.ListarItinerarioIdsAsync(stoppingToken);
                 _logger.LogInformation("Worker — {total} itinerários na fila", itinerarioIds.Count);
 
-                var concluidos      = 0;
-                var totalRelacoes   = 0;
-                var falhas          = new List<(Guid Id, string Motivo)>();
+                var concluidos = 0;
+                var totalRelacoes = 0;
+                var falhas = new List<(Guid Id, string Motivo)>();
 
                 foreach (var id in itinerarioIds)
                 {

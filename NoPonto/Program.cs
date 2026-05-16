@@ -13,6 +13,8 @@ using NoPonto.Data.Interfaces;
 using NoPonto.Data.Repositories;
 using System.Reflection;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
+using System.Net.Sockets;
 
 Env.Load();
 
@@ -65,6 +67,13 @@ builder.Services.AddSwaggerGen(options =>
         Description = "API para consulta e importação de dados de transporte público (linhas, sentidos, itinerários, paradas e POIs). (Teste do deploy no railway v9.0)"
     });
 
+    options.SwaggerDoc("admin", new OpenApiInfo
+    {
+        Title = "NoPonto Admin API",
+        Version = "v1",
+        Description = "Endpoints administrativos do NoPonto"
+    });
+
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
 
@@ -77,6 +86,15 @@ builder.Services.AddSwaggerGen(options =>
     {
         var controller = api.ActionDescriptor.RouteValues["controller"];
         return [string.IsNullOrWhiteSpace(controller) ? "Outros" : controller];
+    });
+
+    options.DocInclusionPredicate((docName, apiDesc) =>
+    {
+        var groupName = apiDesc.GroupName;
+        if (string.IsNullOrWhiteSpace(groupName))
+            return docName == "v1";
+
+        return string.Equals(groupName, docName, StringComparison.OrdinalIgnoreCase);
     });
 });
 
@@ -165,13 +183,15 @@ builder.Services.AddSingleton<GpsEnriquecimentoService>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<GpsPollingService>();
 
-var redisConnection =
-    $"{redisHost}:{GetEnv("REDIS_PORT")}";
+var redisConnection = $"{redisHost}:{GetEnv("REDIS_PORT")},allowAdmin=true";
 
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = redisConnection;
 });
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    _ => ConnectionMultiplexer.Connect(redisConnection));
 
 // Cliente HTTP para o serviço de ML (FastAPI local)
 var mlBaseUrl = builder.Configuration["ML:ETA:BASE_URL"] ?? "http://localhost:5200";
@@ -179,6 +199,13 @@ builder.Services.AddHttpClient<GpsEtaClient>(client =>
 {
     client.BaseAddress = new Uri(mlBaseUrl);
     client.Timeout = TimeSpan.FromSeconds(3); // timeout curto — não pode travar o ciclo GPS
+});
+
+var mlAdminBaseUrl = builder.Configuration["ML:ADMIN:BASE_URL"] ?? "http://ml:5200";
+builder.Services.AddHttpClient("ml-admin", client =>
+{
+    client.BaseAddress = new Uri(mlAdminBaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(10);
 });
 
 builder.Services.AddScoped<ILinhaRepository, LinhaRepository>();
@@ -201,7 +228,8 @@ builder.Services.AddHttpClient<ArcGisClientService>();
 builder.Services.AddScoped<ImportacaoParadasService>();
 builder.Services.AddScoped<RelacionarParadasItinerariosService>();
 builder.Services.AddScoped<RelacionarParadasJob>();
-builder.Services.AddHostedService<ImportacaoItinerariosService>();
+builder.Services.AddSingleton<ImportacaoItinerariosService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportacaoItinerariosService>());
 
 builder.Services.AddHttpClient<OverpassClient>();
 builder.Services.AddScoped<PopularPoisService>();
@@ -209,6 +237,20 @@ builder.Services.AddScoped<IPoiRepository, PoiRepository>();
 
 builder.Services.AddSingleton<PopularPoisQueue>();
 builder.Services.AddHostedService<PopularPoisWorker>();
+
+builder.Services.AddHttpClient("docker", client =>
+{
+    client.BaseAddress = new Uri("http://localhost");
+}).ConfigurePrimaryHttpMessageHandler(() =>
+    new SocketsHttpHandler
+    {
+        ConnectCallback = async (_, ct) =>
+        {
+            var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint("/var/run/docker.sock"), ct);
+            return new NetworkStream(socket, ownsSocket: true);
+        }
+    });
 
 // Histórico de passagens para ML
 builder.Services
@@ -234,6 +276,7 @@ app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
     options.SwaggerEndpoint("/swagger/v1/swagger.json", "NoPonto API v1");
+    options.SwaggerEndpoint("/swagger/admin/swagger.json", "NoPonto Admin API v1");
     options.DocumentTitle = "NoPonto API - Documentação";
 });
 
