@@ -183,8 +183,7 @@ builder.Services.AddSingleton<GpsEnriquecimentoService>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<GpsPollingService>();
 
-var redisConnection =
-    $"{redisHost}:{GetEnv("REDIS_PORT")}";
+var redisConnection = $"{redisHost}:{GetEnv("REDIS_PORT")},allowAdmin=true";
 
 builder.Services.AddStackExchangeRedisCache(options =>
 {
@@ -206,7 +205,7 @@ var mlAdminBaseUrl = builder.Configuration["ML:ADMIN:BASE_URL"] ?? "http://ml:52
 builder.Services.AddHttpClient("ml-admin", client =>
 {
     client.BaseAddress = new Uri(mlAdminBaseUrl);
-    client.Timeout = TimeSpan.FromSeconds(3);
+    client.Timeout = TimeSpan.FromSeconds(10);
 });
 
 builder.Services.AddScoped<ILinhaRepository, LinhaRepository>();

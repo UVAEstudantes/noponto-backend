@@ -30,19 +30,21 @@ public sealed class AdminDashboardController : ControllerBase
     [ProducesResponseType(typeof(AdminDashboardStatsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetStats(CancellationToken cancellationToken)
     {
-        var agora = DateTimeOffset.UtcNow;
-        var inicioDia = agora.Date;
+        // FIX: usar UTC puro para evitar erro de offset no Npgsql
+        var agora      = DateTime.UtcNow;
+        var inicioDia  = agora.Date;                  // 00:00:00 UTC
         var inicioSemana = agora.AddDays(-7);
 
-        var passagensHojeTask = _db.HistoricoPassagens
+        // FIX: queries sequenciais no mesmo DbContext — nunca paralelas
+        var passagensHoje = await _db.HistoricoPassagens
             .AsNoTracking()
             .CountAsync(h => h.TimestampRegistro >= inicioDia, cancellationToken);
 
-        var passagensSemanaTask = _db.HistoricoPassagens
+        var passagensSemana = await _db.HistoricoPassagens
             .AsNoTracking()
             .CountAsync(h => h.TimestampRegistro >= inicioSemana, cancellationToken);
 
-        var veiculosAtivos = 0;
+        var veiculosAtivos  = 0;
         var linhasMonitoradas = 0;
 
         try
@@ -50,7 +52,7 @@ public sealed class AdminDashboardController : ControllerBase
             var server = ObterServidorRedis();
             if (server is not null)
             {
-                veiculosAtivos = ContarChaves(server, "veiculo:*:ativo");
+                veiculosAtivos    = ContarChaves(server, "veiculo:*:ativo");
                 linhasMonitoradas = ContarChaves(server, "linha:*:veiculos");
             }
         }
@@ -61,34 +63,32 @@ public sealed class AdminDashboardController : ControllerBase
 
         var uptime = DateTimeOffset.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime();
 
-        var resposta = new AdminDashboardStatsDto
+        return Ok(new AdminDashboardStatsDto
         {
-            VeiculosAtivos = veiculosAtivos,
-            PassagensHoje = await passagensHojeTask,
-            PassagensSemana = await passagensSemanaTask,
-            LinhasMonitoradas = linhasMonitoradas,
-            LinhasComAssinantes = GpsHub.LinhasComAssinantes.Count,
-            CiclosGpsUltimaHora = 240,
-            UptimeSistema = uptime,
+            VeiculosAtivos         = veiculosAtivos,
+            PassagensHoje          = passagensHoje,
+            PassagensSemana        = passagensSemana,
+            LinhasMonitoradas      = linhasMonitoradas,
+            LinhasComAssinantes    = GpsHub.LinhasComAssinantes.Count,
+            CiclosGpsUltimaHora    = 240,
+            UptimeSistema          = uptime,
             DefasagemMediaSegundos = 45.0
-        };
-
-        return Ok(resposta);
+        });
     }
 
     [HttpGet("alertas")]
     [ProducesResponseType(typeof(IReadOnlyList<AdminDashboardAlertDto>), StatusCodes.Status200OK)]
     public IActionResult GetAlertas()
     {
-        var agora = DateTimeOffset.UtcNow;
+        var agora   = DateTimeOffset.UtcNow;
         var alertas = new List<AdminDashboardAlertDto>();
 
         if (GpsHub.LinhasComAssinantes.Count == 0)
         {
             alertas.Add(new AdminDashboardAlertDto
             {
-                Tipo = "info",
-                Mensagem = "Nenhuma linha assinada",
+                Tipo      = "info",
+                Mensagem  = "Nenhuma linha assinada",
                 Timestamp = agora
             });
         }
@@ -97,8 +97,8 @@ public sealed class AdminDashboardController : ControllerBase
         {
             alertas.Add(new AdminDashboardAlertDto
             {
-                Tipo = "erro",
-                Mensagem = "Redis indisponivel",
+                Tipo      = "erro",
+                Mensagem  = "Redis indisponível",
                 Timestamp = agora
             });
         }
@@ -106,8 +106,8 @@ public sealed class AdminDashboardController : ControllerBase
         var uptime = DateTimeOffset.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime();
         alertas.Add(new AdminDashboardAlertDto
         {
-            Tipo = "sucesso",
-            Mensagem = $"Sistema operacional - uptime {uptime:c}",
+            Tipo      = "sucesso",
+            Mensagem  = $"Sistema operacional — uptime {uptime:c}",
             Timestamp = agora
         });
 
@@ -123,7 +123,7 @@ public sealed class AdminDashboardController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Redis indisponivel no alerta do dashboard admin.");
+            _logger.LogWarning(ex, "Redis indisponível no alerta do dashboard admin.");
             return false;
         }
     }
