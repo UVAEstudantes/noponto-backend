@@ -240,14 +240,23 @@ builder.Services.AddHostedService<PopularPoisWorker>();
 
 builder.Services.AddHttpClient("docker", client =>
 {
-    client.BaseAddress = new Uri("http://localhost");
-}).ConfigurePrimaryHttpMessageHandler(() =>
+    // Usa um host fictício — o ConnectCallback ignora o host e conecta via Unix socket
+    client.BaseAddress = new Uri("http://docker-socket");
+    client.Timeout = TimeSpan.FromSeconds(10);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
     new SocketsHttpHandler
     {
-        ConnectCallback = async (_, ct) =>
+        ConnectCallback = async (context, ct) =>
         {
-            var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            await socket.ConnectAsync(new UnixDomainSocketEndPoint("/var/run/docker.sock"), ct);
+            var socket = new Socket(
+                AddressFamily.Unix,
+                SocketType.Stream,
+                ProtocolType.Unspecified);
+
+            await socket.ConnectAsync(
+                new UnixDomainSocketEndPoint("/var/run/docker.sock"), ct);
+
             return new NetworkStream(socket, ownsSocket: true);
         }
     });
