@@ -35,40 +35,67 @@ public sealed class AdminSistemaController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<AdminContainerDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListarContainers(CancellationToken cancellationToken)
     {
-        var client = _httpClientFactory.CreateClient("docker");
-
-        using var response = await client.GetAsync("/containers/json?all=true", cancellationToken);
-        if (!response.IsSuccessStatusCode)
-            return StatusCode((int)response.StatusCode, new { mensagem = "Falha ao consultar containers." });
-
-        var conteudo = await response.Content.ReadAsStringAsync(cancellationToken);
-        var containers = JsonSerializer.Deserialize<List<DockerContainerResponse>>(conteudo) ?? [];
-
-        var resultado = containers.Select(c => new AdminContainerDto
+        try
         {
-            Id = c.Id,
-            Nome = (c.Names?.FirstOrDefault() ?? string.Empty).TrimStart('/'),
-            Imagem = c.Image ?? string.Empty,
-            Status = c.Status ?? string.Empty,
-            Estado = c.State ?? string.Empty,
-            Uptime = c.Created > 0 ? DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(c.Created) : null,
-            Portas = c.Ports?.Select(FormatarPorta).ToList() ?? []
-        }).ToList();
+            var client = _httpClientFactory.CreateClient("docker");
+            using var response = await client.GetAsync("/containers/json?all=true", cancellationToken);
 
-        return Ok(resultado);
+            if (!response.IsSuccessStatusCode)
+                return StatusCode((int)response.StatusCode, new { mensagem = "Falha ao consultar containers." });
+
+            var conteudo = await response.Content.ReadAsStringAsync(cancellationToken);
+            var containers = JsonSerializer.Deserialize<List<DockerContainerResponse>>(conteudo) ?? [];
+
+            var resultado = containers.Select(c => new AdminContainerDto
+            {
+                Id     = c.Id,
+                Nome   = (c.Names?.FirstOrDefault() ?? string.Empty).TrimStart('/'),
+                Imagem = c.Image ?? string.Empty,
+                Status = c.Status ?? string.Empty,
+                Estado = c.State ?? string.Empty,
+                Uptime = c.Created > 0
+                    ? DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(c.Created)
+                    : null,
+                Portas = c.Ports?.Select(FormatarPorta).ToList() ?? []
+            }).ToList();
+
+            return Ok(resultado);
+        }
+        catch (HttpRequestException ex) when (
+            ex.InnerException is System.Net.Sockets.SocketException se &&
+            (se.SocketErrorCode == System.Net.Sockets.SocketError.ConnectionRefused ||
+            se.SocketErrorCode == System.Net.Sockets.SocketError.AddressAlreadyInUse ||
+            (int)se.SocketErrorCode == 99)) // Cannot assign requested address
+        {
+            _logger.LogWarning("Docker socket não disponível (ambiente local ou socket não montado).");
+            return Ok(new List<AdminContainerDto>()); // retorna lista vazia em vez de 500
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao consultar containers Docker.");
+            return StatusCode(503, new { mensagem = "Docker socket indisponível.", detalhe = ex.Message });
+        }
     }
 
     [HttpPost("containers/{id}/restart")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> ReiniciarContainer(string id, CancellationToken cancellationToken)
     {
-        var client = _httpClientFactory.CreateClient("docker");
-        using var response = await client.PostAsync($"/containers/{id}/restart", null, cancellationToken);
+        try
+        {
+            var client = _httpClientFactory.CreateClient("docker");
+            using var response = await client.PostAsync($"/containers/{id}/restart", null, cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
-            return StatusCode((int)response.StatusCode, new { mensagem = "Falha ao reiniciar container." });
+            if (!response.IsSuccessStatusCode)
+                return StatusCode((int)response.StatusCode, new { mensagem = "Falha ao reiniciar container." });
 
-        return Ok(new { mensagem = "Container reiniciado.", id });
+            return Ok(new { mensagem = "Container reiniciado.", id });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao reiniciar container {id}.", id);
+            return StatusCode(503, new { mensagem = "Docker socket indisponível.", detalhe = ex.Message });
+        }
     }
 
     [HttpGet("containers/{id}/logs")]
@@ -78,20 +105,29 @@ public sealed class AdminSistemaController : ControllerBase
         [FromQuery] int tail = 100,
         CancellationToken cancellationToken = default)
     {
-        var client = _httpClientFactory.CreateClient("docker");
-        var url = $"/containers/{id}/logs?stdout=true&stderr=true&tail={tail}&timestamps=true";
+        try
+        {
+            var client = _httpClientFactory.CreateClient("docker");
+            var url = $"/containers/{id}/logs?stdout=true&stderr=true&tail={tail}&timestamps=true";
 
-        using var response = await client.GetAsync(url, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-            return StatusCode((int)response.StatusCode, new { mensagem = "Falha ao consultar logs." });
+            using var response = await client.GetAsync(url, cancellationToken);
 
-        var linhas = await LerLinhasLogAsync(response, cancellationToken);
-        var formatadas = linhas
-            .Select(FormatarLinhaLog)
-            .Where(l => !string.IsNullOrWhiteSpace(l))
-            .ToList();
+            if (!response.IsSuccessStatusCode)
+                return StatusCode((int)response.StatusCode, new { mensagem = "Falha ao consultar logs." });
 
-        return Ok(formatadas);
+            var linhas = await LerLinhasLogAsync(response, cancellationToken);
+            var formatadas = linhas
+                .Select(FormatarLinhaLog)
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .ToList();
+
+            return Ok(formatadas);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao buscar logs do container {id}.", id);
+            return StatusCode(503, new { mensagem = "Docker socket indisponível.", detalhe = ex.Message });
+        }
     }
 
     [HttpGet("metricas")]
