@@ -140,6 +140,12 @@ builder.Services.AddHttpClient<GpsBrtClient>(client =>
 {
     client.BaseAddress = new Uri(brtApiBaseUrl);
     client.Timeout = TimeSpan.FromSeconds(gpsHttpTimeoutSeconds);
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AutomaticDecompression = System.Net.DecompressionMethods.GZip
+                           | System.Net.DecompressionMethods.Deflate
+                           | System.Net.DecompressionMethods.Brotli
 });
 
 builder.Services
