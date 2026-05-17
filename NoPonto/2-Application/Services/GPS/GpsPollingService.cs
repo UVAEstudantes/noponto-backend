@@ -27,6 +27,7 @@ public sealed class GpsPollingService : BackgroundService
         new(StringComparer.OrdinalIgnoreCase);
     private readonly GpsHistoricoService _historicoService;
     private readonly GpsEtaClient _etaClient;
+    private readonly GpsBrtClient _brtClient;
 
     public GpsPollingService(
         GpsSppoClient cliente,
@@ -37,7 +38,8 @@ public sealed class GpsPollingService : BackgroundService
         IServiceScopeFactory scopeFactory,
         GpsEnriquecimentoService enriquecedor,
         GpsHistoricoService historicoService,
-        GpsEtaClient etaClient)
+        GpsEtaClient etaClient,
+        GpsBrtClient brtClient)
     {
         _cliente = cliente;
         _cache = cache;
@@ -48,6 +50,7 @@ public sealed class GpsPollingService : BackgroundService
         _enriquecedor = enriquecedor;
         _historicoService = historicoService;
         _etaClient = etaClient;
+        _brtClient = brtClient;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -106,6 +109,15 @@ public sealed class GpsPollingService : BackgroundService
 
         var posicoes = await _cliente.BuscarComJanelaAsync(
             agora, ct, opcoes.JanelaRetroativaSegundos);
+        
+        // BRT
+
+        var posicoesBrt = await _brtClient.BuscarPosicoesAsync(ct);
+        if (posicoesBrt.Count > 0)
+        {
+            posicoes = posicoes.Concat(posicoesBrt).ToList();
+            _logger.LogDebug("Mescladas {brt} posições BRT ao ciclo", posicoesBrt.Count);
+        }
 
         if (posicoes.Count == 0) return;
 
