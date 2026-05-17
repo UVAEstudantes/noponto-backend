@@ -133,6 +133,15 @@ builder.Services.AddHttpClient<GpsSppoClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(gpsHttpTimeoutSeconds);
 });
 
+var brtApiBaseUrl = builder.Configuration["GPS:BRT:BASE_URL"]
+    ?? "https://dados.mobilidade.rio/gps/brt";
+
+builder.Services.AddHttpClient<GpsBrtClient>(client =>
+{
+    client.BaseAddress = new Uri(brtApiBaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(gpsHttpTimeoutSeconds);
+});
+
 builder.Services
     .AddOptions<GpsPollingOptions>()
     .Bind(builder.Configuration.GetSection(GpsPollingOptions.Secao))

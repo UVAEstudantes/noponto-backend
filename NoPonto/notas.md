@@ -6,9 +6,9 @@
 
 - tem dois endpoints q retornam as linhas q passam em uma parada (da pra transformar um deles em tempo ate o proximo veiculo)
 
-- melhorar o nome da linha pra ser apenas o "855" e com a desc de "Terminal Magarça <-> Terminal Deodoro"
+- melhorar o nome da linha pra ser apenas o "855" e com a desc de "Terminal Magarça <-> Terminal Deodoro" 
 
-- melhorar o linhas detalhes pra mostrar valor passagem
+- melhorar o linhas detalhes pra mostrar valor passagem (add)
 
 - sistema de alertas/notificações com signalR para informar de próximos ônibus
 
@@ -17,7 +17,7 @@
 - get count pois por itinerario, retornar itinerarioId e count, sort de quantidade
 
 
-problemas com o GPS:
+problemas com o GPS: (fix)
 
 - veiculos somem e surgem em posições aleatorias da linha e dps voltam pra posição real
 
