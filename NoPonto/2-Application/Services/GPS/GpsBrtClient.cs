@@ -112,10 +112,37 @@ public sealed class GpsBrtClient
         [JsonPropertyName("velocidade")]
         public double Velocidade { get; init; }
 
+        // direcao pode vir como número (354) ou string (" ") dependendo do veículo
         [JsonPropertyName("direcao")]
+        [JsonConverter(typeof(DirecaoConverter))]
         public string Direcao { get; init; } = string.Empty;
 
         [JsonPropertyName("sentido")]
         public string Sentido { get; init; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Deserializa direcao que pode ser número ou string na API do BRT.
+    /// </summary>
+    private sealed class DirecaoConverter : System.Text.Json.Serialization.JsonConverter<string>
+    {
+        public override string Read(
+            ref System.Text.Json.Utf8JsonReader reader,
+            Type typeToConvert,
+            System.Text.Json.JsonSerializerOptions options)
+        {
+            return reader.TokenType switch
+            {
+                System.Text.Json.JsonTokenType.Number => reader.GetDouble().ToString(),
+                System.Text.Json.JsonTokenType.String => reader.GetString() ?? string.Empty,
+                _ => string.Empty
+            };
+        }
+
+        public override void Write(
+            System.Text.Json.Utf8JsonWriter writer,
+            string value,
+            System.Text.Json.JsonSerializerOptions options)
+            => writer.WriteStringValue(value);
     }
 }
