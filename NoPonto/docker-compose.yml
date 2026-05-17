@@ -61,6 +61,7 @@ services:
 
       ML__ETA__BASE_URL: http://noponto_ml:5200
 
+      GPS__BRT__BASE_URL: ${GPS__BRT__BASE_URL}
       GPS__API__BASE_URL: ${GPS__API__BASE_URL}
       GPS__HTTP_TIMEOUT_SECONDS: ${GPS__HTTP_TIMEOUT_SECONDS}
       GPS__HUB__ROUTE: ${GPS__HUB__ROUTE}
