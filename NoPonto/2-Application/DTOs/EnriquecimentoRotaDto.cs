@@ -6,6 +6,8 @@ public sealed class EnriquecimentoRotaDto
     public double  PosicaoNaRota                { get; init; }
     public double  ComprimentoRotaMetros        { get; init; }
     public double  DistanciaARotaMetros         { get; init; }
+    public double? LatitudeProjetada            { get; init; }
+    public double? LongitudeProjetada           { get; init; }
 
     /// <summary>
     /// Bearing calculado no trecho local da rota ao redor do veículo.

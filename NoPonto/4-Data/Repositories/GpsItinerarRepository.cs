@@ -62,7 +62,8 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
             ),
             itinerario_escolhido AS (
                 SELECT *,
-                    ABS(MOD((bearing_local - @bearing + 540.0)::numeric, 360.0) - 180.0) AS diff_bearing
+                    ABS(MOD((bearing_local - @bearing + 540.0)::numeric, 360.0) - 180.0) AS diff_bearing,
+                    ST_LineInterpolatePoint("Geometria", posicao_na_rota) AS ponto_rota
                 FROM com_bearing_local
                 WHERE ABS(MOD((bearing_local - @bearing + 540.0)::numeric, 360.0) - 180.0) < 80
                 ORDER BY diff_bearing ASC, distancia_rota_metros ASC
@@ -86,6 +87,8 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
                 ie.comprimento_metros,
                 ie.distancia_rota_metros,
                 ie.bearing_local,
+                ST_Y(ie.ponto_rota)        AS lat_rota,
+                ST_X(ie.ponto_rota)        AS lon_rota,
                 pp.parada_nome,
                 pp.distancia_parada_metros
             FROM itinerario_escolhido ie
@@ -119,6 +122,12 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
                 PosicaoNaRota                = reader.GetDouble(reader.GetOrdinal("posicao_na_rota")),
                 ComprimentoRotaMetros        = reader.GetDouble(reader.GetOrdinal("comprimento_metros")),
                 DistanciaARotaMetros         = reader.GetDouble(reader.GetOrdinal("distancia_rota_metros")),
+                LatitudeProjetada            = reader.IsDBNull(reader.GetOrdinal("lat_rota"))
+                                                    ? null
+                                                    : reader.GetDouble(reader.GetOrdinal("lat_rota")),
+                LongitudeProjetada           = reader.IsDBNull(reader.GetOrdinal("lon_rota"))
+                                                    ? null
+                                                    : reader.GetDouble(reader.GetOrdinal("lon_rota")),
                 BearingLocal                 = reader.IsDBNull(reader.GetOrdinal("bearing_local"))
                                                     ? null
                                                     : reader.GetDouble(reader.GetOrdinal("bearing_local")),

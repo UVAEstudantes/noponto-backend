@@ -177,12 +177,18 @@ public sealed class TremSimulacaoService
             {
                 if (!_config.CoordenadasEstacoes.TryGetValue(estAtual.Id, out var coord))
                     return null;
+                if (!_config.CoordenadasEstacoes.TryGetValue(estProxima.Id, out var coordProximaParada))
+                    return null;
+
+                var bearingParada = GpsEnriquecimentoService.CalcularBearing(
+                    coord.Lat, coord.Lon,
+                    coordProximaParada.Lat, coordProximaParada.Lon);
 
                 var proximaNome = estProxima.Nome;
                 var distProxima = distanciaKm * 1000; // metros
 
                 return CriarDto(codigoLinha, branchId, numeroTrem, ida,
-                    coord.Lat, coord.Lon, 0, agora,
+                    coord.Lat, coord.Lon, 0, bearingParada, agora,
                     proximaNome, distProxima, estAtual.Nome);
             }
 
@@ -201,12 +207,15 @@ public sealed class TremSimulacaoService
 
                 var lat = coordAtual.Lat + (coordProxima.Lat - coordAtual.Lat) * fracao;
                 var lon = coordAtual.Lon + (coordProxima.Lon - coordAtual.Lon) * fracao;
+                var bearing = GpsEnriquecimentoService.CalcularBearing(
+                    lat, lon,
+                    coordProxima.Lat, coordProxima.Lon);
 
                 var distRestanteKm = distanciaKm * (1 - fracao);
                 var velocidade = VelocidadeMediaKmh;
 
                 return CriarDto(codigoLinha, branchId, numeroTrem, ida,
-                    lat, lon, velocidade, agora,
+                    lat, lon, velocidade, bearing, agora,
                     estProxima.Nome, distRestanteKm * 1000, null);
             }
 
@@ -223,6 +232,7 @@ public sealed class TremSimulacaoService
         bool ida,
         double lat, double lon,
         double velocidade,
+        double? bearing,
         DateTimeOffset agora,
         string? proximaParada,
         double? distanciaProxima,
@@ -239,6 +249,7 @@ public sealed class TremSimulacaoService
             Longitude = lon,
             Velocidade = velocidade,
             VelocidadeMedia = velocidade > 0 ? velocidade : null,
+            Bearing = bearing,
             TimestampGps = agora,
             TimestampServidor = agora,
             Status = StatusVeiculo.Ativo,

@@ -13,6 +13,8 @@ namespace NoPonto.Application.Trem;
 public sealed class TremSimulacaoWorker : BackgroundService
 {
     private static readonly TimeSpan Intervalo = TimeSpan.FromSeconds(30);
+    private const double DistanciaMaximaRotaMetros = 5000;
+    private const int ParalelismoEnriquecimento = 8;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -22,17 +24,20 @@ public sealed class TremSimulacaoWorker : BackgroundService
     private readonly TremSimulacaoService _simulacao;
     private readonly IDistributedCache _cache;
     private readonly IHubContext<GpsHub> _hub;
+    private readonly IGpsItinerarioRepository _itinerarios;
     private readonly ILogger<TremSimulacaoWorker> _logger;
 
     public TremSimulacaoWorker(
         TremSimulacaoService simulacao,
         IDistributedCache cache,
         IHubContext<GpsHub> hub,
+        IGpsItinerarioRepository itinerarios,
         ILogger<TremSimulacaoWorker> logger)
     {
         _simulacao = simulacao;
         _cache = cache;
         _hub = hub;
+        _itinerarios = itinerarios;
         _logger = logger;
     }
 
@@ -60,6 +65,8 @@ public sealed class TremSimulacaoWorker : BackgroundService
         var posicoes = _simulacao.CalcularPosicoesSimuladas();
 
         if (posicoes.Count == 0) return;
+
+        posicoes = await EnriquecerRotasAsync(posicoes, ct);
 
         var opcoesAtivo = new DistributedCacheEntryOptions
         {
@@ -126,5 +133,52 @@ public sealed class TremSimulacaoWorker : BackgroundService
 
         _logger.LogDebug(
             "Simulação trem: {n} posições publicadas.", posicoes.Count);
+    }
+
+    private async Task<List<PosicaoVeiculoDto>> EnriquecerRotasAsync(
+        List<PosicaoVeiculoDto> posicoes,
+        CancellationToken ct)
+    {
+        var semaforo = new SemaphoreSlim(ParalelismoEnriquecimento, ParalelismoEnriquecimento);
+
+        var tarefas = posicoes.Select(async posicao =>
+        {
+            if (!posicao.Bearing.HasValue)
+                return posicao;
+
+            await semaforo.WaitAsync(ct);
+            try
+            {
+                var rota = await _itinerarios.BuscarEnriquecimentoAsync(
+                    posicao.CodigoLinha,
+                    posicao.Latitude,
+                    posicao.Longitude,
+                    posicao.Bearing.Value,
+                    DistanciaMaximaRotaMetros,
+                    ct);
+
+                if (rota is null)
+                    return posicao;
+
+                return posicao with
+                {
+                    Latitude                     = rota.LatitudeProjetada ?? posicao.Latitude,
+                    Longitude                    = rota.LongitudeProjetada ?? posicao.Longitude,
+                    PosicaoNaRota                = rota.PosicaoNaRota,
+                    ComprimentoRotaMetros        = rota.ComprimentoRotaMetros,
+                    ItinerarioId                 = rota.ItinerarioId,
+                    Bearing                      = rota.BearingLocal ?? posicao.Bearing,
+                    ProximaParadaNome            = rota.ProximaParadaNome ?? posicao.ProximaParadaNome,
+                    DistanciaProximaParadaMetros = rota.DistanciaProximaParadaMetros ?? posicao.DistanciaProximaParadaMetros,
+                };
+            }
+            finally
+            {
+                semaforo.Release();
+            }
+        });
+
+        var resultado = await Task.WhenAll(tarefas);
+        return resultado.ToList();
     }
 }
