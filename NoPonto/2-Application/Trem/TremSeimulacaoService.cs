@@ -488,12 +488,12 @@ public sealed class TremSimulacaoService
         var sem = valor.Normalize(NormalizationForm.FormD);
         var chars = sem.Where(c =>
             CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray();
-        return new string(chars)
-            .Normalize(NormalizationForm.FormC)
+        return Regex.Replace(
+                new string(chars).Normalize(NormalizationForm.FormC),
+                @"\s+", " ")
             .ToUpperInvariant()
             .Replace("/", " ")
             .Replace("-", " ")
-            .Replace(Regex.Match(valor, @"\s+").Value, " ")
             .Trim();
     }
 
