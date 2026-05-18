@@ -15,26 +15,26 @@ public sealed class ImportacaoTremService
 
     private static readonly Dictionary<string, (string Nome, string Cor)> RamaisConhecidos = new()
     {
-        ["deodoro"]        = ("Ramal Deodoro",           "#ba0c2f"),
-        ["santa_cruz"]     = ("Ramal Santa Cruz",        "#64a70b"),
-        ["japeri"]         = ("Ramal Japeri",             "#92c1e9"),
-        ["saracuruna"]     = ("Ramal Saracuruna",         "#de7c00"),
-        ["belford_roxo"]   = ("Ramal Belford Roxo",      "#5c068c"),
-        ["paracambi"]      = ("Extensão Paracambi",      "#92c1e9"),
-        ["vila_inhomirim"] = ("Extensão Vila Inhomirim",  "#de7c00"),
-        ["guapimirim"]     = ("Extensão Guapimirim",     "#de7c00"),
+        ["deodoro"] = ("Ramal Deodoro", "#ba0c2f"),
+        ["santa_cruz"] = ("Ramal Santa Cruz", "#64a70b"),
+        ["japeri"] = ("Ramal Japeri", "#92c1e9"),
+        ["saracuruna"] = ("Ramal Saracuruna", "#de7c00"),
+        ["belford_roxo"] = ("Ramal Belford Roxo", "#5c068c"),
+        ["paracambi"] = ("Extensão Paracambi", "#92c1e9"),
+        ["vila_inhomirim"] = ("Extensão Vila Inhomirim", "#de7c00"),
+        ["guapimirim"] = ("Extensão Guapimirim", "#de7c00"),
     };
 
     private static readonly Dictionary<string, string> ArcGisParaBranch = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Deodoro"]        = "deodoro",
-        ["Santa Cruz"]     = "santa_cruz",
-        ["Japeri"]         = "japeri",
-        ["Saracuruna"]     = "saracuruna",
-        ["Belford Roxo"]   = "belford_roxo",
-        ["Paracambi"]      = "paracambi",
+        ["Deodoro"] = "deodoro",
+        ["Santa Cruz"] = "santa_cruz",
+        ["Japeri"] = "japeri",
+        ["Saracuruna"] = "saracuruna",
+        ["Belford Roxo"] = "belford_roxo",
+        ["Paracambi"] = "paracambi",
         ["Vila Inhomirim"] = "vila_inhomirim",
-        ["Guapimirim"]     = "guapimirim",
+        ["Guapimirim"] = "guapimirim",
     };
 
     // Mapeamento manual para estações cujo nome na SuperVia diverge do ArcGIS.
@@ -42,15 +42,15 @@ public sealed class ImportacaoTremService
     // Valor  = nome normalizado do ArcGIS (ou prefixo que identifica a estação)
     private static readonly Dictionary<string, string> AliasEstacoes = new(StringComparer.OrdinalIgnoreCase)
     {
-       
-        ["OSWALDO CRUZ"]                          = "OSVALDO CRUZ",
-        ["PAVUNA/SAO JOAO DE MERITI"]             = "PAVUNA",
+
+        ["OSWALDO CRUZ"] = "OSVALDO CRUZ",
+        ["PAVUNA/SAO JOAO DE MERITI"] = "PAVUNA",
         ["ESTACAO OLIMPICA DE ENGENHO DE DENTRO"] = "ENGENHO DE DENTRO",
-        ["PREFEITO BENTO RIBEIRO"]                = "BENTO RIBEIRO",
-        ["MOCIDADE/PADRE MIGUEL"]                 = "PADRE MIGUEL",
-        ["BENJAMIM DO MONTE"]                     = "BENJAMIN DO MONTE",
-        ["SURUI"]                                 = "SURURU",
-        ["JORORO"]                                = "JORARA",
+        ["PREFEITO BENTO RIBEIRO"] = "BENTO RIBEIRO",
+        ["MOCIDADE/PADRE MIGUEL"] = "PADRE MIGUEL",
+        ["BENJAMIM DO MONTE"] = "BENJAMIN DO MONTE",
+        ["SURUI"] = "SURURU",
+        ["JORORO"] = "JORARA",
     };
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -69,10 +69,10 @@ public sealed class ImportacaoTremService
         IConfiguration configuration,
         ILogger<ImportacaoTremService> logger)
     {
-        _scopeFactory      = scopeFactory;
+        _scopeFactory = scopeFactory;
         _httpClientFactory = httpClientFactory;
-        _configuration     = configuration;
-        _logger            = logger;
+        _configuration = configuration;
+        _logger = logger;
     }
 
     // ── Ponto de entrada ──────────────────────────────────────────────────────
@@ -83,14 +83,14 @@ public sealed class ImportacaoTremService
         _logger.LogInformation("Iniciando importação completa da SuperVia...");
 
         using var scope = _scopeFactory.CreateScope();
-        var db   = scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
         var http = _httpClientFactory.CreateClient("arcgis-trem");
 
         var modalId = await GarantirModalTremAsync(db, ct);
 
-        var estacoesSupervia  = await BuscarEstacoesSuperViaAsync(http, ct);
+        var estacoesSupervia = await BuscarEstacoesSuperViaAsync(http, ct);
         var coordenadasArcgis = await BuscarCoordenadasArcGisAsync(http, ct);
-        var geometriasArcgis  = await BuscarGeometriasArcGisAsync(http, ct);
+        var geometriasArcgis = await BuscarGeometriasArcGisAsync(http, ct);
 
         _logger.LogInformation(
             "Dados recebidos — SuperVia: {sv} entradas | ArcGIS coords: {ac} | ArcGIS geom: {ag} ramais",
@@ -135,7 +135,7 @@ public sealed class ImportacaoTremService
                 "https://www.supervia.com.br/sua-viagem-e-servicos/conheca-as-estacoes/deodoro/?id_branch=santa_cruz");
 
             var response = await http.SendAsync(request, ct);
-            var body     = await response.Content.ReadAsStringAsync(ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
 
             _logger.LogInformation(
                 "SuperVia status: {status} | body: {body}",
@@ -161,7 +161,7 @@ public sealed class ImportacaoTremService
         try
         {
             var json = await http.GetStringAsync(url, ct);
-            var fc   = JsonSerializer.Deserialize<ArcGisEstacaoCollection>(json, JsonOpts);
+            var fc = JsonSerializer.Deserialize<ArcGisEstacaoCollection>(json, JsonOpts);
 
             return fc?.Features?
                 .Where(f => !string.IsNullOrWhiteSpace(f.Properties?.Nome)
@@ -188,7 +188,7 @@ public sealed class ImportacaoTremService
         try
         {
             var json = await http.GetStringAsync(url, ct);
-            var fc   = JsonSerializer.Deserialize<ArcGisRamalCollection>(json, JsonOpts);
+            var fc = JsonSerializer.Deserialize<ArcGisRamalCollection>(json, JsonOpts);
 
             return fc?.Features?
                 .Where(f => !string.IsNullOrWhiteSpace(f.Properties?.Ramal)
@@ -220,14 +220,14 @@ public sealed class ImportacaoTremService
             .ToDictionaryAsync(p => p.Codigo, p => p.Id, ct);
 
         var paradaIdPorEstacao = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        var criadas    = 0;
+        var criadas = 0;
         var atualizadas = 0;
 
         foreach (var estacao in estacoesUnicas)
         {
             if (string.IsNullOrWhiteSpace(estacao.Title)) continue;
 
-            var nome     = estacao.Title.Trim();
+            var nome = estacao.Title.Trim();
             var codigoBd = $"{PrefixoParada}{estacao.IdStation!.ToUpperInvariant()}";
 
             var coords = ResolverCoordenadas(nome, coordenadas);
@@ -245,7 +245,7 @@ public sealed class ImportacaoTremService
                 var parada = await db.Paradas.FindAsync([idExistente], ct);
                 if (parada is not null)
                 {
-                    parada.Nome        = nome;
+                    parada.Nome = nome;
                     parada.Localizacao = localizacao;
                     atualizadas++;
                     paradaIdPorEstacao[estacao.IdStation!] = parada.Id;
@@ -255,9 +255,9 @@ public sealed class ImportacaoTremService
             {
                 var nova = new Parada
                 {
-                    Id          = Guid.NewGuid(),
-                    Codigo      = codigoBd,
-                    Nome        = nome,
+                    Id = Guid.NewGuid(),
+                    Codigo = codigoBd,
+                    Nome = nome,
                     Localizacao = localizacao,
                 };
                 db.Paradas.Add(nova);
@@ -352,30 +352,30 @@ public sealed class ImportacaoTremService
                 .ToList();
 
             // Nome dos sentidos baseado nas estações terminais do ramal
-            var nomeTerminal = estacoesOrdenadas.Last().Title?.Trim()  ?? "Terminal";
-            var nomeCentral  = estacoesOrdenadas.First().Title?.Trim() ?? "Central do Brasil";
+            var nomeTerminal = estacoesOrdenadas.Last().Title?.Trim() ?? "Terminal";
+            var nomeCentral = estacoesOrdenadas.First().Title?.Trim() ?? "Central do Brasil";
 
             // ── Linha ─────────────────────────────────────────────────────────
             var codigo = $"TREM-{branchId.ToUpperInvariant()}";
-            var linha  = await db.Linhas.FirstOrDefaultAsync(l => l.Codigo == codigo, ct);
+            var linha = await db.Linhas.FirstOrDefaultAsync(l => l.Codigo == codigo, ct);
 
             if (linha is null)
             {
                 linha = new Linha
                 {
-                    Id        = Guid.NewGuid(),
-                    Codigo    = codigo,
-                    Nome      = info.Nome,
-                    ModalId   = modalId,
-                    TipoRota  = "trem",
+                    Id = Guid.NewGuid(),
+                    Codigo = codigo,
+                    Nome = info.Nome,
+                    ModalId = modalId,
+                    TipoRota = "trem",
                     Consorcio = ConsorcioSuperVia,
                 };
                 db.Linhas.Add(linha);
             }
             else
             {
-                linha.Nome      = info.Nome;
-                linha.ModalId   = modalId;
+                linha.Nome = info.Nome;
+                linha.ModalId = modalId;
                 linha.Consorcio = ConsorcioSuperVia;
             }
 
@@ -385,9 +385,9 @@ public sealed class ImportacaoTremService
             var geometriaIda = ObterOuCriarGeometria(branchId, geometrias);
 
             // Geometria volta: coordenadas invertidas
-            var factory        = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(4326);
+            var factory = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(4326);
             var coordsInvertidas = geometriaIda.Coordinates.Reverse().ToArray();
-            var geometriaVolta   = factory.CreateLineString(coordsInvertidas);
+            var geometriaVolta = factory.CreateLineString(coordsInvertidas);
 
             // ── Sentido Central → Terminal (ex: "Santa Cruz") ─────────────────
             await GarantirSentidoEItinerarioAsync(
@@ -433,10 +433,10 @@ public sealed class ImportacaoTremService
         {
             itinerario = new Itinerario
             {
-                Id              = Guid.NewGuid(),
-                SentidoId       = sentido.Id,
+                Id = Guid.NewGuid(),
+                SentidoId = sentido.Id,
                 DistanciaMetros = geometria.Length, // comprimento aproximado em graus
-                Geometria       = geometria,
+                Geometria = geometria,
             };
             db.Itinerarios.Add(itinerario);
             await db.SaveChangesAsync(ct);
@@ -522,15 +522,15 @@ public sealed class ImportacaoTremService
         for (var i = 0; i < total; i++)
         {
             var paradaId = paradaIdPorEstacao[estacoesComParada[i].IdStation!];
-            var posicao  = total > 1 ? (double)i / (total - 1) : 0.0;
+            var posicao = total > 1 ? (double)i / (total - 1) : 0.0;
 
             novos.Add(new ParadaItinerario
             {
-                Id              = Guid.NewGuid(),
-                ItinerarioId    = itinerarioId,
-                ParadaId        = paradaId,
-                Ordem           = i + 1,
-                PosicaoLinha    = posicao,
+                Id = Guid.NewGuid(),
+                ItinerarioId = itinerarioId,
+                ParadaId = paradaId,
+                Ordem = i + 1,
+                PosicaoLinha = posicao,
                 DistanciaMetros = 0,
             });
         }
@@ -678,22 +678,22 @@ public sealed class ImportacaoTremService
 
     private sealed class SuperViaEstacaoDto
     {
-        [JsonPropertyName("id")]               public int Id { get; init; }
-        [JsonPropertyName("title")]            public string? Title { get; init; }
-        [JsonPropertyName("id_station")]       public string? IdStation { get; init; }
-        [JsonPropertyName("is_terminal")]      public bool IsTerminal { get; init; }
-        [JsonPropertyName("is_transfer")]      public bool IsTransfer { get; init; }
-        [JsonPropertyName("weight")]           public int Weight { get; init; }
-        [JsonPropertyName("url")]              public string? Url { get; init; }
+        [JsonPropertyName("id")] public int Id { get; init; }
+        [JsonPropertyName("title")] public string? Title { get; init; }
+        [JsonPropertyName("id_station")] public string? IdStation { get; init; }
+        [JsonPropertyName("is_terminal")] public bool IsTerminal { get; init; }
+        [JsonPropertyName("is_transfer")] public bool IsTransfer { get; init; }
+        [JsonPropertyName("weight")] public int Weight { get; init; }
+        [JsonPropertyName("url")] public string? Url { get; init; }
         [JsonPropertyName("station_x_branch")] public List<StationBranchDto>? StationXBranch { get; init; }
     }
 
     private sealed class StationBranchDto
     {
-        [JsonPropertyName("weight")]    public int Weight { get; init; }
-        [JsonPropertyName("name")]      public string? Name { get; init; }
+        [JsonPropertyName("weight")] public int Weight { get; init; }
+        [JsonPropertyName("name")] public string? Name { get; init; }
         [JsonPropertyName("id_branch")] public string? IdBranch { get; init; }
-        [JsonPropertyName("color")]     public string? Color { get; init; }
+        [JsonPropertyName("color")] public string? Color { get; init; }
     }
 
     // ── DTOs ArcGIS estações ──────────────────────────────────────────────────
@@ -705,7 +705,7 @@ public sealed class ImportacaoTremService
 
     private sealed class ArcGisEstacaoFeature
     {
-        [JsonPropertyName("geometry")]   public ArcGisPonto? Geometry { get; init; }
+        [JsonPropertyName("geometry")] public ArcGisPonto? Geometry { get; init; }
         [JsonPropertyName("properties")] public ArcGisEstacaoProps? Properties { get; init; }
     }
 
@@ -728,19 +728,19 @@ public sealed class ImportacaoTremService
 
     private sealed class ArcGisRamalFeature
     {
-        [JsonPropertyName("geometry")]   public ArcGisGeometry? Geometry { get; init; }
+        [JsonPropertyName("geometry")] public ArcGisGeometry? Geometry { get; init; }
         [JsonPropertyName("properties")] public ArcGisRamalProps? Properties { get; init; }
     }
 
     private sealed class ArcGisGeometry
     {
-        [JsonPropertyName("type")]        public string Type { get; init; } = string.Empty;
+        [JsonPropertyName("type")] public string Type { get; init; } = string.Empty;
         [JsonPropertyName("coordinates")] public JsonElement? CoordinatesRaw { get; init; }
     }
 
     private sealed class ArcGisRamalProps
     {
-        [JsonPropertyName("ramal")]            public string? Ramal { get; init; }
+        [JsonPropertyName("ramal")] public string? Ramal { get; init; }
         [JsonPropertyName("st_length(shape)")] public double Comprimento { get; init; }
     }
 }
