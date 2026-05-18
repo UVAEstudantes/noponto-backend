@@ -162,13 +162,13 @@ public sealed class TremSimulacaoWorker : BackgroundService
 
                 return posicao with
                 {
-                    Latitude                     = rota.LatitudeProjetada ?? posicao.Latitude,
-                    Longitude                    = rota.LongitudeProjetada ?? posicao.Longitude,
-                    PosicaoNaRota                = rota.PosicaoNaRota,
-                    ComprimentoRotaMetros        = rota.ComprimentoRotaMetros,
-                    ItinerarioId                 = rota.ItinerarioId,
-                    Bearing                      = rota.BearingLocal ?? posicao.Bearing,
-                    ProximaParadaNome            = rota.ProximaParadaNome ?? posicao.ProximaParadaNome,
+                    Latitude = rota.LatitudeProjetada ?? posicao.Latitude,
+                    Longitude = rota.LongitudeProjetada ?? posicao.Longitude,
+                    PosicaoNaRota = rota.PosicaoNaRota,
+                    ComprimentoRotaMetros = rota.ComprimentoRotaMetros,
+                    ItinerarioId = rota.ItinerarioId,
+                    Bearing = rota.BearingLocal ?? posicao.Bearing,
+                    ProximaParadaNome = rota.ProximaParadaNome ?? posicao.ProximaParadaNome,
                     DistanciaProximaParadaMetros = rota.DistanciaProximaParadaMetros ?? posicao.DistanciaProximaParadaMetros,
                 };
             }

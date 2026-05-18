@@ -14,7 +14,7 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
         ILogger<GpsItinerarioRepository> logger)
     {
         _dataSource = dataSource;
-        _logger     = logger;
+        _logger = logger;
     }
 
     public async Task<EnriquecimentoRotaDto?> BuscarEnriquecimentoAsync(
@@ -99,13 +99,13 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
         try
         {
             await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
-            await using var cmd  = conn.CreateCommand();
+            await using var cmd = conn.CreateCommand();
 
             cmd.CommandText = sql;
-            cmd.Parameters.AddWithValue("lat",      latitude);
-            cmd.Parameters.AddWithValue("lon",      longitude);
-            cmd.Parameters.AddWithValue("codigo",   codigoLinha);
-            cmd.Parameters.AddWithValue("bearing",  bearing);
+            cmd.Parameters.AddWithValue("lat", latitude);
+            cmd.Parameters.AddWithValue("lon", longitude);
+            cmd.Parameters.AddWithValue("codigo", codigoLinha);
+            cmd.Parameters.AddWithValue("bearing", bearing);
             cmd.Parameters.AddWithValue("dist_max", distanciaMaximaMetros);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
@@ -118,20 +118,20 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
 
             return new EnriquecimentoRotaDto
             {
-                ItinerarioId                 = reader.GetGuid(reader.GetOrdinal("itinerario_id")),
-                PosicaoNaRota                = reader.GetDouble(reader.GetOrdinal("posicao_na_rota")),
-                ComprimentoRotaMetros        = reader.GetDouble(reader.GetOrdinal("comprimento_metros")),
-                DistanciaARotaMetros         = reader.GetDouble(reader.GetOrdinal("distancia_rota_metros")),
-                LatitudeProjetada            = reader.IsDBNull(reader.GetOrdinal("lat_rota"))
+                ItinerarioId = reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+                PosicaoNaRota = reader.GetDouble(reader.GetOrdinal("posicao_na_rota")),
+                ComprimentoRotaMetros = reader.GetDouble(reader.GetOrdinal("comprimento_metros")),
+                DistanciaARotaMetros = reader.GetDouble(reader.GetOrdinal("distancia_rota_metros")),
+                LatitudeProjetada = reader.IsDBNull(reader.GetOrdinal("lat_rota"))
                                                     ? null
                                                     : reader.GetDouble(reader.GetOrdinal("lat_rota")),
-                LongitudeProjetada           = reader.IsDBNull(reader.GetOrdinal("lon_rota"))
+                LongitudeProjetada = reader.IsDBNull(reader.GetOrdinal("lon_rota"))
                                                     ? null
                                                     : reader.GetDouble(reader.GetOrdinal("lon_rota")),
-                BearingLocal                 = reader.IsDBNull(reader.GetOrdinal("bearing_local"))
+                BearingLocal = reader.IsDBNull(reader.GetOrdinal("bearing_local"))
                                                     ? null
                                                     : reader.GetDouble(reader.GetOrdinal("bearing_local")),
-                ProximaParadaNome            = reader.IsDBNull(reader.GetOrdinal("parada_nome"))
+                ProximaParadaNome = reader.IsDBNull(reader.GetOrdinal("parada_nome"))
                                                     ? null
                                                     : reader.GetString(reader.GetOrdinal("parada_nome")),
                 DistanciaProximaParadaMetros = reader.IsDBNull(reader.GetOrdinal("distancia_parada_metros"))
@@ -162,7 +162,7 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
         try
         {
             await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
-            await using var cmd  = conn.CreateCommand();
+            await using var cmd = conn.CreateCommand();
 
             cmd.CommandText = sql;
             cmd.Parameters.AddWithValue("id", itinerarioId);
