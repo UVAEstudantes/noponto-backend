@@ -35,25 +35,25 @@ public sealed class TremSimulacaoService
     {
         try
         {
-            var path = Path.Combine(AppContext.BaseDirectory, "DadosTrem.json");
+            var path = Path.Combine(AppContext.BaseDirectory, "dadosTrem.json");
 
             // Fallback para diretório do projeto em dev
             if (!File.Exists(path))
-                path = Path.Combine(Directory.GetCurrentDirectory(), "2-Application", "Trem", "DadosTrem.json");
+                path = Path.Combine(Directory.GetCurrentDirectory(), "2-Application", "Trem", "dadosTrem.json");
 
             if (!File.Exists(path))
             {
-                _logger.LogWarning("DadosTrem.json não encontrado em {path}", path);
+                _logger.LogWarning("dadosTrem.json não encontrado em {path}", path);
                 return;
             }
 
             var json = File.ReadAllText(path);
             _config = JsonSerializer.Deserialize<DadosTremConfig>(json, JsonOpts);
-            _logger.LogInformation("DadosTrem.json carregado — {n} ramais.", _config?.Ramais?.Count ?? 0);
+            _logger.LogInformation("dadosTrem.json carregado — {n} ramais.", _config?.Ramais?.Count ?? 0);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha ao carregar DadosTrem.json.");
+            _logger.LogError(ex, "Falha ao carregar dadosTrem.json.");
         }
     }
 
@@ -88,8 +88,8 @@ public sealed class TremSimulacaoService
             // Gera trens em ambos os sentidos
             // IDA: estacao[0] → estacao[^1]
             // VOLTA: estacao[^1] → estacao[0]
-            var tremsIda   = GerarTrensNoTrecho(branchId, codigoLinha, ramal, estacoes,
-                                ida: true,  agora, intervaloSeg, tempoViagemSeg);
+            var tremsIda = GerarTrensNoTrecho(branchId, codigoLinha, ramal, estacoes,
+                                ida: true, agora, intervaloSeg, tempoViagemSeg);
             var tremsVolta = GerarTrensNoTrecho(branchId, codigoLinha, ramal, estacoes,
                                 ida: false, agora, intervaloSeg, tempoViagemSeg);
 
@@ -162,7 +162,7 @@ public sealed class TremSimulacaoService
 
         for (int i = 0; i < estacoesLista.Count - 1; i++)
         {
-            var estAtual  = estacoesLista[i];
+            var estAtual = estacoesLista[i];
             var estProxima = estacoesLista[i + 1];
 
             var distanciaKm = Math.Abs(
@@ -229,32 +229,32 @@ public sealed class TremSimulacaoService
         string? paradaAtual)
     {
         var sentido = ida ? "IDA" : "VOLTA";
-        var ordem   = $"TREM-{branchId.ToUpperInvariant()}-{sentido}-{numeroTrem:D3}";
+        var ordem = $"TREM-{branchId.ToUpperInvariant()}-{sentido}-{numeroTrem:D3}";
 
         return new PosicaoVeiculoDto
         {
-            Ordem                        = ordem,
-            CodigoLinha                  = codigoLinha,
-            Latitude                     = lat,
-            Longitude                    = lon,
-            Velocidade                   = velocidade,
-            VelocidadeMedia              = velocidade > 0 ? velocidade : null,
-            TimestampGps                 = agora,
-            TimestampServidor            = agora,
-            Status                       = StatusVeiculo.Ativo,
-            ProximaParadaNome            = proximaParada,
+            Ordem = ordem,
+            CodigoLinha = codigoLinha,
+            Latitude = lat,
+            Longitude = lon,
+            Velocidade = velocidade,
+            VelocidadeMedia = velocidade > 0 ? velocidade : null,
+            TimestampGps = agora,
+            TimestampServidor = agora,
+            Status = StatusVeiculo.Ativo,
+            ProximaParadaNome = proximaParada,
             DistanciaProximaParadaMetros = distanciaProxima,
             // Indica que é simulação
-            EtaConfianca                 = "simulado",
+            EtaConfianca = "simulado",
         };
     }
 
     private static double ObterIntervaloAtual(RamalConfig ramal, TimeSpan horario)
     {
         var inicioPicoManha = TimeSpan.Parse(ramal.PicoManhaInicio);
-        var fimPicoManha    = TimeSpan.Parse(ramal.PicoManhaFim);
+        var fimPicoManha = TimeSpan.Parse(ramal.PicoManhaFim);
         var inicioPicoTarde = TimeSpan.Parse(ramal.PicoTardeInicio);
-        var fimPicoTarde    = TimeSpan.Parse(ramal.PicoTardeFim);
+        var fimPicoTarde = TimeSpan.Parse(ramal.PicoTardeFim);
 
         var emPico = (horario >= inicioPicoManha && horario <= fimPicoManha)
                   || (horario >= inicioPicoTarde && horario <= fimPicoTarde);
