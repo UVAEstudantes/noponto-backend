@@ -1,6 +1,7 @@
 using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Npgsql;
 using NoPonto.API.Hubs;
@@ -11,11 +12,10 @@ using NoPonto.Application.Services;
 using NoPonto.Application.Services.BackgroundServices;
 using NoPonto.Data.Interfaces;
 using NoPonto.Data.Repositories;
-using System.Reflection;
-using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System.Net.Sockets;
 using NoPonto.Application.Trem;
+using System.Reflection;
 
 Env.Load();
 
@@ -58,14 +58,16 @@ if (!gpsHubRoute.StartsWith('/'))
     gpsHubRoute = $"/{gpsHubRoute}";
 
 builder.Services.AddControllers();
+
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "NoPonto API",
         Version = "v1",
-        Description = "API para consulta e importação de dados de transporte público (linhas, sentidos, itinerários, paradas e POIs). (Teste do deploy no railway v9.0)"
+        Description = "API para consulta e importação de dados de transporte público."
     });
 
     options.SwaggerDoc("admin", new OpenApiInfo
@@ -92,6 +94,7 @@ builder.Services.AddSwaggerGen(options =>
     options.DocInclusionPredicate((docName, apiDesc) =>
     {
         var groupName = apiDesc.GroupName;
+
         if (string.IsNullOrWhiteSpace(groupName))
             return docName == "v1";
 
@@ -99,7 +102,9 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-var corsOrigins = builder.Configuration.GetSection("CORS:ORIGINS").Get<string[]>() ?? [];
+var corsOrigins = builder.Configuration
+    .GetSection("CORS:ORIGINS")
+    .Get<string[]>() ?? [];
 
 builder.Services.AddCors(options =>
 {
@@ -127,13 +132,40 @@ builder.Services.AddCors(options =>
 var postgresHost = builder.Configuration["POSTGRES_HOST"] ?? "localhost";
 var redisHost = builder.Configuration["REDIS_HOST"] ?? "localhost";
 
-// HttpClient tipado para a API de GPS
+// --------------------------------------------------------------------
+// DATABASE
+// --------------------------------------------------------------------
+
+var connectionString =
+    $"Host={postgresHost};" +
+    $"Port={GetEnv("POSTGRES_PORT")};" +
+    $"Database={GetEnv("POSTGRES_DB")};" +
+    $"Username={GetEnv("POSTGRES_USER")};" +
+    $"Password={GetEnv("POSTGRES_PASSWORD")}";
+
+// Pool externo do Npgsql
+builder.Services.AddSingleton(
+    NpgsqlDataSource.Create(connectionString));
+
+builder.Services.AddDbContext<TransporteDbContext>(options =>
+    options.UseNpgsql(
+        connectionString,
+        x => x.UseNetTopologySuite()
+    )
+);
+
+// --------------------------------------------------------------------
+// HTTP CLIENTS
+// --------------------------------------------------------------------
+
+// GPS SPPO
 builder.Services.AddHttpClient<GpsSppoClient>(client =>
 {
     client.BaseAddress = gpsApiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(gpsHttpTimeoutSeconds);
 });
 
+// GPS BRT
 var brtApiBaseUrl = builder.Configuration["GPS:BRT:BASE_URL"]
     ?? "https://dados.mobilidade.rio/gps/brt";
 
@@ -144,80 +176,30 @@ builder.Services.AddHttpClient<GpsBrtClient>(client =>
 })
 .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
 {
-    AutomaticDecompression = System.Net.DecompressionMethods.GZip
-                           | System.Net.DecompressionMethods.Deflate
-                           | System.Net.DecompressionMethods.Brotli
+    AutomaticDecompression =
+        System.Net.DecompressionMethods.GZip |
+        System.Net.DecompressionMethods.Deflate |
+        System.Net.DecompressionMethods.Brotli
 });
 
-builder.Services
-    .AddOptions<GpsPollingOptions>()
-    .Bind(builder.Configuration.GetSection(GpsPollingOptions.Secao))
-    .Validate(o => o.IntervaloSegundos > 0, "GpsPolling:IntervaloSegundos deve ser > 0")
-    .Validate(o => o.TtlAtivoSegundos > 0, "GpsPolling:TtlAtivoSegundos deve ser > 0")
-    .Validate(o => o.TtlRecenteSegundos >= o.TtlAtivoSegundos,
-        "GpsPolling:TtlRecenteSegundos deve ser ≥ TtlAtivoSegundos")
-    .Validate(o => o.VelocidadeMaximaKmh > 0, "GpsPolling:VelocidadeMaximaKmh deve ser > 0")
-    .Validate(o => o.JanelaVelocidadeLeituras > 0, "GpsPolling:JanelaVelocidadeLeituras deve ser > 0")
-    .Validate(o => o.DistanciaMaximaRotaMetros > 0, "GpsPolling:DistanciaMaximaRotaMetros deve ser > 0")
-    .ValidateOnStart();
+// ML ETA
+var mlBaseUrl =
+    builder.Configuration["ML:ETA:BASE_URL"]
+    ?? "http://localhost:5200";
 
-var connectionString =
-    $"Host={postgresHost};" +
-    $"Port={GetEnv("POSTGRES_PORT")};" +
-    $"Database={GetEnv("POSTGRES_DB")};" +
-    $"Username={GetEnv("POSTGRES_USER")};" +
-    $"Password={GetEnv("POSTGRES_PASSWORD")}";
-
-// NpgsqlDataSource: pool de conexões independente do EF Core.
-// Usado pelo GpsItinerarioRepository para queries paralelas sem conflito de conexão.
-builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
-
-builder.Services.AddDbContext<TransporteDbContext>(options =>
-    options.UseNpgsql(
-        connectionString,
-        x => x.UseNetTopologySuite()
-    )
-);
-
-// ── GPS: enriquecimento geoespacial ──────────────────────────────────────────
-//
-// GpsItinerarioRepository é Scoped porque recebe TransporteDbContext (Scoped).
-// Mas nas queries GPS ele usa NpgsqlDataSource diretamente (pool externo) —
-// pode ser resolvido via scope criado pelo controlador ou pelo repositório Scoped normal.
-//
-// GpsEnriquecimentoService é SINGLETON:
-//   - Mantém _itinerarioAtual e _historicoVelocidades entre ciclos de polling.
-//   - Usa IGpsItinerarioRepository via IServiceScopeFactory internamente
-//     (se precisar de scope) — mas atualmente recebe o repositório no construtor,
-//     então o repositório também precisa ser Singleton ou usar NpgsqlDataSource diretamente.
-//
-// Como GpsItinerarioRepository usa apenas NpgsqlDataSource (sem DbContext) nas queries GPS,
-// registramos ele como Singleton também — é stateless e thread-safe via pool de conexões.
-builder.Services.AddSingleton<IGpsItinerarioRepository, GpsItinerarioRepository>();
-builder.Services.AddSingleton<GpsEnriquecimentoService>();
-
-builder.Services.AddSignalR();
-builder.Services.AddHostedService<GpsPollingService>();
-
-var redisConnection = $"{redisHost}:{GetEnv("REDIS_PORT")},allowAdmin=true";
-
-builder.Services.AddStackExchangeRedisCache(options =>
-{
-    options.Configuration = redisConnection;
-});
-
-builder.Services.AddSingleton<IConnectionMultiplexer>(
-    _ => ConnectionMultiplexer.Connect(redisConnection));
-
-// Cliente HTTP para o serviço de ML (FastAPI local)
-var mlBaseUrl = builder.Configuration["ML:ETA:BASE_URL"] ?? "http://localhost:5200";
 builder.Services.AddHttpClient<GpsEtaClient>(client =>
 {
     client.BaseAddress = new Uri(mlBaseUrl);
-    client.Timeout = TimeSpan.FromSeconds(3); // timeout curto — não pode travar o ciclo GPS
+
+    // não pode travar polling GPS
+    client.Timeout = TimeSpan.FromSeconds(3);
 });
 
-var mlAdminBaseUrl = builder.Configuration["ML:ADMIN:BASE_URL"] ?? "http://ml:5200";
+// ML ADMIN
+var mlAdminBaseUrl =
+    builder.Configuration["ML:ADMIN:BASE_URL"]
+    ?? "http://ml:5200";
+
 builder.Services.AddHttpClient("ml-admin", client =>
 {
     client.BaseAddress = new Uri(mlAdminBaseUrl);
@@ -265,17 +247,23 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportacaoItinerar
 builder.Services.AddHttpClient<OverpassClient>();
 builder.Services.AddScoped<PopularPoisService>();
 builder.Services.AddScoped<IPoiRepository, PoiRepository>();
+// ArcGIS trem
+builder.Services.AddHttpClient("arcgis-trem", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
 
-builder.Services.AddSingleton<PopularPoisQueue>();
-builder.Services.AddHostedService<PopularPoisWorker>();
+    client.DefaultRequestHeaders.Add(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
+});
 
 // Simulação de trens (posições estimadas por intervalo/distância)
 builder.Services.AddSingleton<TremSimulacaoService>();
 builder.Services.AddHostedService<TremSimulacaoWorker>();
 
+// Docker socket
 builder.Services.AddHttpClient("docker", client =>
 {
-    // Usa um host fictício — o ConnectCallback ignora o host e conecta via Unix socket
     client.BaseAddress = new Uri("http://docker-socket");
     client.Timeout = TimeSpan.FromSeconds(10);
 })
@@ -290,13 +278,43 @@ builder.Services.AddHttpClient("docker", client =>
                 ProtocolType.Unspecified);
 
             await socket.ConnectAsync(
-                new UnixDomainSocketEndPoint("/var/run/docker.sock"), ct);
+                new UnixDomainSocketEndPoint("/var/run/docker.sock"),
+                ct);
 
             return new NetworkStream(socket, ownsSocket: true);
         }
     });
 
-// Histórico de passagens para ML
+builder.Services.AddHttpClient<ArcGisClientService>();
+builder.Services.AddHttpClient<OverpassClient>();
+
+// --------------------------------------------------------------------
+// OPTIONS
+// --------------------------------------------------------------------
+
+builder.Services
+    .AddOptions<GpsPollingOptions>()
+    .Bind(builder.Configuration.GetSection(GpsPollingOptions.Secao))
+    .Validate(
+        o => o.IntervaloSegundos > 0,
+        "GpsPolling:IntervaloSegundos deve ser > 0")
+    .Validate(
+        o => o.TtlAtivoSegundos > 0,
+        "GpsPolling:TtlAtivoSegundos deve ser > 0")
+    .Validate(
+        o => o.TtlRecenteSegundos >= o.TtlAtivoSegundos,
+        "GpsPolling:TtlRecenteSegundos deve ser ≥ TtlAtivoSegundos")
+    .Validate(
+        o => o.VelocidadeMaximaKmh > 0,
+        "GpsPolling:VelocidadeMaximaKmh deve ser > 0")
+    .Validate(
+        o => o.JanelaVelocidadeLeituras > 0,
+        "GpsPolling:JanelaVelocidadeLeituras deve ser > 0")
+    .Validate(
+        o => o.DistanciaMaximaRotaMetros > 0,
+        "GpsPolling:DistanciaMaximaRotaMetros deve ser > 0")
+    .ValidateOnStart();
+
 builder.Services
     .AddOptions<GpsHistoricoOptions>()
     .Bind(builder.Configuration.GetSection(GpsHistoricoOptions.Secao));
@@ -304,29 +322,110 @@ builder.Services
 builder.Services.AddSingleton<GpsHistoricoOptions>(sp =>
     sp.GetRequiredService<IOptions<GpsHistoricoOptions>>().Value);
 
+// --------------------------------------------------------------------
+// REDIS
+// --------------------------------------------------------------------
+
+var redisConnection =
+    $"{redisHost}:{GetEnv("REDIS_PORT")},allowAdmin=true";
+
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = redisConnection;
+});
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    _ => ConnectionMultiplexer.Connect(redisConnection));
+
+// --------------------------------------------------------------------
+// SERVICES
+// --------------------------------------------------------------------
+
+// GPS enriquecimento
+builder.Services.AddSingleton<
+    IGpsItinerarioRepository,
+    GpsItinerarioRepository>();
+
+builder.Services.AddSingleton<GpsEnriquecimentoService>();
+
 builder.Services.AddSingleton<GpsHistoricoService>();
+
+builder.Services.AddSignalR();
+
+builder.Services.AddHostedService<GpsPollingService>();
+
+//builder.Services.AddScoped<ImportacaoTremService>();
+
+builder.Services.AddScoped<ILinhaRepository, LinhaRepository>();
+builder.Services.AddScoped<ISentidoRepository, SentidoRepository>();
+builder.Services.AddScoped<IItinerarioRepository, ItinerarioRepository>();
+builder.Services.AddScoped<IParadaRepository, ParadaRepository>();
+builder.Services.AddScoped<IPoiRepository, PoiRepository>();
+builder.Services.AddScoped<IModalRepository, ModalRepository>();
+builder.Services.AddScoped<ITarifaRepository, TarifaRepository>();
+
+builder.Services.AddScoped<ILinhaService, LinhaService>();
+builder.Services.AddScoped<ISentidoService, SentidoService>();
+builder.Services.AddScoped<IItinerarioService, ItinerarioService>();
+builder.Services.AddScoped<IParadaService, ParadaService>();
+builder.Services.AddScoped<IPoiService, PoiService>();
+builder.Services.AddScoped<IModalService, ModalService>();
+builder.Services.AddScoped<ITarifaService, TarifaService>();
+
+builder.Services.AddScoped<ImportacaoParadasService>();
+builder.Services.AddScoped<RelacionarParadasItinerariosService>();
+builder.Services.AddScoped<RelacionarParadasJob>();
+
+builder.Services.AddSingleton<ImportacaoItinerariosService>();
+
+builder.Services.AddHostedService(sp =>
+    sp.GetRequiredService<ImportacaoItinerariosService>());
+
+builder.Services.AddScoped<PopularPoisService>();
+
+builder.Services.AddSingleton<PopularPoisQueue>();
+builder.Services.AddHostedService<PopularPoisWorker>();
+
+// --------------------------------------------------------------------
+// BUILD
+// --------------------------------------------------------------------
 
 var app = builder.Build();
 
+// migrations automáticas
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
+    var db = scope.ServiceProvider
+        .GetRequiredService<TransporteDbContext>();
+
     db.Database.Migrate();
 }
+
+// --------------------------------------------------------------------
+// MIDDLEWARES
+// --------------------------------------------------------------------
 
 app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseSwagger();
+
 app.UseSwaggerUI(options =>
 {
-    options.SwaggerEndpoint("/swagger/v1/swagger.json", "NoPonto API v1");
-    options.SwaggerEndpoint("/swagger/admin/swagger.json", "NoPonto Admin API v1");
+    options.SwaggerEndpoint(
+        "/swagger/v1/swagger.json",
+        "NoPonto API v1");
+
+    options.SwaggerEndpoint(
+        "/swagger/admin/swagger.json",
+        "NoPonto Admin API v1");
+
     options.DocumentTitle = "NoPonto API - Documentação";
 });
 
 app.UseCors("CorsPadrao");
 
 app.MapHub<GpsHub>(gpsHubRoute);
+
 app.MapControllers();
 
 app.MapGet("/", () => "Hello World!");
