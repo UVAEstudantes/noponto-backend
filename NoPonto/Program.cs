@@ -223,6 +223,21 @@ builder.Services.AddHttpClient("ml-admin", client =>
     client.Timeout = TimeSpan.FromSeconds(10);
 });
 
+builder.Services.AddHttpClient("arcgis-trem", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+
+    client.DefaultRequestHeaders.Add("User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
+});
+
+// Trem — SuperVia
+builder.Services.AddHttpClient("arcgis-trem", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddScoped<ImportacaoTremService>();
+
 builder.Services.AddScoped<ILinhaRepository, LinhaRepository>();
 builder.Services.AddScoped<ISentidoRepository, SentidoRepository>();
 builder.Services.AddScoped<IItinerarioRepository, ItinerarioRepository>();

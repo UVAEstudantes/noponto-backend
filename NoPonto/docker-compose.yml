@@ -66,6 +66,10 @@ services:
       GPS__HTTP_TIMEOUT_SECONDS: ${GPS__HTTP_TIMEOUT_SECONDS}
       GPS__HUB__ROUTE: ${GPS__HUB__ROUTE}
 
+      SUPERVIA__STATIONS_URL: ${SUPERVIA__STATIONS_URL}
+      ARCGIS__TREM__RAMAIS__BASE_URL: ${ARCGIS__TREM__RAMAIS__BASE_URL}
+      ARCGIS__TREM__ESTACOES__BASE_URL: ${ARCGIS__TREM__ESTACOES__BASE_URL}
+
       GpsPolling__IntervaloSegundos: ${GpsPolling__IntervaloSegundos}
       GpsPolling__TtlAtivoSegundos: ${GpsPolling__TtlAtivoSegundos}
       GpsPolling__TtlRecenteSegundos: ${GpsPolling__TtlRecenteSegundos}
