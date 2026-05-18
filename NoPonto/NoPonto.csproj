@@ -24,7 +24,7 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="2-Application/Trem/dadosTrem.json">
+    <Content Update="2-Application/Trem/dadosTrem.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
