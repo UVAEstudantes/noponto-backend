@@ -563,69 +563,54 @@ public sealed class ImportacaoTremService
     private static LineString AchatarMultiLineString(MultiLineString mls)
     {
         var factory = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(4326);
+
         var linhas = mls.Geometries
             .OfType<LineString>()
-            .Where(l => l.NumPoints > 0)
+            .Where(l => l.NumPoints >= 2)
             .ToList();
 
-        if (linhas.Count == 0)
-            return factory.CreateLineString([]);
+        if (linhas.Count == 0) return factory.CreateLineString([]);
+        if (linhas.Count == 1) return linhas[0];
 
-        var usados = new HashSet<int>();
-        var coordsOrdenados = new List<Coordinate>(linhas[0].Coordinates);
-        usados.Add(0);
+        // Ordena os segmentos conectando pelo ponto mais próximo entre extremidades
+        var ordenados = new List<Coordinate[]> { linhas[0].Coordinates };
+        var restantes  = linhas.Skip(1).ToList();
 
-        while (usados.Count < linhas.Count)
+        while (restantes.Count > 0)
         {
-            var ultimo = coordsOrdenados[^1];
-            var melhorIdx = -1;
-            var melhorDist = double.MaxValue;
-            var inverter = false;
+            var ultimoCoord = ordenados[^1][^1];
+            var melhorIdx   = 0;
+            var melhorDist  = double.MaxValue;
+            var inverter    = false;
 
-            for (int i = 0; i < linhas.Count; i++)
+            for (int i = 0; i < restantes.Count; i++)
             {
-                if (usados.Contains(i)) continue;
+                var coords = restantes[i].Coordinates;
+                var dInicio = Dist(ultimoCoord, coords[0]);
+                var dFim    = Dist(ultimoCoord, coords[^1]);
 
-                var coords = linhas[i].Coordinates;
-                var inicio = coords[0];
-                var fim = coords[^1];
-
-                var distInicio = Distancia(ultimo, inicio);
-                if (distInicio < melhorDist)
-                {
-                    melhorDist = distInicio;
-                    melhorIdx = i;
-                    inverter = false;
-                }
-
-                var distFim = Distancia(ultimo, fim);
-                if (distFim < melhorDist)
-                {
-                    melhorDist = distFim;
-                    melhorIdx = i;
-                    inverter = true;
-                }
+                if (dInicio < melhorDist) { melhorDist = dInicio; melhorIdx = i; inverter = false; }
+                if (dFim    < melhorDist) { melhorDist = dFim;    melhorIdx = i; inverter = true;  }
             }
 
-            if (melhorIdx < 0)
-                break;
+            var segmento = restantes[melhorIdx].Coordinates.ToArray();
+            if (inverter) Array.Reverse(segmento);
+            restantes.RemoveAt(melhorIdx);
 
-            var candidatos = linhas[melhorIdx].Coordinates;
-            if (inverter)
-                Array.Reverse(candidatos);
+            // Elimina duplicata do ponto de junção se coincidente
+            var inicio = segmento[0];
+            if (Dist(ultimoCoord, inicio) < 0.0001)
+                segmento = segmento.Skip(1).ToArray();
 
-            if (candidatos.Length > 0 && candidatos[0].Equals2D(ultimo))
-                coordsOrdenados.AddRange(candidatos.Skip(1));
-            else
-                coordsOrdenados.AddRange(candidatos);
-
-            usados.Add(melhorIdx);
+            if (segmento.Length > 0)
+                ordenados.Add(segmento);
         }
 
-        return factory.CreateLineString(coordsOrdenados.ToArray());
+        var todos = ordenados.SelectMany(c => c).ToArray();
+        return factory.CreateLineString(todos);
     }
 
-    private static double Distancia(Coordinate a, Coordinate b)
+    private static double Dist(Coordinate a, Coordinate b)
     {
         var dx = a.X - b.X;
         var dy = a.Y - b.Y;
