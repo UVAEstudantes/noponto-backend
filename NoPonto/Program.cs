@@ -15,6 +15,7 @@ using System.Reflection;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System.Net.Sockets;
+using NoPonto.Application.Trem;
 
 Env.Load();
 
@@ -223,6 +224,21 @@ builder.Services.AddHttpClient("ml-admin", client =>
     client.Timeout = TimeSpan.FromSeconds(10);
 });
 
+builder.Services.AddHttpClient("arcgis-trem", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+
+    client.DefaultRequestHeaders.Add("User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
+});
+
+// Trem — SuperVia
+builder.Services.AddHttpClient("arcgis-trem", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddScoped<ImportacaoTremService>();
+
 builder.Services.AddScoped<ILinhaRepository, LinhaRepository>();
 builder.Services.AddScoped<ISentidoRepository, SentidoRepository>();
 builder.Services.AddScoped<IItinerarioRepository, ItinerarioRepository>();
@@ -252,6 +268,10 @@ builder.Services.AddScoped<IPoiRepository, PoiRepository>();
 
 builder.Services.AddSingleton<PopularPoisQueue>();
 builder.Services.AddHostedService<PopularPoisWorker>();
+
+// Simulação de trens (posições estimadas por intervalo/distância)
+builder.Services.AddSingleton<TremSimulacaoService>();
+builder.Services.AddHostedService<TremSimulacaoWorker>();
 
 builder.Services.AddHttpClient("docker", client =>
 {
