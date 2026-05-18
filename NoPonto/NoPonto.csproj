@@ -28,7 +28,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Update="2-Application/Trem/horarios_supervia.txt">
+    <Content Remove="2-Application/Trem/horarios_supervia.txt" />
+    <Content Include="2-Application/Trem/horarios_supervia.txt">
+      <Link>horarios_supervia.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
