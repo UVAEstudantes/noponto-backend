@@ -31,9 +31,9 @@ public sealed class TremSimulacaoWorker : BackgroundService
         ILogger<TremSimulacaoWorker> logger)
     {
         _simulacao = simulacao;
-        _cache     = cache;
-        _hub       = hub;
-        _logger    = logger;
+        _cache = cache;
+        _hub = hub;
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -61,18 +61,44 @@ public sealed class TremSimulacaoWorker : BackgroundService
 
         if (posicoes.Count == 0) return;
 
-        var opcoesCache = new DistributedCacheEntryOptions
+        var opcoesAtivo = new DistributedCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(90),
         };
+        var opcoesRecente = new DistributedCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(90),
+        };
+        var opcoesLinha = new DistributedCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(120),
+        };
 
         var tarefas = new List<Task>();
+        var ativosPorLinha = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var pos in posicoes)
         {
             var json = JsonSerializer.Serialize(pos, JsonOpts);
             tarefas.Add(_cache.SetStringAsync(
-                GpsPollingService.ChaveVeiculoAtivo(pos.Ordem), json, opcoesCache, ct));
+                GpsPollingService.ChaveVeiculoAtivo(pos.Ordem), json, opcoesAtivo, ct));
+            tarefas.Add(_cache.SetStringAsync(
+                GpsPollingService.ChaveVeiculoRecente(pos.Ordem), json, opcoesRecente, ct));
+
+            if (!ativosPorLinha.TryGetValue(pos.CodigoLinha, out var ordens))
+            {
+                ordens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                ativosPorLinha[pos.CodigoLinha] = ordens;
+            }
+            ordens.Add(pos.Ordem);
+        }
+
+        foreach (var (linha, ordens) in ativosPorLinha)
+        {
+            tarefas.Add(_cache.SetStringAsync(
+                GpsPollingService.ChaveLinha(linha),
+                string.Join(',', ordens),
+                opcoesLinha, ct));
         }
 
         await Task.WhenAll(tarefas);
@@ -83,7 +109,7 @@ public sealed class TremSimulacaoWorker : BackgroundService
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
         var linhasAssinadas = GpsHub.LinhasComAssinantes;
-        var broadcastTasks  = new List<Task>();
+        var broadcastTasks = new List<Task>();
 
         foreach (var linha in linhasAssinadas)
         {
