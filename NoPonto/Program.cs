@@ -15,6 +15,7 @@ using System.Reflection;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System.Net.Sockets;
+using NoPonto.Application.Trem;
 
 Env.Load();
 
@@ -267,6 +268,10 @@ builder.Services.AddScoped<IPoiRepository, PoiRepository>();
 
 builder.Services.AddSingleton<PopularPoisQueue>();
 builder.Services.AddHostedService<PopularPoisWorker>();
+
+// Simulação de trens (posições estimadas por intervalo/distância)
+builder.Services.AddSingleton<TremSimulacaoService>();
+builder.Services.AddHostedService<TremSimulacaoWorker>();
 
 builder.Services.AddHttpClient("docker", client =>
 {

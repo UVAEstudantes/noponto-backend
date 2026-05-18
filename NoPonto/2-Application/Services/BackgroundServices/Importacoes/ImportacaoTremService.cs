@@ -42,23 +42,14 @@ public sealed class ImportacaoTremService
     // Valor  = nome normalizado do ArcGIS (ou prefixo que identifica a estação)
     private static readonly Dictionary<string, string> AliasEstacoes = new(StringComparer.OrdinalIgnoreCase)
     {
-        // SuperVia: "Oswaldo Cruz"  →  ArcGIS: "Osvaldo Cruz"
+       
         ["OSWALDO CRUZ"]                          = "OSVALDO CRUZ",
-        // SuperVia: "Mangueira/Jamelão"  →  ArcGIS: "Mangueira"  (aparentemente esta desativada)
-        //["MANGUEIRA/JAMELAO"]                     = "MANGUEIRA",
-        // SuperVia: "Pavuna/São João de Meriti"  →  ArcGIS: "Pavuna"
         ["PAVUNA/SAO JOAO DE MERITI"]             = "PAVUNA",
-        // SuperVia: "Estação Olímpica de Engenho de Dentro"  →  ArcGIS: "Engenho de Dentro"
         ["ESTACAO OLIMPICA DE ENGENHO DE DENTRO"] = "ENGENHO DE DENTRO",
-        // SuperVia: "Prefeito Bento Ribeiro"  →  ArcGIS: "Bento Ribeiro"
         ["PREFEITO BENTO RIBEIRO"]                = "BENTO RIBEIRO",
-        // SuperVia: "Mocidade/Padre Miguel"  →  ArcGIS: "Padre Miguel"
         ["MOCIDADE/PADRE MIGUEL"]                 = "PADRE MIGUEL",
-        // SuperVia: "Benjamim do Monte"  →  ArcGIS: "Benjamin do Monte"
         ["BENJAMIM DO MONTE"]                     = "BENJAMIN DO MONTE",
-        // SuperVia: "Suruí"  →  ArcGIS: "Sururu" / variação
         ["SURUI"]                                 = "SURURU",
-        // SuperVia: "Jororó"  →  ArcGIS: "Jorara" / variação
         ["JORORO"]                                = "JORARA",
     };
 
@@ -444,7 +435,7 @@ public sealed class ImportacaoTremService
             {
                 Id              = Guid.NewGuid(),
                 SentidoId       = sentido.Id,
-                DistanciaMetros = geometria.Length, // comprimento aproximado em graus; ok como referência
+                DistanciaMetros = geometria.Length, // comprimento aproximado em graus
                 Geometria       = geometria,
             };
             db.Itinerarios.Add(itinerario);
