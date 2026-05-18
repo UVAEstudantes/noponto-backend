@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Distributed;
@@ -25,6 +26,8 @@ public sealed class TremSimulacaoWorker : BackgroundService
     private readonly IDistributedCache _cache;
     private readonly IHubContext<GpsHub> _hub;
     private readonly IGpsItinerarioRepository _itinerarios;
+    private readonly ConcurrentDictionary<string, PosicaoVeiculoDto> _ultimaPosicao =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<TremSimulacaoWorker> _logger;
 
     public TremSimulacaoWorker(
@@ -67,6 +70,7 @@ public sealed class TremSimulacaoWorker : BackgroundService
         if (posicoes.Count == 0) return;
 
         posicoes = await EnriquecerRotasAsync(posicoes, ct);
+        posicoes = AnexarHistorico(posicoes);
 
         var opcoesAtivo = new DistributedCacheEntryOptions
         {
@@ -180,5 +184,30 @@ public sealed class TremSimulacaoWorker : BackgroundService
 
         var resultado = await Task.WhenAll(tarefas);
         return resultado.ToList();
+    }
+
+    private List<PosicaoVeiculoDto> AnexarHistorico(List<PosicaoVeiculoDto> posicoes)
+    {
+        var atualizadas = new List<PosicaoVeiculoDto>(posicoes.Count);
+
+        foreach (var posicao in posicoes)
+        {
+            var atual = posicao;
+
+            if (_ultimaPosicao.TryGetValue(atual.Ordem, out var anterior))
+            {
+                atual = atual with
+                {
+                    LatitudeAnterior = anterior.Latitude,
+                    LongitudeAnterior = anterior.Longitude,
+                    TimestampAnterior = anterior.TimestampGps,
+                };
+            }
+
+            _ultimaPosicao[atual.Ordem] = atual;
+            atualizadas.Add(atual);
+        }
+
+        return atualizadas;
     }
 }

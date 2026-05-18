@@ -1,0 +1,1243 @@
+Central do Brasil - Sentido Belford Roxo
+Primeiro Trem: 4h35 (sáb. 5h49 / dom. 6h25)
+Último Trem: 21h21 (sáb. 19h09 / dom. 13h47)
+
+Central do Brasil - Sentido Deodoro
+Primeiro Trem: 4h19 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Central do Brasil - Sentido Japeri
+Primeiro Trem: 4h08 (sáb. 6h03 / dom. 5h58)
+Último Trem: 23h01 (sáb. 21h29 / dom. 20h38)
+
+Central do Brasil - Sentido Santa Cruz
+Primeiro Trem: 4h16 (sáb. 6h18 / dom. 6h18)
+Último Trem: 22h46 (sáb. 21h14 / dom. 20h18)
+
+Central do Brasil - Sentido Saracuruna
+Primeiro Trem: 4h54 (sáb. 5h12 / dom. 6h12)
+Último Trem: 22h38 (sáb. 20h29 / dom. 20h21)
+
+--------------------------------------------------
+
+Praça da Bandeira - Sentido Central do Brasil
+Primeiro Trem: 5h40 (sáb. 5h51 / dom. 6h26)
+Último Trem: 23h40 (sáb. 22h06 / dom. 22h26)
+
+Praça da Bandeira - Sentido Deodoro
+Primeiro Trem: 4h18 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Praça da Bandeira - Sentido Japeri
+Primeiro Trem: 4h13 (sáb. 6h08 / dom. 6h03)
+Último Trem: 23h06 (sáb. 21h34 / dom. 20h43)
+
+Praça da Bandeira - Sentido Santa Cruz
+Primeiro Trem: 4h21 (sáb. 6h23 / dom. 6h23)
+Último Trem: 22h50 (sáb. 21h19 / dom. 20h23)
+
+--------------------------------------------------
+
+São Cristóvão - Sentido Belford Roxo
+Primeiro Trem: 4h42 (sáb. 5h56 / dom. 6h24)
+Último Trem: 21h28 (sáb. 19h16 / dom. 13h56)
+
+São Cristóvão - Sentido Central do Brasil
+Primeiro Trem: 5h38 (parador) | 5h13 (expresso) (sáb. 5h49 / dom. 6h24)
+Último Trem: 23h38 | 22h49 (sáb. 22h04 / dom. 22h24)
+
+São Cristóvão - Sentido Deodoro
+Primeiro Trem: 4h20 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+São Cristóvão - Sentido Gramacho
+Primeiro Trem: 5h01 (sáb. N/A / dom. N/A)
+Último Trem: 22h45 (sáb. N/A / dom. N/A)
+
+São Cristóvão - Sentido Japeri
+Primeiro Trem: 4h15 (sáb. 6h10 / dom. 6h05)
+Último Trem: 23h08 (sáb. 21h36 / dom. 20h45)
+
+São Cristóvão - Sentido Santa Cruz
+Primeiro Trem: 4h23 (sáb. 6h25 / dom. 6h25)
+Último Trem: 22h53 (sáb. 21h21 / dom. 20h25)
+
+São Cristóvão - Sentido Saracuruna
+Primeiro Trem: 5h01 (sáb. 5h13 / dom. 6h16)
+Último Trem: 22h45 (sáb. 20h43 / dom. 20h26)
+
+--------------------------------------------------
+
+Maracanã - Sentido Belford Roxo
+Primeiro Trem: 4h45 (sáb. 5h59 / dom. 6h26)
+Último Trem: 21h31 (sáb. 19h19 / dom. 13h56)
+
+Maracanã - Sentido Central do Brasil
+Primeiro Trem: 5h11 (expresso) | 5h36 (parador) (sáb. 6h01 / dom. 6h08)
+Último Trem: 23h36 (sáb. 22h16 / dom. 22h22)
+
+Maracanã - Sentido Deodoro
+Primeiro Trem: 4h22 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Maracanã - Sentido Gramacho
+Primeiro Trem: 5h04 (sáb. 05h16 / dom. 06h19)
+Último Trem: 22h48 (sáb. 20h46 / dom. 20h29)
+
+Maracanã - Sentido Japeri
+Primeiro Trem: 4h18 (sáb. 6h12 / dom. 6h07)
+Último Trem: 23h11 (sáb. 21h38 / dom. 20h47)
+
+Maracanã - Sentido Santa Cruz
+Primeiro Trem: 4h26 (sáb. 6h27 / dom. 6h27)
+Último Trem: 22h56 (sáb. 21h23 / dom. 20h27)
+
+--------------------------------------------------
+
+Triagem - Sentido Belford Roxo
+Primeiro Trem: 4h50 (sáb. 6h08 / dom. 6h30)
+Último Trem: 21h36 (sáb. 19h30 / dom. 13h56)
+
+Triagem - Sentido Central do Brasil
+Primeiro Trem: 5h07 (sáb. 5h27 / dom. 6h03)
+Último Trem: 22h53 (sáb. 21h37 / dom. 20h13)
+
+Triagem - Sentido Gramacho
+Primeiro Trem: 5h09 (sáb. N/A / dom. N/A)
+Último Trem: 22h53 (sáb. N/A / dom. N/A)
+
+Triagem - Sentido Saracuruna
+Primeiro Trem: 5h09 (sáb. 5h20 / dom. 6h22)
+Último Trem: 22h53 (sáb. 20h50 / dom. 20h32)
+
+--------------------------------------------------
+
+Jacarezinho - Sentido Belford Roxo
+Primeiro Trem: 4h54 (sáb. 6h12 / dom. 6h34)
+Último Trem: 21h40 (sáb. 19h34 / dom. 14h04)
+
+Jacarezinho - Sentido Central do Brasil
+Primeiro Trem: 5h32 (sáb. 7h02 / dom. 7h02)
+Último Trem: 22h19 (sáb. 20h03 / dom. 14h32)
+
+--------------------------------------------------
+
+Del Castilho - Sentido Belford Roxo
+Primeiro Trem: 4h58 (sáb. 6h16 / dom. 6h38)
+Último Trem: 21h44 (sáb. 19h38 / dom. 14h08)
+
+Del Castilho - Sentido Central do Brasil
+Primeiro Trem: 5h28 (sáb. 6h58 / dom. 6h58)
+Último Trem: 22h15 (sáb. 19h59 / dom. 14h28)
+
+--------------------------------------------------
+
+Pilares - Sentido Belford Roxo
+Primeiro Trem: 5h01 (sáb. 6h21 / dom. 6h51)
+Último Trem: 21h47 (sáb. 19h43 / dom. 14h13)
+
+Pilares - Sentido Central do Brasil
+Primeiro Trem: 5h25 (sáb. 6h55 / dom. 6h56)
+Último Trem: 22h12 (sáb. 19h56 / dom. 14h20)
+
+--------------------------------------------------
+
+Tomás Coelho - Sentido Belford Roxo
+Primeiro Trem: 5h06 (sáb. 6h25 / dom. 6h47)
+Último Trem: 21h52 (sáb. 19h47 / dom. 14h17)
+
+Tomás Coelho - Sentido Central do Brasil
+Primeiro Trem: 5h20 (sáb. 6h50 / dom. 6h49)
+Último Trem: 22h07 (sáb. 19h51 / dom. 14h19)
+
+--------------------------------------------------
+
+Cavalcanti - Sentido Belford Roxo
+Primeiro Trem: 5h10 (sáb. 6h27 / dom. 6h56)
+Último Trem: 21h56 (sáb. 19h49 / dom. 14h18)
+
+Cavalcanti - Sentido Central do Brasil
+Primeiro Trem: 5h16 (sáb. 6h46 / dom. 6h50)
+Último Trem: 22h03 (sáb. 19h47 / dom. 14h14)
+
+--------------------------------------------------
+
+Mercadão de Madureira - Sentido Belford Roxo
+Primeiro Trem: 5h14 (sáb. 6h33 / dom. 6h55)
+Último Trem: 22h (sáb. 19h55 / dom. 14h25)
+
+Mercadão de Madureira - Sentido Central do Brasil
+Primeiro Trem: 5h12 (sáb. 6h43 / dom. 6h41)
+Último Trem: 21h59 (sáb. 19h44 / dom. 14h11)
+
+--------------------------------------------------
+
+Rocha Miranda - Sentido Belford Roxo
+Primeiro Trem: 5h18 (sáb. 6h37 / dom. 6h59)
+Último Trem: 22h04 (sáb. 19h59 / dom. 14h29)
+
+Rocha Miranda - Sentido Central do Brasil
+Primeiro Trem: 5h08 (sáb. 6h39 / dom. 6h37)
+Último Trem: 21h55 (sáb. 19h40 / dom. 14h07)
+
+--------------------------------------------------
+
+Honório Gurgel - Sentido Belford Roxo
+Primeiro Trem: 5h20 (sáb. 6h39 / dom. 7h01)
+Último Trem: 22h06 (sáb. 20h01 / dom. 14h31)
+
+Honório Gurgel - Sentido Central do Brasil
+Primeiro Trem: 5h06 (sáb. 6h37 / dom. 6h35)
+Último Trem: 21h53 (sáb. 19h38 / dom. 14h05)
+
+--------------------------------------------------
+
+Barros Filho - Sentido Belford Roxo
+Primeiro Trem: 5h24 (sáb. 6h43 / dom. 7h10)
+Último Trem: 22h10 (sáb. 20h05 / dom. 14h32)
+
+Barros Filho - Sentido Central do Brasil
+Primeiro Trem: 5h02 (sáb. 6h33 / dom. 6h36)
+Último Trem: 21h49 (sáb. 19h34 / dom. 14h)
+
+--------------------------------------------------
+
+Costa Barros - Sentido Belford Roxo
+Primeiro Trem: 5h27 (sáb. 6h46 / dom. 7h13)
+Último Trem: 22h13 (sáb. 20h08 / dom. 14h35)
+
+Costa Barros - Sentido Central do Brasil
+Primeiro Trem: 4h59 (sáb. 6h30 / dom. 6h33)
+Último Trem: 21h46 (sáb. 19h31 / dom. 13h57)
+
+--------------------------------------------------
+
+Pavuna/São João de Meriti - Sentido Belford Roxo
+Primeiro Trem: 5h30 (sáb. 6h50 / dom. N/A)
+Último Trem: 22h16 (sáb. 20h12 / dom. 14h42)
+
+Pavuna/São João de Meriti - Sentido Central do Brasil
+Primeiro Trem: 4h56 (sáb. 6h27 / dom. 6h24)
+Último Trem: 21h43 (sáb. 19h28 / dom. 13h54)
+
+--------------------------------------------------
+
+Vila Rosali - Sentido Belford Roxo
+Primeiro Trem: 5h34 (sáb. 6h53 / dom. 7h15)
+Último Trem: 22h20 (sáb. 20h15 / dom. 14h45)
+
+Vila Rosali - Sentido Central do Brasil
+Primeiro Trem: 4h52 (sáb. 6h23 / dom. 6h20)
+Último Trem: 21h39 (sáb. 19h24 / dom. 13h50)
+
+--------------------------------------------------
+
+Agostinho Porto - Sentido Belford Roxo
+Primeiro Trem: 5h36 (sáb. 6h56 / dom. 7h23)
+Último Trem: 22h22 (sáb. 20h18 / dom. 14h45)
+
+Agostinho Porto - Sentido Central do Brasil
+Primeiro Trem: 4h50 (sáb. 6h21 / dom. 6h23)
+Último Trem: 21h37 (sáb. 19h22 / dom. 13h47)
+
+--------------------------------------------------
+
+Coelho da Rocha - Sentido Belford Roxo
+Primeiro Trem: 5h39 (sáb. 6h59 / dom. 7h25)
+Último Trem: 22h25 (sáb. 20h21 / dom. 14h47)
+
+Coelho da Rocha - Sentido Central do Brasil
+Primeiro Trem: 4h47 (sáb. 6h18 / dom. 6h20)
+Último Trem: 21h34 (sáb. 19h19 / dom. 13h44)
+
+--------------------------------------------------
+
+Belford Roxo - Sentido Central do Brasil
+Primeiro Trem: 4h43 (sáb. 6h14 / dom. 6h02)
+Último Trem: 21h30 (sáb. 19h15 / dom. 14h13)
+
+--------------------------------------------------
+
+São Francisco Xavier - Sentido Central do Brasil
+Primeiro Trem: 5h34 (sáb. 5h54 / dom. 6h19)
+Último Trem: 23h34 (sáb. 21h59 / dom. 22h19)
+
+São Francisco Xavier - Sentido Deodoro
+Primeiro Trem: 4h23 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+São Francisco Xavier - Sentido Japeri
+Primeiro Trem: 4h20 (sáb. 6h15 / dom. 6h10)
+Último Trem: 23h13 (sáb. 21h41 / dom. 20h50)
+
+São Francisco Xavier - Sentido Santa Cruz
+Primeiro Trem: 4h28 (sáb. 6h30 / dom. 6h30)
+Último Trem: 22h58 (sáb. 21h26 / dom. 20h30)
+
+--------------------------------------------------
+
+Riachuelo - Sentido Central do Brasil
+Primeiro Trem: 5h31 (sáb. 5h51 / dom. 6h17)
+Último Trem: 23h31 (sáb. 21h56 / dom. 22h17)
+
+Riachuelo - Sentido Deodoro
+Primeiro Trem: 4h26 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Riachuelo - Sentido Japeri
+Primeiro Trem: 4h23 (sáb. 6h18 / dom. 6h12)
+Último Trem: 23h16 (sáb. 21h44 / dom. 20h52)
+
+Riachuelo - Sentido Santa Cruz
+Primeiro Trem: 4h31 (sáb. 6h33 / dom. 6h32)
+Último Trem: 23h01 (sáb. 21h29 / dom. 20h32)
+
+--------------------------------------------------
+
+Sampaio - Sentido Central do Brasil
+Primeiro Trem: 5h29 (sáb. 5h49 / dom. 6h15)
+Último Trem: 23h29 (sáb. 21h54 / dom. 22h15)
+
+Sampaio - Sentido Deodoro
+Primeiro Trem: 4h28 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Sampaio - Sentido Japeri
+Primeiro Trem: 4h25 (sáb. 6h20 / dom. 6h14)
+Último Trem: 23h18 (sáb. 21h46 / dom. 20h54)
+
+Sampaio - Sentido Santa Cruz
+Primeiro Trem: 4h33 (sáb. 6h35 / dom. 6h34)
+Último Trem: 23h03 (sáb. 21h31 / dom. 20h34)
+
+--------------------------------------------------
+
+Engenho Novo - Sentido Central do Brasil
+Primeiro Trem: 5h27 (sáb. 5h47 / dom. 6h13)
+Último Trem: 23h27 (sáb. 21h52 / dom. 22h13)
+
+Engenho Novo - Sentido Deodoro
+Primeiro Trem: 4h31 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Engenho Novo - Sentido Japeri
+Primeiro Trem: 4h27 (sáb. 6h22 / dom. 6h26)
+Último Trem: 23h20 (sáb. 21h48 / dom. 20h56)
+
+Engenho Novo - Sentido Santa Cruz
+Primeiro Trem: 4h35 (sáb. 6h37 / dom. 6h36)
+Último Trem: 23h05 (sáb. 21h33 / dom. 20h36)
+
+--------------------------------------------------
+
+Méier - Sentido Central do Brasil
+Primeiro Trem: 5h25 (sáb. 5h45 / dom. 6h09)
+Último Trem: 23h25 (sáb. 21h50 / dom. 22h09)
+
+Méier - Sentido Deodoro
+Primeiro Trem: 4h45 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Méier - Sentido Japeri
+Primeiro Trem: 4h29 (sáb. 6h24 / dom. 6h20)
+Último Trem: 23h22 (sáb. 21h50 / dom. 21h)
+
+Méier - Sentido Santa Cruz
+Primeiro Trem: 4h37 (sáb. 6h39 / dom. 6h40)
+Último Trem: 23h07 (sáb. 21h35 / dom. 20h40)
+
+--------------------------------------------------
+
+Estação Olímpica de Engenho de Dentro - Sentido Central do Brasil
+Primeiro Trem: 5h22 (parador) | 5h (expresso) (sáb. 5h42 / dom. 6h06)
+Último Trem: 23h22 (sáb. 21h50 / dom. 22h)
+
+Estação Olímpica de Engenho de Dentro - Sentido Deodoro
+Primeiro Trem: 4h39 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Estação Olímpica de Engenho de Dentro - Sentido Japeri
+Primeiro Trem: 4h31 (sáb. 6h28 / dom. N/A)
+Último Trem: 23h24 (sáb. 21h54 / dom. N/A)
+
+Estação Olímpica de Engenho de Dentro - Sentido Santa Cruz
+Primeiro Trem: 4h39 (sáb. 6h41 / dom. 6h43)
+Último Trem: 23h09 (sáb. 21h37 / dom. 20h47)
+
+--------------------------------------------------
+
+Piedade - Sentido Central do Brasil
+Primeiro Trem: 5h20 (sáb. 5h39 / dom. 6h03)
+Último Trem: 23h20 (sáb. 21h47 / dom. 22h03)
+
+Piedade - Sentido Deodoro
+Primeiro Trem: 4h42 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Piedade - Sentido Japeri
+Primeiro Trem: 4h33 (sáb. 6h31 / dom. 6h25)
+Último Trem: 23h26 (sáb. 21h57 / dom. 21h05)
+
+Piedade - Sentido Santa Cruz
+Primeiro Trem: 4h41 (sáb. 6h44 / dom. 6h45)
+Último Trem: 23h11 (sáb. 21h40 / dom. 20h45)
+
+--------------------------------------------------
+
+Quintino - Sentido Central do Brasil
+Primeiro Trem: 5h18 (sáb. 5h37 / dom. 6h01)
+Último Trem: 23h18 (sáb. 21h44 / dom. 22h01)
+
+Quintino - Sentido Deodoro
+Primeiro Trem: 4h45 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Quintino - Sentido Japeri
+Primeiro Trem: 4h35 (sáb. 6h34 / dom. 6h27)
+Último Trem: 23h28 (sáb. 22h / dom. 21h07)
+
+Quintino - Sentido Santa Cruz
+Primeiro Trem: 4h43 (sáb. 6h47 / dom. 6h47)
+Último Trem: 23h13 (sáb. 21h43 / dom. 20h47)
+
+--------------------------------------------------
+
+Cascadura - Sentido Central do Brasil
+Primeiro Trem: 5h16 (sáb. 5h35 / dom. 5h44)
+Último Trem: 23h16 (sáb. 21h42 / dom. 21h46)
+
+Cascadura - Sentido Deodoro
+Primeiro Trem: 4h58 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Cascadura - Sentido Japeri
+Primeiro Trem: 4h37 (sáb. 6h36 / dom. 6h31)
+Último Trem: 23h30 (sáb. 22h02 / dom. 21h11)
+
+Cascadura - Sentido Santa Cruz
+Primeiro Trem: 4h45 (sáb. 6h49 / dom. 6h51)
+Último Trem: 23h15 (sáb. 21h45 / dom. 20h51)
+
+--------------------------------------------------
+
+Madureira - Sentido Central do Brasil
+Primeiro Trem: 4h58 (expresso) | 5h14 (parador) (sáb. 5h33 / dom. 5h56)
+Último Trem: 23h14 (sáb. 21h40 / dom. 21h56)
+
+Madureira - Sentido Deodoro
+Primeiro Trem: 4h49 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Madureira - Sentido Japeri
+Primeiro Trem: 4h39 (sáb. 6h38 / dom. 6h31)
+Último Trem: 23h32 (sáb. 22h04 / dom. 21h11)
+
+Madureira - Sentido Santa Cruz
+Primeiro Trem: 4h47 (sáb. 6h51 / dom. 6h51)
+Último Trem: 23h17 (sáb. 21h47 / dom. 20h51)
+
+--------------------------------------------------
+
+Oswaldo Cruz - Sentido Central do Brasil
+Primeiro Trem: 5h12 (sáb. 5h31 / dom. 5h53)
+Último Trem: 23h12 (sáb. 21h38 / dom. 21h53)
+
+Oswaldo Cruz - Sentido Deodoro
+Primeiro Trem: 4h52 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Oswaldo Cruz - Sentido Japeri
+Primeiro Trem: 4h41 (sáb. 6h40 / dom. 6h35)
+Último Trem: 23h34 (sáb. 21h59 / dom. 21h15)
+
+Oswaldo Cruz - Sentido Santa Cruz
+Primeiro Trem: 4h49 (sáb. 6h53 / dom. 6h55)
+Último Trem: 23h19 (sáb. 21h49 / dom. 20h55)
+
+--------------------------------------------------
+
+Prefeito Bento Ribeiro - Sentido Central do Brasil
+Primeiro Trem: 5h10 (sáb. 5h29 / dom. 5h51)
+Último Trem: 23h10 (sáb. 21h34 / dom. 21h51)
+
+Prefeito Bento Ribeiro - Sentido Deodoro
+Primeiro Trem: 4h54 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Prefeito Bento Ribeiro - Sentido Japeri
+Primeiro Trem: 4h43 (sáb. 6h42 / dom. 6h37)
+Último Trem: 23h36 (sáb. 22h08 / dom. 21h17)
+
+Prefeito Bento Ribeiro - Sentido Santa Cruz
+Primeiro Trem: 4h51 (sáb. 6h55 / dom. 6h57)
+Último Trem: 23h21 (sáb. 21h51 / dom. 20h57)
+
+--------------------------------------------------
+
+Marechal Hermes - Sentido Central do Brasil
+Primeiro Trem: 5h08 (sáb. 5h27 / dom. 5h49)
+Último Trem: 23h08 (sáb. 21h32 / dom. 21h49)
+
+Marechal Hermes - Sentido Deodoro
+Primeiro Trem: 4h56 (sáb. N/A / dom. N/A)
+Último Trem: N/A (sáb. N/A / dom. N/A)
+
+Marechal Hermes - Sentido Japeri
+Primeiro Trem: 4h45 (sáb. 6h44 / dom. 6h39)
+Último Trem: 23h38 (sáb. 22h10 / dom. 21h19)
+
+Marechal Hermes - Sentido Santa Cruz
+Primeiro Trem: 4h53 (sáb. 6h57 / dom. 6h59)
+Último Trem: 23h23 (sáb. 21h53 / dom. 20h59)
+
+--------------------------------------------------
+
+Deodoro - Sentido Central do Brasil
+Primeiro Trem: 4h47 (expresso) | 5h05 (parador) (sáb. 5h24 / dom. 5h45)
+Último Trem: 23h05 (sáb. 21h29 / dom. 21h45)
+
+Deodoro - Sentido Japeri
+Primeiro Trem: 4h48 (sáb. 6h47 / dom. 6h44)
+Último Trem: 23h41 (sáb. 22h13 / dom. 21h24)
+
+Deodoro - Sentido Santa Cruz
+Primeiro Trem: 4h56 (sáb. 7h02 / dom. 7h04)
+Último Trem: 23h26 (sáb. 21h58 / dom. 21h04)
+
+--------------------------------------------------
+
+Vila Militar - Sentido Central do Brasil
+Primeiro Trem: 4h42 (sáb. 5h17 / dom. 5h58)
+Último Trem: 22h59 (sáb. 21h00 / dom. 20h43)
+
+Vila Militar - Sentido Santa Cruz
+Primeiro Trem: 5h01 (sáb. 7h07 / dom. 7h08)
+Último Trem: 23h31 (sáb. 22h03 / dom. 21h08)
+
+--------------------------------------------------
+
+Magalhães Bastos - Sentido Central do Brasil
+Primeiro Trem: 4h39 (sáb. 5h15 / dom. 5h56)
+Último Trem: 22h57 (sáb. 20h57 / dom. 20h41)
+
+Magalhães Bastos - Sentido Santa Cruz
+Primeiro Trem: 5h03 (sáb. 7h09 / dom. 7h10)
+Último Trem: 23h33 (sáb. 22h05 / dom. 21h10)
+
+--------------------------------------------------
+
+Realengo - Sentido Central do Brasil
+Primeiro Trem: 4h35 (sáb. 5h12 / dom. 5h53)
+Último Trem: 22h54 (sáb. 20h55 / dom. 20h38)
+
+Realengo - Sentido Santa Cruz
+Primeiro Trem: 5h06 (sáb. 7h12 / dom. 7h13)
+Último Trem: 23h36 (sáb. 22h08 / dom. 21h13)
+
+--------------------------------------------------
+
+Mocidade/Padre Miguel - Sentido Central do Brasil
+Primeiro Trem: 4h32 (sáb. 5h10 / dom. 5h50)
+Último Trem: 22h51 (sáb. 20h53 / dom. 20h35)
+
+Mocidade/Padre Miguel - Sentido Santa Cruz
+Primeiro Trem: 5h09 (sáb. 7h14 / dom. 7h16)
+Último Trem: 23h39 (sáb. 22h10 / dom. 21h16)
+
+--------------------------------------------------
+
+Guilherme da Silveira - Sentido Central do Brasil
+Primeiro Trem: 4h30 (sáb. 5h08 / dom. 5h48)
+Último Trem: 22h49 (sáb. 20h51 / dom. 20h33)
+
+Guilherme da Silveira - Sentido Santa Cruz
+Primeiro Trem: 5h11 (sáb. 7h16 / dom. 7h16)
+Último Trem: 23h41 (sáb. 22h12 / dom. 21h18)
+
+--------------------------------------------------
+
+Bangu - Sentido Central do Brasil
+Primeiro Trem: 4h28 (sáb. 5h06 / dom. 5h34)
+Último Trem: 22h47 (sáb. 20h48 / dom. 20h16)
+
+Bangu - Sentido Santa Cruz
+Primeiro Trem: 5h13 (sáb. 7h18 / dom. 7h21)
+Último Trem: 23h43 (sáb. 22h14 / dom. 21h21)
+
+--------------------------------------------------
+
+Senador Camará - Sentido Central do Brasil
+Primeiro Trem: 4h25 (sáb. 5h03 / dom. 5h43)
+Último Trem: 22h44 (sáb. 20h44 / dom. 20h28)
+
+Senador Camará - Sentido Santa Cruz
+Primeiro Trem: 5h16 (sáb. 7h21 / dom. 7h23)
+Último Trem: 23h46 (sáb. 22h17 / dom. 21h23)
+
+--------------------------------------------------
+
+Santíssimo - Sentido Central do Brasil
+Primeiro Trem: 4h20 (sáb. 4h59 / dom. 5h38)
+Último Trem: 22h40 (sáb. 20h40 / dom. 20h23)
+
+Santíssimo - Sentido Santa Cruz
+Primeiro Trem: 5h20 (sáb. 7h25 / dom. 7h28)
+Último Trem: 23h50 (sáb. 22h21 / dom. 21h28)
+
+--------------------------------------------------
+
+Augusto Vasconcelos - Sentido Central do Brasil
+Primeiro Trem: 4h16 (sáb. 4h55 / dom. 5h22)
+Último Trem: 22h36 (sáb. 20h36 / dom. 20h04)
+
+Augusto Vasconcelos - Sentido Santa Cruz
+Primeiro Trem: 5h24 (sáb. 7h29 / dom. 7h33)
+Último Trem: 23h54 (sáb. 22h25 / dom. 21h33)
+
+--------------------------------------------------
+
+Campo Grande - Sentido Central do Brasil
+Primeiro Trem: 4h12 (sáb. 4h52 / dom. 5h18)
+Último Trem: 22h33 (sáb. 20h37 / dom. 20h)
+
+Campo Grande - Sentido Santa Cruz
+Primeiro Trem: 5h27 (sáb. 7h32 / dom. 7h37)
+Último Trem: 23h57 (sáb. 22h28 / dom. 21h37)
+
+--------------------------------------------------
+
+Benjamim do Monte - Sentido Central do Brasil
+Primeiro Trem: 4h09 (sáb. 4h49 / dom. 5h15)
+Último Trem: 22h30 (sáb. 20h34 / dom. 19h57)
+
+Benjamim do Monte - Sentido Santa Cruz
+Primeiro Trem: 5h30 (sáb. 7h35 / dom. 7h40)
+Último Trem: 00h00 (sáb. 22h31 / dom. 21h40)
+
+--------------------------------------------------
+
+Inhoaíba - Sentido Central do Brasil
+Primeiro Trem: 4h07 (sáb. 4h47 / dom. 5h13)
+Último Trem: 22h27 (sáb. 20h32 / dom. 19h55)
+
+Inhoaíba - Sentido Santa Cruz
+Primeiro Trem: 5h33 (sáb. 7h37 / dom. 7h42)
+Último Trem: 00h03 (sáb. 22h33 / dom. 21h42)
+
+--------------------------------------------------
+
+Cosmos - Sentido Central do Brasil
+Primeiro Trem: 4h04 (sáb. 4h44 / dom. 5h10)
+Último Trem: 22h24 (sáb. 20h29 / dom. 19h52)
+
+Cosmos - Sentido Santa Cruz
+Primeiro Trem: 5h36 (sáb. 7h40 / dom. 7h46)
+Último Trem: 00h06 (sáb. 22h36 / dom. 21h46)
+
+--------------------------------------------------
+
+Paciência - Sentido Central do Brasil
+Primeiro Trem: 4h01 (sáb. 4h41 / dom. 5h07)
+Último Trem: 22h21 (sáb. 20h26 / dom. 19h49)
+
+Paciência - Sentido Santa Cruz
+Primeiro Trem: 5h39 (sáb. 7h43 / dom. 7h48)
+Último Trem: 00h09 (sáb. 22h39 / dom. 21h48)
+
+--------------------------------------------------
+
+Tancredo Neves - Sentido Central do Brasil
+Primeiro Trem: 3h57 (sáb. 4h38 / dom. 5h04)
+Último Trem: 22h18 (sáb. 20h23 / dom. 19h46)
+
+Tancredo Neves - Sentido Santa Cruz
+Primeiro Trem: 5h42 (sáb. 7h46 / dom. 7h51)
+Último Trem: 00h12 (sáb. 22h42 / dom. 21h51)
+
+--------------------------------------------------
+
+Santa Cruz - Sentido Central do Brasil
+Primeiro Trem: 3h52 (sáb. 4h32 / dom. 4h58)
+Último Trem: 22h14 (sáb. 20h17 / dom. 19h40)
+
+--------------------------------------------------
+
+Silva Freire - Sentido Central do Brasil
+Primeiro Trem: 10h (sáb. N/A / dom. N/A)
+Último Trem: 14h45 (sáb. N/A / dom. N/A)
+
+Silva Freire - Sentido Japeri
+Primeiro Trem: 10h15 (sáb. N/A / dom. N/A)
+Último Trem: 14h56 (sáb. N/A / dom. N/A)
+
+--------------------------------------------------
+
+Ricardo de Albuquerque - Sentido Central do Brasil
+Primeiro Trem: 4h52 (sáb. 5h07 / dom. 5h41)
+Último Trem: 22h52 (sáb. 21h22 / dom. 21h41)
+
+Ricardo de Albuquerque - Sentido Japeri
+Primeiro Trem: 4h53 (sáb. 6h52 / dom. 6h50)
+Último Trem: 23h46 (sáb. 22h22 / dom. 21h30)
+
+--------------------------------------------------
+
+Anchieta - Sentido Central do Brasil
+Primeiro Trem: 4h48 (sáb. 5h03 / dom. 5h24)
+Último Trem: 22h48 (sáb. 21h18 / dom. 21h26)
+
+Anchieta - Sentido Japeri
+Primeiro Trem: 4h57 (sáb. 6h56 / dom. 6h51)
+Último Trem: 23h50 (sáb. 22h22 / dom. 21h31)
+
+--------------------------------------------------
+
+Olinda - Sentido Central do Brasil
+Primeiro Trem: 4h46 (sáb. 5h01 / dom. 5h33)
+Último Trem: 22h46 (sáb. 21h16 / dom. 21h33)
+
+Olinda - Sentido Japeri
+Primeiro Trem: 4h59 (sáb. 6h58 / dom. 6h57)
+Último Trem: 23h52 (sáb. 22h24 / dom. 21h37)
+
+--------------------------------------------------
+
+Nilópolis - Sentido Central do Brasil
+Primeiro Trem: 4h43 (sáb. 4h58 / dom. 5h19)
+Último Trem: 22h43 (sáb. 21h13 / dom. 21h21)
+
+Nilópolis - Sentido Japeri
+Primeiro Trem: 5h02 (sáb. 7h04 / dom. 6h56)
+Último Trem: 23h55 (sáb. 22h23 / dom. 21h36)
+
+--------------------------------------------------
+
+Edson Passos - Sentido Central do Brasil
+Primeiro Trem: 4h40 (sáb. 4h55 / dom. 5h28)
+Último Trem: 22h40 (sáb. 21h10 / dom. 21h28)
+
+Edson Passos - Sentido Japeri
+Primeiro Trem: 5h05 (sáb. 7h04 / dom. 7h02)
+Último Trem: 23h58 (sáb. 22h30 / dom. 21h42)
+
+--------------------------------------------------
+
+Mesquita - Sentido Central do Brasil
+Primeiro Trem: 4h38 (sáb. 4h53 / dom. 5h14)
+Último Trem: 22h38 (sáb. 21h08 / dom. 21h16)
+
+Mesquita - Sentido Japeri
+Primeiro Trem: 5h07 (sáb. 7h06 / dom. 7h01)
+Último Trem: 00h00 (sáb. 22h32 / dom. 21h41)
+
+--------------------------------------------------
+
+Presidente Juscelino - Sentido Central do Brasil
+Primeiro Trem: 4h35 (sáb. 4h50 / dom. 5h22)
+Último Trem: 22h35 (sáb. 21h05 / dom. 21h22)
+
+Presidente Juscelino - Sentido Japeri
+Primeiro Trem: 5h10 (sáb. 7h13 / dom. 7h08)
+Último Trem: 00h03 (sáb. 22h3 / dom. 21h48)
+
+--------------------------------------------------
+
+Nova Iguaçu - Sentido Central do Brasil
+Primeiro Trem: 4h32 (sáb. 4h47 / dom. 5h17)
+Último Trem: 22h32 (sáb. 21h02 / dom. 21h17)
+
+Nova Iguaçu - Sentido Japeri
+Primeiro Trem: 5h13 (sáb. 7h12 / dom. 7h13)
+Último Trem: 00h06 (sáb. 22h38 / dom. 21h53)
+
+--------------------------------------------------
+
+Comendador Soares - Sentido Central do Brasil
+Primeiro Trem: 4h26 (sáb. 4h41 / dom. 5h02)
+Último Trem: 22h26 (sáb. 21h56 / dom. 21h04)
+
+Comendador Soares - Sentido Japeri
+Primeiro Trem: 5h19 (sáb. 7h18 / dom. 7h13)
+Último Trem: 00h12 (sáb. 22h44 / dom. 21h53)
+
+--------------------------------------------------
+
+Austin - Sentido Central do Brasil
+Primeiro Trem: 4h21 (sáb. 4h36 / dom. 4h57)
+Último Trem: 22h21 (sáb. 20h51 / dom. 20h59)
+
+Austin - Sentido Japeri
+Primeiro Trem: 5h24 (sáb. 7h23 / dom. 7h18)
+Último Trem: 00h17 (sáb. 22h49 / dom. 21h58)
+
+--------------------------------------------------
+
+Queimados - Sentido Central do Brasil
+Primeiro Trem: 4h15 (sáb. 4h30 / dom. 4h54)
+Último Trem: 22h15 (sáb. 20h45 / dom. 20h54)
+
+Queimados - Sentido Japeri
+Primeiro Trem: 5h30 (sáb. 7h29 / dom. 7h35)
+Último Trem: 00h23 (sáb. 22h55 / dom. 22h15)
+
+--------------------------------------------------
+
+Engenheiro Pedreira - Sentido Central do Brasil
+Primeiro Trem: 4h08 (sáb. 4h23 / dom. 4h45)
+Último Trem: 22h08 (sáb. 20h38 / dom. 20h45)
+
+Engenheiro Pedreira - Sentido Japeri
+Primeiro Trem: 5h37 (sáb. 7h36 / dom. 7h44)
+Último Trem: 00h30 (sáb. 23h02 / dom. 22h24)
+
+--------------------------------------------------
+
+Japeri - Sentido Central do Brasil
+Primeiro Trem: 4h (sáb. 4h15 / dom. 4h36)
+Último Trem: 22h (sáb. 20h30 / dom. 20h36)
+
+Japeri - Sentido Paracambi
+Primeiro Trem: 3h50 (sáb. 5h08 / dom. 5h38)
+Último Trem: 23h56 (segunda-feira) | 00h55 (ter. a sexta) (sáb. 00h55 / dom. 21h59)
+
+--------------------------------------------------
+
+Lages - Sentido Japeri
+Primeiro Trem: 3h30 (sáb. 4h48 / dom. 5h24)
+Último Trem: 21h47 (sáb. 20h10 / dom. 20h16)
+
+Lages - Sentido Paracambi
+Primeiro Trem: 4h02 (sáb. 5h20 / dom. 6h32)
+Último Trem: 00h08 (sáb. 22h28 / dom. 22h39)
+
+--------------------------------------------------
+
+Paracambi - Sentido Japeri
+Primeiro Trem: 3h27 (sáb. 4h44 / dom. 5h08)
+Último Trem: 21h38 (sáb. 20h06 / dom. 20h10)
+
+--------------------------------------------------
+
+Manguinhos - Sentido Central do Brasil
+Primeiro Trem: 5h04 (sáb. 5h20 / dom. 5h58)
+Último Trem: 22h50 (sáb. 21h36 / dom. 20h08)
+
+Manguinhos - Sentido Gramacho
+Primeiro Trem: 5h12 (sáb. N/A / dom. N/A)
+Último Trem: 22h56 (sáb. N/A / dom. N/A)
+
+Manguinhos - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h24 / dom. 6h25)
+Último Trem: N/A (sáb. 20h52 / dom. 20h35)
+
+--------------------------------------------------
+
+Bonsucesso - Sentido Central do Brasil
+Primeiro Trem: 5h01 (sáb. 5h17 / dom. 5h54)
+Último Trem: 22h47 (sáb. 21h33 / dom. 20h23)
+
+Bonsucesso - Sentido Gramacho
+Primeiro Trem: 5h15 (sáb. N/A / dom. N/A)
+Último Trem: 22h59 (sáb. N/A / dom. N/A)
+
+Bonsucesso - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h26 / dom. 6h29)
+Último Trem: N/A (sáb. 20h56 / dom. 20h39)
+
+--------------------------------------------------
+
+Ramos - Sentido Central do Brasil
+Primeiro Trem: 4h58 (sáb. 5h15 / dom. 5h52)
+Último Trem: 22h44 (sáb. 21h31 / dom. 20h02)
+
+Ramos - Sentido Gramacho
+Primeiro Trem: 5h17 (sáb. N/A / dom. N/A)
+Último Trem: 23h01 (sáb. N/A / dom. N/A)
+
+Ramos - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h29 / dom. 6h31)
+Último Trem: N/A (sáb. 20h59 / dom. 20h41)
+
+--------------------------------------------------
+
+Olaria - Sentido Central do Brasil
+Primeiro Trem: 4h55 (sáb. 5h13 / dom. 5h49)
+Último Trem: 22h41 (sáb. 21h29 / dom. 19h59)
+
+Olaria - Sentido Gramacho
+Primeiro Trem: 5h19 (sáb. N/A / dom. N/A)
+Último Trem: 23h03 (sáb. N/A / dom. N/A)
+
+Olaria - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h31 / dom. 6h34)
+Último Trem: N/A (sáb. 21h01 / dom. 20h44)
+
+--------------------------------------------------
+
+Penha - Sentido Central do Brasil
+Primeiro Trem: 4h52 (sáb. 5h11 / dom. 5h46)
+Último Trem: 22h38 (sáb. 21h27 / dom. 19h46)
+
+Penha - Sentido Gramacho
+Primeiro Trem: 5h21 (sáb. N/A / dom. N/A)
+Último Trem: 23h05 (sáb. N/A / dom. N/A)
+
+Penha - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h35 / dom. 6h36)
+Último Trem: N/A (sáb. 21h05 / dom. 20h46)
+
+--------------------------------------------------
+
+Penha Circular - Sentido Central do Brasil
+Primeiro Trem: 4h50 (sáb. 5h09 / dom. 5h44)
+Último Trem: 22h36 (sáb. 21h25 / dom. 19h54)
+
+Penha Circular - Sentido Gramacho
+Primeiro Trem: 5h23 (sáb. N/A / dom. N/A)
+Último Trem: 23h07 (sáb. N/A / dom. N/A)
+
+Penha Circular - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h37 / dom. 6h38)
+Último Trem: N/A (sáb. 21h07 / dom. 20h48)
+
+--------------------------------------------------
+
+Brás de Pina - Sentido Central do Brasil
+Primeiro Trem: 4h48 (sáb. 5h07 / dom. 5h41)
+Último Trem: 22h34 (sáb. 21h23 / dom. 20h10)
+
+Brás de Pina - Sentido Gramacho
+Primeiro Trem: 5h25 (sáb. N/A / dom. N/A)
+Último Trem: 23h09 (sáb. N/A / dom. N/A)
+
+Brás de Pina - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h39 / dom. 6h42)
+Último Trem: N/A (sáb. 21h09 / dom. 20h52)
+
+--------------------------------------------------
+
+Cordovil - Sentido Central do Brasil
+Primeiro Trem: 4h46 (sáb. 5h05 / dom. 5h39)
+Último Trem: 22h32 (sáb. 21h21 / dom. 20h08)
+
+Cordovil - Sentido Gramacho
+Primeiro Trem: 5h27 (sáb. N/A / dom. N/A)
+Último Trem: 23h11 (sáb. N/A / dom. N/A)
+
+Cordovil - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h41 / dom. 6h44)
+Último Trem: N/A (sáb. 21h11 / dom. 20h54)
+
+--------------------------------------------------
+
+Parada de Lucas - Sentido Central do Brasil
+Primeiro Trem: 4h44 (sáb. 5h03 / dom. 5h38)
+Último Trem: 22h30 (sáb. 21h19 / dom. 19h48)
+
+Parada de Lucas - Sentido Gramacho
+Primeiro Trem: 5h29 (sáb. N/A / dom. N/A)
+Último Trem: 23h13 (sáb. N/A / dom. N/A)
+
+Parada de Lucas - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h44 / dom. 6h45)
+Último Trem: N/A (sáb. 21h14 / dom. 20h45)
+
+--------------------------------------------------
+
+Vigário Geral - Sentido Central do Brasil
+Primeiro Trem: 4h41 (sáb. 5h00 / dom. 5h35)
+Último Trem: 22h27 (sáb. 21h16 / dom. 19h45)
+
+Vigário Geral - Sentido Gramacho
+Primeiro Trem: 5h32 (sáb. N/A / dom. N/A)
+Último Trem: 23h16 (sáb. N/A / dom. N/A)
+
+Vigário Geral - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h47 / dom. 6h48)
+Último Trem: N/A (sáb. 21h17 / dom. 20h58)
+
+--------------------------------------------------
+
+Duque de Caxias - Sentido Central do Brasil
+Primeiro Trem: 4h37 (sáb. 4h57 / dom. 5h32)
+Último Trem: 22h23 (sáb. 21h13 / dom. 19h42)
+
+Duque de Caxias - Sentido Gramacho
+Primeiro Trem: 5h35 (sáb. N/A / dom. N/A)
+Último Trem: 23h19 (sáb. N/A / dom. N/A)
+
+Duque de Caxias - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h53 / dom. 6h54)
+Último Trem: N/A (sáb. 21h23 / dom. 21h04)
+
+--------------------------------------------------
+
+Corte Oito - Sentido Central do Brasil
+Primeiro Trem: 4h33 (sáb. 4h53 / dom. 5h26)
+Último Trem: 22h19 (sáb. 21h09 / dom. 19h55)
+
+Corte Oito - Sentido Gramacho
+Primeiro Trem: 5h39 (sáb. N/A / dom. N/A)
+Último Trem: 23h23 (sáb. N/A / dom. N/A)
+
+Corte Oito - Sentido Saracuruna
+Primeiro Trem: N/A (sáb. 5h56 / dom. 6h59)
+Último Trem: N/A (sáb. 21h26 / dom. 21h09)
+
+--------------------------------------------------
+
+Gramacho - Sentido Central do Brasil
+Primeiro Trem: 4h29 (sáb. 4h49 / dom. 5h23)
+Último Trem: 22h15 (sáb. 21h05 / dom. 19h33)
+
+Gramacho - Sentido Saracuruna
+Primeiro Trem: 4h39 (sáb. 6h / dom. 7h12)
+Último Trem: 23h30 (sáb. 21h30 / dom. 21h22)
+
+--------------------------------------------------
+
+Campos Elíseos - Sentido Central do Brasil
+Primeiro Trem: N/A (sáb. 4h41 / dom. 5h12)
+Último Trem: N/A (sáb. 20h57 / dom. 19h41)
+
+Campos Elíseos - Sentido Gramacho
+Primeiro Trem: 4h19 (sáb. N/A / dom. N/A)
+Último Trem: 22h13 (sáb. N/A / dom. N/A)
+
+Campos Elíseos - Sentido Saracuruna
+Primeiro Trem: 4h49 (sáb. 6h09 / dom. 7h11)
+Último Trem: 23h37 (sáb. 21h39 / dom. 21h21)
+
+--------------------------------------------------
+
+Jardim Primavera - Sentido Central do Brasil
+Primeiro Trem: N/A (sáb. 4h34 / dom. 5h07)
+Último Trem: N/A (sáb. 20h50 / dom. 19h17)
+
+Jardim Primavera - Sentido Gramacho
+Primeiro Trem: 4h12 (sáb. N/A / dom. N/A)
+Último Trem: 22h06 (sáb. N/A / dom. N/A)
+
+Jardim Primavera - Sentido Saracuruna
+Primeiro Trem: 4h54 (sáb. 6h15 / dom. 7h16)
+Último Trem: 23h42 (sáb. 21h43 / dom. 21h26)
+
+--------------------------------------------------
+
+Saracuruna - Sentido Central do Brasil
+Primeiro Trem: N/A (sáb. 4h30 / dom. 5h03)
+Último Trem: N/A (sáb. 20h46 / dom. 19h13)
+
+Saracuruna - Sentido Gramacho
+Primeiro Trem: 4h08 (sáb. N/A / dom. N/A)
+Último Trem: 22h02 (sáb. N/A / dom. N/A)
+
+Saracuruna - Sentido Guapimirim
+Primeiro Trem: 5h40 (sáb. 6h30 / dom. 8h24)
+Último Trem: 19h15 (sáb. 19h37 / dom. 20h09)
+
+Saracuruna - Sentido Vila Inhomirim
+Primeiro Trem: 6h40 (sáb. 7h04 / dom. 7h39)
+Último Trem: 22h02 (sáb. 18h53 / dom. 20h09)
+
+--------------------------------------------------
+
+Parque Estrela - Sentido Guapimirim
+Primeiro Trem: 5h48 (sáb. 6h38 / dom. 8h32)
+Último Trem: 19h33 (sáb. 19h45 / dom. 20h17)
+
+Parque Estrela - Sentido Saracuruna
+Primeiro Trem: 5h17 (sáb. 5h38 / dom. 6h22)
+Último Trem: 18h02 (sáb. 18h17 / dom. 18h50)
+
+--------------------------------------------------
+
+Santa Dalila - Sentido Guapimirim
+Primeiro Trem: 5h59 (sáb. 6h49 / dom. 8h43)
+Último Trem: 19h44 (sáb. 19h56 / dom. 20h28)
+
+Santa Dalila - Sentido Saracuruna
+Primeiro Trem: 4h52 (sáb. 5h27 / dom. 6h11)
+Último Trem: 17h51 (sáb. 18h06 / dom. 18h39)
+
+--------------------------------------------------
+
+Suruí - Sentido Guapimirim
+Primeiro Trem: 6h05 (sáb. 6h55 / dom. 8h49)
+Último Trem: 19h50 (sáb. 20h02 / dom. 20h34)
+
+Suruí - Sentido Saracuruna
+Primeiro Trem: 5h (sáb. 5h21 / dom. 6h05)
+Último Trem: 17h45 (sáb. 18h / dom. 18h33)
+
+--------------------------------------------------
+
+Santa Guilhermina - Sentido Guapimirim
+Primeiro Trem: 6h13 (sáb. 7h03 / dom. 8h57)
+Último Trem: 19h58 (sáb. 20h10 / dom. 20h42)
+
+Santa Guilhermina - Sentido Saracuruna
+Primeiro Trem: 4h52 (sáb. 5h13 / dom. 5h57)
+Último Trem: 17h37 (sáb. 17h52 / dom. 18h25)
+
+--------------------------------------------------
+
+Iriri - Sentido Guapimirim
+Primeiro Trem: 6h19 (sáb. 7h09 / dom. 9h03)
+Último Trem: 20h04 (sáb. 20h16 / dom. 20h48)
+
+Iriri - Sentido Saracuruna
+Primeiro Trem: 4h46 (sáb. 5h07 / dom. 5h51)
+Último Trem: 17h31 (sáb. 17h46 / dom. 18h19)
+
+--------------------------------------------------
+
+Magé - Sentido Guapimirim
+Primeiro Trem: 6h25 (sáb. 7h15 / dom. 9h09)
+Último Trem: 20h10 (sáb. 20h22 / dom. 20h54)
+
+Magé - Sentido Saracuruna
+Primeiro Trem: 4h41 (sáb. 5h02 / dom. 5h46)
+Último Trem: 17h26 (sáb. 17h41 / dom. 18h14)
+
+--------------------------------------------------
+
+Jardim Nova Marília - Sentido Guapimirim
+Primeiro Trem: 6h32 (sáb. 7h22 / dom. 9h16)
+Último Trem: 20h17 (sáb. 20h29 / dom. 21h01)
+
+Jardim Nova Marília - Sentido Saracuruna
+Primeiro Trem: 4h33 (sáb. 4h54 / dom. 5h38)
+Último Trem: 17h18 (sáb. 17h33 / dom. 18h06)
+
+--------------------------------------------------
+
+Jororó - Sentido Guapimirim
+Primeiro Trem: 6h41 (sáb. 5h11 / dom. 9h25)
+Último Trem: 20h26 (sáb. 21h / dom. 21h10)
+
+Jororó - Sentido Saracuruna
+Primeiro Trem: 4h24 (sáb. 5h10 / dom. 5h29)
+Último Trem: 17h09 (sáb. 17h24 / dom. 17h57)
+
+--------------------------------------------------
+
+Citrolândia - Sentido Guapimirim
+Primeiro Trem: 6h46 (sáb. 7h36 / dom. 9h28)
+Último Trem: 20h31 (sáb. 20h43 / dom. 21h15)
+
+Citrolândia - Sentido Saracuruna
+Primeiro Trem: 4h19 (sáb. 4h40 / dom. 5h24)
+Último Trem: 17h04 (sáb. 17h19 / dom. 17h52)
+
+--------------------------------------------------
+
+Parada Ideal - Sentido Guapimirim
+Primeiro Trem: 6h51 (sáb. 7h41 / dom. 9h35)
+Último Trem: 20h36 (sáb. 20h48 / dom. 21h20)
+
+Parada Ideal - Sentido Saracuruna
+Primeiro Trem: 4h14 (sáb. 4h35 / dom. 5h19)
+Último Trem: 16h59 (sáb. 17h14 / dom. 17h47)
+
+--------------------------------------------------
+
+Jardim Guapimirim - Sentido Guapimirim
+Primeiro Trem: 6h56 (sáb. 7h46 / dom. 9h40)
+Último Trem: 20h41 (sáb. 20h53 / dom. 21h25)
+
+Jardim Guapimirim - Sentido Saracuruna
+Primeiro Trem: 4h09 (sáb. 4h30 / dom. 5h14)
+Último Trem: 16h54 (sáb. 17h09 / dom. 17h42)
+
+--------------------------------------------------
+
+Parada Modelo - Sentido Guapimirim
+Primeiro Trem: 7h02 (sáb. 7h52 / dom. 9h46)
+Último Trem: 20h47 (sáb. 20h59 / dom. 21h31)
+
+Parada Modelo - Sentido Saracuruna
+Primeiro Trem: 4h03 (sáb. 4h24 / dom. 5h08)
+Último Trem: 16h48 (sáb. 17h03 / dom. 17h36)
+
+--------------------------------------------------
+
+Parada Bananal - Sentido Guapimirim
+Primeiro Trem: 7h05 (sáb. 7h55 / dom. 9h49)
+Último Trem: 20h50 (sáb. 21h02 / dom. 21h34)
+
+Parada Bananal - Sentido Saracuruna
+Primeiro Trem: 4h (sáb. 4h21 / dom. 5h05)
+Último Trem: 16h45 (sáb. 17h / dom. 17h33)
+
+--------------------------------------------------
+
+Guapimirim - Sentido Saracuruna
+Primeiro Trem: 3h55 (sáb. 4h16 / dom. 5h)
+Último Trem: 16h40 (sáb. 16h55 / dom. 17h28)
+
+--------------------------------------------------
+
+Morabi - Sentido Saracuruna
+Primeiro Trem: 5h19 (sáb. 5h41 / dom. 5h32)
+Último Trem: 21h12 (sáb. 18h19 / dom. 18h52)
+
+Morabi - Sentido Vila Inhomirim
+Primeiro Trem: 6h46 (sáb. 7h10 / dom. 7h45)
+Último Trem: 22h18 (sáb. 18h59 / dom. 20h15)
+
+--------------------------------------------------
+
+Imbariê - Sentido Saracuruna
+Primeiro Trem: 5h13 (sáb. 5h35 / dom. 5h26)
+Último Trem: 21h06 (sáb. 18h13 / dom. 18h46)
+
+Imbariê - Sentido Vila Inhomirim
+Primeiro Trem: 6h52 (sáb. 7h17 / dom. 7h52)
+Último Trem: 22h24 (sáb. 19h06 / dom. 20h22)
+
+--------------------------------------------------
+
+Manoel Belo - Sentido Saracuruna
+Primeiro Trem: 5h08 (sáb. 5h24 / dom. 5h14)
+Último Trem: 21h01 (sáb. 18h01 / dom. 18h57)
+
+Manoel Belo - Sentido Vila Inhomirim
+Primeiro Trem: 6h57 (sáb. 6h57 / dom. 7h51)
+Último Trem: 22h29 (sáb. 19h10 / dom. 20h23)
+
+--------------------------------------------------
+
+Parada Angélica - Sentido Saracuruna
+Primeiro Trem: 5h03 (sáb. 5h23 / dom. 5h14)
+Último Trem: 20h56 (sáb. 18h01 / dom. 18h34)
+
+Parada Angélica - Sentido Vila Inhomirim
+Primeiro Trem: 7h02 (sáb. 7h28 / dom. 8h03)
+Último Trem: 22h34 (sáb. 19h17 / dom. 20h33)
+
+--------------------------------------------------
+
+Piabetá - Sentido Saracuruna
+Primeiro Trem: 4h57 (sáb. 5h17 / dom. 5h08)
+Último Trem: 20h50 (sáb. 17h55 / dom. 18h28)
+
+Piabetá - Sentido Vila Inhomirim
+Primeiro Trem: 7h08 (sáb. N/A / dom. N/A)
+Último Trem: 22h40 (sáb. N/A / dom. N/A)
+
+--------------------------------------------------
+
+Fragoso - Sentido Saracuruna
+Primeiro Trem: 4h50 (sáb. 5h08 / dom. 4h58)
+Último Trem: 20h43 (sáb. 17h45 / dom. 18h41)
+
+Fragoso - Sentido Vila Inhomirim
+Primeiro Trem: 7h15 (sáb. 7h19 / dom. 8h08)
+Último Trem: 22h47 (sáb. 19h32 / dom. 20h48)
+
+--------------------------------------------------
+
+Vila Inhomirim - Sentido Saracuruna
+Primeiro Trem: 4h45 (sáb. 5h01 / dom. 4h51)
+Último Trem: 20h38 (sáb. 17h38 / dom. 18h34)

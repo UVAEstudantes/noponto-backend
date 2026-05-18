@@ -562,9 +562,74 @@ public sealed class ImportacaoTremService
 
     private static LineString AchatarMultiLineString(MultiLineString mls)
     {
-        var coords  = mls.Geometries.SelectMany(g => ((LineString)g).Coordinates).ToArray();
         var factory = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(4326);
-        return factory.CreateLineString(coords);
+        var linhas = mls.Geometries
+            .OfType<LineString>()
+            .Where(l => l.NumPoints > 0)
+            .ToList();
+
+        if (linhas.Count == 0)
+            return factory.CreateLineString([]);
+
+        var usados = new HashSet<int>();
+        var coordsOrdenados = new List<Coordinate>(linhas[0].Coordinates);
+        usados.Add(0);
+
+        while (usados.Count < linhas.Count)
+        {
+            var ultimo = coordsOrdenados[^1];
+            var melhorIdx = -1;
+            var melhorDist = double.MaxValue;
+            var inverter = false;
+
+            for (int i = 0; i < linhas.Count; i++)
+            {
+                if (usados.Contains(i)) continue;
+
+                var coords = linhas[i].Coordinates;
+                var inicio = coords[0];
+                var fim = coords[^1];
+
+                var distInicio = Distancia(ultimo, inicio);
+                if (distInicio < melhorDist)
+                {
+                    melhorDist = distInicio;
+                    melhorIdx = i;
+                    inverter = false;
+                }
+
+                var distFim = Distancia(ultimo, fim);
+                if (distFim < melhorDist)
+                {
+                    melhorDist = distFim;
+                    melhorIdx = i;
+                    inverter = true;
+                }
+            }
+
+            if (melhorIdx < 0)
+                break;
+
+            var candidatos = linhas[melhorIdx].Coordinates;
+            if (inverter)
+                Array.Reverse(candidatos);
+
+            if (candidatos.Length > 0 && candidatos[0].Equals2D(ultimo))
+                coordsOrdenados.AddRange(candidatos.Skip(1));
+            else
+                coordsOrdenados.AddRange(candidatos);
+
+            usados.Add(melhorIdx);
+        }
+
+        return factory.CreateLineString(coordsOrdenados.ToArray());
+    }
+
+    private static double Distancia(Coordinate a, Coordinate b)
+    {
+        var dx = a.X - b.X;
+        var dy = a.Y - b.Y;
+        return Math.Sqrt(dx * dx + dy * dy);
     }
 
     private static Geometry? ConverterGeometria(ArcGisGeometry? geo)
