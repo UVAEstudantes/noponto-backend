@@ -14,6 +14,7 @@ using NoPonto.Data.Interfaces;
 using NoPonto.Data.Repositories;
 using StackExchange.Redis;
 using System.Net.Sockets;
+using NoPonto.Application.Trem;
 using System.Reflection;
 
 Env.Load();
@@ -205,6 +206,47 @@ builder.Services.AddHttpClient("ml-admin", client =>
     client.Timeout = TimeSpan.FromSeconds(10);
 });
 
+builder.Services.AddHttpClient("arcgis-trem", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+
+    client.DefaultRequestHeaders.Add("User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
+});
+
+// Trem — SuperVia
+builder.Services.AddHttpClient("arcgis-trem", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddScoped<ImportacaoTremService>();
+
+builder.Services.AddScoped<ILinhaRepository, LinhaRepository>();
+builder.Services.AddScoped<ISentidoRepository, SentidoRepository>();
+builder.Services.AddScoped<IItinerarioRepository, ItinerarioRepository>();
+builder.Services.AddScoped<IParadaRepository, ParadaRepository>();
+builder.Services.AddScoped<IPoiRepository, PoiRepository>();
+builder.Services.AddScoped<IModalRepository, ModalRepository>();
+builder.Services.AddScoped<ITarifaRepository, TarifaRepository>();
+
+builder.Services.AddScoped<ILinhaService, LinhaService>();
+builder.Services.AddScoped<ISentidoService, SentidoService>();
+builder.Services.AddScoped<IItinerarioService, ItinerarioService>();
+builder.Services.AddScoped<IParadaService, ParadaService>();
+builder.Services.AddScoped<IPoiService, PoiService>();
+builder.Services.AddScoped<IModalService, ModalService>();
+builder.Services.AddScoped<ITarifaService, TarifaService>();
+
+builder.Services.AddHttpClient<ArcGisClientService>();
+builder.Services.AddScoped<ImportacaoParadasService>();
+builder.Services.AddScoped<RelacionarParadasItinerariosService>();
+builder.Services.AddScoped<RelacionarParadasJob>();
+builder.Services.AddSingleton<ImportacaoItinerariosService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportacaoItinerariosService>());
+
+builder.Services.AddHttpClient<OverpassClient>();
+builder.Services.AddScoped<PopularPoisService>();
+builder.Services.AddScoped<IPoiRepository, PoiRepository>();
 // ArcGIS trem
 builder.Services.AddHttpClient("arcgis-trem", client =>
 {
@@ -214,6 +256,10 @@ builder.Services.AddHttpClient("arcgis-trem", client =>
         "User-Agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
 });
+
+// Simulação de trens (posições estimadas por intervalo/distância)
+builder.Services.AddSingleton<TremSimulacaoService>();
+builder.Services.AddHostedService<TremSimulacaoWorker>();
 
 // Docker socket
 builder.Services.AddHttpClient("docker", client =>

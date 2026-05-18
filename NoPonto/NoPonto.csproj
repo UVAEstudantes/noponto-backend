@@ -23,5 +23,10 @@
     <PackageReference Include="StackExchange.Redis" Version="2.12.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="../NoPonto/2-Application/Trem/DadosTrem.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 
 </Project>
