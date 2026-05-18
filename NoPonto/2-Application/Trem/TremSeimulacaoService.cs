@@ -35,25 +35,25 @@ public sealed class TremSimulacaoService
     {
         try
         {
-            var path = Path.Combine(AppContext.BaseDirectory, "dadosTrem.json");
+            var path = Path.Combine(AppContext.BaseDirectory, "DadosTrem.json");
 
             // Fallback para diretório do projeto em dev
             if (!File.Exists(path))
-                path = Path.Combine(Directory.GetCurrentDirectory(), "2-Application", "Trem", "dadosTrem.json");
+                path = Path.Combine(Directory.GetCurrentDirectory(), "2-Application", "Trem", "DadosTrem.json");
 
             if (!File.Exists(path))
             {
-                _logger.LogWarning("dadosTrem.json não encontrado em {path}", path);
+                _logger.LogWarning("DadosTrem.json não encontrado em {path}", path);
                 return;
             }
 
             var json = File.ReadAllText(path);
             _config = JsonSerializer.Deserialize<DadosTremConfig>(json, JsonOpts);
-            _logger.LogInformation("dadosTrem.json carregado — {n} ramais.", _config?.Ramais?.Count ?? 0);
+            _logger.LogInformation("DadosTrem.json carregado — {n} ramais.", _config?.Ramais?.Count ?? 0);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha ao carregar dadosTrem.json.");
+            _logger.LogError(ex, "Falha ao carregar DadosTrem.json.");
         }
     }
 
