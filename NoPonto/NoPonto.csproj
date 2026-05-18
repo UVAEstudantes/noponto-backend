@@ -26,6 +26,7 @@
   <ItemGroup>
     <Content Update="2-Application/Trem/dadosTrem.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
 
