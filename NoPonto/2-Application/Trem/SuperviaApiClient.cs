@@ -46,9 +46,17 @@ public sealed class SuperviaApiClient
             response.EnsureSuccessStatusCode();
 
             var body = await response.Content.ReadAsStringAsync(ct);
-            var lista = JsonSerializer.Deserialize<List<ProximoTremDto>>(body, JsonOpts);
 
-            return lista?.FirstOrDefault();
+            // Tenta objeto único primeiro, depois array
+            if (body.TrimStart().StartsWith('['))
+            {
+                var lista = JsonSerializer.Deserialize<List<ProximoTremDto>>(body, JsonOpts);
+                return lista?.FirstOrDefault();
+            }
+            else
+            {
+                return JsonSerializer.Deserialize<ProximoTremDto>(body, JsonOpts);
+            }
         }
         catch (Exception ex)
         {
