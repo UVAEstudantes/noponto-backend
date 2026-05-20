@@ -53,8 +53,21 @@ public sealed class TremSimulacaoWorker : BackgroundService
         }
     }
 
+    private static bool DentroDoHorarioOperacao()
+    {
+        var agora = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(-3)).TimeOfDay;
+        // Para entre 23:00 e 04:00
+        return agora >= TimeSpan.FromHours(4) && agora < TimeSpan.FromHours(23);
+    }
+
     private async Task ProcessarCicloAsync(CancellationToken ct)
     {
+        if (!DentroDoHorarioOperacao())
+        {
+            _logger.LogDebug("TremSimulacaoWorker fora do horário de operação, pulando ciclo.");
+            return;
+        }
+
         var posicoes = await _tremService.ObterPosicoesAsync(ct);
         if (posicoes.Count == 0) return;
 
