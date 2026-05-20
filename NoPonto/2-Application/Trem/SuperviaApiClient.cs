@@ -11,16 +11,19 @@ public sealed class SuperviaApiClient
 {
     private readonly HttpClient _http;
     private readonly ILogger<SuperviaApiClient> _logger;
+    private readonly string _endpoint;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNameCaseInsensitive = true,
     };
 
-    public SuperviaApiClient(HttpClient http, ILogger<SuperviaApiClient> logger)
+    public SuperviaApiClient(HttpClient http, ILogger<SuperviaApiClient> logger, IConfiguration config)
     {
-        _http   = http;
-        _logger = logger;
+        _http     = http;
+        _logger   = logger;
+        _endpoint = config["SUPERVIA:API:POST_ENDPOINT"]
+                    ?? throw new InvalidOperationException("SUPERVIA:API:POST_ENDPOINT não configurado.");
     }
 
     /// <summary>
@@ -39,7 +42,7 @@ public sealed class SuperviaApiClient
                 new("s_destino", idEstacaoDestino),
             ]);
 
-            var response = await _http.PostAsync("$SUPERVIA__API__POST_ENDPOINT$", content, ct);
+            var response = await _http.PostAsync(_endpoint, content, ct);
             response.EnsureSuccessStatusCode();
 
             var body = await response.Content.ReadAsStringAsync(ct);
