@@ -70,6 +70,9 @@ services:
       ARCGIS__TREM__RAMAIS__BASE_URL: ${ARCGIS__TREM__RAMAIS__BASE_URL}
       ARCGIS__TREM__ESTACOES__BASE_URL: ${ARCGIS__TREM__ESTACOES__BASE_URL}
 
+      SUPERVIA__API__BASE_URL: ${SUPERVIA__API__BASE_URL}
+      SUPERVIA__API__POST_ENDPOINT: ${SUPERVIA__API__POST_ENDPOINT}
+
       GpsPolling__IntervaloSegundos: ${GpsPolling__IntervaloSegundos}
       GpsPolling__TtlAtivoSegundos: ${GpsPolling__TtlAtivoSegundos}
       GpsPolling__TtlRecenteSegundos: ${GpsPolling__TtlRecenteSegundos}

@@ -257,8 +257,16 @@ builder.Services.AddHttpClient("arcgis-trem", client =>
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
 });
 
-// Simulação de trens (posições estimadas por intervalo/distância)
-builder.Services.AddSingleton<TremSimulacaoService>();
+var superviaBaseUrl = builder.Configuration["SUPERVIA:API:BASE_URL"]   ?? "";
+
+builder.Services.AddHttpClient<SuperviaApiClient>(client =>
+{
+    client.BaseAddress = new Uri(superviaBaseUrl);
+    client.Timeout     = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("User-Agent", "Dart/3.9 (dart:io)");
+});
+
+builder.Services.AddSingleton<TremTempoRealService>();
 builder.Services.AddHostedService<TremSimulacaoWorker>();
 
 // Docker socket

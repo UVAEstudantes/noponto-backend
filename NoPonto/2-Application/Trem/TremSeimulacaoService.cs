@@ -1,59 +1,104 @@
-using System.Globalization;
-using System.Text;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using NoPonto.Application.GPS;
 
 namespace NoPonto.Application.Trem;
 
 /// <summary>
-/// Simula posições de trens da SuperVia com base em:
-///   - Horários reais do primeiro trem por estação/sentido
-///   - Distâncias reais entre estações (quadro SuperVia)
-///   - Velocidade calculada por trecho real
+/// Usa o endpoint real da SuperVia para calcular posições estimadas dos trens.
 ///
-/// AVISO: dados simulados — não refletem a posição real dos trens.
+/// Estratégia:
+///   1. Para cada ramal, consulta o próximo trem em estações-chave (inicial e terminal)
+///   2. Com a estimativa de chegada e a distância, interpola onde o trem está agora
+///   3. Publica no formato PosicaoVeiculoDto com EtaConfianca = "supervia"
+///
+/// AVISO: posição interpolada — não é GPS real, mas baseada em dados reais da SuperVia.
 /// </summary>
-public sealed class TremSimulacaoService
+public sealed class TremTempoRealService
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNameCaseInsensitive = true,
     };
 
-    private static readonly Regex HorarioHeaderRegex = new(
-        @"^(?<estacao>.+?)\s*-\s*Sentido\s+(?<sentido>.+)$",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-    private static readonly Regex HorarioRegex = new(
-        @"\b(?<h>\d{1,2})h(?<m>\d{2})?\b",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-    private const double VelocidadeMinKmh   = 8.0;
-    private const double VelocidadeMaxKmh   = 110.0;
+    private const double VelocidadeMinKmh    = 8.0;
+    private const double VelocidadeMaxKmh    = 110.0;
     private const double VelocidadePadraoKmh = 45.0;
 
+    // Cache das últimas consultas por ramal+sentido para evitar flood na API
+    private readonly ConcurrentDictionary<string, (DateTimeOffset Expira, List<PosicaoTremCacheada> Posicoes)> _cache = new();
+    private static readonly TimeSpan TtlCache = TimeSpan.FromSeconds(60);
+
     private DadosTremConfig? _config;
+    private readonly SuperviaApiClient _apiClient;
+    private readonly ILogger<TremTempoRealService> _logger;
 
-    // (estacaoNormalizada, sentidoNormalizado) → horário do primeiro trem
-    private readonly Dictionary<(string Estacao, string Sentido), TimeSpan> _primeirosHorarios = new();
+    // Pares de estações a consultar por ramal:
+    // (idEstacaoPartida, idEstacaoDestino, branchId, ida)
+    private static readonly List<(string Partida, string Destino, string BranchId, bool Ida)> ConsultasPorRamal =
+    [
+        // Santa Cruz IDA (Central → Santa Cruz): consulta da Central para Campo Grande
+        ("central_brasil",   "campo_grande",  "santa_cruz",    true),
+        // Santa Cruz VOLTA (Santa Cruz → Central): consulta de Campo Grande para Central
+        ("campo_grande",     "central_brasil","santa_cruz",    false),
+        // Santa Cruz IDA trecho Deodoro (Central → Deodoro)
+        ("central_brasil",   "deodoro",       "deodoro",       true),
+        // Deodoro VOLTA
+        ("deodoro",          "central_brasil","deodoro",       false),
+        // Japeri IDA
+        ("central_brasil",   "nova_iguacu",   "japeri",        true),
+        // Japeri VOLTA
+        ("nova_iguacu",      "central_brasil","japeri",        false),
+        // Saracuruna IDA (Central → Gramacho)
+        ("central_brasil",   "saracuruna",    "saracuruna",    true),
+        // Saracuruna VOLTA
+        ("saracuruna",       "central_brasil","saracuruna",    false),
+        // Belford Roxo IDA
+        ("central_brasil",   "belford_roxo",  "belford_roxo",  true),
+        // Belford Roxo VOLTA
+        ("belford_roxo",     "central_brasil","belford_roxo",  false),
+        // Paracambi IDA
+        ("japeri",           "paracambi",     "paracambi",     true),
+        // Paracambi VOLTA
+        ("paracambi",        "japeri",        "paracambi",     false),
+        // Vila Inhomirim IDA
+        ("saracuruna",       "vila_inhomirim","vila_inhomirim",true),
+        // Vila Inhomirim VOLTA
+        ("vila_inhomirim",   "saracuruna",    "vila_inhomirim",false),
+        // Guapimirim IDA
+        ("saracuruna",       "guapimirim",    "guapimirim",    true),
+        // Guapimirim VOLTA
+        ("guapimirim",       "saracuruna",    "guapimirim",    false),
+    ];
 
-    // (branchId, idxEstacaoOrigem, idxEstacaoDestino) → segundos de viagem
-    // Pré-calculado para cada trecho consecutivo em ambos os sentidos
-    private readonly Dictionary<string, double> _temposTrecho = new();
-
-    private readonly ILogger<TremSimulacaoService> _logger;
-
-    public TremSimulacaoService(ILogger<TremSimulacaoService> logger)
+    // Mapeamento id_estacao do DadosTrem → id usado na API SuperVia
+    private static readonly Dictionary<string, string> IdParaApiSuperVia = new(StringComparer.OrdinalIgnoreCase)
     {
-        _logger = logger;
-        CarregarConfig();
-        CarregarHorarios();
-        PreCalcularTemposTrecho();
-    }
+        ["central_brasil"]     = "central_brasil",
+        ["praca_bandeira"]     = "praca_bandeira",
+        ["sao_cristovao"]      = "sao_cristovao",
+        ["maracana"]           = "maracana",
+        ["deodoro"]            = "deodoro",
+        ["campo_grande"]       = "campo_grande",
+        ["nova_iguacu"]        = "nova_iguacu",
+        ["saracuruna"]         = "saracuruna",
+        ["belford_roxo"]       = "belford_roxo",
+        ["japeri"]             = "japeri",
+        ["paracambi"]          = "paracambi",
+        ["vila_inhomirim"]     = "vila_inhomirim",
+        ["guapimirim"]         = "guapimirim",
+        ["santa_cruz"]         = "santa_cruz",
+    };
 
-    // ── Carregamento ──────────────────────────────────────────────────────────
+    public TremTempoRealService(
+        SuperviaApiClient apiClient,
+        ILogger<TremTempoRealService> logger)
+    {
+        _apiClient = apiClient;
+        _logger    = logger;
+        CarregarConfig();
+    }
 
     private void CarregarConfig()
     {
@@ -71,433 +116,262 @@ public sealed class TremSimulacaoService
         catch (Exception ex) { _logger.LogError(ex, "Falha ao carregar DadosTrem.json."); }
     }
 
-    private void CarregarHorarios()
-    {
-        try
-        {
-            var path = Path.Combine(AppContext.BaseDirectory, "horarios_supervia.txt");
-            if (!File.Exists(path))
-                path = Path.Combine(Directory.GetCurrentDirectory(), "2-Application", "Trem", "horarios_supervia.txt");
-
-            if (!File.Exists(path)) { _logger.LogWarning("horarios_supervia.txt não encontrado."); return; }
-
-            string? estacaoAtual = null;
-            string? sentidoAtual = null;
-
-            foreach (var raw in File.ReadLines(path))
-            {
-                var line = raw.Trim();
-                if (line.Length == 0) continue;
-
-                var header = HorarioHeaderRegex.Match(line);
-                if (header.Success)
-                {
-                    estacaoAtual = header.Groups["estacao"].Value.Trim();
-                    sentidoAtual = header.Groups["sentido"].Value.Trim();
-                    continue;
-                }
-
-                if (!line.StartsWith("Primeiro Trem:", StringComparison.OrdinalIgnoreCase)) continue;
-                if (string.IsNullOrWhiteSpace(estacaoAtual) || string.IsNullOrWhiteSpace(sentidoAtual)) continue;
-
-                var horario = ExtrairPrimeiroHorario(line);
-                if (!horario.HasValue) continue;
-
-                var chave = (Norm(estacaoAtual), Norm(sentidoAtual));
-                _primeirosHorarios.TryAdd(chave, horario.Value);
-            }
-
-            _logger.LogInformation("horarios_supervia.txt — {n} entradas carregadas.", _primeirosHorarios.Count);
-        }
-        catch (Exception ex) { _logger.LogError(ex, "Falha ao carregar horarios_supervia.txt."); }
-    }
-
-    /// <summary>
-    /// Pré-calcula o tempo em segundos entre cada par de estações consecutivas,
-    /// para cada ramal e sentido, usando a diferença entre os horários do primeiro
-    /// trem em estações adjacentes.
-    /// 
-    /// Chave: "{branchId}|{idxOrigem}|{idxDestino}"
-    /// </summary>
-    private void PreCalcularTemposTrecho()
-    {
-        if (_config?.Ramais is null) return;
-
-        foreach (var (branchId, ramal) in _config.Ramais)
-        {
-            var estacoes = ramal.Estacoes;
-            if (estacoes is null || estacoes.Count < 2) continue;
-
-            // IDA: índice 0 → N-1
-            // Sentido = nome da última estação
-            var sentidoIda   = Norm(estacoes[^1].Nome);
-            var sentidoVolta = Norm(estacoes[0].Nome);
-
-            for (int i = 0; i < estacoes.Count - 1; i++)
-            {
-                // ── Trecho IDA ────────────────────────────────────────────────
-                var tempoIda = CalcTempoTrecho(
-                    estacoes[i].Nome, sentidoIda,
-                    estacoes[i + 1].Nome, sentidoIda,
-                    estacoes[i], estacoes[i + 1],
-                    ramal.TempoPadadaSegundos);
-
-                _temposTrecho[$"{branchId}|{i}|{i + 1}"] = tempoIda;
-
-                // ── Trecho VOLTA ──────────────────────────────────────────────
-                int iV      = estacoes.Count - 1 - i;      // índice no original (sentido volta)
-                int iVProx  = estacoes.Count - 1 - (i + 1);
-                var tempoVolta = CalcTempoTrecho(
-                    estacoes[iV].Nome, sentidoVolta,
-                    estacoes[iVProx].Nome, sentidoVolta,
-                    estacoes[iV], estacoes[iVProx],
-                    ramal.TempoPadadaSegundos);
-
-                _temposTrecho[$"{branchId}|{iV}|{iVProx}"] = tempoVolta;
-            }
-        }
-
-        _logger.LogInformation("Tempos de trecho pré-calculados: {n} trechos.", _temposTrecho.Count);
-    }
-
-    private double CalcTempoTrecho(
-        string nomeOrigem, string sentidoNorm,
-        string nomeDestino, string sentidoDestNorm,
-        EstacaoConfig estOrigem, EstacaoConfig estDestino,
-        double tempoPadadaSegundos)
-    {
-        if (_primeirosHorarios.TryGetValue((Norm(nomeOrigem), sentidoNorm), out var hOrigem)
-         && _primeirosHorarios.TryGetValue((Norm(nomeDestino), sentidoDestNorm), out var hDestino))
-        {
-            var diff = hDestino - hOrigem;
-            // Cruza meia-noite
-            if (diff < TimeSpan.Zero) diff = diff.Add(TimeSpan.FromHours(24));
-
-            var tempoMovSeg = diff.TotalSeconds - tempoPadadaSegundos;
-            if (tempoMovSeg >= 20 && tempoMovSeg <= 3600)
-                return tempoMovSeg;
-        }
-
-        // Fallback: velocidade padrão
-        var distKm = Math.Abs(estDestino.DistanciaCentralKm - estOrigem.DistanciaCentralKm);
-        return (distKm / VelocidadePadraoKmh) * 3600;
-    }
-
     // ── API pública ───────────────────────────────────────────────────────────
 
-    public List<PosicaoVeiculoDto> CalcularPosicoesSimuladas()
+    /// <summary>
+    /// Consulta a API real da SuperVia e calcula posições interpoladas.
+    /// Usa cache de 60s para não sobrecarregar o endpoint.
+    /// </summary>
+    public async Task<List<PosicaoVeiculoDto>> ObterPosicoesAsync(CancellationToken ct = default)
     {
         if (_config?.Ramais is null || _config.CoordenadasEstacoes is null)
             return [];
 
-        var agora     = DateTimeOffset.UtcNow.ToLocalTime();
+        var agora     = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(-3));
         var resultado = new List<PosicaoVeiculoDto>();
 
-        foreach (var (branchId, ramal) in _config.Ramais)
+        // Faz as consultas em paralelo com limite de concorrência
+        var semaforo = new SemaphoreSlim(4, 4);
+        var tarefas  = ConsultasPorRamal.Select(async consulta =>
         {
-            var codigoLinha = $"TREM-{branchId.ToUpperInvariant()}";
-            var estacoes    = ramal.Estacoes;
-            if (estacoes is null || estacoes.Count < 2) continue;
+            var chaveCache = $"{consulta.BranchId}|{consulta.Ida}|{consulta.Partida}";
 
-            var intervaloMin = ObterIntervaloAtual(ramal, agora.TimeOfDay);
-            var intervaloSeg = intervaloMin * 60.0;
+            // Verifica cache
+            if (_cache.TryGetValue(chaveCache, out var cached) && cached.Expira > agora)
+                return cached.Posicoes;
 
-            // Constrói a timeline de trechos para cada sentido
-            var timelineIda   = ConstruirTimeline(branchId, ramal, estacoes, ida: true);
-            var timelineVolta = ConstruirTimeline(branchId, ramal, estacoes, ida: false);
+            await semaforo.WaitAsync(ct);
+            try
+            {
+                var apiId_partida = IdParaApiSuperVia.GetValueOrDefault(consulta.Partida, consulta.Partida);
+                var apiId_destino = IdParaApiSuperVia.GetValueOrDefault(consulta.Destino, consulta.Destino);
 
-            var duracaoIda   = timelineIda.Sum(t => t.TempoParadaSeg + t.TempoMovimentoSeg);
-            var duracaoVolta = timelineVolta.Sum(t => t.TempoParadaSeg + t.TempoMovimentoSeg);
+                var resposta = await _apiClient.BuscarProximoTremAsync(apiId_partida, apiId_destino, ct);
+                if (resposta is null) return new List<PosicaoTremCacheada>();
 
-            // Tempo de espera no terminal (pelo menos 1 intervalo para não gerar
-            // infinitos trens parados no terminal)
-            var espTerminalIda   = Math.Max(ramal.TempoPadadaSegundos, intervaloSeg * 0.5);
-            var espTerminalVolta = Math.Max(ramal.TempoPadadaSegundos, intervaloSeg * 0.5);
+                var posicoes = InterpolarPosicao(consulta.BranchId, consulta.Ida, consulta.Partida, resposta, agora);
 
-            var tremsIda   = GerarTrens(branchId, codigoLinha, ramal, estacoes, ida: true,
-                                agora, intervaloSeg, duracaoIda, espTerminalIda, timelineIda);
-            var tremsVolta = GerarTrens(branchId, codigoLinha, ramal, estacoes, ida: false,
-                                agora, intervaloSeg, duracaoVolta, espTerminalVolta, timelineVolta);
+                _cache[chaveCache] = (agora.Add(TtlCache), posicoes);
+                return posicoes;
+            }
+            finally
+            {
+                semaforo.Release();
+            }
+        });
 
-            resultado.AddRange(tremsIda);
-            resultado.AddRange(tremsVolta);
+        var todosResultados = await Task.WhenAll(tarefas);
+
+        // Deduplica por tripname — o mesmo trem pode aparecer em múltiplas consultas
+        var visto = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var lista in todosResultados)
+        {
+            foreach (var item in lista)
+            {
+                if (string.IsNullOrWhiteSpace(item.TripName) || visto.Add(item.TripName))
+                    resultado.Add(item.Posicao);
+            }
         }
 
+        _logger.LogDebug("Trens tempo real: {n} posições obtidas da API SuperVia.", resultado.Count);
         return resultado;
     }
 
-    // ── Construção de timeline ────────────────────────────────────────────────
+    // ── Interpolação de posição ───────────────────────────────────────────────
 
-    /// <summary>
-    /// Constrói a sequência de trechos do ramal num dado sentido.
-    /// Cada entrada representa: parada na estação atual + movimento até a próxima.
-    /// </summary>
-    private List<TrechoTimeline> ConstruirTimeline(
+    private List<PosicaoTremCacheada> InterpolarPosicao(
         string branchId,
-        RamalConfig ramal,
-        List<EstacaoConfig> estacoes,
-        bool ida)
+        bool ida,
+        string idEstacaoConsulta,
+        ProximoTremDto resposta,
+        DateTimeOffset agora)
     {
-        // Para IDA: percorremos estacoes[0..N-1]
-        // Para VOLTA: percorremos estacoes[N-1..0]
-        var ordem = ida
+        if (_config?.Ramais is null || _config.CoordenadasEstacoes is null)
+            return [];
+
+        if (!_config.Ramais.TryGetValue(branchId, out var ramal) || ramal.Estacoes is null)
+            return [];
+
+        var resultado = new List<PosicaoTremCacheada>();
+        var estacoes  = ramal.Estacoes;
+
+        // Encontra o índice da estação de consulta na lista do ramal
+        var idxEstacaoConsulta = estacoes.FindIndex(e =>
+            string.Equals(e.Id, idEstacaoConsulta, StringComparison.OrdinalIgnoreCase));
+
+        if (idxEstacaoConsulta < 0)
+        {
+            _logger.LogDebug("Estação de consulta '{e}' não encontrada no ramal '{r}'",
+                idEstacaoConsulta, branchId);
+            return [];
+        }
+
+        var minutosParaChegada = resposta.MinutosParaChegada;
+        var estimativa = resposta.EstimativaDateTimeOffset ?? agora.AddMinutes(minutosParaChegada);
+
+        // Segundos até o trem chegar na estação de consulta
+        var segParaChegar = (estimativa - agora).TotalSeconds;
+        if (segParaChegar < -120) return []; // trem passou há mais de 2 min, ignora
+
+        // Estações do ramal na ordem correta (IDA ou VOLTA)
+        var ordemEstacoes = ida
             ? Enumerable.Range(0, estacoes.Count).ToList()
             : Enumerable.Range(0, estacoes.Count).Reverse().ToList();
 
-        var timeline = new List<TrechoTimeline>();
+        // Posição do trem nas estações:
+        // Se segParaChegar > 0: trem ainda não chegou na estação de consulta
+        // Se segParaChegar <= 0: trem já passou, está entre consulta e próxima
+        var passConsulta = ordemEstacoes.IndexOf(idxEstacaoConsulta);
+        if (passConsulta < 0) return [];
 
-        for (int pass = 0; pass < ordem.Count; pass++)
+        // Calcula a posição do trem dentro da rota
+        double posicaoTremKm;
+        var distanciaConsultaKm = estacoes[idxEstacaoConsulta].DistanciaCentralKm;
+
+        if (segParaChegar > 0)
         {
-            var idxAtual = ordem[pass];
-            bool eTerminal = pass == 0 || pass == ordem.Count - 1;
+            // Trem está ANTES da estação de consulta (ainda vai chegar)
+            // Estima velocidade média e retroage
+            var velocidadeKmh = VelocidadePadraoKmh;
+            var distanciaRetroKm = (segParaChegar / 3600.0) * velocidadeKmh;
 
-            // Tempo de parada nesta estação
-            double tempoPararSeg = eTerminal
-                ? Math.Max(ramal.TempoPadadaSegundos * 3, 60)   // terminal para mais tempo
-                : ramal.TempoPadadaSegundos;
+            posicaoTremKm = ida
+                ? distanciaConsultaKm - distanciaRetroKm
+                : distanciaConsultaKm + distanciaRetroKm;
+        }
+        else
+        {
+            // Trem já passou pela estação de consulta
+            // Avança na proporção do tempo decorrido
+            var segDecorrido = -segParaChegar;
+            var velocidadeKmh = VelocidadePadraoKmh;
+            var distanciaAvancoKm = (segDecorrido / 3600.0) * velocidadeKmh;
 
-            // Tempo de movimento até a próxima (última estação: 0)
-            double tempoMovSeg = 0;
-            int    idxProximo  = -1;
-
-            if (pass < ordem.Count - 1)
-            {
-                idxProximo = ordem[pass + 1];
-                var chave  = $"{branchId}|{idxAtual}|{idxProximo}";
-                tempoMovSeg = _temposTrecho.TryGetValue(chave, out var t) ? t
-                    : FallbackTempo(estacoes[idxAtual], estacoes[idxProximo]);
-            }
-
-            timeline.Add(new TrechoTimeline(
-                idxAtual, idxProximo, pass,
-                tempoPararSeg, tempoMovSeg,
-                estacoes[idxAtual].Nome,
-                idxProximo >= 0 ? estacoes[idxProximo].Nome : null));
+            posicaoTremKm = ida
+                ? distanciaConsultaKm + distanciaAvancoKm
+                : distanciaConsultaKm - distanciaAvancoKm;
         }
 
-        return timeline;
-    }
+        // Encontra em qual trecho o trem está baseado na posição km
+        var pos = InterpolarNaRota(branchId, estacoes, ordemEstacoes, posicaoTremKm, ida, agora,
+            resposta.TripName ?? $"{branchId}-{(ida ? "IDA" : "VOLTA")}",
+            resposta.RamalNome ?? branchId);
 
-    private double FallbackTempo(EstacaoConfig a, EstacaoConfig b)
-    {
-        var distKm = Math.Abs(b.DistanciaCentralKm - a.DistanciaCentralKm);
-        return (distKm / VelocidadePadraoKmh) * 3600;
-    }
-
-    // ── Geração de trens ──────────────────────────────────────────────────────
-
-    private List<PosicaoVeiculoDto> GerarTrens(
-        string branchId,
-        string codigoLinha,
-        RamalConfig ramal,
-        List<EstacaoConfig> estacoes,
-        bool ida,
-        DateTimeOffset agora,
-        double intervaloSeg,
-        double duracaoViagemSeg,
-        double espTerminalSeg,
-        List<TrechoTimeline> timeline)
-    {
-        var resultado = new List<PosicaoVeiculoDto>();
-        if (duracaoViagemSeg <= 0) return resultado;
-
-        // Segundos desde o início da operação (4h)
-        var inicioOp = new DateTimeOffset(agora.Date.AddHours(4), agora.Offset);
-        var segDesdeInicio = (agora - inicioOp).TotalSeconds;
-        if (segDesdeInicio < 0) return resultado;
-
-        // Quantos trens partiram desde as 4h
-        var totalPartidas = (int)(segDesdeInicio / intervaloSeg) + 2;
-
-        // Janela: trens que partiram nos últimos duracaoViagem segundos
-        for (int i = Math.Max(0, totalPartidas - 40); i <= totalPartidas; i++)
-        {
-            var partidaSeg     = i * intervaloSeg;
-            var tempoEmViagem  = segDesdeInicio - partidaSeg;
-
-            if (tempoEmViagem < 0) continue;
-            if (tempoEmViagem > duracaoViagemSeg + espTerminalSeg) continue;
-
-            var posicao = InterpolaTimeline(
-                branchId, codigoLinha, ramal, estacoes,
-                ida, i, tempoEmViagem, agora, timeline);
-
-            if (posicao is not null)
-                resultado.Add(posicao);
-        }
+        if (pos is not null)
+            resultado.Add(new PosicaoTremCacheada(resposta.TripName ?? "", pos));
 
         return resultado;
     }
 
-    private PosicaoVeiculoDto? InterpolaTimeline(
+    private PosicaoVeiculoDto? InterpolarNaRota(
         string branchId,
-        string codigoLinha,
-        RamalConfig ramal,
         List<EstacaoConfig> estacoes,
+        List<int> ordemEstacoes,
+        double posicaoKm,
         bool ida,
-        int numeroTrem,
-        double tempoEmViagem,
         DateTimeOffset agora,
-        List<TrechoTimeline> timeline)
+        string tripName,
+        string ramalNome)
     {
         if (_config?.CoordenadasEstacoes is null) return null;
 
-        double cursor = 0;
+        // Limita a posição aos extremos do ramal
+        var distMin = estacoes[ordemEstacoes[0]].DistanciaCentralKm;
+        var distMax = estacoes[ordemEstacoes[^1]].DistanciaCentralKm;
 
-        for (int pass = 0; pass < timeline.Count; pass++)
+        if (ida)
+            posicaoKm = Math.Clamp(posicaoKm, distMin, distMax);
+        else
+            posicaoKm = Math.Clamp(posicaoKm, distMax, distMin);
+
+        // Percorre os trechos para encontrar onde o trem está
+        for (int pass = 0; pass < ordemEstacoes.Count - 1; pass++)
         {
-            var trecho = timeline[pass];
+            var idxAtual  = ordemEstacoes[pass];
+            var idxProx   = ordemEstacoes[pass + 1];
+            var distAtual = estacoes[idxAtual].DistanciaCentralKm;
+            var distProx  = estacoes[idxProx].DistanciaCentralKm;
 
-            // ── Parado na estação atual ───────────────────────────────────────
-            if (tempoEmViagem >= cursor && tempoEmViagem < cursor + trecho.TempoParadaSeg)
+            // Verifica se o trem está neste trecho
+            bool noTrecho = ida
+                ? posicaoKm >= distAtual && posicaoKm <= distProx
+                : posicaoKm <= distAtual && posicaoKm >= distProx;
+
+            if (!noTrecho) continue;
+
+            var distTrecho = Math.Abs(distProx - distAtual);
+            if (distTrecho <= 0) continue;
+
+            var fracao = Math.Abs(posicaoKm - distAtual) / distTrecho;
+            fracao = Math.Clamp(fracao, 0, 1);
+
+            if (!_config.CoordenadasEstacoes.TryGetValue(estacoes[idxAtual].Id, out var cAtual)) return null;
+            if (!_config.CoordenadasEstacoes.TryGetValue(estacoes[idxProx].Id, out var cProx))   return null;
+
+            var lat = cAtual.Lat + (cProx.Lat - cAtual.Lat) * fracao;
+            var lon = cAtual.Lon + (cProx.Lon - cAtual.Lon) * fracao;
+
+            var bearing = GpsEnriquecimentoService.CalcularBearing(lat, lon, cProx.Lat, cProx.Lon);
+
+            // Velocidade estimada pelo trecho
+            var velKmh = VelocidadePadraoKmh;
+
+            // Próxima parada e distância restante até ela
+            var distRestanteKm = distTrecho * (1 - fracao);
+            var nomeProxima    = estacoes[idxProx].Nome;
+
+            var sentido = ida ? "IDA" : "VOLTA";
+            var ordem   = $"TREM-{branchId.ToUpperInvariant()}-{sentido}-{tripName}";
+
+            // Posição na rota (0 a 1) baseada no ramal inteiro
+            var distTotal  = Math.Abs(estacoes[ordemEstacoes[^1]].DistanciaCentralKm - estacoes[ordemEstacoes[0]].DistanciaCentralKm);
+            var distPercorrida = Math.Abs(posicaoKm - estacoes[ordemEstacoes[0]].DistanciaCentralKm);
+            var posicaoNaRota  = distTotal > 0 ? distPercorrida / distTotal : 0;
+
+            return new PosicaoVeiculoDto
             {
-                if (!_config.CoordenadasEstacoes.TryGetValue(estacoes[trecho.IdxEstacao].Id, out var coord))
-                    return null;
+                Ordem                        = ordem,
+                CodigoLinha                  = $"TREM-{branchId.ToUpperInvariant()}",
+                Latitude                     = lat,
+                Longitude                    = lon,
+                Velocidade                   = velKmh,
+                VelocidadeMedia              = velKmh,
+                Bearing                      = bearing,
+                TimestampGps                 = agora,
+                TimestampServidor            = agora,
+                Status                       = StatusVeiculo.Ativo,
+                ProximaParadaNome            = nomeProxima,
+                DistanciaProximaParadaMetros = distRestanteKm * 1000,
+                PosicaoNaRota                = posicaoNaRota,
+                EtaConfianca                 = "supervia",
+            };
+        }
 
-                // Próxima parada = próxima estação no sentido do trem
-                string?  nomeProxima = trecho.NomeProxima;
-                double?  distProxima = null;
-
-                if (trecho.IdxProxima >= 0
-                    && _config.CoordenadasEstacoes.TryGetValue(estacoes[trecho.IdxProxima].Id, out var coordProx))
-                {
-                    distProxima = Math.Abs(
-                        estacoes[trecho.IdxProxima].DistanciaCentralKm
-                        - estacoes[trecho.IdxEstacao].DistanciaCentralKm) * 1000;
-                }
-
-                double? bearing = null;
-                if (trecho.IdxProxima >= 0
-                    && _config.CoordenadasEstacoes.TryGetValue(estacoes[trecho.IdxProxima].Id, out var coordBrg))
-                {
-                    bearing = GpsEnriquecimentoService.CalcularBearing(
-                        coord.Lat, coord.Lon,
-                        coordBrg.Lat, coordBrg.Lon);
-                }
-
-                return CriarDto(codigoLinha, branchId, numeroTrem, ida,
-                    coord.Lat, coord.Lon, 0, bearing, agora,
-                    nomeProxima, distProxima);
-            }
-
-            cursor += trecho.TempoParadaSeg;
-
-            // ── Em movimento para a próxima estação ───────────────────────────
-            if (trecho.TempoMovimentoSeg <= 0) { continue; }
-
-            if (tempoEmViagem >= cursor && tempoEmViagem < cursor + trecho.TempoMovimentoSeg)
+        // Fallback: trem está parado na primeira ou última estação
+        var idxFinal = ordemEstacoes[^1];
+        if (_config.CoordenadasEstacoes.TryGetValue(estacoes[idxFinal].Id, out var coordFinal))
+        {
+            var sentido = ida ? "IDA" : "VOLTA";
+            return new PosicaoVeiculoDto
             {
-                var fracao = (tempoEmViagem - cursor) / trecho.TempoMovimentoSeg;
-
-                var idAtual = estacoes[trecho.IdxEstacao].Id;
-                var idProx  = estacoes[trecho.IdxProxima].Id;
-
-                if (!_config.CoordenadasEstacoes.TryGetValue(idAtual, out var cAtual)) return null;
-                if (!_config.CoordenadasEstacoes.TryGetValue(idProx,  out var cProx))  return null;
-
-                var lat = cAtual.Lat + (cProx.Lat - cAtual.Lat) * fracao;
-                var lon = cAtual.Lon + (cProx.Lon - cAtual.Lon) * fracao;
-
-                var bearing = GpsEnriquecimentoService.CalcularBearing(lat, lon, cProx.Lat, cProx.Lon);
-
-                var distKm   = Math.Abs(estacoes[trecho.IdxProxima].DistanciaCentralKm
-                                      - estacoes[trecho.IdxEstacao].DistanciaCentralKm);
-                var velKmh   = Math.Clamp(
-                    distKm / (trecho.TempoMovimentoSeg / 3600.0),
-                    VelocidadeMinKmh, VelocidadeMaxKmh);
-
-                var distRestanteM = distKm * (1 - fracao) * 1000;
-
-                return CriarDto(codigoLinha, branchId, numeroTrem, ida,
-                    lat, lon, velKmh, bearing, agora,
-                    trecho.NomeProxima, distRestanteM);
-            }
-
-            cursor += trecho.TempoMovimentoSeg;
+                Ordem             = $"TREM-{branchId.ToUpperInvariant()}-{sentido}-{tripName}",
+                CodigoLinha       = $"TREM-{branchId.ToUpperInvariant()}",
+                Latitude          = coordFinal.Lat,
+                Longitude         = coordFinal.Lon,
+                Velocidade        = 0,
+                TimestampGps      = agora,
+                TimestampServidor = agora,
+                Status            = StatusVeiculo.Ativo,
+                EtaConfianca      = "supervia",
+            };
         }
 
         return null;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── DTOs internos ─────────────────────────────────────────────────────────
 
-    private static PosicaoVeiculoDto CriarDto(
-        string codigoLinha, string branchId, int numeroTrem, bool ida,
-        double lat, double lon, double velocidade, double? bearing,
-        DateTimeOffset agora, string? proximaParada, double? distanciaProxima)
-    {
-        var sentido = ida ? "IDA" : "VOLTA";
-        var ordem   = $"TREM-{branchId.ToUpperInvariant()}-{sentido}-{numeroTrem:D3}";
-
-        return new PosicaoVeiculoDto
-        {
-            Ordem                        = ordem,
-            CodigoLinha                  = codigoLinha,
-            Latitude                     = lat,
-            Longitude                    = lon,
-            Velocidade                   = velocidade,
-            VelocidadeMedia              = velocidade > 0 ? velocidade : null,
-            Bearing                      = bearing,
-            TimestampGps                 = agora,
-            TimestampServidor            = agora,
-            Status                       = StatusVeiculo.Ativo,
-            ProximaParadaNome            = proximaParada,
-            DistanciaProximaParadaMetros = distanciaProxima,
-            EtaConfianca                 = "simulado",
-        };
-    }
-
-    private static double ObterIntervaloAtual(RamalConfig ramal, TimeSpan horario)
-    {
-        var inicioPicoM = TimeSpan.Parse(ramal.PicoManhaInicio);
-        var fimPicoM    = TimeSpan.Parse(ramal.PicoManhaFim);
-        var inicioPicoT = TimeSpan.Parse(ramal.PicoTardeInicio);
-        var fimPicoT    = TimeSpan.Parse(ramal.PicoTardeFim);
-
-        var emPico = (horario >= inicioPicoM && horario <= fimPicoM)
-                  || (horario >= inicioPicoT && horario <= fimPicoT);
-
-        return emPico ? ramal.IntervaloPicoMinutos : ramal.IntervaloForaPicoMinutos;
-    }
-
-    private static TimeSpan? ExtrairPrimeiroHorario(string linha)
-    {
-        var semParen = linha;
-        var idx = semParen.IndexOf('(');
-        if (idx >= 0) semParen = semParen[..idx];
-
-        var matches = HorarioRegex.Matches(semParen);
-        if (matches.Count == 0) return null;
-
-        TimeSpan? menor = null;
-        foreach (Match m in matches)
-        {
-            if (!int.TryParse(m.Groups["h"].Value, out var h)) continue;
-            var minRaw = m.Groups["m"].Success ? m.Groups["m"].Value : "00";
-            if (!int.TryParse(minRaw, out var min)) continue;
-            var ts = new TimeSpan(h % 24, min, 0);
-            if (!menor.HasValue || ts < menor.Value) menor = ts;
-        }
-
-        return menor;
-    }
-
-    // Normaliza string para chave de dicionário
-    private static string Norm(string valor)
-    {
-        var sem = valor.Normalize(NormalizationForm.FormD);
-        var chars = sem.Where(c =>
-            CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray();
-        return Regex.Replace(
-                new string(chars).Normalize(NormalizationForm.FormC),
-                @"\s+", " ")
-            .ToUpperInvariant()
-            .Replace("/", " ")
-            .Replace("-", " ")
-            .Trim();
-    }
-
-    // ── DTOs ──────────────────────────────────────────────────────────────────
+    private sealed record PosicaoTremCacheada(string TripName, PosicaoVeiculoDto Posicao);
 
     private sealed class DadosTremConfig
     {
@@ -516,23 +390,8 @@ public sealed class TremSimulacaoService
         [JsonPropertyName("intervalo_fora_pico_minutos")]
         public double IntervaloForaPicoMinutos { get; init; }
 
-        [JsonPropertyName("pico_manha_inicio")]
-        public string PicoManhaInicio { get; init; } = "05:00";
-
-        [JsonPropertyName("pico_manha_fim")]
-        public string PicoManhaFim { get; init; } = "09:00";
-
-        [JsonPropertyName("pico_tarde_inicio")]
-        public string PicoTardeInicio { get; init; } = "16:00";
-
-        [JsonPropertyName("pico_tarde_fim")]
-        public string PicoTardeFim { get; init; } = "20:00";
-
         [JsonPropertyName("tempo_parada_segundos")]
         public double TempoPadadaSegundos { get; init; } = 20;
-
-        [JsonPropertyName("tempo_parada_terminal_segundos")]
-        public double? TempoParadaTerminalSegundos { get; init; }
 
         [JsonPropertyName("estacoes")]
         public List<EstacaoConfig>? Estacoes { get; init; }
@@ -555,14 +414,4 @@ public sealed class TremSimulacaoService
         [JsonPropertyName("lat")] public double Lat { get; init; }
         [JsonPropertyName("lon")] public double Lon { get; init; }
     }
-
-    // Representa um passo na timeline de um sentido
-    private sealed record TrechoTimeline(
-        int    IdxEstacao,
-        int    IdxProxima,
-        int    PassNum,
-        double TempoParadaSeg,
-        double TempoMovimentoSeg,
-        string NomeEstacao,
-        string? NomeProxima);
 }

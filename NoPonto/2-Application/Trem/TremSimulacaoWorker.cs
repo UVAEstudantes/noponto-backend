@@ -7,13 +7,9 @@ using NoPonto.Application.GPS;
 
 namespace NoPonto.Application.Trem;
 
-/// <summary>
-/// BackgroundService que publica posições simuladas de trens
-/// no Redis e via SignalR a cada 30 segundos.
-/// </summary>
 public sealed class TremSimulacaoWorker : BackgroundService
 {
-    private static readonly TimeSpan Intervalo = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Intervalo = TimeSpan.FromSeconds(60);
     private const double DistanciaMaximaRotaMetros = 5000;
     private const int ParalelismoEnriquecimento = 8;
 
@@ -22,7 +18,7 @@ public sealed class TremSimulacaoWorker : BackgroundService
         PropertyNameCaseInsensitive = true,
     };
 
-    private readonly TremSimulacaoService _simulacao;
+    private readonly TremTempoRealService _tremService;
     private readonly IDistributedCache _cache;
     private readonly IHubContext<GpsHub> _hub;
     private readonly IGpsItinerarioRepository _itinerarios;
@@ -31,17 +27,17 @@ public sealed class TremSimulacaoWorker : BackgroundService
     private readonly ILogger<TremSimulacaoWorker> _logger;
 
     public TremSimulacaoWorker(
-        TremSimulacaoService simulacao,
+        TremTempoRealService tremService,
         IDistributedCache cache,
         IHubContext<GpsHub> hub,
         IGpsItinerarioRepository itinerarios,
         ILogger<TremSimulacaoWorker> logger)
     {
-        _simulacao = simulacao;
-        _cache = cache;
-        _hub = hub;
+        _tremService = tremService;
+        _cache       = cache;
+        _hub         = hub;
         _itinerarios = itinerarios;
-        _logger = logger;
+        _logger      = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -50,14 +46,8 @@ public sealed class TremSimulacaoWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            try
-            {
-                await ProcessarCicloAsync(stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Falha no ciclo de simulação de trens.");
-            }
+            try { await ProcessarCicloAsync(stoppingToken); }
+            catch (Exception ex) { _logger.LogError(ex, "Falha no ciclo de trens."); }
 
             await Task.Delay(Intervalo, stoppingToken);
         }
@@ -65,25 +55,15 @@ public sealed class TremSimulacaoWorker : BackgroundService
 
     private async Task ProcessarCicloAsync(CancellationToken ct)
     {
-        var posicoes = _simulacao.CalcularPosicoesSimuladas();
-
+        var posicoes = await _tremService.ObterPosicoesAsync(ct);
         if (posicoes.Count == 0) return;
 
         posicoes = await EnriquecerRotasAsync(posicoes, ct);
         posicoes = AnexarHistorico(posicoes);
 
-        var opcoesAtivo = new DistributedCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(90),
-        };
-        var opcoesRecente = new DistributedCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(90),
-        };
-        var opcoesLinha = new DistributedCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(120),
-        };
+        var opcoesAtivo  = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(120) };
+        var opcoesRecente = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(120) };
+        var opcoesLinha  = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(150) };
 
         var tarefas = new List<Task>();
         var ativosPorLinha = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
@@ -91,10 +71,8 @@ public sealed class TremSimulacaoWorker : BackgroundService
         foreach (var pos in posicoes)
         {
             var json = JsonSerializer.Serialize(pos, JsonOpts);
-            tarefas.Add(_cache.SetStringAsync(
-                GpsPollingService.ChaveVeiculoAtivo(pos.Ordem), json, opcoesAtivo, ct));
-            tarefas.Add(_cache.SetStringAsync(
-                GpsPollingService.ChaveVeiculoRecente(pos.Ordem), json, opcoesRecente, ct));
+            tarefas.Add(_cache.SetStringAsync(GpsPollingService.ChaveVeiculoAtivo(pos.Ordem),   json, opcoesAtivo,   ct));
+            tarefas.Add(_cache.SetStringAsync(GpsPollingService.ChaveVeiculoRecente(pos.Ordem), json, opcoesRecente, ct));
 
             if (!ativosPorLinha.TryGetValue(pos.CodigoLinha, out var ordens))
             {
@@ -105,109 +83,73 @@ public sealed class TremSimulacaoWorker : BackgroundService
         }
 
         foreach (var (linha, ordens) in ativosPorLinha)
-        {
-            tarefas.Add(_cache.SetStringAsync(
-                GpsPollingService.ChaveLinha(linha),
-                string.Join(',', ordens),
-                opcoesLinha, ct));
-        }
+            tarefas.Add(_cache.SetStringAsync(GpsPollingService.ChaveLinha(linha), string.Join(',', ordens), opcoesLinha, ct));
 
         await Task.WhenAll(tarefas);
 
-        // Broadcast para assinantes SignalR por linha
-        var porLinha = posicoes
-            .GroupBy(p => p.CodigoLinha, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
-
+        var porLinha      = posicoes.GroupBy(p => p.CodigoLinha, StringComparer.OrdinalIgnoreCase)
+                                    .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
         var linhasAssinadas = GpsHub.LinhasComAssinantes;
-        var broadcastTasks = new List<Task>();
+        var broadcastTasks  = new List<Task>();
 
         foreach (var linha in linhasAssinadas)
         {
             if (!porLinha.TryGetValue(linha, out var veiculos)) continue;
-
-            broadcastTasks.Add(
-                _hub.Clients
-                    .Group(GpsHub.GrupoLinha(linha))
-                    .SendAsync("PosicaoAtualizada", veiculos, ct));
+            broadcastTasks.Add(_hub.Clients.Group(GpsHub.GrupoLinha(linha)).SendAsync("PosicaoAtualizada", veiculos, ct));
         }
 
-        if (broadcastTasks.Count > 0)
-            await Task.WhenAll(broadcastTasks);
+        if (broadcastTasks.Count > 0) await Task.WhenAll(broadcastTasks);
 
-        _logger.LogDebug(
-            "Simulação trem: {n} posições publicadas.", posicoes.Count);
+        _logger.LogInformation("Trens: {n} posições publicadas.", posicoes.Count);
     }
 
-    private async Task<List<PosicaoVeiculoDto>> EnriquecerRotasAsync(
-        List<PosicaoVeiculoDto> posicoes,
-        CancellationToken ct)
+    private async Task<List<PosicaoVeiculoDto>> EnriquecerRotasAsync(List<PosicaoVeiculoDto> posicoes, CancellationToken ct)
     {
         var semaforo = new SemaphoreSlim(ParalelismoEnriquecimento, ParalelismoEnriquecimento);
 
         var tarefas = posicoes.Select(async posicao =>
         {
-            if (!posicao.Bearing.HasValue)
-                return posicao;
+            if (!posicao.Bearing.HasValue) return posicao;
 
             await semaforo.WaitAsync(ct);
             try
             {
                 var rota = await _itinerarios.BuscarEnriquecimentoAsync(
-                    posicao.CodigoLinha,
-                    posicao.Latitude,
-                    posicao.Longitude,
-                    posicao.Bearing.Value,
-                    DistanciaMaximaRotaMetros,
-                    ct);
+                    posicao.CodigoLinha, posicao.Latitude, posicao.Longitude,
+                    posicao.Bearing.Value, DistanciaMaximaRotaMetros, ct);
 
-                if (rota is null)
-                    return posicao;
+                if (rota is null) return posicao;
 
                 return posicao with
                 {
-                    Latitude = rota.LatitudeProjetada ?? posicao.Latitude,
-                    Longitude = rota.LongitudeProjetada ?? posicao.Longitude,
-                    PosicaoNaRota = rota.PosicaoNaRota,
-                    ComprimentoRotaMetros = rota.ComprimentoRotaMetros,
-                    ItinerarioId = rota.ItinerarioId,
-                    Bearing = rota.BearingLocal ?? posicao.Bearing,
-                    ProximaParadaNome = rota.ProximaParadaNome ?? posicao.ProximaParadaNome,
+                    Latitude                     = rota.LatitudeProjetada    ?? posicao.Latitude,
+                    Longitude                    = rota.LongitudeProjetada   ?? posicao.Longitude,
+                    PosicaoNaRota                = rota.PosicaoNaRota,
+                    ComprimentoRotaMetros        = rota.ComprimentoRotaMetros,
+                    ItinerarioId                 = rota.ItinerarioId,
+                    Bearing                      = rota.BearingLocal         ?? posicao.Bearing,
+                    ProximaParadaNome            = rota.ProximaParadaNome    ?? posicao.ProximaParadaNome,
                     DistanciaProximaParadaMetros = rota.DistanciaProximaParadaMetros ?? posicao.DistanciaProximaParadaMetros,
                 };
             }
-            finally
-            {
-                semaforo.Release();
-            }
+            finally { semaforo.Release(); }
         });
 
-        var resultado = await Task.WhenAll(tarefas);
-        return resultado.ToList();
+        return (await Task.WhenAll(tarefas)).ToList();
     }
 
     private List<PosicaoVeiculoDto> AnexarHistorico(List<PosicaoVeiculoDto> posicoes)
     {
         var atualizadas = new List<PosicaoVeiculoDto>(posicoes.Count);
-
         foreach (var posicao in posicoes)
         {
             var atual = posicao;
-
             if (_ultimaPosicao.TryGetValue(atual.Ordem, out var anterior))
-            {
-                atual = atual with
-                {
-                    LatitudeAnterior = anterior.Latitude,
-                    LongitudeAnterior = anterior.Longitude,
-                    TimestampAnterior = anterior.TimestampGps,
-                };
-            }
+                atual = atual with { LatitudeAnterior = anterior.Latitude, LongitudeAnterior = anterior.Longitude, TimestampAnterior = anterior.TimestampGps };
 
             _ultimaPosicao[atual.Ordem] = atual;
             atualizadas.Add(atual);
         }
-
         return atualizadas;
     }
 }
