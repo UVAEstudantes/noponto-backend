@@ -462,7 +462,6 @@ public sealed class ImportacaoTremService
         if (!geometrias.TryGetValue(branchId, out var feat) || feat.Geometry is null)
         {
             _logger.LogWarning("Sem geometria ArcGIS para '{ramal}' — usando LineString mínima.", branchId);
-            // Dois pontos distintos próximos ao centro do Rio como fallback seguro
             return factory.CreateLineString([
                 new Coordinate(-43.1731, -22.9035),
                 new Coordinate(-43.1730, -22.9034),
@@ -479,9 +478,79 @@ public sealed class ImportacaoTremService
             ]);
         }
 
-        return geo is LineString ls ? ls
-             : geo is MultiLineString mls ? AchatarMultiLineString(mls)
-             : (LineString)geo;
+        if (geo is LineString ls) return ls;
+        if (geo is MultiLineString mls) return AchatarMultiLineString(mls, branchId);
+        return (LineString)geo;
+    }
+
+    private LineString AchatarMultiLineString(MultiLineString mls, string branchId = "")
+    {
+        var factory = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(4326);
+
+        var linhas = mls.Geometries
+            .OfType<LineString>()
+            .Where(l => l.NumPoints >= 2)
+            .ToList();
+
+        if (linhas.Count == 0) return factory.CreateLineString([]);
+        if (linhas.Count == 1) return linhas[0];
+
+        // Ponto de origem: Central do Brasil (lon, lat)
+        // Todos os ramais principais partem de Central
+        var origem = new Coordinate(-43.1918, -22.9035);
+
+        // Ordena segmentos: o mais próximo da origem vai primeiro
+        // Para cada segmento, considera tanto o início quanto o fim
+        linhas = linhas.OrderBy(l =>
+            Math.Min(
+                Dist(origem, l.Coordinates[0]),
+                Dist(origem, l.Coordinates[^1])
+            )
+        ).ToList();
+
+        // Monta a cadeia conectando pelo ponto mais próximo entre extremidades
+        var ordenados = new List<Coordinate[]>();
+
+        // Primeiro segmento: garante que começa perto da origem
+        var primeiro = linhas[0].Coordinates.ToArray();
+        if (Dist(origem, primeiro[^1]) < Dist(origem, primeiro[0]))
+            Array.Reverse(primeiro); // inverte se o fim está mais perto da origem
+        ordenados.Add(primeiro);
+
+        var restantes = linhas.Skip(1).ToList();
+
+        while (restantes.Count > 0)
+        {
+            var ultimoCoord = ordenados[^1][^1];
+            var melhorIdx   = 0;
+            var melhorDist  = double.MaxValue;
+            var inverter    = false;
+
+            for (int i = 0; i < restantes.Count; i++)
+            {
+                var coords = restantes[i].Coordinates;
+                var dInicio = Dist(ultimoCoord, coords[0]);
+                var dFim    = Dist(ultimoCoord, coords[^1]);
+
+                if (dInicio < melhorDist) { melhorDist = dInicio; melhorIdx = i; inverter = false; }
+                if (dFim    < melhorDist) { melhorDist = dFim;    melhorIdx = i; inverter = true;  }
+            }
+
+            var segmento = restantes[melhorIdx].Coordinates.ToArray();
+            if (inverter) Array.Reverse(segmento);
+            restantes.RemoveAt(melhorIdx);
+
+            // Elimina duplicata do ponto de junção
+            var inicio = segmento[0];
+            if (Dist(ultimoCoord, inicio) < 0.0001)
+                segmento = segmento.Skip(1).ToArray();
+
+            if (segmento.Length > 0)
+                ordenados.Add(segmento);
+        }
+
+        var todos = ordenados.SelectMany(c => c).ToArray();
+        return factory.CreateLineString(todos);
     }
 
     private async Task VincularParadasAoItinerarioAsync(

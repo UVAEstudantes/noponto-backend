@@ -3,10 +3,6 @@ using System.Text.Json.Serialization;
 
 namespace NoPonto.Application.Trem;
 
-/// <summary>
-/// Consulta o endpoint interno do app SuperVia para obter
-/// o próximo trem entre dois pares de estações.
-/// </summary>
 public sealed class SuperviaApiClient
 {
     private readonly HttpClient _http;
@@ -27,10 +23,10 @@ public sealed class SuperviaApiClient
     }
 
     /// <summary>
-    /// Retorna o próximo trem entre duas estações.
-    /// Retorna null se não houver resposta válida.
+    /// Retorna todos os trens previstos entre duas estações.
+    /// A API retorna array com próximo(s) trem(ns) — capturamos todos.
     /// </summary>
-    public async Task<ProximoTremDto?> BuscarProximoTremAsync(
+    public async Task<List<ProximoTremDto>> BuscarProximosTrensAsync(
         string idEstacaoPartida,
         string idEstacaoDestino,
         CancellationToken ct = default)
@@ -46,23 +42,31 @@ public sealed class SuperviaApiClient
             response.EnsureSuccessStatusCode();
 
             var body = await response.Content.ReadAsStringAsync(ct);
+            if (string.IsNullOrWhiteSpace(body)) return [];
 
-            // Tenta objeto único primeiro, depois array
-            if (body.TrimStart().StartsWith('['))
+            var primeiro = body.TrimStart()[0];
+
+            if (primeiro == '[')
             {
-                var lista = JsonSerializer.Deserialize<List<ProximoTremDto>>(body, JsonOpts);
-                return lista?.FirstOrDefault();
+                return JsonSerializer.Deserialize<List<ProximoTremDto>>(body, JsonOpts) ?? [];
             }
-            else
+
+            if (primeiro == '{')
             {
-                return JsonSerializer.Deserialize<ProximoTremDto>(body, JsonOpts);
+                var single = JsonSerializer.Deserialize<ProximoTremDto>(body, JsonOpts);
+                return single is null ? [] : [single];
             }
+
+            // Texto puro como "em breve" — sem trens disponíveis
+            _logger.LogDebug("Resposta não-JSON de {p}→{d}: {body}",
+                idEstacaoPartida, idEstacaoDestino, body[..Math.Min(body.Length, 60)]);
+            return [];
         }
         catch (Exception ex)
         {
             _logger.LogWarning("Falha ao consultar próximo trem {p}→{d}: {msg}",
                 idEstacaoPartida, idEstacaoDestino, ex.Message);
-            return null;
+            return [];
         }
     }
 }
@@ -101,11 +105,9 @@ public sealed class ProximoTremDto
     [JsonPropertyName("plataforma")]
     public string? Plataforma { get; init; }
 
-    /// <summary>Minutos até o próximo trem (0 se já chegou)</summary>
     public int MinutosParaChegada =>
         int.TryParse(MinutosRef, out var m) ? Math.Max(0, m) : 0;
 
-    /// <summary>Data/hora estimada de chegada no local da consulta</summary>
     public DateTimeOffset? EstimativaDateTimeOffset
     {
         get
