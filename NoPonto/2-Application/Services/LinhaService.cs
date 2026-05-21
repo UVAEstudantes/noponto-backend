@@ -26,7 +26,7 @@ public sealed class LinhaService : ILinhaService
         _logger = logger;
     }
 
-    public async Task<PaginacaoRespostaDTO<LinhaConsultaDTO>> ListarAsync(string? nome, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<PaginacaoRespostaDTO<LinhaConsultaDTO>> ListarAsync(string? nome, int page, int pageSize, Guid? modalId, CancellationToken cancellationToken)
     {
         PaginacaoUtil.ValidarOuLancar(page, pageSize, TamanhoMaximoPagina);
 
@@ -36,7 +36,7 @@ public sealed class LinhaService : ILinhaService
             page,
             pageSize);
 
-        return await _linhaRepository.ListarAsync(nome, page, pageSize, cancellationToken);
+        return await _linhaRepository.ListarAsync(nome, page, pageSize, modalId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<LinhaPorParadaConsultaDTO>> ListarPorParadaAsync(Guid paradaId, CancellationToken cancellationToken)

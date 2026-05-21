@@ -15,9 +15,13 @@ public sealed class LinhaRepository : ILinhaRepository
         _contexto = contexto;
     }
 
-    public async Task<PaginacaoRespostaDTO<LinhaConsultaDTO>> ListarAsync(string? nome, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<PaginacaoRespostaDTO<LinhaConsultaDTO>> ListarAsync(string? nome, int page, int pageSize, Guid? modalId, CancellationToken cancellationToken)
     {
         var consulta = AplicarFiltro(_contexto.Linhas.AsNoTracking(), nome);
+        if (modalId.HasValue)
+        {
+            consulta = consulta.Where(l => l.ModalId == modalId.Value);
+        }
         var totalRegistros = await consulta.CountAsync(cancellationToken);
 
         var itens = await consulta
