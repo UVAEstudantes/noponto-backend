@@ -5,7 +5,7 @@ namespace NoPonto.Application.Interfaces;
 
 public interface ILinhaService
 {
-    Task<PaginacaoRespostaDTO<LinhaConsultaDTO>> ListarAsync(string? nome, int page, int pageSize, CancellationToken cancellationToken);
+    Task<PaginacaoRespostaDTO<LinhaConsultaDTO>> ListarAsync(string? nome, int page, int pageSize, Guid? modalId, CancellationToken cancellationToken);
     Task<IReadOnlyList<LinhaPorParadaConsultaDTO>> ListarPorParadaAsync(Guid paradaId, CancellationToken cancellationToken);
     Task<LinhaDetalhesDTO> BuscarDetalhesAsync(Guid linhaId, CancellationToken cancellationToken);
 }

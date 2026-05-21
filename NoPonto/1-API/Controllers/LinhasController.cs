@@ -26,6 +26,7 @@ public class LinhasController : ControllerBase
     /// <param name="page">Página desejada (inicia em 1).</param>
     /// <param name="pageSize">Quantidade de itens por página.</param>
     /// <param name="cancellationToken">Token de cancelamento da requisição.</param>
+    /// <param name="modalId">Filtro para o identificador do modal.</param>
     /// <remarks>
     /// Exemplo de resposta:
     /// {
@@ -52,9 +53,10 @@ public class LinhasController : ControllerBase
         [FromQuery] string? nome,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
+        [FromQuery] Guid? modalId = null,
         CancellationToken cancellationToken = default)
     {
-        var resposta = await _service.ListarAsync(nome, page, pageSize, cancellationToken);
+        var resposta = await _service.ListarAsync(nome, page, pageSize, modalId, cancellationToken);
         return Ok(resposta);
     }
 
