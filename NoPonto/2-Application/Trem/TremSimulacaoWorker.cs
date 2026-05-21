@@ -25,24 +25,37 @@ public sealed class TremSimulacaoWorker : BackgroundService
     private readonly ConcurrentDictionary<string, PosicaoVeiculoDto> _ultimaPosicao =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<TremSimulacaoWorker> _logger;
+    private readonly bool _habilitado;
+    private readonly int _horarioInicio;
+    private readonly int _horarioFim;
 
     public TremSimulacaoWorker(
         TremTempoRealService tremService,
         IDistributedCache cache,
         IHubContext<GpsHub> hub,
         IGpsItinerarioRepository itinerarios,
-        ILogger<TremSimulacaoWorker> logger)
+        ILogger<TremSimulacaoWorker> logger,
+        IConfiguration config)
     {
-        _tremService = tremService;
-        _cache       = cache;
-        _hub         = hub;
-        _itinerarios = itinerarios;
-        _logger      = logger;
+        _tremService   = tremService;
+        _cache         = cache;
+        _hub           = hub;
+        _itinerarios   = itinerarios;
+        _logger        = logger;
+        _habilitado    = config.GetValue("TREM:HABILITADO", true);
+        _horarioInicio = config.GetValue("TREM:HORARIO_INICIO", 4);
+        _horarioFim    = config.GetValue("TREM:HORARIO_FIM", 23);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("TremSimulacaoWorker iniciado.");
+        if (!_habilitado)
+        {
+            _logger.LogInformation("TremSimulacaoWorker desabilitado via configuração.");
+            return;
+        }
+
+        _logger.LogInformation("TremSimulacaoWorker iniciado — operação: {i}h–{f}h.", _horarioInicio, _horarioFim);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -53,11 +66,14 @@ public sealed class TremSimulacaoWorker : BackgroundService
         }
     }
 
-    private static bool DentroDoHorarioOperacao()
+    private bool DentroDoHorarioOperacao()
     {
         var agora = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(-3)).TimeOfDay;
-        // Para entre 23:00 e 04:00
-        return agora >= TimeSpan.FromHours(4) && agora < TimeSpan.FromHours(23);
+        // Intervalo que cruza meia-noite (ex: 22h–04h) usa OR; senão usa AND
+        if (_horarioInicio < _horarioFim)
+            return agora >= TimeSpan.FromHours(_horarioInicio) && agora < TimeSpan.FromHours(_horarioFim);
+        else
+            return agora >= TimeSpan.FromHours(_horarioInicio) || agora < TimeSpan.FromHours(_horarioFim);
     }
 
     private async Task ProcessarCicloAsync(CancellationToken ct)
@@ -74,9 +90,9 @@ public sealed class TremSimulacaoWorker : BackgroundService
         posicoes = await EnriquecerRotasAsync(posicoes, ct);
         posicoes = AnexarHistorico(posicoes);
 
-        var opcoesAtivo  = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(120) };
+        var opcoesAtivo   = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(120) };
         var opcoesRecente = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(120) };
-        var opcoesLinha  = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(150) };
+        var opcoesLinha   = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(150) };
 
         var tarefas = new List<Task>();
         var ativosPorLinha = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
@@ -100,8 +116,8 @@ public sealed class TremSimulacaoWorker : BackgroundService
 
         await Task.WhenAll(tarefas);
 
-        var porLinha      = posicoes.GroupBy(p => p.CodigoLinha, StringComparer.OrdinalIgnoreCase)
-                                    .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+        var porLinha       = posicoes.GroupBy(p => p.CodigoLinha, StringComparer.OrdinalIgnoreCase)
+                                     .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
         var linhasAssinadas = GpsHub.LinhasComAssinantes;
         var broadcastTasks  = new List<Task>();
 
@@ -158,7 +174,12 @@ public sealed class TremSimulacaoWorker : BackgroundService
         {
             var atual = posicao;
             if (_ultimaPosicao.TryGetValue(atual.Ordem, out var anterior))
-                atual = atual with { LatitudeAnterior = anterior.Latitude, LongitudeAnterior = anterior.Longitude, TimestampAnterior = anterior.TimestampGps };
+                atual = atual with
+                {
+                    LatitudeAnterior  = anterior.Latitude,
+                    LongitudeAnterior = anterior.Longitude,
+                    TimestampAnterior = anterior.TimestampGps,
+                };
 
             _ultimaPosicao[atual.Ordem] = atual;
             atualizadas.Add(atual);

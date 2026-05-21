@@ -5,15 +5,6 @@ using NoPonto.Application.GPS;
 
 namespace NoPonto.Application.Trem;
 
-/// <summary>
-/// Usa o endpoint real da SuperVia para calcular posições estimadas dos trens.
-///
-/// Estratégia:
-///   1. Consulta estações-chave, priorizando estações de integração
-///   2. Nas integrações a API retorna múltiplos ramais de uma vez — capturamos todos
-///   3. Cada trem (tripname) é posicionado no ramal correto pelo ramal_nome da resposta
-///   4. Deduplica por tripname mantendo a posição mais avançada na rota
-/// </summary>
 public sealed class TremTempoRealService
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
@@ -22,88 +13,75 @@ public sealed class TremTempoRealService
     };
 
     private const double VelocidadePadraoKmh = 45.0;
+    // Dois trens do mesmo sentido/linha considerados duplicatas se < 2km de distância
+    private const double DistanciaMinEntresTrensKm = 2.0;
 
     private readonly ConcurrentDictionary<string, (DateTimeOffset Expira, List<PosicaoTremCacheada> Posicoes)> _cache = new();
     private static readonly TimeSpan TtlCache = TimeSpan.FromSeconds(55);
+
+    // Histórico de posições para calcular velocidade média real
+    private readonly ConcurrentDictionary<string, (double Lat, double Lon, DateTimeOffset Ts)> _historicoPosicao = new();
 
     private DadosTremConfig? _config;
     private readonly SuperviaApiClient _apiClient;
     private readonly ILogger<TremTempoRealService> _logger;
 
-    // Mapeamento ramal_nome da API → branchId interno
     private static readonly Dictionary<string, string> RamalNomeParaBranchId = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Santa Cruz"]    = "santa_cruz",
-        ["Japeri"]        = "japeri",
-        ["Deodoro"]       = "deodoro",
-        ["Saracuruna"]    = "saracuruna",
-        ["Gramacho"]      = "saracuruna", // Gramacho é subtrecho do Saracuruna
-        ["Belford Roxo"]  = "belford_roxo",
-        ["Paracambi"]     = "paracambi",
-        ["Vila Inhomirim"]= "vila_inhomirim",
-        ["Guapimirim"]    = "guapimirim",
+        ["Santa Cruz"]     = "santa_cruz",
+        ["Japeri"]         = "japeri",
+        ["Deodoro"]        = "deodoro",
+        ["Saracuruna"]     = "saracuruna",
+        ["Gramacho"]       = "saracuruna",
+        ["Belford Roxo"]   = "belford_roxo",
+        ["Paracambi"]      = "paracambi",
+        ["Vila Inhomirim"] = "vila_inhomirim",
+        ["Guapimirim"]     = "guapimirim",
     };
 
-    /// <summary>
-    /// Consultas a fazer por ciclo.
-    /// Cada entrada: (idEstacaoPartida, idEstacaoTerminal, branchId, ida)
-    ///
-    /// Nas estações de integração (Central, Maracanã, Deodoro, São Cristóvão)
-    /// a API retorna trens de múltiplos ramais — o branchId aqui é o "ramal âncora"
-    /// para o caso de nenhum ramal_nome reconhecível vir na resposta.
-    /// Na prática todos os trens retornados são processados pelo ramal_nome real.
-    /// </summary>
     private static readonly List<(string Partida, string Terminal, string BranchId, bool Ida)> ConsultasChave =
     [
-        // ── INTEGRAÇÕES CENTRAIS IDA ─────────────────────────────────────────
-        // Central e Maracanã retornam Santa Cruz, Japeri, Saracuruna, Belford Roxo de uma vez
-        ("central_brasil", "sao_cristovao",  "santa_cruz",   true),
-        ("maracana",       "deodoro",         "santa_cruz",   true),
-        ("meier",          "santa_cruz",      "santa_cruz",   true),
-        ("madureira",      "santa_cruz",      "santa_cruz",   true),
-        ("deodoro",        "santa_cruz",      "santa_cruz",   true),
-        ("bangu",          "santa_cruz",      "santa_cruz",   true),
-        ("campo_grande",   "santa_cruz",      "santa_cruz",   true),
-        ("cosmos",         "santa_cruz",      "santa_cruz",   true),
+        ("central_brasil", "sao_cristovao",  "santa_cruz",     true),
+        ("maracana",       "deodoro",         "santa_cruz",     true),
+        ("meier",          "santa_cruz",      "santa_cruz",     true),
+        ("madureira",      "santa_cruz",      "santa_cruz",     true),
+        ("deodoro",        "santa_cruz",      "santa_cruz",     true),
+        ("bangu",          "santa_cruz",      "santa_cruz",     true),
+        ("campo_grande",   "santa_cruz",      "santa_cruz",     true),
+        ("cosmos",         "santa_cruz",      "santa_cruz",     true),
 
-        // ── INTEGRAÇÕES CENTRAIS VOLTA ───────────────────────────────────────
-        ("sao_cristovao",  "central_brasil",  "santa_cruz",   false),
-        ("deodoro",        "maracana",        "santa_cruz",   false),
-        ("santa_cruz",     "central_brasil",  "santa_cruz",   false),
-        ("cosmos",         "central_brasil",  "santa_cruz",   false),
-        ("campo_grande",   "central_brasil",  "santa_cruz",   false),
-        ("bangu",          "central_brasil",  "santa_cruz",   false),
-        ("madureira",      "central_brasil",  "santa_cruz",   false),
-        ("meier",          "central_brasil",  "santa_cruz",   false),
+        ("sao_cristovao",  "central_brasil",  "santa_cruz",     false),
+        ("deodoro",        "maracana",        "santa_cruz",     false),
+        ("santa_cruz",     "central_brasil",  "santa_cruz",     false),
+        ("cosmos",         "central_brasil",  "santa_cruz",     false),
+        ("campo_grande",   "central_brasil",  "santa_cruz",     false),
+        ("bangu",          "central_brasil",  "santa_cruz",     false),
+        ("madureira",      "central_brasil",  "santa_cruz",     false),
+        ("meier",          "central_brasil",  "santa_cruz",     false),
 
-        // ── JAPERI trecho exclusivo ──────────────────────────────────────────
-        ("nova_iguacu",    "japeri",          "japeri",       true),
-        ("queimados",      "japeri",          "japeri",       true),
-        ("japeri",         "nova_iguacu",     "japeri",       false),
-        ("queimados",      "central_brasil",  "japeri",       false),
+        ("nova_iguacu",    "japeri",          "japeri",         true),
+        ("queimados",      "japeri",          "japeri",         true),
+        ("japeri",         "nova_iguacu",     "japeri",         false),
+        ("queimados",      "central_brasil",  "japeri",         false),
 
-        // ── BELFORD ROXO trecho exclusivo ───────────────────────────────────
-        ("del_castilho",   "belford_roxo",    "belford_roxo", true),
-        ("honorio_gurgel", "belford_roxo",    "belford_roxo", true),
-        ("pavuna",         "belford_roxo",    "belford_roxo", true),
-        ("belford_roxo",   "del_castilho",    "belford_roxo", false),
-        ("pavuna",         "central_brasil",  "belford_roxo", false),
+        ("del_castilho",   "belford_roxo",    "belford_roxo",   true),
+        ("honorio_gurgel", "belford_roxo",    "belford_roxo",   true),
+        ("pavuna",         "belford_roxo",    "belford_roxo",   true),
+        ("belford_roxo",   "del_castilho",    "belford_roxo",   false),
+        ("pavuna",         "central_brasil",  "belford_roxo",   false),
 
-        // ── SARACURUNA trecho exclusivo ──────────────────────────────────────
-        ("bonsucesso",     "saracuruna",      "saracuruna",   true),
-        ("penha",          "saracuruna",      "saracuruna",   true),
-        ("duque_caxias",   "saracuruna",      "saracuruna",   true),
-        ("gramacho",       "saracuruna",      "saracuruna",   true),
-        ("saracuruna",     "gramacho",        "saracuruna",   false),
-        ("duque_caxias",   "central_brasil",  "saracuruna",   false),
-        ("penha",          "central_brasil",  "saracuruna",   false),
-        ("bonsucesso",     "central_brasil",  "saracuruna",   false),
+        ("bonsucesso",     "saracuruna",      "saracuruna",     true),
+        ("penha",          "saracuruna",      "saracuruna",     true),
+        ("duque_caxias",   "saracuruna",      "saracuruna",     true),
+        ("gramacho",       "saracuruna",      "saracuruna",     true),
+        ("saracuruna",     "gramacho",        "saracuruna",     false),
+        ("duque_caxias",   "central_brasil",  "saracuruna",     false),
+        ("penha",          "central_brasil",  "saracuruna",     false),
+        ("bonsucesso",     "central_brasil",  "saracuruna",     false),
 
-        // ── PARACAMBI ────────────────────────────────────────────────────────
-        ("japeri",         "paracambi",       "paracambi",    true),
-        ("paracambi",      "japeri",          "paracambi",    false),
+        ("japeri",         "paracambi",       "paracambi",      true),
+        ("paracambi",      "japeri",          "paracambi",      false),
 
-        // ── VILA INHOMIRIM ───────────────────────────────────────────────────
         ("saracuruna",     "vila_inhomirim",  "vila_inhomirim", true),
         ("imbarie",        "vila_inhomirim",  "vila_inhomirim", true),
         ("piabeta",        "vila_inhomirim",  "vila_inhomirim", true),
@@ -111,18 +89,15 @@ public sealed class TremTempoRealService
         ("piabeta",        "saracuruna",      "vila_inhomirim", false),
         ("imbarie",        "saracuruna",      "vila_inhomirim", false),
 
-        // ── GUAPIMIRIM ───────────────────────────────────────────────────────
-        ("saracuruna",     "guapimirim",      "guapimirim",   true),
-        ("mage",           "guapimirim",      "guapimirim",   true),
-        ("jd_guapimirim",  "guapimirim",      "guapimirim",   true),
-        ("guapimirim",     "saracuruna",      "guapimirim",   false),
-        ("jd_guapimirim",  "saracuruna",      "guapimirim",   false),
-        ("mage",           "saracuruna",      "guapimirim",   false),
+        ("saracuruna",     "guapimirim",      "guapimirim",     true),
+        ("mage",           "guapimirim",      "guapimirim",     true),
+        ("jd_guapimirim",  "guapimirim",      "guapimirim",     true),
+        ("guapimirim",     "saracuruna",      "guapimirim",     false),
+        ("jd_guapimirim",  "saracuruna",      "guapimirim",     false),
+        ("mage",           "saracuruna",      "guapimirim",     false),
     ];
 
-    public TremTempoRealService(
-        SuperviaApiClient apiClient,
-        ILogger<TremTempoRealService> logger)
+    public TremTempoRealService(SuperviaApiClient apiClient, ILogger<TremTempoRealService> logger)
     {
         _apiClient = apiClient;
         _logger    = logger;
@@ -144,8 +119,6 @@ public sealed class TremTempoRealService
         }
         catch (Exception ex) { _logger.LogError(ex, "Falha ao carregar DadosTrem.json."); }
     }
-
-    // ── API pública ───────────────────────────────────────────────────────────
 
     public async Task<List<PosicaoVeiculoDto>> ObterPosicoesAsync(CancellationToken ct = default)
     {
@@ -171,13 +144,8 @@ public sealed class TremTempoRealService
                 var posicoes = new List<PosicaoTremCacheada>();
                 foreach (var resposta in respostas)
                 {
-                    // Usa o ramal_nome da resposta para determinar o branchId correto
-                    // Isso é o que permite capturar múltiplos ramais numa consulta de integração
                     var branchIdReal = ResolverBranchId(resposta, consulta.BranchId);
-
-                    var pos = InterpolarPosicao(
-                        branchIdReal, consulta.Ida, consulta.Partida, resposta, agora);
-
+                    var pos = InterpolarPosicao(branchIdReal, consulta.Ida, consulta.Partida, resposta, agora);
                     posicoes.AddRange(pos);
                 }
 
@@ -189,8 +157,8 @@ public sealed class TremTempoRealService
 
         var todosResultados = await Task.WhenAll(tarefas);
 
-        // Deduplica por tripname: mantém a posição com maior posicaoNaRota
-        var melhorPorTrip = new Dictionary<string, PosicaoVeiculoDto>(StringComparer.OrdinalIgnoreCase);
+        // Deduplica por tripname mantendo maior posicaoNaRota
+        var melhorPorTrip = new Dictionary<string, PosicaoTremCacheada>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var lista in todosResultados)
         {
@@ -201,44 +169,115 @@ public sealed class TremTempoRealService
                     : item.TripName;
 
                 if (!melhorPorTrip.TryGetValue(tripKey, out var existente) ||
-                    item.Posicao.PosicaoNaRota > existente.PosicaoNaRota)
+                    item.Posicao.PosicaoNaRota > existente.Posicao.PosicaoNaRota)
                 {
-                    melhorPorTrip[tripKey] = item.Posicao;
+                    melhorPorTrip[tripKey] = item;
                 }
             }
         }
 
-        var resultado = melhorPorTrip.Values.ToList();
+        // Remove duplicatas anônimas próximas de trens com tripname real
+        // (mesmo trem retornado com e sem tripname pela API)
+        var resultado = EliminarAnonimosProximos(melhorPorTrip.Values.ToList());
+
+        // Calcula velocidade média real pelo histórico de posições
+        resultado = AtualizarVelocidadeMedia(resultado, agora);
+
         _logger.LogInformation("Trens tempo real: {n} posições únicas.", resultado.Count);
+        return resultado.Select(c => c.Posicao).ToList();
+    }
+
+    /// <summary>
+    /// Remove trens anônimos (sem tripname real) que estejam muito próximos
+    /// de um trem com tripname real no mesmo sentido/linha.
+    /// </summary>
+    private static List<PosicaoTremCacheada> EliminarAnonimosProximos(List<PosicaoTremCacheada> trens)
+    {
+        var reais    = trens.Where(t => !t.TripName.StartsWith("anon-")).ToList();
+        var anonimos = trens.Where(t => t.TripName.StartsWith("anon-")).ToList();
+
+        var resultado = new List<PosicaoTremCacheada>(reais);
+
+        foreach (var anon in anonimos)
+        {
+            var muitoProximo = reais.Any(r =>
+                r.Posicao.CodigoLinha == anon.Posicao.CodigoLinha &&
+                DistanciaKm(r.Posicao.Latitude, r.Posicao.Longitude,
+                            anon.Posicao.Latitude, anon.Posicao.Longitude) < DistanciaMinEntresTrensKm);
+
+            if (!muitoProximo)
+                resultado.Add(anon);
+        }
+
         return resultado;
     }
 
-    private static string ResolverBranchId(ProximoTremDto resposta, string branchIdFallback)
+    /// <summary>
+    /// Calcula velocidade média real baseada no deslocamento desde a última posição registrada.
+    /// </summary>
+    private List<PosicaoTremCacheada> AtualizarVelocidadeMedia(List<PosicaoTremCacheada> trens, DateTimeOffset agora)
+    {
+        var atualizados = new List<PosicaoTremCacheada>(trens.Count);
+
+        foreach (var item in trens)
+        {
+            var pos = item.Posicao;
+            var chave = pos.Ordem;
+
+            double velMedia = VelocidadePadraoKmh;
+
+            if (_historicoPosicao.TryGetValue(chave, out var anterior))
+            {
+                var deltaSeg = (agora - anterior.Ts).TotalSeconds;
+                if (deltaSeg > 5 && deltaSeg < 300) // janela razoável: 5s a 5min
+                {
+                    var distKm = DistanciaKm(anterior.Lat, anterior.Lon, pos.Latitude, pos.Longitude);
+                    var velCalculada = distKm / (deltaSeg / 3600.0);
+
+                    // Aceita só se dentro de limites físicos plausíveis para trem urbano
+                    if (velCalculada >= 0 && velCalculada <= 120)
+                        velMedia = velCalculada;
+                }
+            }
+
+            _historicoPosicao[chave] = (pos.Latitude, pos.Longitude, agora);
+
+            atualizados.Add(item with
+            {
+                Posicao = pos with { VelocidadeMedia = velMedia }
+            });
+        }
+
+        return atualizados;
+    }
+
+    private static double DistanciaKm(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double R = 6371.0;
+        var dLat = (lat2 - lat1) * Math.PI / 180;
+        var dLon = (lon2 - lon1) * Math.PI / 180;
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+              + Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180)
+              * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+    }
+
+    private static string ResolverBranchId(ProximoTremDto resposta, string fallback)
     {
         if (!string.IsNullOrWhiteSpace(resposta.RamalNome) &&
             RamalNomeParaBranchId.TryGetValue(resposta.RamalNome, out var id))
             return id;
-
-        return branchIdFallback;
+        return fallback;
     }
 
-    // ── Interpolação ──────────────────────────────────────────────────────────
-
     private List<PosicaoTremCacheada> InterpolarPosicao(
-        string branchId,
-        bool ida,
-        string idEstacaoConsulta,
-        ProximoTremDto resposta,
-        DateTimeOffset agora)
+        string branchId, bool ida, string idEstacaoConsulta,
+        ProximoTremDto resposta, DateTimeOffset agora)
     {
-        if (_config?.Ramais is null || _config.CoordenadasEstacoes is null)
-            return [];
-
-        if (!_config.Ramais.TryGetValue(branchId, out var ramal) || ramal.Estacoes is null)
-            return [];
+        if (_config?.Ramais is null || _config.CoordenadasEstacoes is null) return [];
+        if (!_config.Ramais.TryGetValue(branchId, out var ramal) || ramal.Estacoes is null) return [];
 
         var estacoes = ramal.Estacoes;
-
         var idxConsulta = estacoes.FindIndex(e =>
             string.Equals(e.Id, idEstacaoConsulta, StringComparison.OrdinalIgnoreCase));
 
@@ -250,7 +289,6 @@ public sealed class TremTempoRealService
 
         var estimativa    = resposta.EstimativaDateTimeOffset ?? agora.AddMinutes(resposta.MinutosParaChegada);
         var segParaChegar = (estimativa - agora).TotalSeconds;
-
         if (segParaChegar < -180) return [];
 
         var ordemEstacoes = ida
@@ -263,37 +301,35 @@ public sealed class TremTempoRealService
         if (segParaChegar > 0)
         {
             var distRetroKm = (segParaChegar / 3600.0) * VelocidadePadraoKmh;
-            posicaoKm = ida
-                ? distConsultaKm - distRetroKm
-                : distConsultaKm + distRetroKm;
+            posicaoKm = ida ? distConsultaKm - distRetroKm : distConsultaKm + distRetroKm;
         }
         else
         {
             var distAvancoKm = (-segParaChegar / 3600.0) * VelocidadePadraoKmh;
-            posicaoKm = ida
-                ? distConsultaKm + distAvancoKm
-                : distConsultaKm - distAvancoKm;
+            posicaoKm = ida ? distConsultaKm + distAvancoKm : distConsultaKm - distAvancoKm;
         }
 
-        // Usa tripname real se disponível; fallback limpo sem duplicar sentido
+        var tipoTrem = resposta.TipoTrem?.ToLowerInvariant() switch
+        {
+            "expresso" or "express" => "expresso",
+            _                       => "parador",
+        };
+
+        // Sentido legível: central = direção Central do Brasil, terminal = direção terminal
+        var nomeSentido = ida ? "central" : "terminal";
+
         var tripName = !string.IsNullOrWhiteSpace(resposta.TripName)
             ? resposta.TripName
             : $"anon-{branchId}-{(ida ? "I" : "V")}-{(int)(distConsultaKm * 10):D4}";
 
-        var pos = InterpolarNaRota(
-            branchId, estacoes, ordemEstacoes, posicaoKm, ida, agora, tripName);
-
+        var pos = InterpolarNaRota(branchId, estacoes, ordemEstacoes, posicaoKm, ida, agora, tripName, tipoTrem, nomeSentido);
         return pos is null ? [] : [new PosicaoTremCacheada(tripName, pos)];
     }
 
     private PosicaoVeiculoDto? InterpolarNaRota(
-        string branchId,
-        List<EstacaoConfig> estacoes,
-        List<int> ordemEstacoes,
-        double posicaoKm,
-        bool ida,
-        DateTimeOffset agora,
-        string tripName)
+        string branchId, List<EstacaoConfig> estacoes, List<int> ordemEstacoes,
+        double posicaoKm, bool ida, DateTimeOffset agora,
+        string tripName, string tipoTrem, string nomeSentido)
     {
         if (_config?.CoordenadasEstacoes is null) return null;
 
@@ -328,20 +364,22 @@ public sealed class TremTempoRealService
             var lat     = cAtual.Lat + (cProx.Lat - cAtual.Lat) * fracao;
             var lon     = cAtual.Lon + (cProx.Lon - cAtual.Lon) * fracao;
             var bearing = GpsEnriquecimentoService.CalcularBearing(lat, lon, cProx.Lat, cProx.Lon);
-            var sentido = ida ? "IDA" : "VOLTA";
 
             var distTotal      = Math.Abs(distMax - distMin);
             var distPercorrida = Math.Abs(posicaoKm - distMin);
             var posNaRota      = distTotal > 0 ? distPercorrida / distTotal : 0;
 
+            // Ordem: {tipo}-{sentido}-{tripname}
+            var ordem = $"{tipoTrem}-{nomeSentido}-{tripName}";
+
             return new PosicaoVeiculoDto
             {
-                Ordem                        = $"TREM-{branchId.ToUpperInvariant()}-{sentido}-{tripName}",
+                Ordem                        = ordem,
                 CodigoLinha                  = $"TREM-{branchId.ToUpperInvariant()}",
                 Latitude                     = lat,
                 Longitude                    = lon,
                 Velocidade                   = VelocidadePadraoKmh,
-                VelocidadeMedia              = VelocidadePadraoKmh,
+                VelocidadeMedia              = VelocidadePadraoKmh, // será sobrescrita por AtualizarVelocidadeMedia
                 Bearing                      = bearing,
                 TimestampGps                 = agora,
                 TimestampServidor            = agora,
@@ -353,18 +391,19 @@ public sealed class TremTempoRealService
             };
         }
 
-        // Fallback: posiciona na última estação — nome limpo sem duplicar sentido
+        // Fallback: última estação
         var idxFinal = ordemEstacoes[^1];
         if (_config.CoordenadasEstacoes.TryGetValue(estacoes[idxFinal].Id, out var coordFinal))
         {
-            var sentido = ida ? "IDA" : "VOLTA";
+            var ordem = $"{tipoTrem}-{nomeSentido}-{tripName}";
             return new PosicaoVeiculoDto
             {
-                Ordem             = $"TREM-{branchId.ToUpperInvariant()}-{sentido}-{tripName}",
+                Ordem             = ordem,
                 CodigoLinha       = $"TREM-{branchId.ToUpperInvariant()}",
                 Latitude          = coordFinal.Lat,
                 Longitude         = coordFinal.Lon,
                 Velocidade        = 0,
+                VelocidadeMedia   = VelocidadePadraoKmh,
                 TimestampGps      = agora,
                 TimestampServidor = agora,
                 Status            = StatusVeiculo.Ativo,

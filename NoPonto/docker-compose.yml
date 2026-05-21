@@ -73,6 +73,10 @@ services:
       SUPERVIA__API__BASE_URL: ${SUPERVIA__API__BASE_URL}
       SUPERVIA__API__POST_ENDPOINT: ${SUPERVIA__API__POST_ENDPOINT}
 
+      TREM__HABILITADO: ${TREM__HABILITADO}
+      TREM__HORARIO_INICIO: ${TREM__HORARIO_INICIO}
+      TREM__HORARIO_FIM: ${TREM__HORARIO_FIM}
+
       GpsPolling__IntervaloSegundos: ${GpsPolling__IntervaloSegundos}
       GpsPolling__TtlAtivoSegundos: ${GpsPolling__TtlAtivoSegundos}
       GpsPolling__TtlRecenteSegundos: ${GpsPolling__TtlRecenteSegundos}
