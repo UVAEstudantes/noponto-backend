@@ -109,6 +109,97 @@ public sealed class RelacionarParadasItinerariosService
             cronometro.Elapsed.TotalSeconds.ToString("F2", CultureInfo.InvariantCulture));
     }
 
+    /// <summary>
+    /// Executa o relacionamento apenas para itinerários do modal informado
+    /// (ex: "BRT", "Ônibus", "Trem").
+    /// Garante que paradas de modais diferentes não se misturem:
+    /// o SQL já faz isso naturalmente pois filtra por itinerário → linha → modal.
+    /// </summary>
+    public async Task ExecutarRelacionamentoPorModalAsync(
+        string nomeModal,
+        CancellationToken cancellationToken = default)
+    {
+        var cronometro = Stopwatch.StartNew();
+
+        _logger.LogInformation(
+            "Iniciando relacionamento de paradas para modal '{modal}'", nomeModal);
+
+        var config = LerConfiguracoes();
+        var totalRelacoesCriadas      = 0;
+        var totalItinerariosProcessados = 0;
+
+        // Busca IDs de itinerários cujas linhas pertencem ao modal informado
+        var itinerarioIds = await _contexto.Itinerarios
+            .AsNoTracking()
+            .Where(i => i.Sentido.Linha.Modal.Nome == nomeModal)
+            .Select(i => i.Id)
+            .ToListAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Modal '{modal}' — {total} itinerários encontrados.", nomeModal, itinerarioIds.Count);
+
+        foreach (var itinerarioId in itinerarioIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            totalItinerariosProcessados++;
+
+            var candidatos        = await BuscarCandidatosAsync(itinerarioId, config, cancellationToken);
+            var paradasSelecionadas = FiltrarEOrdenar(candidatos, config);
+
+            if (paradasSelecionadas.Count == 0)
+                continue;
+
+            var paradaIds = paradasSelecionadas.Select(p => p.ParadaId).ToList();
+
+            var jaRelacionadas = await _contexto.ParadasItinerario
+                .AsNoTracking()
+                .Where(r => r.ItinerarioId == itinerarioId
+                        && paradaIds.Contains(r.ParadaId))
+                .Select(r => r.ParadaId)
+                .ToListAsync(cancellationToken);
+
+            var jaRelacionadasSet = new HashSet<Guid>(jaRelacionadas);
+            var relacoesNovas     = new List<ParadaItinerario>();
+            var ordem             = 0;
+
+            foreach (var parada in paradasSelecionadas)
+            {
+                ordem++;
+                if (!jaRelacionadasSet.Add(parada.ParadaId))
+                    continue;
+
+                relacoesNovas.Add(new ParadaItinerario
+                {
+                    Id              = Guid.NewGuid(),
+                    ParadaId        = parada.ParadaId,
+                    ItinerarioId    = itinerarioId,
+                    Ordem           = ordem,
+                    PosicaoLinha    = parada.PosicaoLinha,
+                    DistanciaMetros = parada.DistanciaVerticeMetros
+                });
+            }
+
+            var criadas = await SalvarRelacoesEmLotesAsync(
+                relacoesNovas, config.TamanhoLote, cancellationToken);
+
+            _logger.LogInformation(
+                "Itinerário {id} (modal {modal}) — relações criadas: {qtd}",
+                itinerarioId, nomeModal, criadas);
+
+            totalRelacoesCriadas += criadas;
+        }
+
+        cronometro.Stop();
+
+        _logger.LogInformation(
+            "Relacionamento modal '{modal}' concluído — " +
+            "{itinerarios} itinerários, {relacoes} relações, {s:F2}s.",
+            nomeModal,
+            totalItinerariosProcessados,
+            totalRelacoesCriadas,
+            cronometro.Elapsed.TotalSeconds);
+    }
+
     public async Task<ResultadoItinerario> ExecutarParaItinerarioAsync(
         Guid itinerarioId,
         CancellationToken cancellationToken = default)
