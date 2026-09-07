@@ -15,6 +15,9 @@ namespace NoPonto.Application.GPS;
 ///
 /// O deduplicador no PollingService (GroupBy + OrderByDescending) garante
 /// que só fica a posição mais recente por veículo.
+///
+/// ATENÇÃO (07/09/2026): a API mudou de schema. Ver PosicaoApiDto.cs para
+/// detalhes do mapeamento de campos antigos → novos.
 /// </summary>
 public sealed class GpsSppoClient
 {
@@ -75,15 +78,34 @@ public sealed class GpsSppoClient
                 return [];
             }
 
-            _logger.LogInformation(
-                "API GPS retornou {total} posições (janela {janela}s)",
-                raw.Count, janelaSegundos);
+            var normalizadas = new List<PosicaoVeiculoDto>(raw.Count);
+            var foraDeOperacao = 0;
+            var invalidas = 0;
 
-            return raw
-                .Select(Normalizar)
-                .Where(p => p is not null)
-                .Cast<PosicaoVeiculoDto>()
-                .ToList();
+            foreach (var dto in raw)
+            {
+                var normalizado = Normalizar(dto, out var motivo);
+
+                if (normalizado is not null)
+                {
+                    normalizadas.Add(normalizado);
+                }
+                else if (motivo == MotivoDescarte.ForaDeOperacao)
+                {
+                    foraDeOperacao++;
+                }
+                else
+                {
+                    invalidas++;
+                }
+            }
+
+            _logger.LogInformation(
+                "API GPS retornou {total} posições (janela {janela}s): {ativas} ativas, " +
+                "{fora} fora de operação, {inv} inválidas",
+                raw.Count, janelaSegundos, normalizadas.Count, foraDeOperacao, invalidas);
+
+            return normalizadas;
         }
         catch (Exception ex)
         {
@@ -92,13 +114,28 @@ public sealed class GpsSppoClient
         }
     }
 
-    private PosicaoVeiculoDto? Normalizar(PosicaoApiDto dto)
+    private enum MotivoDescarte
     {
-        if (string.IsNullOrWhiteSpace(dto.Ordem) || string.IsNullOrWhiteSpace(dto.Linha))
+        Nenhum,
+        ForaDeOperacao,
+        Invalida,
+    }
+
+    private PosicaoVeiculoDto? Normalizar(PosicaoApiDto dto, out MotivoDescarte motivo)
+    {
+        // id_veiculo nulo/vazio é anômalo (nunca deveria acontecer segundo a doc da API).
+        if (string.IsNullOrWhiteSpace(dto.Ordem))
         {
-            _logger.LogWarning(
-                "Posição SPPO ignorada por identificação inválida: ordem={ordem} linha={linha}",
-                dto.Ordem, dto.Linha);
+            _logger.LogWarning("Posição SPPO ignorada: id_veiculo ausente");
+            motivo = MotivoDescarte.Invalida;
+            return null;
+        }
+
+        // servico (linha) nulo é NORMAL e documentado: significa veículo fora de
+        // operação no momento. Não é erro — só contamos, sem warning por item.
+        if (string.IsNullOrWhiteSpace(dto.Linha))
+        {
+            motivo = MotivoDescarte.ForaDeOperacao;
             return null;
         }
 
@@ -110,11 +147,20 @@ public sealed class GpsSppoClient
             _logger.LogWarning(
                 "Coordenada inválida para veículo {ordem}: lat={lat} lon={lon}",
                 dto.Ordem, dto.Latitude, dto.Longitude);
+            motivo = MotivoDescarte.Invalida;
             return null;
         }
 
         if (!TryParseDouble(dto.Velocidade, out var velocidade))
             velocidade = 0;
+
+        // datetime/datetime_envio/datetime_servidor já vêm como DateTimeOffset
+        // (System.Text.Json converte ISO 8601 nativamente). Se algum vier nulo
+        // (a API às vezes omite), caímos para UtcNow como fallback.
+        var timestampGps      = dto.DataHora ?? DateTimeOffset.UtcNow;
+        var timestampServidor = dto.DataHoraServidor ?? dto.DataHoraEnvio ?? DateTimeOffset.UtcNow;
+
+        motivo = MotivoDescarte.Nenhum;
 
         return new PosicaoVeiculoDto
         {
@@ -123,8 +169,8 @@ public sealed class GpsSppoClient
             Latitude          = lat,
             Longitude         = lon,
             Velocidade        = velocidade,
-            TimestampGps      = UnixMsParaDateTimeOffset(dto.DataHora),
-            TimestampServidor = UnixMsParaDateTimeOffset(dto.DataHoraServidor),
+            TimestampGps      = timestampGps,
+            TimestampServidor = timestampServidor,
         };
     }
 
@@ -148,12 +194,5 @@ public sealed class GpsSppoClient
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out resultado);
-    }
-
-    private static DateTimeOffset UnixMsParaDateTimeOffset(string? unixMs)
-    {
-        if (long.TryParse(unixMs, out var ms))
-            return DateTimeOffset.FromUnixTimeMilliseconds(ms);
-        return DateTimeOffset.UtcNow;
     }
 }

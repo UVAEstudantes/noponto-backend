@@ -6,11 +6,23 @@ namespace NoPonto.Application.GPS;
 
 /// <summary>
 /// Representa exatamente um item do JSON retornado pela API pública de GPS.
+///
+/// ATENÇÃO: a API mudou de schema (observado em 07/09/2026). Nomes antigos
+/// (ordem, linha, datahora, datahoraenvio, datahoraservidor) foram
+/// substituídos por (id_veiculo, servico, datetime, datetime_envio,
+/// datetime_servidor). Os campos de data também passaram de unix-ms (string)
+/// para ISO 8601 (string, ex: "2026-09-07T18:49:34Z").
 /// </summary>
 public sealed class PosicaoApiDto
 {
-    [JsonPropertyName("ordem")]
+    [JsonPropertyName("id_veiculo")]
     public string Ordem { get; init; } = null!;
+
+    [JsonPropertyName("servico")]
+    public string Linha { get; init; } = null!;
+
+    [JsonPropertyName("sentido")]
+    public string? Sentido { get; init; }
 
     [JsonPropertyName("latitude")]
     [JsonConverter(typeof(StringOrNumberJsonConverter))]
@@ -20,24 +32,40 @@ public sealed class PosicaoApiDto
     [JsonConverter(typeof(StringOrNumberJsonConverter))]
     public string Longitude { get; init; } = null!;
 
-    [JsonPropertyName("datahora")]
-    [JsonConverter(typeof(StringOrNumberJsonConverter))]
-    public string DataHora { get; init; } = null!;
-
     [JsonPropertyName("velocidade")]
     [JsonConverter(typeof(StringOrNumberJsonConverter))]
     public string Velocidade { get; init; } = null!;
 
-    [JsonPropertyName("linha")]
-    public string Linha { get; init; } = null!;
-
-    [JsonPropertyName("datahoraenvio")]
+    /// <summary>
+    /// Bearing/direção em graus, já calculado pela própria API.
+    /// Antes seu sistema calculava isso internamente a partir de duas
+    /// posições consecutivas — agora pode vir pronto. Avalie se vale usar
+    /// direto em vez do cálculo manual em GpsEnriquecimentoService.
+    /// </summary>
+    [JsonPropertyName("direcao")]
     [JsonConverter(typeof(StringOrNumberJsonConverter))]
-    public string DataHoraEnvio { get; init; } = null!;
+    public string? Direcao { get; init; }
 
-    [JsonPropertyName("datahoraservidor")]
-    [JsonConverter(typeof(StringOrNumberJsonConverter))]
-    public string DataHoraServidor { get; init; } = null!;
+    [JsonPropertyName("route_id")]
+    public string? RouteId { get; init; }
+
+    [JsonPropertyName("trip_id")]
+    public string? TripId { get; init; }
+
+    [JsonPropertyName("shape_id")]
+    public string? ShapeId { get; init; }
+
+    /// <summary>Timestamp real do GPS, agora em ISO 8601 (antes era unix ms).</summary>
+    [JsonPropertyName("datetime")]
+    public DateTimeOffset? DataHora { get; init; }
+
+    /// <summary>Quando o veículo enviou o dado à central. Agora ISO 8601.</summary>
+    [JsonPropertyName("datetime_envio")]
+    public DateTimeOffset? DataHoraEnvio { get; init; }
+
+    /// <summary>Quando o servidor da API recebeu/processou. Agora ISO 8601.</summary>
+    [JsonPropertyName("datetime_servidor")]
+    public DateTimeOffset? DataHoraServidor { get; init; }
 }
 
 /// <summary>
