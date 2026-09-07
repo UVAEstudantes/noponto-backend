@@ -247,6 +247,11 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportacaoItinerar
 builder.Services.AddHttpClient<OverpassClient>();
 builder.Services.AddScoped<PopularPoisService>();
 builder.Services.AddScoped<IPoiRepository, PoiRepository>();
+
+// BRT
+builder.Services.AddScoped<ImportacaoParadasBrtService>();
+builder.Services.AddScoped<RelacionarParadasBrtJob>();
+
 // ArcGIS trem
 builder.Services.AddHttpClient("arcgis-trem", client =>
 {
