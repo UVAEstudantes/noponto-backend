@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace NoPonto.Application.GPS;
@@ -11,26 +13,57 @@ public sealed class PosicaoApiDto
     public string Ordem { get; init; } = null!;
 
     [JsonPropertyName("latitude")]
+    [JsonConverter(typeof(StringOrNumberJsonConverter))]
     public string Latitude { get; init; } = null!;
 
     [JsonPropertyName("longitude")]
+    [JsonConverter(typeof(StringOrNumberJsonConverter))]
     public string Longitude { get; init; } = null!;
 
     [JsonPropertyName("datahora")]
+    [JsonConverter(typeof(StringOrNumberJsonConverter))]
     public string DataHora { get; init; } = null!;
 
     [JsonPropertyName("velocidade")]
+    [JsonConverter(typeof(StringOrNumberJsonConverter))]
     public string Velocidade { get; init; } = null!;
 
     [JsonPropertyName("linha")]
     public string Linha { get; init; } = null!;
 
     [JsonPropertyName("datahoraenvio")]
+    [JsonConverter(typeof(StringOrNumberJsonConverter))]
     public string DataHoraEnvio { get; init; } = null!;
 
     [JsonPropertyName("datahoraservidor")]
+    [JsonConverter(typeof(StringOrNumberJsonConverter))]
     public string DataHoraServidor { get; init; } = null!;
 }
+
+/// <summary>
+/// Aceita campos escalares que a API externa pode devolver ora como texto,
+/// ora como número. Preserva o valor textual para a normalização existente.
+/// </summary>
+public sealed class StringOrNumberJsonConverter : JsonConverter<string>
+{
+    public override string Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options) => reader.TokenType switch
+    {
+        JsonTokenType.String => reader.GetString() ?? string.Empty,
+        JsonTokenType.Number => reader.GetDecimal().ToString(CultureInfo.InvariantCulture),
+        JsonTokenType.Null => string.Empty,
+        _ => throw new JsonException(
+            $"Esperado texto ou número, recebido {reader.TokenType}.")
+    };
+
+    public override void Write(
+        Utf8JsonWriter writer,
+        string value,
+        JsonSerializerOptions options) => writer.WriteStringValue(value);
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Status do veículo

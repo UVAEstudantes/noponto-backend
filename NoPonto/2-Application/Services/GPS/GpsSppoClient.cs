@@ -94,8 +94,18 @@ public sealed class GpsSppoClient
 
     private PosicaoVeiculoDto? Normalizar(PosicaoApiDto dto)
     {
+        if (string.IsNullOrWhiteSpace(dto.Ordem) || string.IsNullOrWhiteSpace(dto.Linha))
+        {
+            _logger.LogWarning(
+                "Posição SPPO ignorada por identificação inválida: ordem={ordem} linha={linha}",
+                dto.Ordem, dto.Linha);
+            return null;
+        }
+
         if (!TryParseDecimalBr(dto.Latitude, out var lat) ||
-            !TryParseDecimalBr(dto.Longitude, out var lon))
+            !TryParseDecimalBr(dto.Longitude, out var lon) ||
+            lat is < -90 or > 90 ||
+            lon is < -180 or > 180)
         {
             _logger.LogWarning(
                 "Coordenada inválida para veículo {ordem}: lat={lat} lon={lon}",
@@ -118,17 +128,29 @@ public sealed class GpsSppoClient
         };
     }
 
-    private static bool TryParseDecimalBr(string valor, out double resultado) =>
-        double.TryParse(
-            valor.Replace(',', '.'),
-            NumberStyles.Float,
-            CultureInfo.InvariantCulture,
-            out resultado);
+    private static bool TryParseDecimalBr(string? valor, out double resultado)
+    {
+        resultado = 0;
+        return !string.IsNullOrWhiteSpace(valor) &&
+            double.TryParse(
+                valor.Replace(',', '.'),
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out resultado);
+    }
 
-    private static bool TryParseDouble(string valor, out double resultado) =>
-        double.TryParse(valor, NumberStyles.Float, CultureInfo.InvariantCulture, out resultado);
+    private static bool TryParseDouble(string? valor, out double resultado)
+    {
+        resultado = 0;
+        return !string.IsNullOrWhiteSpace(valor) &&
+            double.TryParse(
+                valor.Replace(',', '.'),
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out resultado);
+    }
 
-    private static DateTimeOffset UnixMsParaDateTimeOffset(string unixMs)
+    private static DateTimeOffset UnixMsParaDateTimeOffset(string? unixMs)
     {
         if (long.TryParse(unixMs, out var ms))
             return DateTimeOffset.FromUnixTimeMilliseconds(ms);
