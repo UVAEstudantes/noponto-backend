@@ -5,23 +5,28 @@ using Microsoft.Extensions.Logging;
 namespace NoPonto.Application.GPS;
 
 /// <summary>
-/// Cliente HTTP tipado para a API pública de GPS da Mobilidade Rio.
+/// Cliente HTTP tipado para a API pública de GPS da Mobilidade Rio (fornecedora Zirix).
 ///
-/// A API filtra por datahoraenvio (quando o GPS comunicou à central),
-/// não por datahora (timestamp real do GPS). Para evitar perder posições
-/// que chegaram com atraso, usamos uma janela com overlap retroativo:
+/// ATENÇÃO (07/09/2026): endpoint migrado de
+/// https://dados.mobilidade.rio/gps/sppo (descontinuado, será desligado até 30/11/2026)
+/// para
+/// https://dados.mobilidade.rio/sppo/zirix/gps
+/// Ver PosicaoApiDto.cs para o mapeamento de campos do novo schema.
+///
+/// O filtro dataInicial/dataFinal agora referencia datetime_servidor (quando a
+/// posição foi disponibilizada no endpoint), e a doc recomenda ISO 8601 (UTC).
+/// Para evitar perder posições que chegaram com atraso, usamos uma janela com
+/// overlap retroativo:
 ///   dataInicial = agora - JanelaSegundos (default: 60s)
 ///   dataFinal   = agora
 ///
 /// O deduplicador no PollingService (GroupBy + OrderByDescending) garante
 /// que só fica a posição mais recente por veículo.
-///
-/// ATENÇÃO (07/09/2026): a API mudou de schema. Ver PosicaoApiDto.cs para
-/// detalhes do mapeamento de campos antigos → novos.
 /// </summary>
 public sealed class GpsSppoClient
 {
-    private const string FormatoData = "yyyy-MM-dd+HH:mm:ss";
+    // ISO 8601 UTC, ex: 2026-09-07T19:22:41Z
+    private const string FormatoData = "yyyy-MM-ddTHH:mm:ssZ";
 
     private readonly HttpClient _http;
     private readonly ILogger<GpsSppoClient> _logger;
@@ -62,8 +67,9 @@ public sealed class GpsSppoClient
         var inicio = referencia.AddSeconds(-janelaSegundos);
         var fim    = referencia;
 
-        var dataInicial = inicio.ToLocalTime().ToString(FormatoData, CultureInfo.InvariantCulture);
-        var dataFinal   = fim.ToLocalTime().ToString(FormatoData, CultureInfo.InvariantCulture);
+        // ATENÇÃO: novo endpoint espera UTC em ISO 8601, não mais hora local.
+        var dataInicial = inicio.ToUniversalTime().ToString(FormatoData, CultureInfo.InvariantCulture);
+        var dataFinal   = fim.ToUniversalTime().ToString(FormatoData, CultureInfo.InvariantCulture);
         var url = $"?dataInicial={dataInicial}&dataFinal={dataFinal}";
 
         _logger.LogDebug("Buscando GPS SPPO janela {janela}s: {url}", janelaSegundos, url);
@@ -131,8 +137,8 @@ public sealed class GpsSppoClient
             return null;
         }
 
-        // servico (linha) nulo é NORMAL e documentado: significa veículo fora de
-        // operação no momento. Não é erro — só contamos, sem warning por item.
+        // servico (linha) nulo/vazio é NORMAL e documentado: significa veículo fora
+        // de operação no momento. Não é erro — só contamos, sem warning por item.
         if (string.IsNullOrWhiteSpace(dto.Linha))
         {
             motivo = MotivoDescarte.ForaDeOperacao;
