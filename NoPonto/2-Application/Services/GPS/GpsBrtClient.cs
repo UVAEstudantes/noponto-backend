@@ -60,13 +60,20 @@ public sealed class GpsBrtClient
 
     private static PosicaoVeiculoDto? Normalizar(BrtVeiculoDto dto)
     {
-        if (dto.Latitude == 0 || dto.Longitude == 0)
+        if (!GpsLeituraValidator.CoordenadaValida(dto.Latitude, dto.Longitude))
+            return null;
+
+        DateTimeOffset? bruto = dto.DataHora > 0
+            ? DateTimeOffset.FromUnixTimeMilliseconds(dto.DataHora)
+            : null;
+
+        if (!GpsLeituraValidator.TimestampValido(bruto, DateTimeOffset.UtcNow, out var timestampGps))
             return null;
 
         double? direcao = null;
         if (!string.IsNullOrWhiteSpace(dto.Direcao) &&
             double.TryParse(dto.Direcao.Trim(), out var dir) &&
-            dir >= 0 && dir <= 360)
+            dir is >= 0 and <= 360)
         {
             direcao = dir;
         }
@@ -78,8 +85,8 @@ public sealed class GpsBrtClient
             Latitude          = dto.Latitude,
             Longitude         = dto.Longitude,
             Velocidade        = dto.Velocidade,
-            TimestampGps      = DateTimeOffset.FromUnixTimeMilliseconds(dto.DataHora),
-            TimestampServidor = DateTimeOffset.FromUnixTimeMilliseconds(dto.DataHora),
+            TimestampGps      = timestampGps,
+            TimestampServidor = timestampGps,
             Bearing           = direcao,
         };
     }

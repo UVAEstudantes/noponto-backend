@@ -350,6 +350,8 @@ builder.Services.AddStackExchangeRedisCache(options =>
 builder.Services.AddSingleton<IConnectionMultiplexer>(
     _ => ConnectionMultiplexer.Connect(redisConnection));
 
+builder.Services.AddSingleton<IPosicaoVeiculoCacheRepository, PosicaoVeiculoCacheRepository>();
+
 // --------------------------------------------------------------------
 // SERVICES
 // --------------------------------------------------------------------

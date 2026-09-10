@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NoPonto.API.Hubs;
+using NoPonto.Data.Repositories;
 
 namespace NoPonto.Application.GPS;
 
@@ -29,6 +30,8 @@ public sealed class GpsPollingService : BackgroundService
     private readonly GpsEtaClient _etaClient;
     private readonly GpsBrtClient _brtClient;
 
+    private readonly IPosicaoVeiculoCacheRepository _posicaoCache;
+
     public GpsPollingService(
         GpsSppoClient cliente,
         IDistributedCache cache,
@@ -39,7 +42,8 @@ public sealed class GpsPollingService : BackgroundService
         GpsEnriquecimentoService enriquecedor,
         GpsHistoricoService historicoService,
         GpsEtaClient etaClient,
-        GpsBrtClient brtClient)
+        GpsBrtClient brtClient,
+        IPosicaoVeiculoCacheRepository posicaoCache)
     {
         _cliente = cliente;
         _cache = cache;
@@ -51,6 +55,7 @@ public sealed class GpsPollingService : BackgroundService
         _historicoService = historicoService;
         _etaClient = etaClient;
         _brtClient = brtClient;
+        _posicaoCache = posicaoCache;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -280,27 +285,37 @@ public sealed class GpsPollingService : BackgroundService
             .Concat(resultadosSemEnriquecimento)
             .ToList();
 
-        // ── 5. Escrita no Redis ───────────────────────────────────────────────
-        var opcoesAtivo = new DistributedCacheEntryOptions
+        // ── 5. Escrita atômica no Redis (CAS por timestamp) ─────────────────────
+        // A leitura "anterior" feita no passo 2 é só uma otimização para evitar
+        // enriquecimento desnecessário; a decisão final e autoritativa de aceitar
+        // ou rejeitar cada posição acontece aqui, atomicamente no Redis.
+        var ttlAtivo   = TimeSpan.FromSeconds(opcoes.TtlAtivoSegundos);
+        var ttlRecente = TimeSpan.FromSeconds(opcoes.TtlRecenteSegundos);
+
+        var resultadosGravacao = await Task.WhenAll(todosProcessados.Select(async final =>
         {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(opcoes.TtlAtivoSegundos)
-        };
-        var opcoesRecente = new DistributedCacheEntryOptions
+            var aceito = await _posicaoCache.TentarAtualizarAsync(
+                final.Ordem, final, final.TimestampGps, ttlAtivo, ttlRecente, ct);
+            return (Posicao: final, Aceito: aceito);
+        }));
+
+        var aceitos = resultadosGravacao.Where(r => r.Aceito).Select(r => r.Posicao).ToList();
+        var rejeitadosPorCas = resultadosGravacao.Length - aceitos.Count;
+
+        if (rejeitadosPorCas > 0)
         {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(opcoes.TtlRecenteSegundos)
-        };
+            _logger.LogInformation(
+                "Ciclo GPS: {qtd} posições rejeitadas na escrita CAS (concorrência entre instâncias ou duplicata).",
+                rejeitadosPorCas);
+        }
+
+        var ordensAceitas = new HashSet<string>(aceitos.Select(a => a.Ordem), StringComparer.OrdinalIgnoreCase);
 
         var ativosPorLinha = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var tarefasEscrita = new List<Task>();
 
-        foreach (var final in todosProcessados)
+        foreach (var final in aceitos)
         {
-            var jsonFinal = JsonSerializer.Serialize(final, JsonOptions);
-            tarefasEscrita.Add(_cache.SetStringAsync(
-                ChaveVeiculoAtivo(final.Ordem), jsonFinal, opcoesAtivo, ct));
-            tarefasEscrita.Add(_cache.SetStringAsync(
-                ChaveVeiculoRecente(final.Ordem), jsonFinal, opcoesRecente, ct));
-
             if (!ativosPorLinha.TryGetValue(final.CodigoLinha, out var set))
             {
                 set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -309,10 +324,15 @@ public sealed class GpsPollingService : BackgroundService
             set.Add(final.Ordem);
         }
 
-        // ── 5.5. Coleta histórico de passagens ────────────────────────────────
+        // ── 5.5. Coleta histórico de passagens (somente leituras aceitas) ───────
         if (opcoes.HistoricoHabilitado && resultadosEnriquecidos.Length > 0)
         {
-            await _historicoService.ProcessarLoteAsync(resultadosEnriquecidos, ct);
+            var enriquecidosAceitos = resultadosEnriquecidos
+                .Where(p => ordensAceitas.Contains(p.Ordem))
+                .ToList();
+
+            if (enriquecidosAceitos.Count > 0)
+                await _historicoService.ProcessarLoteAsync(enriquecidosAceitos, ct);
         }
 
         // ── 6. Merge sets de linha ────────────────────────────────────────────
@@ -376,7 +396,7 @@ public sealed class GpsPollingService : BackgroundService
                 if (!ativosPorLinha.TryGetValue(linha, out var todasOrdens)) continue;
 
                 var veiculosDaLinha = new List<PosicaoVeiculoDto>();
-                veiculosDaLinha.AddRange(todosProcessados.Where(p => p.CodigoLinha == linha));
+                veiculosDaLinha.AddRange(aceitos.Where(p => p.CodigoLinha == linha));
 
                 var ordensDoCiclo = new HashSet<string>(
                     veiculosDaLinha.Select(p => p.Ordem),

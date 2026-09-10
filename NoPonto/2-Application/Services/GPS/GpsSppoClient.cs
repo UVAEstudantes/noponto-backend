@@ -125,11 +125,11 @@ public sealed class GpsSppoClient
         Nenhum,
         ForaDeOperacao,
         Invalida,
+        SemTimestampConfiavel,
     }
 
     private PosicaoVeiculoDto? Normalizar(PosicaoApiDto dto, out MotivoDescarte motivo)
     {
-        // id_veiculo nulo/vazio é anômalo (nunca deveria acontecer segundo a doc da API).
         if (string.IsNullOrWhiteSpace(dto.Ordem))
         {
             _logger.LogWarning("Posição SPPO ignorada: id_veiculo ausente");
@@ -137,8 +137,6 @@ public sealed class GpsSppoClient
             return null;
         }
 
-        // servico (linha) nulo/vazio é NORMAL e documentado: significa veículo fora
-        // de operação no momento. Não é erro — só contamos, sem warning por item.
         if (string.IsNullOrWhiteSpace(dto.Linha))
         {
             motivo = MotivoDescarte.ForaDeOperacao;
@@ -147,24 +145,30 @@ public sealed class GpsSppoClient
 
         if (!TryParseDecimalBr(dto.Latitude, out var lat) ||
             !TryParseDecimalBr(dto.Longitude, out var lon) ||
-            lat is < -90 or > 90 ||
-            lon is < -180 or > 180)
+            !GpsLeituraValidator.CoordenadaValida(lat, lon))
         {
             _logger.LogWarning(
-                "Coordenada inválida para veículo {ordem}: lat={lat} lon={lon}",
+                "Coordenada inválida/sentinela para veículo {ordem}: lat={lat} lon={lon}",
                 dto.Ordem, dto.Latitude, dto.Longitude);
             motivo = MotivoDescarte.Invalida;
+            return null;
+        }
+
+        var agora = DateTimeOffset.UtcNow;
+        if (!GpsLeituraValidator.TimestampValido(dto.DataHora, agora, out var timestampGps))
+        {
+            _logger.LogWarning(
+                "Timestamp GPS ausente/inválido/futuro para veículo {ordem} — leitura descartada " +
+                "(não é substituída por UtcNow).",
+                dto.Ordem);
+            motivo = MotivoDescarte.SemTimestampConfiavel;
             return null;
         }
 
         if (!TryParseDouble(dto.Velocidade, out var velocidade))
             velocidade = 0;
 
-        // datetime/datetime_envio/datetime_servidor já vêm como DateTimeOffset
-        // (System.Text.Json converte ISO 8601 nativamente). Se algum vier nulo
-        // (a API às vezes omite), caímos para UtcNow como fallback.
-        var timestampGps      = dto.DataHora ?? DateTimeOffset.UtcNow;
-        var timestampServidor = dto.DataHoraServidor ?? dto.DataHoraEnvio ?? DateTimeOffset.UtcNow;
+        var timestampServidor = dto.DataHoraServidor ?? dto.DataHoraEnvio ?? agora;
 
         motivo = MotivoDescarte.Nenhum;
 
