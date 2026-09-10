@@ -286,28 +286,50 @@ public sealed class GpsPollingService : BackgroundService
             .ToList();
 
         // ── 5. Escrita atômica no Redis (CAS por timestamp) ─────────────────────
-        // A leitura "anterior" feita no passo 2 é só uma otimização para evitar
-        // enriquecimento desnecessário; a decisão final e autoritativa de aceitar
-        // ou rejeitar cada posição acontece aqui, atomicamente no Redis.
         var ttlAtivo   = TimeSpan.FromSeconds(opcoes.TtlAtivoSegundos);
         var ttlRecente = TimeSpan.FromSeconds(opcoes.TtlRecenteSegundos);
 
         var resultadosGravacao = await Task.WhenAll(todosProcessados.Select(async final =>
         {
-            var aceito = await _posicaoCache.TentarAtualizarAsync(
+            var resultado = await _posicaoCache.TentarAtualizarAsync(
                 final.Ordem, final, final.TimestampGps, ttlAtivo, ttlRecente, ct);
-            return (Posicao: final, Aceito: aceito);
+            return (Posicao: final, Resultado: resultado);
         }));
 
-        var aceitos = resultadosGravacao.Where(r => r.Aceito).Select(r => r.Posicao).ToList();
-        var rejeitadosPorCas = resultadosGravacao.Length - aceitos.Count;
+        // Só posições cuja gravação foi CONFIRMADA como aceita avançam para
+        // broadcast/histórico. Falha de infraestrutura NUNCA é tratada como
+        // "posição aceita" nem como "rejeição normal de GPS antigo" — é logada
+        // separadamente e a posição simplesmente não avança neste ciclo.
+        var aceitos = new List<PosicaoVeiculoDto>();
+        var rejeitadosPorTimestamp = 0;
+        var falhasInfraestrutura = 0;
 
-        if (rejeitadosPorCas > 0)
+        foreach (var (posicao, resultado) in resultadosGravacao)
         {
-            _logger.LogInformation(
-                "Ciclo GPS: {qtd} posições rejeitadas na escrita CAS (concorrência entre instâncias ou duplicata).",
-                rejeitadosPorCas);
+            switch (resultado.Status)
+            {
+                case PosicaoVeiculoCacheStatus.Accepted:
+                    aceitos.Add(posicao);
+                    break;
+                case PosicaoVeiculoCacheStatus.RejectedOlderOrEqual:
+                    rejeitadosPorTimestamp++;
+                    break;
+                case PosicaoVeiculoCacheStatus.InfrastructureFailure:
+                    falhasInfraestrutura++;
+                    break;
+            }
         }
+
+        if (rejeitadosPorTimestamp > 0)
+            _logger.LogInformation(
+                "Ciclo GPS: {qtd} posições rejeitadas por timestamp antigo/igual (concorrência ou duplicata).",
+                rejeitadosPorTimestamp);
+
+        if (falhasInfraestrutura > 0)
+            _logger.LogWarning(
+                "Ciclo GPS: {qtd} posições NÃO puderam ser gravadas por falha de infraestrutura Redis " +
+                "(não confundir com rejeição por timestamp — nada foi confirmado para esses veículos neste ciclo).",
+                falhasInfraestrutura);
 
         var ordensAceitas = new HashSet<string>(aceitos.Select(a => a.Ordem), StringComparer.OrdinalIgnoreCase);
 
@@ -324,7 +346,7 @@ public sealed class GpsPollingService : BackgroundService
             set.Add(final.Ordem);
         }
 
-        // ── 5.5. Coleta histórico de passagens (somente leituras aceitas) ───────
+        // ── 5.5. Coleta histórico de passagens (somente leituras confirmadas) ────
         if (opcoes.HistoricoHabilitado && resultadosEnriquecidos.Length > 0)
         {
             var enriquecidosAceitos = resultadosEnriquecidos

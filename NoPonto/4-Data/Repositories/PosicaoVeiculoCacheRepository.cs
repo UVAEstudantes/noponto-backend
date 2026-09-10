@@ -13,24 +13,41 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
     };
 
     // Executado atomicamente pelo Redis (scripts Lua são single-threaded no
-    // servidor), eliminando a janela GET→compare→SET que existe ao usar
-    // IDistributedCache diretamente. Não precisa de lock distribuído: o
-    // próprio Redis serializa a execução do script.
+    // servidor), eliminando a janela GET→compare→SET.
+    //
+    // Fail-closed durante a transição de bootstrap:
+    //   ts existe            → compara normalmente.
+    //   ts NÃO existe,
+    //     ativo NÃO existe   → primeira leitura real: aceita.
+    //   ts NÃO existe,
+    //     ativo EXISTE       → estado de transição não migrado: REJEITA.
+    //
+    // KEYS[1]=ts, KEYS[2]=ativo, KEYS[3]=recente
+    // ARGV[1]=novo_ts, ARGV[2]=payload, ARGV[3]=ttl_ts, ARGV[4]=ttl_ativo, ARGV[5]=ttl_recente
+    //
+    // Retorna: 1 → aceito | 0 → rejeitado
     private const string ScriptCasPosicao = """
-        local ts_atual = redis.call('GET', @ts_key)
-        if ts_atual and tonumber(ts_atual) >= tonumber(@novo_ts) then
-            return 0
+        local ts_existe = redis.call('EXISTS', KEYS[1])
+        if ts_existe == 1 then
+            local ts_atual = redis.call('GET', KEYS[1])
+            if tonumber(ts_atual) >= tonumber(ARGV[1]) then
+                return 0
+            end
+        else
+            local ativo_existe = redis.call('EXISTS', KEYS[2])
+            if ativo_existe == 1 then
+                return 0
+            end
         end
 
-        redis.call('SET', @ts_key,      @novo_ts, 'EX', @ttl_controle)
-        redis.call('SET', @ativo_key,   @payload, 'EX', @ttl_ativo)
-        redis.call('SET', @recente_key, @payload, 'EX', @ttl_recente)
+        redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[3])
+        redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[4])
+        redis.call('SET', KEYS[3], ARGV[2], 'EX', ARGV[5])
         return 1
         """;
 
     private readonly IConnectionMultiplexer _redis;
     private readonly ILogger<PosicaoVeiculoCacheRepository> _logger;
-    private readonly LuaScript _script;
 
     public PosicaoVeiculoCacheRepository(
         IConnectionMultiplexer redis,
@@ -38,10 +55,9 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
     {
         _redis  = redis;
         _logger = logger;
-        _script = LuaScript.Prepare(ScriptCasPosicao);
     }
 
-    public async Task<bool> TentarAtualizarAsync(
+    public async Task<PosicaoVeiculoCacheResultado> TentarAtualizarAsync(
         string ordem,
         PosicaoVeiculoDto posicao,
         DateTimeOffset timestampGps,
@@ -49,36 +65,72 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
         TimeSpan ttlRecente,
         CancellationToken ct)
     {
-        var db = _redis.GetDatabase();
-
         var chaveTs      = ChaveVeiculoTimestamp(ordem);
         var chaveAtivo   = GpsPollingService.ChaveVeiculoAtivo(ordem);
         var chaveRecente = GpsPollingService.ChaveVeiculoRecente(ordem);
 
-        var json = JsonSerializer.Serialize(posicao, JsonOptions);
+        string json;
+        try
+        {
+            json = JsonSerializer.Serialize(posicao, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Falha ao serializar posição do veículo {ordem} — não gravado.", ordem);
+            return PosicaoVeiculoCacheResultado.InfrastructureFailure;
+        }
+
         var ttlControle = ttlRecente > ttlAtivo ? ttlRecente : ttlAtivo;
 
         try
         {
-            var resultado = await db.ScriptEvaluateAsync(_script, new
-            {
-                ts_key       = (RedisKey)chaveTs,
-                ativo_key    = (RedisKey)chaveAtivo,
-                recente_key  = (RedisKey)chaveRecente,
-                novo_ts      = timestampGps.ToUnixTimeMilliseconds(),
-                payload      = json,
-                ttl_ativo    = (long)ttlAtivo.TotalSeconds,
-                ttl_recente  = (long)ttlRecente.TotalSeconds,
-                ttl_controle = (long)ttlControle.TotalSeconds,
-            }).ConfigureAwait(false);
+            var db = _redis.GetDatabase();
 
-            return (long)resultado == 1;
+            var resultado = await db.ScriptEvaluateAsync(
+                ScriptCasPosicao,
+                keys: new RedisKey[] { chaveTs, chaveAtivo, chaveRecente },
+                values: new RedisValue[]
+                {
+                    timestampGps.ToUnixTimeMilliseconds(),
+                    json,
+                    (long)ttlControle.TotalSeconds,
+                    (long)ttlAtivo.TotalSeconds,
+                    (long)ttlRecente.TotalSeconds,
+                }).ConfigureAwait(false);
+
+            var aceito = (long)resultado! == 1;
+
+            return aceito
+                ? PosicaoVeiculoCacheResultado.Accepted
+                : PosicaoVeiculoCacheResultado.RejectedOlderOrEqual;
+        }
+        catch (RedisConnectionException ex)
+        {
+            _logger.LogError(ex,
+                "Falha de conexão com Redis ao gravar posição do veículo {ordem} — " +
+                "NÃO tratar como rejeição de GPS.", ordem);
+            return PosicaoVeiculoCacheResultado.InfrastructureFailure;
+        }
+        catch (RedisTimeoutException ex)
+        {
+            _logger.LogError(ex,
+                "Timeout no Redis ao gravar posição do veículo {ordem} — " +
+                "NÃO tratar como rejeição de GPS.", ordem);
+            return PosicaoVeiculoCacheResultado.InfrastructureFailure;
+        }
+        catch (RedisServerException ex)
+        {
+            _logger.LogError(ex,
+                "Erro no script Lua/servidor Redis ao gravar posição do veículo {ordem} — " +
+                "NÃO tratar como rejeição de GPS.", ordem);
+            return PosicaoVeiculoCacheResultado.InfrastructureFailure;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex,
-                "Falha ao gravar posição do veículo {ordem} via CAS Redis.", ordem);
-            return false;
+            _logger.LogError(ex,
+                "Falha inesperada ao gravar posição do veículo {ordem} via CAS Redis.", ordem);
+            return PosicaoVeiculoCacheResultado.InfrastructureFailure;
         }
     }
 

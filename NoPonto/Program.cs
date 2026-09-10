@@ -351,6 +351,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(
     _ => ConnectionMultiplexer.Connect(redisConnection));
 
 builder.Services.AddSingleton<IPosicaoVeiculoCacheRepository, PosicaoVeiculoCacheRepository>();
+builder.Services.AddSingleton<PosicaoVeiculoTsBootstrapper>();
 
 // --------------------------------------------------------------------
 // SERVICES
@@ -414,6 +415,12 @@ using (var scope = app.Services.CreateScope())
         .GetRequiredService<TransporteDbContext>();
 
     db.Database.Migrate();
+
+    // Bootstrap idempotente de "veiculo:{ordem}:ts" a partir de "veiculo:{ordem}:ativo"
+    // já existentes. DEVE rodar antes do GpsPollingService começar a escrever,
+    // para que o CAS nunca encontre um :ativo sem :ts correspondente.
+    var bootstrapper = scope.ServiceProvider.GetRequiredService<PosicaoVeiculoTsBootstrapper>();
+    await bootstrapper.ExecutarAsync(CancellationToken.None);
 }
 
 // --------------------------------------------------------------------
