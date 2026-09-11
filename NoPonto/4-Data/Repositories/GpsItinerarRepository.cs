@@ -66,7 +66,12 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
                     ST_LineInterpolatePoint("Geometria", posicao_na_rota) AS ponto_rota
                 FROM com_bearing_local
                 WHERE ABS(MOD((bearing_local - @bearing + 540.0)::numeric, 360.0) - 180.0) < 80
-                ORDER BY diff_bearing ASC, distancia_rota_metros ASC
+                -- Score combinado normalizado: pesa bearing e distância igualmente
+                -- em relação aos próprios limites (80° e @dist_max), em vez de
+                -- decidir por bearing puro primeiro. Reduz o risco de uma rua
+                -- paralela mais distante vencer só por ter bearing marginalmente
+                -- melhor que um candidato bem mais próximo.
+                ORDER BY (diff_bearing / 80.0) + (distancia_rota_metros / @dist_max) ASC
                 LIMIT 1
             ),
             proxima_parada AS (

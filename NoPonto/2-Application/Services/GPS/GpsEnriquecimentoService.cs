@@ -26,9 +26,17 @@ public sealed class GpsEnriquecimentoService
         new(StringComparer.OrdinalIgnoreCase);
 
     // Historico de velocidades persistido entre ciclos.
-    // ConcurrentDictionary protege a chave; lock(fila) protege o Queue.
     private readonly ConcurrentDictionary<string, Queue<double>> _historicoVelocidades =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Fator de tolerância sobre <see cref="GpsPollingOptions.VelocidadeMaximaKmh"/>
+    /// usado para julgar um salto entre duas leituras consecutivas como
+    /// geograficamente implausível. Um fator &gt;1 é necessário porque a
+    /// velocidade instantânea pode ter picos legítimos acima da média
+    /// configurada (frenagem/aceleração, trecho de via expressa etc).
+    /// </summary>
+    private const double FatorToleranciaSalto = 2.0;
 
     public GpsEnriquecimentoService(
         IGpsItinerarioRepository repositorio,
@@ -49,6 +57,37 @@ public sealed class GpsEnriquecimentoService
         var velocidadeMedia = AtualizarFilaVelocidade(posicao);
         var veiculoParado   = (velocidadeMedia ?? posicao.Velocidade) < _opcoes.VelocidadeMinimaBearingKmh;
 
+        // ── 1.5. Detecção de salto geográfico implausível ─────────────────────
+        //
+        // Uma leitura cuja velocidade implícita (distância/tempo desde a leitura
+        // anterior) é absurda não pode ser usada para matching de rota — o bearing
+        // calculado a partir dela também não é confiável. Em vez de inventar uma
+        // posição, tratamos como "sem bearing confiável" e reaproveitamos o
+        // fallback já existente que mantém o último itinerário confirmado por
+        // MaxCiclosSemRota ciclos (comportamento conservador, sem fabricar dado).
+        if (posicao.TemHistorico)
+        {
+            var deltaSegundos = (posicao.TimestampGps - posicao.TimestampAnterior!.Value).TotalSeconds;
+
+            if (EhSaltoImplausivel(
+                    posicao.LatitudeAnterior!.Value, posicao.LongitudeAnterior!.Value,
+                    posicao.Latitude, posicao.Longitude,
+                    deltaSegundos,
+                    _opcoes.VelocidadeMaximaKmh))
+            {
+                var distanciaMetros = HaversineMetros(
+                    posicao.LatitudeAnterior.Value, posicao.LongitudeAnterior.Value,
+                    posicao.Latitude, posicao.Longitude);
+
+                _logger.LogWarning(
+                    "Veiculo {ordem}: salto geografico implausivel ({dist:F0}m em {seg:F0}s) — " +
+                    "matching de rota ignorado neste ciclo, mantendo ultimo estado confirmado.",
+                    posicao.Ordem, distanciaMetros, deltaSegundos);
+
+                bearing = null;
+            }
+        }
+
         // ── 2. Busca rota via PostGIS ─────────────────────────────────────────
         EnriquecimentoRotaDto? rota = null;
 
@@ -64,7 +103,7 @@ public sealed class GpsEnriquecimentoService
         }
         else if (_itinerarioAtual.TryGetValue(posicao.Ordem, out var semBearing))
         {
-            // Sem bearing: mantem ultimo itinerario confirmado
+            // Sem bearing (ou salto implausível): mantem ultimo itinerario confirmado
             rota    = semBearing.Rota;
             bearing = semBearing.Bearing;
         }
@@ -72,7 +111,6 @@ public sealed class GpsEnriquecimentoService
         // ── 3. Estabilidade de itinerario ─────────────────────────────────────
         if (rota is not null)
         {
-            // Captura em variaveis locais para uso seguro no delegate
             var rotaNova      = rota;
             var bearingAtual  = bearing;
             var parado        = veiculoParado;
@@ -98,24 +136,19 @@ public sealed class GpsEnriquecimentoService
                         return new ItinerarioConfirmado(rotaNova, bearingAtual);
 
                     _logger.LogDebug(
-                        "Veiculo {ordem}: troca de itinerario bloqueada (parado={parado}, melhoria={melhoria:F0}m)",
+                        "Veiculo {ordem}: troca de itinerario bloqueada (parado={parado}, melhoria={melhoria:F0}m). " +
+                        "Mantendo itinerario e PosicaoNaRota anteriores intactos.",
                         ordemLog, parado, melhoriaDistancia);
 
-                    return new ItinerarioConfirmado(
-                        new EnriquecimentoRotaDto
-                        {
-                            ItinerarioId                 = anterior.Rota.ItinerarioId,
-                            PosicaoNaRota                = rotaNova.PosicaoNaRota,
-                            ComprimentoRotaMetros        = anterior.Rota.ComprimentoRotaMetros,
-                            DistanciaARotaMetros         = rotaNova.DistanciaARotaMetros,
-                            BearingLocal                 = rotaNova.BearingLocal,
-                            ProximaParadaNome            = rotaNova.ProximaParadaNome,
-                            DistanciaProximaParadaMetros = rotaNova.DistanciaProximaParadaMetros,
-                        },
-                        bearingAtual);
+                    // IMPORTANTE: mantém o EnriquecimentoRotaDto anterior INTEIRO
+                    // (mesmo ItinerarioId, mesma PosicaoNaRota, mesma distância) —
+                    // nunca misturar ItinerarioId antigo com PosicaoNaRota calculada
+                    // para a rota nova. Fazer isso produziria um estado
+                    // geometricamente incoerente (posição relatada em uma rota que
+                    // não é a que o veículo está sinalizando pertencer).
+                    return new ItinerarioConfirmado(anterior.Rota, bearingAtual);
                 });
 
-            // Rele o estado final apos AddOrUpdate para garantir consistencia
             rota = _itinerarioAtual.TryGetValue(posicao.Ordem, out var confirmado)
                 ? confirmado.Rota
                 : rota;
@@ -123,11 +156,6 @@ public sealed class GpsEnriquecimentoService
         else
         {
             // Sem rota nova: mantem ultimo estado por MaxCiclosSemRota ciclos.
-            //
-            // IMPORTANTE: nao chamamos TryRemove dentro do delegate do AddOrUpdate —
-            // modificar o dicionario dentro do delegate e comportamento indefinido.
-            // Usamos sentinela (CiclosSemRota == int.MaxValue) para sinalizar expiracao
-            // e removemos logo apos o AddOrUpdate.
             _itinerarioAtual.AddOrUpdate(
                 posicao.Ordem,
                 _ => new ItinerarioConfirmado(null, bearing),
@@ -144,7 +172,6 @@ public sealed class GpsEnriquecimentoService
                     return new ItinerarioConfirmado(anterior.Rota, anterior.Bearing, ciclosSemRota);
                 });
 
-            // Remove entradas expiradas (sentinela int.MaxValue) apos o AddOrUpdate
             if (_itinerarioAtual.TryGetValue(posicao.Ordem, out var expirado)
                 && expirado.CiclosSemRota == int.MaxValue)
             {
@@ -152,7 +179,6 @@ public sealed class GpsEnriquecimentoService
                     new KeyValuePair<string, ItinerarioConfirmado>(posicao.Ordem, expirado));
             }
 
-            // Rele para obter a rota mantida (ou null se expirou/removida)
             rota = _itinerarioAtual.TryGetValue(posicao.Ordem, out var mantido)
                 && mantido.Rota is not null
                 ? new EnriquecimentoRotaDto
@@ -162,7 +188,6 @@ public sealed class GpsEnriquecimentoService
                     ComprimentoRotaMetros        = mantido.Rota.ComprimentoRotaMetros,
                     DistanciaARotaMetros         = mantido.Rota.DistanciaARotaMetros,
                     BearingLocal                 = mantido.Rota.BearingLocal,
-                    // Sem proxima parada enquanto posicao e incerta
                     ProximaParadaNome            = null,
                     DistanciaProximaParadaMetros = null,
                 }
@@ -181,10 +206,6 @@ public sealed class GpsEnriquecimentoService
         };
     }
 
-    /// <summary>
-    /// Atualiza apenas o historico de velocidade sem enriquecimento PostGIS.
-    /// Usado para veiculos de linhas sem assinantes ativos.
-    /// </summary>
     public PosicaoVeiculoDto AtualizarHistoricoVelocidade(PosicaoVeiculoDto posicao)
     {
         var velocidadeMedia = AtualizarFilaVelocidade(posicao);
@@ -210,10 +231,6 @@ public sealed class GpsEnriquecimentoService
             posicao.Latitude, posicao.Longitude);
     }
 
-    /// <summary>
-    /// Atualiza a janela deslizante de velocidade para o veiculo.
-    /// Thread-safe: ConcurrentDictionary na chave mais lock na Queue.
-    /// </summary>
     private double? AtualizarFilaVelocidade(PosicaoVeiculoDto posicao)
     {
         var fila = _historicoVelocidades.GetOrAdd(
@@ -249,6 +266,42 @@ public sealed class GpsEnriquecimentoService
         var y = Math.Cos(radLat1) * Math.Sin(radLat2)
               - Math.Sin(radLat1) * Math.Cos(radLat2) * Math.Cos(dLon);
         return (ToDeg(Math.Atan2(x, y)) + 360) % 360;
+    }
+
+    /// <summary>
+    /// Diferença angular circular entre dois bearings, em graus, sempre no
+    /// intervalo [0, 180]. Ex.: DiferencaAngular(359, 1) == 2 (não 358).
+    /// Mesma fórmula usada no SQL de matching (GpsItinerarRepository), exposta
+    /// aqui para uso e teste em C#.
+    /// </summary>
+    public static double DiferencaAngular(double anguloA, double anguloB)
+    {
+        var diff = anguloA - anguloB + 540.0;
+        var mod  = diff % 360.0;
+        if (mod < 0) mod += 360.0;
+        return Math.Abs(mod - 180.0);
+    }
+
+    /// <summary>
+    /// Detecta se o deslocamento entre duas leituras consecutivas do mesmo
+    /// veículo implica uma velocidade fisicamente implausível, considerando
+    /// o teto já configurado (<see cref="GpsPollingOptions.VelocidadeMaximaKmh"/>)
+    /// com uma folga de <see cref="FatorToleranciaSalto"/>.
+    /// </summary>
+    public static bool EhSaltoImplausivel(
+        double latAnterior, double lonAnterior,
+        double latNova, double lonNova,
+        double deltaSegundos,
+        double velocidadeMaximaKmh,
+        double fatorTolerancia = FatorToleranciaSalto)
+    {
+        if (deltaSegundos <= 0)
+            return false; // sem tempo decorrido não dá para inferir velocidade implícita
+
+        var distanciaMetros       = HaversineMetros(latAnterior, lonAnterior, latNova, lonNova);
+        var velocidadeImplicitaKmh = (distanciaMetros / deltaSegundos) * 3.6;
+
+        return velocidadeImplicitaKmh > velocidadeMaximaKmh * fatorTolerancia;
     }
 
     private static double HaversineMetros(

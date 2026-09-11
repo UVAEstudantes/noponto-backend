@@ -272,14 +272,6 @@ public sealed class GpsPollingService : BackgroundService
             }
         }
 
-        // ── 4.6. Compensação de defasagem GPS ───────────────────────────────
-        if (resultadosEnriquecidos.Length > 0)
-        {
-            resultadosEnriquecidos = resultadosEnriquecidos
-                .Select(v => CompensarDefasagem(v, agora))
-                .ToArray();
-        }
-
         // ── Reconstrói todosProcessados com ETA aplicado ──────────────────────
         var todosProcessados = resultadosEnriquecidos
             .Concat(resultadosSemEnriquecimento)
@@ -483,48 +475,6 @@ public sealed class GpsPollingService : BackgroundService
             Bearing = anterior?.Bearing,
             Status = StatusVeiculo.Ativo,
         };
-
-    private PosicaoVeiculoDto CompensarDefasagem(PosicaoVeiculoDto posicao, DateTimeOffset agora)
-    {
-        if (!posicao.TemDadosRota)
-            return posicao;
-
-        var velocidadeMedia = posicao.VelocidadeMedia!.Value;
-        if (velocidadeMedia < 2)
-            return posicao;
-
-        var posicaoNaRota = posicao.PosicaoNaRota!.Value;
-        if (posicaoNaRota >= 0.98)
-            return posicao;
-
-        var comprimento = posicao.ComprimentoRotaMetros!.Value;
-        if (comprimento <= 0)
-            return posicao;
-
-        var defasagemSegundos = (agora - posicao.TimestampGps).TotalSeconds;
-        if (defasagemSegundos <= 0)
-            return posicao;
-
-        if (defasagemSegundos > 60)
-        {
-            _logger.LogWarning(
-                "Defasagem GPS alta: veiculo {ordem} linha {linha} com {defasagem:F0}s",
-                posicao.Ordem, posicao.CodigoLinha, defasagemSegundos);
-        }
-
-        if (defasagemSegundos <= 5 || defasagemSegundos >= 120)
-            return posicao;
-
-        var avanco = (velocidadeMedia / 3.6 * defasagemSegundos) / comprimento;
-        if (avanco <= 0)
-            return posicao;
-
-        var posicaoEstimada = Math.Min(1.0, posicaoNaRota + avanco);
-        if (posicaoEstimada <= posicaoNaRota)
-            return posicao;
-
-        return posicao with { PosicaoNaRota = posicaoEstimada };
-    }
 
     private async Task LimparVeiculosDeLinhasAntigasAsync(
         List<(string Ordem, string LinhaAntiga)> trocas,
