@@ -48,6 +48,7 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
             $"veiculo:{_ordem}:ts",
             $"veiculo:{_ordem}:ativo",
             $"veiculo:{_ordem}:recente",
+            $"veiculo:{_ordem}:gps-lock",
         });
         _redis.Dispose();
         return Task.CompletedTask;
@@ -112,6 +113,9 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
 
         var armazenado = await LerAtivoViaIDistributedCacheAsync();
         Assert.Equal(maxEsperado, armazenado!.TimestampGps);
+        Assert.Equal(
+            maxEsperado.ToUnixTimeMilliseconds(),
+            (long)(await _redis.GetDatabase().StringGetAsync($"veiculo:{_ordem}:ts"))!);
     }
 
     [Fact]
@@ -137,6 +141,9 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
         var armazenado  = await LerAtivoViaIDistributedCacheAsync();
 
         Assert.Equal(maxEsperado, armazenado!.TimestampGps);
+        Assert.Equal(
+            maxEsperado.ToUnixTimeMilliseconds(),
+            (long)(await _redis.GetDatabase().StringGetAsync($"veiculo:{_ordem}:ts"))!);
     }
 
     // ── Compatibilidade de formato: CAS grava, consumidor lê (bug original) ──

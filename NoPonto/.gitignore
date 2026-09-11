@@ -4,6 +4,7 @@
 ## Get latest from `dotnet new gitignore`
 
 BACKEND_CONTEXT.md
+context.md
 
 # dotenv files
 .env

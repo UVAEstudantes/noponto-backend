@@ -19,34 +19,15 @@ namespace NoPonto.Data.Repositories;
 ///
 ///   Para nunca divergir desse formato — e para nunca precisar reimplementar
 ///   manualmente um detalhe interno de outro pacote dentro de um script Lua —
-///   este repositório:
-///     1. Usa um script Lua ATÔMICO apenas sobre "veiculo:{ordem}:ts", que é
-///        SEMPRE Redis String pura, nunca lida por IDistributedCache. Esse
-///        script decide, de forma atômica, se esta é a leitura mais nova
-///        (vence o CAS) ou não.
-///     2. Só DEPOIS de vencer o CAS de timestamp, grava o payload em
-///        ":ativo"/":recente" chamando IDistributedCache.SetStringAsync —
-///        o MESMO mecanismo usado por todos os outros escritores/leitores,
-///        garantindo compatibilidade de formato por construção.
-///
-///   EXISTS funciona sobre qualquer tipo Redis (Hash ou String), então o
-///   Lua pode verificar com segurança se ":ativo" já existe, mesmo contra
-///   chaves legadas de qualquer formato, sem nunca disparar WRONGTYPE.
-///
-/// LIMITAÇÃO DOCUMENTADA:
-///   Como a escrita do payload acontece fora do Lua (não pode ser diferente,
-///   pois IDistributedCache não executa dentro do Redis), existe uma janela
-///   teoricamente possível — porém extremamente estreita — em que duas
-///   instâncias que venceram o CAS de ":ts" em sequência (T10 depois T11)
-///   têm suas escritas de payload reordenadas pela rede, deixando o payload
-///   momentaneamente desatualizado em relação a ":ts". A garantia de
-///   monotonicidade de ":ts" (a fonte de verdade para decisão de aceite)
-///   permanece sempre correta; apenas o payload físico poderia, em teoria,
-///   atrasar por um ciclo. Isso é aceito como trade-off consciente para
-///   evitar reimplementar o formato interno do IDistributedCache em Lua.
+///   o payload é gravado por IDistributedCache. Um lock Redis com token por
+///   veículo protege o CAS e ambas as gravações, eliminando a reordenação entre
+///   instâncias sem alterar o formato Hash do provider.
 /// </summary>
 public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheRepository
 {
+    private static readonly TimeSpan TtlLock = TimeSpan.FromSeconds(15);
+    private const int TentativasLock = 60;
+    private const int EsperaLockMs = 25;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -65,23 +46,48 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
     //   ts NÃO existe,
     //     ativo EXISTE       → estado de transição não migrado: REJEITA.
     //
-    // Retorna: 1 → CAS de timestamp vencido | 0 → rejeitado
+    // Retorna: { 1, timestamp anterior (ou ''), pttl anterior } | { 0 }
     private const string ScriptCasTimestamp = """
         local ts_existe = redis.call('EXISTS', KEYS[1])
+        local ts_anterior = ''
+        local pttl_anterior = -1
         if ts_existe == 1 then
-            local ts_atual = redis.call('GET', KEYS[1])
-            if tonumber(ts_atual) >= tonumber(ARGV[1]) then
-                return 0
+            ts_anterior = redis.call('GET', KEYS[1])
+            if tonumber(ts_anterior) >= tonumber(ARGV[1]) then
+                return { 0 }
             end
+            pttl_anterior = redis.call('PTTL', KEYS[1])
         else
             local ativo_existe = redis.call('EXISTS', KEYS[2])
             if ativo_existe == 1 then
-                return 0
+                return { 0 }
             end
         end
 
         redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+        return { 1, ts_anterior, pttl_anterior }
+        """;
+
+    // Restaura somente o valor que este escritor acabou de instalar. O lock
+    // normalmente torna a condição imediata, mas a comparação mantém a
+    // recuperação segura mesmo se o lease expirar em uma falha extrema.
+    private const string ScriptRestaurarTimestamp = """
+        if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+        if ARGV[2] == '' then
+            redis.call('DEL', KEYS[1])
+        elseif tonumber(ARGV[3]) > 0 then
+            redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+        else
+            redis.call('SET', KEYS[1], ARGV[2])
+        end
         return 1
+        """;
+
+    private const string ScriptLiberarLock = """
+        if redis.call('GET', KEYS[1]) == ARGV[1] then
+            return redis.call('DEL', KEYS[1])
+        end
+        return 0
         """;
 
     private readonly IConnectionMultiplexer _redis;
@@ -109,6 +115,7 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
         var chaveTs      = ChaveVeiculoTimestamp(ordem);
         var chaveAtivo   = GpsPollingService.ChaveVeiculoAtivo(ordem);
         var chaveRecente = GpsPollingService.ChaveVeiculoRecente(ordem);
+        var chaveLock    = $"veiculo:{ordem}:gps-lock";
 
         string json;
         try
@@ -124,11 +131,25 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
 
         var ttlControle = ttlRecente > ttlAtivo ? ttlRecente : ttlAtivo;
 
-        // ── 1. Decisão atômica de aceite, baseada exclusivamente em ":ts" ────
-        bool venceuCas;
+        var tokenLock = Guid.NewGuid().ToString("N");
+        var db = _redis.GetDatabase();
+        var lockAdquirido = false;
         try
         {
-            var db = _redis.GetDatabase();
+            for (var tentativa = 0; tentativa < TentativasLock && !ct.IsCancellationRequested; tentativa++)
+            {
+                lockAdquirido = await db.StringSetAsync(chaveLock, tokenLock, TtlLock, When.NotExists)
+                    .ConfigureAwait(false);
+                if (lockAdquirido)
+                    break;
+                await Task.Delay(EsperaLockMs, ct).ConfigureAwait(false);
+            }
+
+            if (!lockAdquirido)
+            {
+                _logger.LogError("Timeout ao adquirir lock de GPS do veículo {ordem}.", ordem);
+                return PosicaoVeiculoCacheResultado.InfrastructureFailure;
+            }
 
             var resultado = await db.ScriptEvaluateAsync(
                 ScriptCasTimestamp,
@@ -139,7 +160,35 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
                     (long)ttlControle.TotalSeconds,
                 }).ConfigureAwait(false);
 
-            venceuCas = (long)resultado! == 1;
+            var valores = (RedisResult[])resultado!;
+            if ((long)valores[0]! != 1)
+                return PosicaoVeiculoCacheResultado.RejectedOlderOrEqual;
+
+            var timestampAnterior = valores.Length > 1 ? valores[1].ToString() : null;
+            var pttlAnterior = valores.Length > 2 ? (long)valores[2]! : -1;
+
+            try
+            {
+                var opcoesAtivo = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttlAtivo };
+                var opcoesRecente = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttlRecente };
+
+                // Sequencialmente sob o mesmo lock: nenhuma instância pode
+                // deixar T10 após T11 nos payloads consumidos.
+                await _cache.SetStringAsync(chaveAtivo, json, opcoesAtivo, ct).ConfigureAwait(false);
+                await _cache.SetStringAsync(chaveRecente, json, opcoesRecente, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await db.ScriptEvaluateAsync(
+                    ScriptRestaurarTimestamp,
+                    new RedisKey[] { chaveTs },
+                    new RedisValue[] { timestampGps.ToUnixTimeMilliseconds(), timestampAnterior ?? "", pttlAnterior })
+                    .ConfigureAwait(false);
+                _logger.LogError(ex, "Falha ao gravar payload (:ativo/:recente) do veículo {ordem}; :ts foi restaurado quando possível.", ordem);
+                return PosicaoVeiculoCacheResultado.InfrastructureFailure;
+            }
+
+            return PosicaoVeiculoCacheResultado.Accepted;
         }
         catch (RedisConnectionException ex)
         {
@@ -169,34 +218,21 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
             return PosicaoVeiculoCacheResultado.InfrastructureFailure;
         }
 
-        if (!venceuCas)
-            return PosicaoVeiculoCacheResultado.RejectedOlderOrEqual;
-
-        // ── 2. Só quem venceu o CAS grava o payload — via IDistributedCache, ──
-        //       no MESMO formato usado por todos os outros consumidores.
-        try
+        finally
         {
-            var opcoesAtivo   = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttlAtivo };
-            var opcoesRecente = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttlRecente };
-
-            await Task.WhenAll(
-                _cache.SetStringAsync(chaveAtivo, json, opcoesAtivo, ct),
-                _cache.SetStringAsync(chaveRecente, json, opcoesRecente, ct));
+            if (lockAdquirido)
+            {
+                try
+                {
+                    await db.ScriptEvaluateAsync(ScriptLiberarLock, new RedisKey[] { chaveLock }, new RedisValue[] { tokenLock })
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Falha ao liberar lock de GPS do veículo {ordem}; expirará automaticamente.", ordem);
+                }
+            }
         }
-        catch (Exception ex)
-        {
-            // O ":ts" já avançou de forma correta e irreversível (a decisão de
-            // quem "venceu" continua válida para futuras comparações), mas o
-            // payload físico pode não ter sido gravado desta vez. É falha de
-            // infraestrutura — o chamador NÃO deve publicar isso como aceito
-            // nem tratar como rejeição normal de GPS antigo.
-            _logger.LogError(ex,
-                "Falha ao gravar payload (:ativo/:recente) do veículo {ordem} após vencer o CAS " +
-                "de timestamp. :ts já foi avançado.", ordem);
-            return PosicaoVeiculoCacheResultado.InfrastructureFailure;
-        }
-
-        return PosicaoVeiculoCacheResultado.Accepted;
     }
 
     public static string ChaveVeiculoTimestamp(string ordem) => $"veiculo:{ordem}:ts";
