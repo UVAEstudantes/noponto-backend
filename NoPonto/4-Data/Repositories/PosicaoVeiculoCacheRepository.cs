@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using NoPonto.Application.GPS;
+using NoPonto.Data.Interfaces;
 
 namespace NoPonto.Data.Repositories;
 
@@ -91,16 +92,16 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
         """;
 
     private readonly IConnectionMultiplexer _redis;
-    private readonly IDistributedCache _cache;
+    private readonly IPosicaoVeiculoPayloadWriter _payloadWriter;
     private readonly ILogger<PosicaoVeiculoCacheRepository> _logger;
 
     public PosicaoVeiculoCacheRepository(
         IConnectionMultiplexer redis,
-        IDistributedCache cache,
+        IPosicaoVeiculoPayloadWriter payloadWriter,
         ILogger<PosicaoVeiculoCacheRepository> logger)
     {
         _redis  = redis;
-        _cache  = cache;
+        _payloadWriter = payloadWriter;
         _logger = logger;
     }
 
@@ -174,8 +175,10 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
 
                 // Sequencialmente sob o mesmo lock: nenhuma instância pode
                 // deixar T10 após T11 nos payloads consumidos.
-                await _cache.SetStringAsync(chaveAtivo, json, opcoesAtivo, ct).ConfigureAwait(false);
-                await _cache.SetStringAsync(chaveRecente, json, opcoesRecente, ct).ConfigureAwait(false);
+                await RenovarLockAsync(db, chaveLock, tokenLock).ConfigureAwait(false);
+                await _payloadWriter.GravarAtivoAsync(chaveAtivo, json, opcoesAtivo, ct).ConfigureAwait(false);
+                await RenovarLockAsync(db, chaveLock, tokenLock).ConfigureAwait(false);
+                await _payloadWriter.GravarRecenteAsync(chaveRecente, json, opcoesRecente, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -235,5 +238,26 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
         }
     }
 
+    private static async Task RenovarLockAsync(IDatabase db, RedisKey chaveLock, RedisValue token)
+    {
+        const string script = "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('PEXPIRE', KEYS[1], ARGV[2]) end return 0";
+        var renovado = (long)(await db.ScriptEvaluateAsync(script, new RedisKey[] { chaveLock }, new RedisValue[] { token, (long)TtlLock.TotalMilliseconds }).ConfigureAwait(false))!;
+        if (renovado != 1)
+            throw new InvalidOperationException("Lock de GPS perdido antes da persistência do payload.");
+    }
+
     public static string ChaveVeiculoTimestamp(string ordem) => $"veiculo:{ordem}:ts";
+}
+
+public sealed class DistributedCachePosicaoVeiculoPayloadWriter : IPosicaoVeiculoPayloadWriter
+{
+    private readonly IDistributedCache _cache;
+
+    public DistributedCachePosicaoVeiculoPayloadWriter(IDistributedCache cache) => _cache = cache;
+
+    public Task GravarAtivoAsync(string chave, string json, DistributedCacheEntryOptions opcoes, CancellationToken ct) =>
+        _cache.SetStringAsync(chave, json, opcoes, ct);
+
+    public Task GravarRecenteAsync(string chave, string json, DistributedCacheEntryOptions opcoes, CancellationToken ct) =>
+        _cache.SetStringAsync(chave, json, opcoes, ct);
 }
