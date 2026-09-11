@@ -351,7 +351,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(
     _ => ConnectionMultiplexer.Connect(redisConnection));
 
 builder.Services.AddSingleton<IPosicaoVeiculoCacheRepository, PosicaoVeiculoCacheRepository>();
-builder.Services.AddSingleton<IPosicaoVeiculoPayloadWriter, DistributedCachePosicaoVeiculoPayloadWriter>();
+builder.Services.AddSingleton<IPosicaoVeiculoPayloadWriter, PosicaoVeiculoPayloadWriter>();
 builder.Services.AddSingleton<PosicaoVeiculoTsBootstrapper>();
 
 // --------------------------------------------------------------------
