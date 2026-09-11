@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
 using NoPonto.Data.Repositories;
+using NoPonto.Data.Interfaces;
 using StackExchange.Redis;
 using Xunit;
 
@@ -37,8 +38,7 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
             Configuration = _connStr
         }));
 
-        _repo = new PosicaoVeiculoCacheRepository(
-            _redis, _distributedCache, NullLogger<PosicaoVeiculoCacheRepository>.Instance);
+        _repo = NovoRepositorio(new TestPayloadWriter(_distributedCache));
     }
 
     public Task DisposeAsync()
@@ -48,6 +48,7 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
             $"veiculo:{_ordem}:ts",
             $"veiculo:{_ordem}:ativo",
             $"veiculo:{_ordem}:recente",
+            $"veiculo:{_ordem}:gps-lock",
         });
         _redis.Dispose();
         return Task.CompletedTask;
@@ -112,6 +113,9 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
 
         var armazenado = await LerAtivoViaIDistributedCacheAsync();
         Assert.Equal(maxEsperado, armazenado!.TimestampGps);
+        Assert.Equal(
+            maxEsperado.ToUnixTimeMilliseconds(),
+            (long)(await _redis.GetDatabase().StringGetAsync($"veiculo:{_ordem}:ts"))!);
     }
 
     [Fact]
@@ -137,6 +141,9 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
         var armazenado  = await LerAtivoViaIDistributedCacheAsync();
 
         Assert.Equal(maxEsperado, armazenado!.TimestampGps);
+        Assert.Equal(
+            maxEsperado.ToUnixTimeMilliseconds(),
+            (long)(await _redis.GetDatabase().StringGetAsync($"veiculo:{_ordem}:ts"))!);
     }
 
     // ── Compatibilidade de formato: CAS grava, consumidor lê (bug original) ──
@@ -317,7 +324,7 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
         await using var conexaoRuim = await ConnectionMultiplexer.ConnectAsync(options);
         var cacheRuim = new RedisCache(Options.Create(new RedisCacheOptions { Configuration = "localhost:1" }));
         var repoComFalha = new PosicaoVeiculoCacheRepository(
-            conexaoRuim, cacheRuim, NullLogger<PosicaoVeiculoCacheRepository>.Instance);
+            conexaoRuim, new TestPayloadWriter(cacheRuim), NullLogger<PosicaoVeiculoCacheRepository>.Instance);
 
         var t = DateTimeOffset.UtcNow;
         var resultado = await repoComFalha.TentarAtualizarAsync(
@@ -326,12 +333,84 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
         Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultado.Status);
     }
 
+    [Fact]
+    public async Task T10T11T10_Deterministico_SerializaSecaoCritica()
+    {
+        var entrouAtivoT10 = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var liberarT10 = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writer = new TestPayloadWriter(_distributedCache)
+        {
+            AntesDeAtivo = async () => { entrouAtivoT10.TrySetResult(); await liberarT10.Task; }
+        };
+        var repo = NovoRepositorio(writer);
+        var t10 = DateTimeOffset.UtcNow;
+        var t11 = t10.AddSeconds(1);
+        var a = repo.TentarAtualizarAsync(_ordem, Posicao(t10, _ordem), t10, TtlAtivo, TtlRecente, default);
+        await entrouAtivoT10.Task;
+
+        var b = repo.TentarAtualizarAsync(_ordem, Posicao(t11, _ordem), t11, TtlAtivo, TtlRecente, default);
+        Assert.False(b.IsCompleted); // B não pode concluir enquanto A mantém a seção crítica.
+        Assert.Equal(t10.ToUnixTimeMilliseconds(), (long)(await _redis.GetDatabase().StringGetAsync($"veiculo:{_ordem}:ts"))!);
+
+        liberarT10.SetResult();
+        Assert.Equal(PosicaoVeiculoCacheStatus.Accepted, (await a).Status);
+        Assert.Equal(PosicaoVeiculoCacheStatus.Accepted, (await b).Status);
+        Assert.Equal(t11, (await LerAtivoViaIDistributedCacheAsync())!.TimestampGps);
+        var recente = await _distributedCache.GetStringAsync($"veiculo:{_ordem}:recente");
+        Assert.Equal(t11, JsonSerializer.Deserialize<PosicaoVeiculoDto>(recente!, JsonOptions)!.TimestampGps);
+    }
+
+    [Fact]
+    public async Task FalhaEmAtivo_FazRollbackDoTimestamp()
+    {
+        var repo = NovoRepositorio(new TestPayloadWriter(_distributedCache) { FalharAtivo = true });
+        var t = DateTimeOffset.UtcNow;
+        var resultado = await repo.TentarAtualizarAsync(_ordem, Posicao(t, _ordem), t, TtlAtivo, TtlRecente, default);
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultado.Status);
+        Assert.True((await _redis.GetDatabase().StringGetAsync($"veiculo:{_ordem}:ts")).IsNull);
+        Assert.Null(await _distributedCache.GetStringAsync($"veiculo:{_ordem}:ativo"));
+        Assert.Null(await _distributedCache.GetStringAsync($"veiculo:{_ordem}:recente"));
+    }
+
+    [Fact]
+    public async Task FalhaEmRecente_MantemAtivoParcialEMoveRollbackDoTimestamp()
+    {
+        var repo = NovoRepositorio(new TestPayloadWriter(_distributedCache) { FalharRecente = true });
+        var t = DateTimeOffset.UtcNow;
+        var resultado = await repo.TentarAtualizarAsync(_ordem, Posicao(t, _ordem), t, TtlAtivo, TtlRecente, default);
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultado.Status);
+        Assert.True((await _redis.GetDatabase().StringGetAsync($"veiculo:{_ordem}:ts")).IsNull);
+        Assert.Equal(t, (await LerAtivoViaIDistributedCacheAsync())!.TimestampGps);
+        Assert.Null(await _distributedCache.GetStringAsync($"veiculo:{_ordem}:recente"));
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private async Task<PosicaoVeiculoDto?> LerAtivoViaIDistributedCacheAsync()
     {
         var json = await _distributedCache.GetStringAsync($"veiculo:{_ordem}:ativo");
         return json is null ? null : JsonSerializer.Deserialize<PosicaoVeiculoDto>(json, JsonOptions);
+    }
+
+    private PosicaoVeiculoCacheRepository NovoRepositorio(IPosicaoVeiculoPayloadWriter writer) =>
+        new(_redis, writer, NullLogger<PosicaoVeiculoCacheRepository>.Instance);
+
+    private sealed class TestPayloadWriter(IDistributedCache cache) : IPosicaoVeiculoPayloadWriter
+    {
+        public Func<Task>? AntesDeAtivo { get; init; }
+        public bool FalharAtivo { get; init; }
+        public bool FalharRecente { get; init; }
+        public async Task GravarAtivoAsync(string chave, string json, DistributedCacheEntryOptions opcoes, CancellationToken ct)
+        {
+            if (AntesDeAtivo is not null) await AntesDeAtivo();
+            if (FalharAtivo) throw new InvalidOperationException("falha ativa controlada");
+            await cache.SetStringAsync(chave, json, opcoes, ct);
+        }
+        public Task GravarRecenteAsync(string chave, string json, DistributedCacheEntryOptions opcoes, CancellationToken ct)
+        {
+            if (FalharRecente) throw new InvalidOperationException("falha recente controlada");
+            return cache.SetStringAsync(chave, json, opcoes, ct);
+        }
     }
 
     private async Task EscreverAtivoComoHashViaIDistributedCacheAsync(
