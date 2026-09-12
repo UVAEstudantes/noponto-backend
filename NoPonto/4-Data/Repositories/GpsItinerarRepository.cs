@@ -60,18 +60,30 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
                     )) AS bearing_local
                 FROM candidatos c
             ),
-            itinerario_escolhido AS (
-                SELECT *,
-                    ABS(MOD((bearing_local - @bearing + 540.0)::numeric, 360.0) - 180.0) AS diff_bearing,
-                    ST_LineInterpolatePoint("Geometria", posicao_na_rota) AS ponto_rota
-                FROM com_bearing_local
-                WHERE ABS(MOD((bearing_local - @bearing + 540.0)::numeric, 360.0) - 180.0) < 80
+            com_diff_bearing AS (
+                SELECT
+                    cb.*,
+                    ABS(MOD((cb.bearing_local - @bearing + 540.0)::numeric, 360.0) - 180.0) AS diff_bearing
+                FROM com_bearing_local cb
+            ),
+            com_score AS (
                 -- Score combinado normalizado: pesa bearing e distância igualmente
                 -- em relação aos próprios limites (80° e @dist_max), em vez de
                 -- decidir por bearing puro primeiro. Reduz o risco de uma rua
                 -- paralela mais distante vencer só por ter bearing marginalmente
                 -- melhor que um candidato bem mais próximo.
-                ORDER BY (diff_bearing / 80.0) + (distancia_rota_metros / @dist_max) ASC
+                SELECT
+                    cd.*,
+                    (cd.diff_bearing / 80.0) + (cd.distancia_rota_metros / @dist_max) AS score
+                FROM com_diff_bearing cd
+                WHERE cd.diff_bearing < 80
+            ),
+            itinerario_escolhido AS (
+                SELECT
+                    cs.*,
+                    ST_LineInterpolatePoint(cs."Geometria", cs.posicao_na_rota) AS ponto_rota
+                FROM com_score cs
+                ORDER BY cs.score ASC
                 LIMIT 1
             ),
             proxima_parada AS (
