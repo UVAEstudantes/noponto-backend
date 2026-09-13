@@ -21,6 +21,8 @@ public sealed class GpsEnriquecimentoService
     private readonly GpsPollingOptions _opcoes;
     private readonly ILogger<GpsEnriquecimentoService> _logger;
 
+    // O polling deduplica Ordem e aguarda o ciclo inteiro antes do próximo.
+    // Não há outro chamador de EnriquecerAsync em produção.
     // Estado persistido entre ciclos — DEVE ser thread-safe.
     private readonly ConcurrentDictionary<string, ItinerarioConfirmado> _itinerarioAtual =
         new(StringComparer.OrdinalIgnoreCase);
@@ -32,7 +34,8 @@ public sealed class GpsEnriquecimentoService
     /// <summary>
     /// Fator de tolerância sobre <see cref="GpsPollingOptions.VelocidadeMaximaKmh"/>
     /// usado para julgar um salto entre duas leituras consecutivas como
-    /// geograficamente implausível. Um fator &gt;1 é necessário porque a
+    /// geograficamente implausível e limitar conservadoramente o progresso na rota.
+    /// Um fator &gt;1 é necessário porque a
     /// velocidade instantânea pode ter picos legítimos acima da média
     /// configurada (frenagem/aceleração, trecho de via expressa etc).
     /// </summary>
@@ -62,9 +65,8 @@ public sealed class GpsEnriquecimentoService
         // Uma leitura cuja velocidade implícita (distância/tempo desde a leitura
         // anterior) é absurda não pode ser usada para matching de rota — o bearing
         // calculado a partir dela também não é confiável. Em vez de inventar uma
-        // posição, tratamos como "sem bearing confiável" e reaproveitamos o
-        // fallback já existente que mantém o último itinerário confirmado por
-        // MaxCiclosSemRota ciclos (comportamento conservador, sem fabricar dado).
+        // posição, pulamos o matching atual. O estado anterior pode fornecer
+        // somente bearing; os campos de rota deste ciclo ficam nulos.
         if (posicao.TemHistorico)
         {
             var deltaSegundos = (posicao.TimestampGps - posicao.TimestampAnterior!.Value).TotalSeconds;
@@ -81,7 +83,7 @@ public sealed class GpsEnriquecimentoService
 
                 _logger.LogWarning(
                     "Veiculo {ordem}: salto geografico implausivel ({dist:F0}m em {seg:F0}s) — " +
-                    "matching de rota ignorado neste ciclo, mantendo ultimo estado confirmado.",
+                    "matching de rota ignorado neste ciclo, sem posicao na rota confirmada.",
                     posicao.Ordem, distanciaMetros, deltaSegundos);
 
                 bearing = null;
@@ -103,9 +105,18 @@ public sealed class GpsEnriquecimentoService
         }
         else if (_itinerarioAtual.TryGetValue(posicao.Ordem, out var semBearing))
         {
-            // Sem bearing (ou salto implausível): mantem ultimo itinerario confirmado
-            rota    = semBearing.Rota;
+            // A consulta não ocorreu: preservar bearing não confirma o matching atual.
             bearing = semBearing.Bearing;
+        }
+
+        // Valida antes de substituir o último matching realmente confirmado.
+        // Fração em geometry(4326) × comprimento geography é uma estimativa;
+        // o teto conservador e a margem de projeção evitam uma precisão fictícia.
+        if (rota is not null && !MatchingTemporalAceitavel(posicao, rota))
+        {
+            _logger.LogWarning("Veiculo {ordem}: matching atual invalido ou temporalmente incompatível.",
+                posicao.Ordem);
+            rota = null;
         }
 
         // ── 3. Estabilidade de itinerario ─────────────────────────────────────
@@ -118,13 +129,13 @@ public sealed class GpsEnriquecimentoService
 
             _itinerarioAtual.AddOrUpdate(
                 posicao.Ordem,
-                _ => new ItinerarioConfirmado(rotaNova, bearingAtual),
+                _ => new ItinerarioConfirmado(rotaNova, bearingAtual, timestampGpsConfirmado: posicao.TimestampGps),
                 (_, anterior) =>
                 {
                     var trocouItinerario = rotaNova.ItinerarioId != anterior.Rota?.ItinerarioId;
 
                     if (!trocouItinerario)
-                        return new ItinerarioConfirmado(rotaNova, bearingAtual);
+                        return new ItinerarioConfirmado(rotaNova, bearingAtual, timestampGpsConfirmado: posicao.TimestampGps);
 
                     var melhoriaDistancia = (anterior.Rota?.DistanciaARotaMetros ?? 999)
                                          - rotaNova.DistanciaARotaMetros;
@@ -133,7 +144,7 @@ public sealed class GpsEnriquecimentoService
                                   || melhoriaDistancia > 100;
 
                     if (podeTracar || anterior.Rota is null)
-                        return new ItinerarioConfirmado(rotaNova, bearingAtual);
+                        return new ItinerarioConfirmado(rotaNova, bearingAtual, timestampGpsConfirmado: posicao.TimestampGps);
 
                     _logger.LogDebug(
                         "Veiculo {ordem}: troca de itinerario bloqueada (parado={parado}, melhoria={melhoria:F0}m). " +
@@ -146,7 +157,8 @@ public sealed class GpsEnriquecimentoService
                     // para a rota nova. Fazer isso produziria um estado
                     // geometricamente incoerente (posição relatada em uma rota que
                     // não é a que o veículo está sinalizando pertencer).
-                    return new ItinerarioConfirmado(anterior.Rota, bearingAtual);
+                    return new ItinerarioConfirmado(anterior.Rota, bearingAtual,
+                        timestampGpsConfirmado: anterior.TimestampGpsConfirmado);
                 });
 
             rota = _itinerarioAtual.TryGetValue(posicao.Ordem, out var confirmado)
@@ -155,7 +167,8 @@ public sealed class GpsEnriquecimentoService
         }
         else
         {
-            // Sem rota nova: mantem ultimo estado por MaxCiclosSemRota ciclos.
+            // Sem matching atual: conta o ciclo e retém estado apenas em memória
+            // por MaxCiclosSemRota ciclos, sem copiar a posição antiga para o DTO.
             _itinerarioAtual.AddOrUpdate(
                 posicao.Ordem,
                 _ => new ItinerarioConfirmado(null, bearing),
@@ -169,7 +182,8 @@ public sealed class GpsEnriquecimentoService
                     if (ciclosSemRota >= _opcoes.MaxCiclosSemRota)
                         return new ItinerarioConfirmado(null, bearing, int.MaxValue);
 
-                    return new ItinerarioConfirmado(anterior.Rota, anterior.Bearing, ciclosSemRota);
+                    return new ItinerarioConfirmado(anterior.Rota, anterior.Bearing, ciclosSemRota,
+                        anterior.TimestampGpsConfirmado);
                 });
 
             if (_itinerarioAtual.TryGetValue(posicao.Ordem, out var expirado)
@@ -179,19 +193,6 @@ public sealed class GpsEnriquecimentoService
                     new KeyValuePair<string, ItinerarioConfirmado>(posicao.Ordem, expirado));
             }
 
-            rota = _itinerarioAtual.TryGetValue(posicao.Ordem, out var mantido)
-                && mantido.Rota is not null
-                ? new EnriquecimentoRotaDto
-                {
-                    ItinerarioId                 = mantido.Rota.ItinerarioId,
-                    PosicaoNaRota                = mantido.Rota.PosicaoNaRota,
-                    ComprimentoRotaMetros        = mantido.Rota.ComprimentoRotaMetros,
-                    DistanciaARotaMetros         = mantido.Rota.DistanciaARotaMetros,
-                    BearingLocal                 = mantido.Rota.BearingLocal,
-                    ProximaParadaNome            = null,
-                    DistanciaProximaParadaMetros = null,
-                }
-                : null;
         }
 
         return posicao with
@@ -213,6 +214,36 @@ public sealed class GpsEnriquecimentoService
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static bool RotaValida(EnriquecimentoRotaDto rota) =>
+        double.IsFinite(rota.PosicaoNaRota) && rota.PosicaoNaRota is >= 0 and <= 1
+        && double.IsFinite(rota.ComprimentoRotaMetros) && rota.ComprimentoRotaMetros > 0;
+
+    private bool MatchingTemporalAceitavel(PosicaoVeiculoDto posicao, EnriquecimentoRotaDto atual)
+    {
+        if (!RotaValida(atual)) return false;
+        if (!_itinerarioAtual.TryGetValue(posicao.Ordem, out var confirmado)
+            || confirmado.Rota is not { } anterior
+            || anterior.ItinerarioId != atual.ItinerarioId)
+            return true; // Primeira referência ou política de troca existente.
+
+        if (confirmado.TimestampGpsConfirmado is not { } timestamp || !RotaValida(anterior))
+            return true; // Inicializa referência apenas com candidato válido.
+
+        var segundos = (posicao.TimestampGps - timestamp).TotalSeconds;
+        if (segundos <= 0) return false; // Nunca substitui referência por tempo igual/mais antigo.
+
+        // O mesmo comprimento é determinístico para a mesma geometria na query.
+        // Qualquer alteração reinicia a referência sem misturar geometrias;
+        // não há versionamento que detecte alteração de geometria com comprimento igual.
+        if (atual.ComprimentoRotaMetros != anterior.ComprimentoRotaMetros) return true;
+
+        var distancia = Math.Abs(atual.PosicaoNaRota - anterior.PosicaoNaRota)
+                      * atual.ComprimentoRotaMetros;
+        var limite = (_opcoes.VelocidadeMaximaKmh * FatorToleranciaSalto / 3.6) * segundos
+                   + _opcoes.ToleranciaProjecaoMetros;
+        return distancia <= limite;
+    }
 
     /// <summary>
     /// Política de precedência de bearing:
@@ -348,15 +379,18 @@ public sealed class GpsEnriquecimentoService
         public EnriquecimentoRotaDto? Rota         { get; }
         public double?                Bearing       { get; }
         public int                    CiclosSemRota { get; }
+        public DateTimeOffset?        TimestampGpsConfirmado { get; }
 
         public ItinerarioConfirmado(
             EnriquecimentoRotaDto? rota,
             double? bearing,
-            int ciclosSemRota = 0)
+            int ciclosSemRota = 0,
+            DateTimeOffset? timestampGpsConfirmado = null)
         {
             Rota          = rota;
             Bearing       = bearing;
             CiclosSemRota = ciclosSemRota;
+            TimestampGpsConfirmado = timestampGpsConfirmado;
         }
     }
 }

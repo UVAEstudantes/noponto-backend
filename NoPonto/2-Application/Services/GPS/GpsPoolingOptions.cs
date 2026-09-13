@@ -9,6 +9,8 @@ public sealed class GpsPollingOptions
     public int    TtlRecenteSegundos             { get; set; } = 180;
     public int    TtlLinhaSegundos               { get; set; } = 180;
     public double VelocidadeMaximaKmh            { get; set; } = 90;
+    /// <summary>Margem de instabilidade da projeção, não deslocamento do veículo.</summary>
+    public double ToleranciaProjecaoMetros       { get; set; } = 50;
     public int    JanelaVelocidadeLeituras        { get; set; } = 3;
     public int    JanelaRetroativaSegundos        { get; set; } = 60;
     public double DistanciaMaximaRotaMetros       { get; set; } = 250;

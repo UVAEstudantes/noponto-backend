@@ -321,6 +321,9 @@ builder.Services
         o => o.VelocidadeMaximaKmh > 0,
         "GpsPolling:VelocidadeMaximaKmh deve ser > 0")
     .Validate(
+        o => double.IsFinite(o.ToleranciaProjecaoMetros) && o.ToleranciaProjecaoMetros > 0,
+        "GpsPolling:ToleranciaProjecaoMetros deve ser finita e > 0")
+    .Validate(
         o => o.JanelaVelocidadeLeituras > 0,
         "GpsPolling:JanelaVelocidadeLeituras deve ser > 0")
     .Validate(
