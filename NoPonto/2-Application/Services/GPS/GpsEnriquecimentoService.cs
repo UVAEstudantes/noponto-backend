@@ -214,21 +214,43 @@ public sealed class GpsEnriquecimentoService
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Política de precedência de bearing:
+    ///   1. Havendo deslocamento confiável (&gt;=10m) desde a leitura anterior,
+    ///      o bearing GEOMÉTRICO sempre prevalece — mesmo que a fonte tenha
+    ///      enviado um bearing válido, o geométrico é mais preciso.
+    ///   2. Sem deslocamento confiável (ou sem histórico), preserva o bearing
+    ///      ATUAL já validado pela fonte (GpsSppoClient/GpsBrtClient) — sem
+    ///      overwrite por estado anterior (isso é feito aqui, não mais em
+    ///      GpsPollingService.MontarComHistorico).
+    ///   3. Se a fonte não enviar bearing válido, reutiliza o último bearing
+    ///      CONFIRMADO em memória para este veículo (_itinerarioAtual) —
+    ///      nunca o BearingLocal calculado a partir da rota, que é derivado
+    ///      da geometria do itinerário, não da leitura de entrada.
+    ///   4. Sem nenhuma evidência confiável, retorna null.
+    /// </summary>
     private double? CalcularBearingConfiavel(PosicaoVeiculoDto posicao)
     {
-        if (!posicao.TemHistorico)
+        if (posicao.TemHistorico)
+        {
+            var distancia = HaversineMetros(
+                posicao.LatitudeAnterior!.Value, posicao.LongitudeAnterior!.Value,
+                posicao.Latitude, posicao.Longitude);
+
+            if (distancia >= 10.0)
+            {
+                return CalcularBearing(
+                    posicao.LatitudeAnterior.Value, posicao.LongitudeAnterior.Value,
+                    posicao.Latitude, posicao.Longitude);
+            }
+        }
+
+        if (posicao.Bearing.HasValue)
             return posicao.Bearing;
 
-        var distancia = HaversineMetros(
-            posicao.LatitudeAnterior!.Value, posicao.LongitudeAnterior!.Value,
-            posicao.Latitude, posicao.Longitude);
-
-        if (distancia < 10.0)
-            return posicao.Bearing;
-
-        return CalcularBearing(
-            posicao.LatitudeAnterior.Value, posicao.LongitudeAnterior.Value,
-            posicao.Latitude, posicao.Longitude);
+        return _itinerarioAtual.TryGetValue(posicao.Ordem, out var confirmado)
+            ? confirmado.Bearing
+            : null;
     }
 
     private double? AtualizarFilaVelocidade(PosicaoVeiculoDto posicao)

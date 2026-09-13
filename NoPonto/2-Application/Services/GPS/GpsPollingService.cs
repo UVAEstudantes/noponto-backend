@@ -472,7 +472,7 @@ public sealed class GpsPollingService : BackgroundService
             LatitudeAnterior = anterior?.Latitude,
             LongitudeAnterior = anterior?.Longitude,
             TimestampAnterior = anterior?.TimestampGps,
-            Bearing = anterior?.Bearing,
+            //Bearing = anterior?.Bearing,
             Status = StatusVeiculo.Ativo,
         };
 

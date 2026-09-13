@@ -146,9 +146,9 @@ public class GpsEnriquecimentoServiceTests
 
         repo.Respostas.Enqueue(rotaConfirmada);
 
-        // Segunda leitura: deslocamento minúsculo (~1m, ruído de GPS), simulando
-        // que o pipeline (GpsPollingService.MontarComHistorico) já propagou o
-        // bearing confirmado anteriormente para esta nova leitura.
+        // Segunda leitura: deslocamento minúsculo (~1m, ruído de GPS) e a fonte
+        // reenviou o mesmo bearing válido (90°) — o bearing deve ser preservado,
+        // não recalculado geometricamente sobre um deslocamento de ruído.
         var segunda = primeira with
         {
             Latitude = primeira.Latitude + 0.00001,
@@ -157,12 +157,233 @@ public class GpsEnriquecimentoServiceTests
             TimestampAnterior = primeira.TimestampGps,
             TimestampGps = t0.AddSeconds(20),
             TimestampServidor = t0.AddSeconds(20),
-            Bearing = resultado1.Bearing, // carregado pelo pipeline real
+            Bearing = 90, // bearing atual válido da fonte, igual ao ciclo anterior
         };
 
         var resultado2 = await servico.EnriquecerAsync(segunda, default);
 
         Assert.Equal(resultado1.Bearing, resultado2.Bearing);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Política de precedência de bearing (cenários A–H)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public async Task A_BearingFonteValido_ComMovimento_BearingGeometricoPrevalece()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(new EnriquecimentoRotaDto
+        {
+            ItinerarioId = Guid.NewGuid(), PosicaoNaRota = 0.2,
+            ComprimentoRotaMetros = 1000, DistanciaARotaMetros = 5,
+        });
+
+        var servico = CriarServico(repo);
+        var t0 = DateTimeOffset.UtcNow;
+
+        // Bearing da fonte é 90°, mas o deslocamento real (~223m em 20s, ~40km/h —
+        // fisicamente plausível, bem abaixo do limiar de salto de 180km/h) aponta
+        // para norte (~0°) — o geométrico deve prevalecer, mesmo com fonte válida.
+        var posicao = new PosicaoVeiculoDto
+        {
+            Ordem = "V1", CodigoLinha = "100",
+            Latitude = -22.9000, Longitude = -43.2000,
+            LatitudeAnterior = -22.9020, LongitudeAnterior = -43.2000,
+            TimestampAnterior = t0.AddSeconds(-20),
+            Bearing = 90,
+            TimestampGps = t0, TimestampServidor = t0,
+        };
+
+        var resultado = await servico.EnriquecerAsync(posicao, default);
+
+        var bearingGeometricoEsperado = GpsEnriquecimentoService.CalcularBearing(
+            -22.9020, -43.2000, -22.9000, -43.2000);
+
+        Assert.Equal(bearingGeometricoEsperado, resultado.Bearing);
+        Assert.NotEqual(90, resultado.Bearing);
+    }
+
+    [Fact]
+    public async Task B_BearingFonteValido_SemMovimento_BearingDaFontePreservado()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(new EnriquecimentoRotaDto
+        {
+            ItinerarioId = Guid.NewGuid(), PosicaoNaRota = 0.3,
+            ComprimentoRotaMetros = 1000, DistanciaARotaMetros = 5,
+        });
+
+        var servico = CriarServico(repo);
+        var t0 = DateTimeOffset.UtcNow;
+
+        var posicao = new PosicaoVeiculoDto
+        {
+            Ordem = "V1", CodigoLinha = "100",
+            Latitude = -22.9000, Longitude = -43.2000,
+            LatitudeAnterior = -22.9000, LongitudeAnterior = -43.2000, // sem deslocamento
+            TimestampAnterior = t0.AddSeconds(-20),
+            Bearing = 123,
+            TimestampGps = t0, TimestampServidor = t0,
+        };
+
+        var resultado = await servico.EnriquecerAsync(posicao, default);
+
+        Assert.Equal(123, resultado.Bearing);
+    }
+
+    [Fact]
+    public async Task C_BearingFonteNulo_ComMovimento_BearingGeometricoUsado()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(new EnriquecimentoRotaDto
+        {
+            ItinerarioId = Guid.NewGuid(), PosicaoNaRota = 0.2,
+            ComprimentoRotaMetros = 1000, DistanciaARotaMetros = 5,
+        });
+
+        var servico = CriarServico(repo);
+        var t0 = DateTimeOffset.UtcNow;
+
+        var posicao = new PosicaoVeiculoDto
+        {
+            Ordem = "V1", CodigoLinha = "100",
+            Latitude = -22.9000, Longitude = -43.2000,
+            LatitudeAnterior = -22.9020, LongitudeAnterior = -43.2000,
+            TimestampAnterior = t0.AddSeconds(-20),
+            Bearing = null, // ex.: SPPO, que não envia bearing
+            TimestampGps = t0, TimestampServidor = t0,
+        };
+
+        var resultado = await servico.EnriquecerAsync(posicao, default);
+
+        var bearingGeometricoEsperado = GpsEnriquecimentoService.CalcularBearing(
+            -22.9020, -43.2000, -22.9000, -43.2000);
+
+        Assert.Equal(bearingGeometricoEsperado, resultado.Bearing);
+    }
+
+    [Fact]
+    public async Task D_BearingFonteNulo_SemMovimento_ComBearingAnteriorConfirmado_UsaAnterior()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var rota = new EnriquecimentoRotaDto
+        {
+            ItinerarioId = Guid.NewGuid(), PosicaoNaRota = 0.3,
+            ComprimentoRotaMetros = 1000, DistanciaARotaMetros = 5,
+        };
+        repo.Respostas.Enqueue(rota);
+
+        var servico = CriarServico(repo);
+        var t0 = DateTimeOffset.UtcNow;
+
+        // Primeira leitura confirma bearing = 77° na memória do serviço.
+        var primeira = new PosicaoVeiculoDto
+        {
+            Ordem = "V1", CodigoLinha = "100",
+            Latitude = -22.9000, Longitude = -43.2000,
+            Bearing = 77,
+            TimestampGps = t0, TimestampServidor = t0,
+        };
+        var resultado1 = await servico.EnriquecerAsync(primeira, default);
+        Assert.Equal(77, resultado1.Bearing);
+
+        repo.Respostas.Enqueue(rota);
+
+        // Segunda leitura: sem deslocamento e SEM bearing da fonte.
+        var segunda = primeira with
+        {
+            LatitudeAnterior = primeira.Latitude,
+            LongitudeAnterior = primeira.Longitude,
+            TimestampAnterior = primeira.TimestampGps,
+            TimestampGps = t0.AddSeconds(20),
+            TimestampServidor = t0.AddSeconds(20),
+            Bearing = null,
+        };
+
+        var resultado2 = await servico.EnriquecerAsync(segunda, default);
+
+        Assert.Equal(77, resultado2.Bearing); // reutiliza o bearing confirmado
+    }
+
+    [Fact]
+    public async Task E_BearingFonteNulo_SemMovimento_SemBearingAnterior_PermaneceNull()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(null);
+
+        var servico = CriarServico(repo);
+        var t0 = DateTimeOffset.UtcNow;
+
+        var posicao = new PosicaoVeiculoDto
+        {
+            Ordem = "V1", CodigoLinha = "100",
+            Latitude = -22.9000, Longitude = -43.2000,
+            LatitudeAnterior = -22.9000, LongitudeAnterior = -43.2000,
+            TimestampAnterior = t0.AddSeconds(-20),
+            Bearing = null,
+            TimestampGps = t0, TimestampServidor = t0,
+        };
+
+        var resultado = await servico.EnriquecerAsync(posicao, default);
+
+        Assert.Null(resultado.Bearing);
+    }
+
+    [Fact]
+    public async Task F_PrimeiroCiclo_SemPosicaoAnterior_BearingFontePreservado()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var itinerarioId = Guid.NewGuid();
+        repo.Respostas.Enqueue(new EnriquecimentoRotaDto
+        {
+            ItinerarioId = itinerarioId, PosicaoNaRota = 0.1,
+            ComprimentoRotaMetros = 1000, DistanciaARotaMetros = 5,
+        });
+
+        var servico = CriarServico(repo);
+
+        var posicao = new PosicaoVeiculoDto
+        {
+            Ordem = "V1", CodigoLinha = "100",
+            Latitude = -22.9000, Longitude = -43.2000,
+            Bearing = 45, // sem LatitudeAnterior/LongitudeAnterior/TimestampAnterior
+            TimestampGps = DateTimeOffset.UtcNow, TimestampServidor = DateTimeOffset.UtcNow,
+        };
+
+        var resultado = await servico.EnriquecerAsync(posicao, default);
+
+        Assert.Equal(45, resultado.Bearing);
+        Assert.Equal(itinerarioId, resultado.ItinerarioId); // enriquecimento ocorreu normalmente
+    }
+
+    [Fact]
+    public async Task G_BearingInvalidoDaFonte_NuncaViraBearingValidoPorNormalizacao()
+    {
+        // GpsBrtClient já rejeita "965" e produz Bearing=null antes de chegar
+        // aqui (0..360 é a única validação, sem módulo). Este teste garante que,
+        // ao chegar null no enriquecimento, nada o "conserta" via módulo/clamp —
+        // só é substituído por bearing geométrico real (se houver movimento) ou
+        // pelo bearing confirmado anteriormente.
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(null);
+
+        var servico = CriarServico(repo);
+        var t0 = DateTimeOffset.UtcNow;
+
+        var posicao = new PosicaoVeiculoDto
+        {
+            Ordem = "V1", CodigoLinha = "100",
+            Latitude = -22.9000, Longitude = -43.2000,
+            LatitudeAnterior = -22.9000, LongitudeAnterior = -43.2000,
+            TimestampAnterior = t0.AddSeconds(-20),
+            Bearing = null, // equivalente ao resultado de GpsBrtClient para "965"
+            TimestampGps = t0, TimestampServidor = t0,
+        };
+
+        var resultado = await servico.EnriquecerAsync(posicao, default);
+
+        Assert.Null(resultado.Bearing); // nunca 965 % 360 = 245 nem qualquer "correção"
     }
 
     // ── 6. Salto geográfico impossível ───────────────────────────────────────

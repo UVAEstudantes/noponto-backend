@@ -28,7 +28,7 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _connStr = Environment.GetEnvironmentVariable("REDIS_TEST_CONNECTION") ?? "localhost:6379";
+        _connStr = Environment.GetEnvironmentVariable("REDIS_TEST_CONNECTION") ?? "localhost:6380";
         _redis = await ConnectionMultiplexer.ConnectAsync(_connStr);
 
         // MESMO tipo concreto resolvido em produção via AddStackExchangeRedisCache,
