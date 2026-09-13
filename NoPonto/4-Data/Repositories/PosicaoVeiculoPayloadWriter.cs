@@ -1,74 +1,117 @@
+using System.Text;
 using StackExchange.Redis;
 using NoPonto.Data.Interfaces;
 
 namespace NoPonto.Data.Repositories;
 
 /// <summary>
-/// Escreve o payload de posição do veículo em formato Hash compatível com
-/// Microsoft.Extensions.Caching.StackExchangeRedis (IDistributedCache), mas
-/// condicionando a escrita, ATOMICAMENTE dentro do mesmo script Lua, à posse
-/// do lock de escrita — o "fencing token" descrito na Etapa 1.
-///
-/// Reproduz deliberadamente o mesmo layout de campos que o RedisCache usa
-/// internamente ("absexp", "sldexp", "data") para que os consumidores que já
-/// leem essas chaves via IDistributedCache (VeiculosController, ParadaService,
-/// GpsPollingService) continuem funcionando sem NENHUMA alteração.
-///
-/// Como o projeto nunca configura expiração deslizante para estas chaves,
-/// "sldexp" é sempre gravado como "-1" — o script de leitura do RedisCache só
-/// tenta renovar TTL automaticamente quando sldexp ≠ "-1", então isso
-/// reproduz exatamente o comportamento observável que já existia.
+/// Commit Redis 7+ com preflight somente de leitura, seguido de writes sem decisões intermediárias.
+/// Isolamento Lua não é rollback transacional: tipos, argumentos e ACLs são checados antes do SET.
+/// Hashes reproduzem RedisCache 10.0.2: absexp/sldexp=-1, data UTF-8 e TTL físico sem sliding.
 /// </summary>
 public sealed class PosicaoVeiculoPayloadWriter : IPosicaoVeiculoPayloadWriter
 {
-    // KEYS[1] = chave do payload (":ativo" ou ":recente")
-    // KEYS[2] = chave do lock ("veiculo:{ordem}:gps-lock")
-    // ARGV[1] = token esperado do dono do lock
-    // ARGV[2] = payload (JSON, UTF-8)
-    // ARGV[3] = ttl em segundos para a chave de payload
-    //
-    // A checagem de posse do lock e a gravação do Hash acontecem no MESMO
-    // script — não há nenhuma janela entre "verificar" e "escrever".
-    //
-    // Retorna: 1 → gravado | 0 → lock não pertence mais a este token
-    private const string ScriptGravarComFencing = """
-        local dono_atual = redis.call('GET', KEYS[2])
-        if dono_atual ~= ARGV[1] then
-            return 0
+    // KEYS: 1=ts, 2=ativo, 3=recente, 4=gps-lock.
+    // ARGV: 1=token, 2=JSON, 3=unix ms, 4=TTL ativo, 5=TTL recente, 6=TTL controle (segundos).
+    // Shebang sem allow-oom: Redis 7 rejeita execução já acima de maxmemory antes dos writes.
+    // Isso não promete rollback sob falha catastrófica de alocação/processo do servidor.
+    private const string ScriptCommitAtomico = """
+        #!lua
+        local ACCEPTED, OLDER, EQUAL, FENCING, CLOSED, STATE, ARGS = 1, 2, 3, 4, 5, 6, 7
+
+        -- Fase A: nenhuma escrita, inclusive em rejeições de argumentos ou permissões.
+        if #KEYS ~= 4 or #ARGV ~= 6 then return ARGS end
+        for i = 1, 4 do
+            if KEYS[i] == '' then return ARGS end
+            for j = i + 1, 4 do
+                if KEYS[i] == KEYS[j] then return ARGS end
+            end
         end
 
-        redis.call('HMSET', KEYS[1], 'absexp', '-1', 'sldexp', '-1', 'data', ARGV[2])
-        redis.call('EXPIRE', KEYS[1], ARGV[3])
-        return 1
+        local function inteiro(texto, minimo, maximo)
+            -- Inteiro decimal CANÔNICO: Redis rejeita EXPIRE '060', embora tonumber aceite.
+            if not texto or not string.match(texto, '^[1-9]%d*$') then return nil end
+            local n = tonumber(texto)
+            if not n or n < minimo or n > maximo or n ~= math.floor(n) then return nil end
+            return n
+        end
+
+        local novo = inteiro(ARGV[3], 1, 253402300799999)
+        local ttl_ativo = inteiro(ARGV[4], 1, 922337203685)
+        local ttl_recente = inteiro(ARGV[5], 1, 922337203685)
+        local ttl_controle = inteiro(ARGV[6], 1, 922337203685)
+        if ARGV[1] == '' or ARGV[2] == '' or #ARGV[2] > 536870912
+            or not novo or not ttl_ativo or not ttl_recente or not ttl_controle then
+            return ARGS
+        end
+        if ttl_controle < ttl_ativo or ttl_controle < ttl_recente then return ARGS end
+
+        if redis.call('TYPE', KEYS[4]).ok ~= 'string' then return FENCING end
+        if redis.call('GET', KEYS[4]) ~= ARGV[1] then return FENCING end
+
+        local tipo_ts = redis.call('TYPE', KEYS[1]).ok
+        if tipo_ts ~= 'none' and tipo_ts ~= 'string' then return STATE end
+        local atual = nil
+        if tipo_ts == 'string' then
+            atual = inteiro(redis.call('GET', KEYS[1]), 1, 253402300799999)
+            if not atual then return STATE end
+        end
+
+        local tipo_ativo = redis.call('TYPE', KEYS[2]).ok
+        local tipo_recente = redis.call('TYPE', KEYS[3]).ok
+        if tipo_ativo ~= 'none' and tipo_ativo ~= 'hash' then return STATE end
+        if tipo_recente ~= 'none' and tipo_recente ~= 'hash' then return STATE end
+        if tipo_ts == 'none' and tipo_ativo ~= 'none' then return CLOSED end
+
+        if atual then
+            if novo < atual then return OLDER end
+            if novo == atual then return EQUAL end
+        end
+
+        -- Evita NOPERM depois do primeiro write; ACLs não mudam enquanto o Lua executa.
+        if not redis.acl_check_cmd('SET', KEYS[1], ARGV[3], 'EX', ARGV[6])
+            or not redis.acl_check_cmd('HSET', KEYS[2], 'absexp', '-1', 'sldexp', '-1', 'data', ARGV[2])
+            or not redis.acl_check_cmd('EXPIRE', KEYS[2], ARGV[4])
+            or not redis.acl_check_cmd('HSET', KEYS[3], 'absexp', '-1', 'sldexp', '-1', 'data', ARGV[2])
+            or not redis.acl_check_cmd('EXPIRE', KEYS[3], ARGV[5]) then
+            return STATE
+        end
+
+        -- Fase B: somente writes de formato/argumentos já validados; sem compensação.
+        redis.call('SET', KEYS[1], ARGV[3], 'EX', ARGV[6])
+        redis.call('HSET', KEYS[2], 'absexp', '-1', 'sldexp', '-1', 'data', ARGV[2])
+        redis.call('EXPIRE', KEYS[2], ARGV[4])
+        redis.call('HSET', KEYS[3], 'absexp', '-1', 'sldexp', '-1', 'data', ARGV[2])
+        redis.call('EXPIRE', KEYS[3], ARGV[5])
+        return ACCEPTED
         """;
 
     private readonly IConnectionMultiplexer _redis;
 
-    public PosicaoVeiculoPayloadWriter(IConnectionMultiplexer redis)
+    public PosicaoVeiculoPayloadWriter(IConnectionMultiplexer redis) => _redis = redis;
+
+    public async Task<PosicaoVeiculoCommitStatus> TentarCommitAtomicoAsync(
+        string chaveTs, string chaveAtivo, string chaveRecente, string chaveLock,
+        string token, string json, long timestampMs,
+        TimeSpan ttlAtivo, TimeSpan ttlRecente, TimeSpan ttlControle, CancellationToken ct)
     {
-        _redis = redis;
-    }
+        ct.ThrowIfCancellationRequested();
+        var chaves = new[] { chaveTs, chaveAtivo, chaveRecente, chaveLock };
+        if (chaves.Any(string.IsNullOrWhiteSpace) || chaves.Distinct(StringComparer.Ordinal).Count() != 4
+            || string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(json)
+            || Encoding.UTF8.GetByteCount(json) > 536870912
+            || timestampMs <= 0 || timestampMs > DateTimeOffset.MaxValue.ToUnixTimeMilliseconds()
+            || ttlAtivo.TotalSeconds < 1 || ttlRecente.TotalSeconds < 1 || ttlControle.TotalSeconds < 1
+            || (long)ttlControle.TotalSeconds < (long)ttlAtivo.TotalSeconds
+            || (long)ttlControle.TotalSeconds < (long)ttlRecente.TotalSeconds)
+            return PosicaoVeiculoCommitStatus.InvalidArguments;
 
-    public async Task<bool> GravarComFencingAsync(
-        string chave,
-        string chaveLock,
-        string token,
-        string json,
-        TimeSpan ttl,
-        CancellationToken ct)
-    {
-        var db = _redis.GetDatabase();
-
-        var resultado = await db.ScriptEvaluateAsync(
-            ScriptGravarComFencing,
-            keys: new RedisKey[] { chave, chaveLock },
-            values: new RedisValue[]
-            {
-                token,
-                json,
-                (long)Math.Max(1, ttl.TotalSeconds),
-            }).ConfigureAwait(false);
-
-        return (long)resultado! == 1;
+        var resultado = await _redis.GetDatabase().ScriptEvaluateAsync(
+            ScriptCommitAtomico,
+            new RedisKey[] { chaveTs, chaveAtivo, chaveRecente, chaveLock },
+            new RedisValue[] { token, json, timestampMs,
+                (long)ttlAtivo.TotalSeconds, (long)ttlRecente.TotalSeconds, (long)ttlControle.TotalSeconds }
+        ).ConfigureAwait(false);
+        return (PosicaoVeiculoCommitStatus)(long)resultado;
     }
 }

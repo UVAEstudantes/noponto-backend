@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Reflection;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,8 +10,8 @@ using NoPonto.Data.Interfaces;
 using StackExchange.Redis;
 using Xunit;
 
-// Requer Redis real acessível via REDIS_TEST_CONNECTION (default localhost:6379).
-// Propositalmente NÃO usamos mock: as propriedades sob teste (atomicidade CAS e
+// Requer Redis real acessível via REDIS_TEST_CONNECTION (default localhost:6380).
+// Propositalmente NÃO usamos mock: as propriedades sob teste (commit Lua e
 // compatibilidade de formato físico com IDistributedCache) só são significativas
 // contra um servidor Redis real e o provider real.
 public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
@@ -116,6 +117,7 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
 
         var armazenado = await LerAtivoViaIDistributedCacheAsync();
         Assert.Equal(maxEsperado, armazenado!.TimestampGps);
+        await AssertEstadoIntegralAsync(maxEsperado);
         Assert.Equal(
             maxEsperado.ToUnixTimeMilliseconds(),
             (long)(await _redis.GetDatabase().StringGetAsync($"veiculo:{_ordem}:ts"))!);
@@ -144,6 +146,7 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
         var armazenado  = await LerAtivoViaIDistributedCacheAsync();
 
         Assert.Equal(maxEsperado, armazenado!.TimestampGps);
+        await AssertEstadoIntegralAsync(maxEsperado);
         Assert.Equal(
             maxEsperado.ToUnixTimeMilliseconds(),
             (long)(await _redis.GetDatabase().StringGetAsync($"veiculo:{_ordem}:ts"))!);
@@ -254,7 +257,7 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
         var resultado = await _repo.TentarAtualizarAsync(
             _ordem, Posicao(t1159, _ordem), t1159, TtlAtivo, TtlRecente, default);
 
-        Assert.Equal(PosicaoVeiculoCacheStatus.RejectedOlderOrEqual, resultado.Status);
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultado.Status);
     }
 
     [Fact]
@@ -331,318 +334,476 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
     // FENCING — testes diretos de IPosicaoVeiculoPayloadWriter (requisito 5)
     // ═══════════════════════════════════════════════════════════════════════
 
+
+
     [Fact]
     public async Task Writer_TokenCorreto_EscreveComSucesso()
     {
-        var writer = new PosicaoVeiculoPayloadWriter(_redis);
-        var chaveLock = $"veiculo:{_ordem}:gps-lock";
-        var chaveAtivo = $"veiculo:{_ordem}:ativo";
-        var token = "token-unico";
-
-        var db = _redis.GetDatabase();
-        await db.StringSetAsync(chaveLock, token, TimeSpan.FromSeconds(30));
-
-        var dto = Posicao(DateTimeOffset.UtcNow, _ordem);
-        var json = JsonSerializer.Serialize(dto, JsonOptions);
-
-        var gravou = await writer.GravarComFencingAsync(
-            chaveAtivo, chaveLock, token, json, TimeSpan.FromSeconds(60), default);
-
-        Assert.True(gravou);
-        Assert.Equal(RedisType.Hash, await db.KeyTypeAsync(chaveAtivo));
-
-        var lido = await _distributedCache.GetStringAsync(chaveAtivo);
-        Assert.NotNull(lido);
-        var dtoLido = JsonSerializer.Deserialize<PosicaoVeiculoDto>(lido!, JsonOptions);
-        Assert.Equal(dto.TimestampGps, dtoLido!.TimestampGps);
+        var t = DateTimeOffset.UtcNow;
+        await _redis.GetDatabase().StringSetAsync($"veiculo:{_ordem}:gps-lock", "A", TimeSpan.FromSeconds(15));
+        Assert.Equal(PosicaoVeiculoCommitStatus.Accepted,
+            await CommitDiretoAsync(new PosicaoVeiculoPayloadWriter(_redis), "A", t));
+        await AssertEstadoIntegralAsync(t);
     }
 
     [Fact]
     public async Task Writer_TokenTomadoPorOutraInstancia_RejeitaEscritaFenced()
     {
-        var writer = new PosicaoVeiculoPayloadWriter(_redis);
-        var chaveLock = $"veiculo:{_ordem}:gps-lock";
-        var chaveAtivo = $"veiculo:{_ordem}:ativo";
-
-        var db = _redis.GetDatabase();
-        await db.StringSetAsync(chaveLock, "token-A", TimeSpan.FromSeconds(30));
-        // takeover: outra instância grava seu próprio token na mesma chave
-        await db.StringSetAsync(chaveLock, "token-B", TimeSpan.FromSeconds(30));
-
-        var json = JsonSerializer.Serialize(Posicao(DateTimeOffset.UtcNow, _ordem), JsonOptions);
-        var gravou = await writer.GravarComFencingAsync(
-            chaveAtivo, chaveLock, "token-A", json, TimeSpan.FromSeconds(60), default);
-
-        Assert.False(gravou);
-        Assert.False(await db.KeyExistsAsync(chaveAtivo)); // nada foi escrito
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        var antes = await CapturarDadosAsync();
+        await _redis.GetDatabase().StringSetAsync($"veiculo:{_ordem}:gps-lock", "B", TimeSpan.FromSeconds(15));
+        Assert.Equal(PosicaoVeiculoCommitStatus.FencingLost,
+            await CommitDiretoAsync(new PosicaoVeiculoPayloadWriter(_redis), "A", t0.AddSeconds(1)));
+        await AssertDadosPreservadosAsync(antes);
     }
 
     [Fact]
     public async Task Writer_LockInexistente_RejeitaEscrita()
     {
-        var writer = new PosicaoVeiculoPayloadWriter(_redis);
-        var chaveLock = $"veiculo:{_ordem}:gps-lock"; // nunca criado
-        var chaveAtivo = $"veiculo:{_ordem}:ativo";
-
-        var json = JsonSerializer.Serialize(Posicao(DateTimeOffset.UtcNow, _ordem), JsonOptions);
-        var gravou = await writer.GravarComFencingAsync(
-            chaveAtivo, chaveLock, "qualquer-token", json, TimeSpan.FromSeconds(60), default);
-
-        Assert.False(gravou);
-        Assert.False(await _redis.GetDatabase().KeyExistsAsync(chaveAtivo));
+        var antes = await CapturarDadosAsync();
+        Assert.Equal(PosicaoVeiculoCommitStatus.FencingLost,
+            await CommitDiretoAsync(new PosicaoVeiculoPayloadWriter(_redis), "A"));
+        await AssertDadosPreservadosAsync(antes);
     }
 
     [Fact]
     public async Task Writer_LockExpiradoRealmente_RejeitaEscrita()
     {
-        var writer = new PosicaoVeiculoPayloadWriter(_redis);
-        var chaveLock = $"veiculo:{_ordem}:gps-lock";
-        var chaveAtivo = $"veiculo:{_ordem}:ativo";
-        var token = "token-curto";
-
-        var db = _redis.GetDatabase();
-        await db.StringSetAsync(chaveLock, token, TimeSpan.FromMilliseconds(200));
-        await Task.Delay(400); // aguarda expiração real (TTL << delay, determinístico)
-
-        var json = JsonSerializer.Serialize(Posicao(DateTimeOffset.UtcNow, _ordem), JsonOptions);
-        var gravou = await writer.GravarComFencingAsync(
-            chaveAtivo, chaveLock, token, json, TimeSpan.FromSeconds(60), default);
-
-        Assert.False(gravou);
+        await _redis.GetDatabase().StringSetAsync($"veiculo:{_ordem}:gps-lock", "A", TimeSpan.FromMilliseconds(200));
+        await Task.Delay(400);
+        var antes = await CapturarDadosAsync();
+        Assert.Equal(PosicaoVeiculoCommitStatus.FencingLost,
+            await CommitDiretoAsync(new PosicaoVeiculoPayloadWriter(_redis), "A"));
+        await AssertDadosPreservadosAsync(antes);
     }
 
     [Fact]
     public async Task Writer_PerdaEntreRenovacaoEEscrita_EhDetectadaNoMomentoDaEscrita()
     {
-        // Prova que a proteção está no PONTO DA ESCRITA, não apenas na
-        // renovação anterior (requisito 4). Totalmente determinístico.
-        var writer = new PosicaoVeiculoPayloadWriter(_redis);
-        var chaveLock = $"veiculo:{_ordem}:gps-lock";
-        var chaveAtivo = $"veiculo:{_ordem}:ativo";
-        var tokenA = "token-A";
-
         var db = _redis.GetDatabase();
-        await db.StringSetAsync(chaveLock, tokenA, TimeSpan.FromSeconds(30));
-
-        // A "renova" o lock com sucesso — prova que, até este ponto, A é o dono.
-        const string scriptRenovar =
-            "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('PEXPIRE', KEYS[1], ARGV[2]) end return 0";
-        var renovou = (long)(await db.ScriptEvaluateAsync(
-            scriptRenovar, new RedisKey[] { chaveLock }, new RedisValue[] { tokenA, 30000L }))!;
-        Assert.Equal(1, renovou);
-
-        // Exatamente na janela seguinte, outra instância toma o lock.
-        await db.StringSetAsync(chaveLock, "token-B", TimeSpan.FromSeconds(30));
-
-        // A tenta escrever com o token que tinha ANTES do takeover.
-        var json = JsonSerializer.Serialize(Posicao(DateTimeOffset.UtcNow, _ordem), JsonOptions);
-        var gravou = await writer.GravarComFencingAsync(
-            chaveAtivo, chaveLock, tokenA, json, TimeSpan.FromSeconds(60), default);
-
-        Assert.False(gravou);
-        Assert.False(await db.KeyExistsAsync(chaveAtivo));
+        var chave = $"veiculo:{_ordem}:gps-lock";
+        await db.StringSetAsync(chave, "A", TimeSpan.FromSeconds(15));
+        Assert.True(await db.KeyExpireAsync(chave, TimeSpan.FromSeconds(15)));
+        await db.StringSetAsync(chave, "B", TimeSpan.FromSeconds(15));
+        var antes = await CapturarDadosAsync();
+        Assert.Equal(PosicaoVeiculoCommitStatus.FencingLost,
+            await CommitDiretoAsync(new PosicaoVeiculoPayloadWriter(_redis), "A"));
+        await AssertDadosPreservadosAsync(antes);
+        Assert.Equal("B", (string?)await db.StringGetAsync(chave));
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // T10/T11/T10 — determinístico, via repositório completo
-    // ═══════════════════════════════════════════════════════════════════════
+    [Fact]
+    public Task T10T11T10_Deterministico_TentativaTardiaDeANaoSobrescreveVitoriaDeB()
+        => ExecutarTakeoverAsync(expirarLock: false);
 
     [Fact]
-    public async Task T10T11T10_Deterministico_TentativaTardiaDeANaoSobrescreveVitoriaDeB()
-    {
-        var realWriter = new PosicaoVeiculoPayloadWriter(_redis);
-        var entrouGravarAtivoA = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var liberarA = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task RepositorioComTtlLockCurto_LockExpiraRealmente_TentativaTardiaFalha()
+        => ExecutarTakeoverAsync(expirarLock: true);
 
-        var writerA = new HookedPayloadWriter(realWriter)
+    private async Task ExecutarTakeoverAsync(bool expirarLock)
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        var chegou = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var liberar = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writer = new HookedPayloadWriter(new PosicaoVeiculoPayloadWriter(_redis))
         {
-            AntesDeGravar = async chave =>
+            AntesDeCommit = async () =>
             {
-                if (chave.EndsWith(":ativo"))
-                {
-                    entrouGravarAtivoA.TrySetResult();
-                    await liberarA.Task; // A congela exatamente no ponto do fencing write
-                }
+                chegou.SetResult();
+                await liberar.Task.WaitAsync(TimeSpan.FromSeconds(10));
             }
         };
-
-        var repoA = NovoRepositorio(writerA);
-        var repoB = NovoRepositorio(realWriter);
-
-        var t10 = DateTimeOffset.UtcNow;
-        var t11 = t10.AddSeconds(1);
-
-        var tarefaA = repoA.TentarAtualizarAsync(_ordem, Posicao(t10, _ordem), t10, TtlAtivo, TtlRecente, default);
-        await entrouGravarAtivoA.Task;
-
-        // A já venceu o CAS de T10 e é dono do lock, mas ainda não escreveu
-        // payload nenhum. Simula takeover/expiração real: apaga o lock de A.
-        await _redis.GetDatabase().KeyDeleteAsync($"veiculo:{_ordem}:gps-lock");
-
-        var resultadoB = await repoB.TentarAtualizarAsync(_ordem, Posicao(t11, _ordem), t11, TtlAtivo, TtlRecente, default);
-        Assert.Equal(PosicaoVeiculoCacheStatus.Accepted, resultadoB.Status);
-
-        // Libera A, que agora tenta gravar T10 com um token que não é mais dono.
-        liberarA.SetResult();
-        var resultadoA = await tarefaA;
-
-        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultadoA.Status);
-
-        // Estado final tem que ser inteiramente de B — payload T10 nunca aparece.
-        var db = _redis.GetDatabase();
-        var tsFinal = (long)(await db.StringGetAsync($"veiculo:{_ordem}:ts"))!;
-        Assert.Equal(t11.ToUnixTimeMilliseconds(), tsFinal);
-
-        var ativoFinal = await LerAtivoViaIDistributedCacheAsync();
-        Assert.Equal(t11, ativoFinal!.TimestampGps);
-
-        var recenteJson = await _distributedCache.GetStringAsync($"veiculo:{_ordem}:recente");
-        var recenteFinal = JsonSerializer.Deserialize<PosicaoVeiculoDto>(recenteJson!, JsonOptions);
-        Assert.Equal(t11, recenteFinal!.TimestampGps);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // Lock expiry real — end-to-end via repositório, TTL curto exclusivo do teste
-    // ═══════════════════════════════════════════════════════════════════════
-
-    [Fact]
-    public async Task RepositorioComTtlLockCurto_LockExpiraRealmente_TentativaTardiaFalha()
-    {
-        var ttlLockCurto = TimeSpan.FromMilliseconds(200); // exclusivo deste teste
-
-        var realWriter = new PosicaoVeiculoPayloadWriter(_redis);
-        var entrouGravarAtivoA = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var liberarA = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        var writerA = new HookedPayloadWriter(realWriter)
+        var repoA = expirarLock
+            ? new PosicaoVeiculoCacheRepository(_redis, writer,
+                NullLogger<PosicaoVeiculoCacheRepository>.Instance,
+                TimeSpan.FromMilliseconds(200), 60)
+            : NovoRepositorio(writer);
+        var t10 = t0.AddSeconds(10);
+        var t11 = t0.AddSeconds(11);
+        var tentativaA = repoA.TentarAtualizarAsync(_ordem, Posicao(t10, _ordem), t10,
+            TtlAtivo, TtlRecente, default);
+        try
         {
-            AntesDeGravar = async chave =>
+            await chegou.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            // Pausado ANTES do EVAL: nem :ts nem os payloads podem ter avançado.
+            await AssertEstadoIntegralAsync(t0);
+            var db = _redis.GetDatabase();
+            if (expirarLock)
             {
-                if (chave.EndsWith(":ativo"))
-                {
-                    entrouGravarAtivoA.TrySetResult();
-                    await liberarA.Task;
-                }
+                await Task.Delay(450);
+                Assert.False(await db.KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
             }
-        };
-
-        var repoA = new PosicaoVeiculoCacheRepository(
-            _redis, writerA, NullLogger<PosicaoVeiculoCacheRepository>.Instance, ttlLockCurto, tentativasLock: 60);
-        var repoB = new PosicaoVeiculoCacheRepository(
-            _redis, realWriter, NullLogger<PosicaoVeiculoCacheRepository>.Instance, ttlLockCurto, tentativasLock: 60);
-
-        var t10 = DateTimeOffset.UtcNow;
-        var t11 = t10.AddSeconds(1);
-
-        var tarefaA = repoA.TentarAtualizarAsync(_ordem, Posicao(t10, _ordem), t10, TtlAtivo, TtlRecente, default);
-        await entrouGravarAtivoA.Task;
-
-        // Aguarda o lock de A expirar de verdade (TTL << tempo de espera —
-        // determinístico, não é uma corrida de timing).
-        await Task.Delay(500);
-
-        var resultadoB = await repoB.TentarAtualizarAsync(_ordem, Posicao(t11, _ordem), t11, TtlAtivo, TtlRecente, default);
-        Assert.Equal(PosicaoVeiculoCacheStatus.Accepted, resultadoB.Status);
-
-        liberarA.SetResult();
-        var resultadoA = await tarefaA;
-
-        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultadoA.Status);
-
-        var db = _redis.GetDatabase();
-        var tsFinal = (long)(await db.StringGetAsync($"veiculo:{_ordem}:ts"))!;
-        Assert.Equal(t11.ToUnixTimeMilliseconds(), tsFinal);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // Rollback / falha parcial
-    // ═══════════════════════════════════════════════════════════════════════
-
-    [Fact]
-    public async Task FalhaEmAtivo_ReverteTs_NaoDeixaPayloadParcial()
-    {
-        var realWriter = new PosicaoVeiculoPayloadWriter(_redis);
-        var writerComFalha = new HookedPayloadWriter(realWriter)
-        {
-            FalharPara = chave => chave.EndsWith(":ativo")
-        };
-
-        var repo = NovoRepositorio(writerComFalha);
-
-        var t = DateTimeOffset.UtcNow;
-        var resultado = await repo.TentarAtualizarAsync(_ordem, Posicao(t, _ordem), t, TtlAtivo, TtlRecente, default);
-
-        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultado.Status);
-
-        var db = _redis.GetDatabase();
-        Assert.False(await db.KeyExistsAsync($"veiculo:{_ordem}:ts")); // revertido (não havia valor anterior)
-        Assert.False(await db.KeyExistsAsync($"veiculo:{_ordem}:ativo"));
-        Assert.False(await db.KeyExistsAsync($"veiculo:{_ordem}:recente"));
-    }
-
-    [Fact]
-    public async Task FalhaEmRecente_ReverteTs_MesmoComAtivoJaGravadoFisicamente()
-    {
-        var realWriter = new PosicaoVeiculoPayloadWriter(_redis);
-        var writerComFalha = new HookedPayloadWriter(realWriter)
-        {
-            FalharPara = chave => chave.EndsWith(":recente")
-        };
-
-        var repo = NovoRepositorio(writerComFalha);
-
-        var t = DateTimeOffset.UtcNow;
-        var resultado = await repo.TentarAtualizarAsync(_ordem, Posicao(t, _ordem), t, TtlAtivo, TtlRecente, default);
-
-        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultado.Status);
-
-        var db = _redis.GetDatabase();
-        // ts é revertido mesmo com :ativo fisicamente gravado, porque a
-        // operação como um todo não pôde ser confirmada — evita que :ts
-        // aponte para um estado sem :recente correspondente.
-        Assert.False(await db.KeyExistsAsync($"veiculo:{_ordem}:ts"));
-    }
-
-    [Fact]
-    public async Task Rollback_NaoSobrescreveTsMaisNovoDeOutraOperacao()
-    {
-        var chaveTs = $"veiculo:{_ordem}:ts";
-        var db = _redis.GetDatabase();
-
-        var t10 = DateTimeOffset.UtcNow;
-        var t11 = t10.AddSeconds(1);
-
-        await db.StringSetAsync(chaveTs, t10.ToUnixTimeMilliseconds(), TimeSpan.FromSeconds(60));
-        // outra operação avança para T11 nesse meio tempo
-        await db.StringSetAsync(chaveTs, t11.ToUnixTimeMilliseconds(), TimeSpan.FromSeconds(60));
-
-        const string scriptRestaurar = """
-            local atual = redis.call('GET', KEYS[1])
-            if atual ~= ARGV[1] then
-                return 0
-            end
-            if ARGV[2] == '' then
-                redis.call('DEL', KEYS[1])
-            elseif tonumber(ARGV[3]) > 0 then
-                redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
             else
-                redis.call('SET', KEYS[1], ARGV[2])
-            end
-            return 1
-            """;
-
-        var executou = (long)(await db.ScriptEvaluateAsync(
-            scriptRestaurar,
-            new RedisKey[] { chaveTs },
-            new RedisValue[] { t10.ToUnixTimeMilliseconds(), "", -1 }))!;
-
-        Assert.Equal(0, executou); // no-op: atual (T11) != esperado (T10)
-
-        var tsFinal = (long)(await db.StringGetAsync(chaveTs))!;
-        Assert.Equal(t11.ToUnixTimeMilliseconds(), tsFinal);
+            {
+                await db.KeyDeleteAsync($"veiculo:{_ordem}:gps-lock");
+            }
+            Assert.Equal(PosicaoVeiculoCacheStatus.Accepted,
+                (await _repo.TentarAtualizarAsync(_ordem, Posicao(t11, _ordem), t11,
+                    TtlAtivo, TtlRecente, default)).Status);
+            liberar.TrySetResult();
+            Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure,
+                (await tentativaA.WaitAsync(TimeSpan.FromSeconds(10))).Status);
+            await AssertEstadoIntegralAsync(t11);
+        }
+        finally { liberar.TrySetResult(); }
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    [Fact]
+    public async Task SucessoNormal_NaoAcionaRollback_EstadoFinalIntacto()
+    {
+        await ConfirmarInicialAsync(DateTimeOffset.UtcNow);
+        Assert.False(await _redis.GetDatabase().KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
+    }
+
+    [Fact]
+    public async Task CommitUnico_T0T1_AtualizaAsTresChavesIntegralmente()
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        await ConfirmarInicialAsync(t0.AddSeconds(1));
+    }
+
+    [Fact]
+    public async Task PrimeiraGravacao_SemTsNemAtivo_GravaEstadoIntegral()
+    {
+        Assert.All(await CapturarDadosAsync(), dado => Assert.Null(dado));
+        await ConfirmarInicialAsync(DateTimeOffset.UtcNow);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public async Task RejeicaoMonotonica_NaoAlteraNenhumaDasTresChaves(int diferenca)
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        var antes = await CapturarDadosAsync();
+        var t = t0.AddSeconds(diferenca);
+        Assert.Equal(PosicaoVeiculoCacheStatus.RejectedOlderOrEqual,
+            (await _repo.TentarAtualizarAsync(_ordem, Posicao(t, _ordem), t,
+                TtlAtivo, TtlRecente, default)).Status);
+        await AssertDadosPreservadosAsync(antes);
+        Assert.False(await _redis.GetDatabase().KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task TipoInesperado_Infraestrutura_ZeroWritesNasTresChaves(int indice)
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        var db = _redis.GetDatabase();
+        await db.KeyDeleteAsync(ChavesPosicao[indice]);
+        if (indice == 0) await db.HashSetAsync(ChavesPosicao[indice], "data", "incompativel");
+        else await db.StringSetAsync(ChavesPosicao[indice], "incompativel");
+        var antes = await CapturarDadosAsync();
+        var t1 = t0.AddSeconds(1);
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure,
+            (await _repo.TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
+                TtlAtivo, TtlRecente, default)).Status);
+        await AssertDadosPreservadosAsync(antes);
+        Assert.False(await db.KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("texto")]
+    [InlineData("1.1")]
+    [InlineData("1e3")]
+    [InlineData("01")]
+    [InlineData("NaN")]
+    [InlineData("-1")]
+    [InlineData("0")]
+    [InlineData("253402300800000")]
+    [InlineData("9007199254740993")]
+    [InlineData("Infinity")]
+    public async Task TsCorrompido_Infraestrutura_ZeroWrites(string valor)
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        await _redis.GetDatabase().StringSetAsync(ChavesPosicao[0], valor);
+        var antes = await CapturarDadosAsync();
+        var t1 = t0.AddSeconds(1);
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure,
+            (await _repo.TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
+                TtlAtivo, TtlRecente, default)).Status);
+        await AssertDadosPreservadosAsync(antes);
+    }
+
+    [Fact]
+    public async Task LockTipoInesperado_FencingLost_ZeroWrites()
+    {
+        await _redis.GetDatabase().HashSetAsync($"veiculo:{_ordem}:gps-lock", "token", "A");
+        var antes = await CapturarDadosAsync();
+        Assert.Equal(PosicaoVeiculoCommitStatus.FencingLost,
+            await CommitDiretoAsync(new PosicaoVeiculoPayloadWriter(_redis), "A"));
+        await AssertDadosPreservadosAsync(antes);
+    }
+
+    [Fact]
+    public async Task FailClosed_AtivoHashSemTs_NaoAlteraNemRecente()
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        await _redis.GetDatabase().KeyDeleteAsync(ChavesPosicao[0]);
+        var antes = await CapturarDadosAsync();
+        var t1 = t0.AddSeconds(1);
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure,
+            (await _repo.TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
+                TtlAtivo, TtlRecente, default)).Status);
+        await AssertDadosPreservadosAsync(antes);
+    }
+
+
+
+    [Fact]
+    public async Task TimeoutDepoisDoEvalReal_NaoCompensa_RetryIgualRejeita_MaisNovoAceita()
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        var writer = new HookedPayloadWriter(new PosicaoVeiculoPayloadWriter(_redis))
+        {
+            DepoisDeCommit = () => Task.FromException(
+                new RedisTimeoutException("Resposta do EVAL perdida após execução real", CommandStatus.Sent))
+        };
+        var t1 = t0.AddSeconds(1);
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure,
+            (await NovoRepositorio(writer).TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
+                TtlAtivo, TtlRecente, default)).Status);
+        Assert.Equal(1, writer.Commits);
+        await AssertEstadoIntegralAsync(t1);
+        Assert.False(await _redis.GetDatabase().KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
+        var antesRetry = await CapturarDadosAsync();
+        Assert.Equal(PosicaoVeiculoCacheStatus.RejectedOlderOrEqual,
+            (await _repo.TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
+                TtlAtivo, TtlRecente, default)).Status);
+        await AssertDadosPreservadosAsync(antesRetry);
+        await ConfirmarInicialAsync(t1.AddSeconds(1));
+    }
+
+    [Theory]
+    [InlineData("timeout")]
+    [InlineData("connection")]
+    [InlineData("server")]
+    [InlineData("unexpected")]
+    public async Task FalhaAntesDoEval_PreservaEstadoAnterior(string tipo)
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        var antes = await CapturarDadosAsync();
+        Exception erro = tipo switch
+        {
+            "timeout" => new RedisTimeoutException("Falha antes do EVAL", CommandStatus.WaitingToBeSent),
+            "connection" => new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Falha antes do EVAL"),
+            "server" => new RedisServerException("Falha antes do EVAL"),
+            _ => new InvalidOperationException("Falha antes do EVAL"),
+        };
+        var writer = new HookedPayloadWriter(new PosicaoVeiculoPayloadWriter(_redis))
+        {
+            AntesDeCommit = () => Task.FromException(erro)
+        };
+        var t1 = t0.AddSeconds(1);
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure,
+            (await NovoRepositorio(writer).TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
+                TtlAtivo, TtlRecente, default)).Status);
+        await AssertDadosPreservadosAsync(antes);
+        Assert.False(await _redis.GetDatabase().KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("")]
+    [InlineData("{invalido")]
+    [InlineData("null")]
+    public async Task HashAnteriorComPayloadIncompativel_CommitNaoDependeDeSnapshot(string payload)
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        var db = _redis.GetDatabase();
+        if (payload == "missing") await db.HashDeleteAsync(ChavesPosicao[1], "data");
+        else await db.HashSetAsync(ChavesPosicao[1], "data", payload);
+        await ConfirmarInicialAsync(t0.AddSeconds(1));
+    }
+
+    [Theory]
+    [InlineData(0, 120)]
+    [InlineData(60, 0)]
+    [InlineData(-1, 120)]
+    [InlineData(60, -1)]
+    [InlineData(0.5, 120)]
+    [InlineData(60, 0.5)]
+    public async Task TtlInvalidoNoCSharp_Infraestrutura_ZeroWrites(double ativo, double recente)
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        var antes = await CapturarDadosAsync();
+        var t1 = t0.AddSeconds(1);
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure,
+            (await _repo.TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
+                TimeSpan.FromSeconds(ativo), TimeSpan.FromSeconds(recente), default)).Status);
+        await AssertDadosPreservadosAsync(antes);
+    }
+
+    [Fact]
+    public async Task TimestampInvalidoNoCSharp_Infraestrutura_ZeroWrites()
+    {
+        var antes = await CapturarDadosAsync();
+        var t = DateTimeOffset.UnixEpoch;
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure,
+            (await _repo.TentarAtualizarAsync(_ordem, Posicao(t, _ordem), t,
+                TtlAtivo, TtlRecente, default)).Status);
+        await AssertDadosPreservadosAsync(antes);
+    }
+
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(1, "")]
+    [InlineData(2, "0")]
+    [InlineData(2, "1e3")]
+    [InlineData(2, "253402300800000")]
+    [InlineData(3, "0")]
+    [InlineData(3, "-1")]
+    [InlineData(3, "1.5")]
+    [InlineData(3, "060")]
+    [InlineData(4, "0")]
+    [InlineData(4, "0120")]
+    [InlineData(5, "0")]
+    [InlineData(5, "30")]
+    [InlineData(5, "0120")]
+    [InlineData(5, "922337203686")]
+    public async Task ArgumentoInvalidoDiretoNoLua_RejeitaAntesDeWrites(int indice, string valor)
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        var db = _redis.GetDatabase();
+        await db.StringSetAsync($"veiculo:{_ordem}:gps-lock", "A", TimeSpan.FromSeconds(15));
+        var antes = await CapturarDadosAsync();
+        var args = new RedisValue[]
+        {
+            "A", JsonSerializer.Serialize(Posicao(t0.AddSeconds(1), _ordem), JsonOptions),
+            t0.AddSeconds(1).ToUnixTimeMilliseconds(), 60, 120, 120
+        };
+        args[indice] = valor;
+        Assert.Equal((long)PosicaoVeiculoCommitStatus.InvalidArguments,
+            (long)await db.ScriptEvaluateAsync(ScriptReal(),
+                ChavesPosicao.Concat(new RedisKey[] { $"veiculo:{_ordem}:gps-lock" }).ToArray(), args));
+        await AssertDadosPreservadosAsync(antes);
+    }
+
+    [Fact]
+    public async Task ChavesAliasedDiretoNoLua_RejeitaAntesDeSetTs()
+    {
+        var db = _redis.GetDatabase();
+        await db.StringSetAsync($"veiculo:{_ordem}:gps-lock", "A", TimeSpan.FromSeconds(15));
+        var antes = await CapturarDadosAsync();
+        Assert.Equal((long)PosicaoVeiculoCommitStatus.InvalidArguments,
+            (long)await db.ScriptEvaluateAsync(ScriptReal(),
+                new RedisKey[] { ChavesPosicao[0], ChavesPosicao[0], ChavesPosicao[2], $"veiculo:{_ordem}:gps-lock" },
+                new RedisValue[] { "A", "{}", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), 60, 120, 120 }));
+        await AssertDadosPreservadosAsync(antes);
+    }
+
+    [Fact]
+    public async Task TtlsDeProducao_40E180_ControleProtegeTodoPayloadRemanescente()
+    {
+        var options = new GpsPollingOptions();
+        Assert.Equal(40, options.TtlAtivoSegundos);
+        Assert.Equal(180, options.TtlRecenteSegundos);
+        var t = DateTimeOffset.UtcNow;
+        Assert.Equal(PosicaoVeiculoCacheStatus.Accepted,
+            (await _repo.TentarAtualizarAsync(_ordem, Posicao(t, _ordem), t,
+                TimeSpan.FromSeconds(options.TtlAtivoSegundos),
+                TimeSpan.FromSeconds(options.TtlRecenteSegundos), default)).Status);
+        await AssertEstadoIntegralAsync(t);
+        var esperado = new[] { 180, 40, 180 };
+        for (var i = 0; i < ChavesPosicao.Length; i++)
+        {
+            var ttl = await _redis.GetDatabase().KeyTimeToLiveAsync(ChavesPosicao[i]);
+            Assert.NotNull(ttl);
+            Assert.InRange(ttl!.Value.TotalSeconds, esperado[i] - 5, esperado[i]);
+        }
+    }
+
+    [Fact]
+    public async Task Repositorio_LiberacaoNaoApagaLockDeOutroWriter()
+    {
+        var t0 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t0);
+        var antes = await CapturarDadosAsync();
+        var db = _redis.GetDatabase();
+        var chaveLock = $"veiculo:{_ordem}:gps-lock";
+        var writer = new HookedPayloadWriter(new PosicaoVeiculoPayloadWriter(_redis))
+        {
+            AntesDeCommit = async () =>
+                await db.StringSetAsync(chaveLock, "B", TimeSpan.FromSeconds(15))
+        };
+        var t1 = t0.AddSeconds(1);
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure,
+            (await NovoRepositorio(writer).TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
+                TtlAtivo, TtlRecente, default)).Status);
+        await AssertDadosPreservadosAsync(antes);
+        Assert.Equal("B", (string?)await db.StringGetAsync(chaveLock));
+    }
+
+    private static string ScriptReal() => (string)typeof(PosicaoVeiculoPayloadWriter)
+        .GetField("ScriptCommitAtomico", BindingFlags.NonPublic | BindingFlags.Static)!.GetRawConstantValue()!;
+
+
+    // ── Helpers do protocolo de commit único ─────────────────────────────────
+    private RedisKey[] ChavesPosicao => new RedisKey[]
+    {
+        $"veiculo:{_ordem}:ts", $"veiculo:{_ordem}:ativo", $"veiculo:{_ordem}:recente"
+    };
+
+    private async Task<byte[]?[]> CapturarDadosAsync()
+        => await Task.WhenAll(ChavesPosicao.Select(chave => _redis.GetDatabase().KeyDumpAsync(chave)));
+
+    private async Task AssertDadosPreservadosAsync(byte[]?[] antes)
+    {
+        var depois = await CapturarDadosAsync();
+        for (var i = 0; i < antes.Length; i++) Assert.Equal(antes[i], depois[i]);
+    }
+
+    private async Task AssertEstadoIntegralAsync(DateTimeOffset ts)
+    {
+        var db = _redis.GetDatabase();
+        Assert.Equal(ts.ToUnixTimeMilliseconds(), (long)await db.StringGetAsync(ChavesPosicao[0]));
+        foreach (var chave in ChavesPosicao.Skip(1))
+        {
+            Assert.Equal(RedisType.Hash, await db.KeyTypeAsync(chave));
+            Assert.Equal("-1", (string?)await db.HashGetAsync(chave, "absexp"));
+            Assert.Equal("-1", (string?)await db.HashGetAsync(chave, "sldexp"));
+            var json = await _distributedCache.GetStringAsync(chave.ToString());
+            Assert.NotNull(json);
+            var dto = JsonSerializer.Deserialize<PosicaoVeiculoDto>(json!, JsonOptions);
+            Assert.Equal(ts, dto!.TimestampGps);
+            Assert.Equal(_ordem, dto.Ordem);
+            Assert.Equal(Posicao(ts, _ordem).Latitude, dto.Latitude);
+            Assert.Equal(Posicao(ts, _ordem).Longitude, dto.Longitude);
+        }
+    }
+
+    private Task<PosicaoVeiculoCommitStatus> CommitDiretoAsync(
+        IPosicaoVeiculoPayloadWriter writer, string token, DateTimeOffset? ts = null)
+    {
+        var timestamp = ts ?? DateTimeOffset.UtcNow;
+        return writer.TentarCommitAtomicoAsync(
+            ChavesPosicao[0].ToString(), ChavesPosicao[1].ToString(), ChavesPosicao[2].ToString(),
+            $"veiculo:{_ordem}:gps-lock", token,
+            JsonSerializer.Serialize(Posicao(timestamp, _ordem), JsonOptions),
+            timestamp.ToUnixTimeMilliseconds(), TtlAtivo, TtlRecente, TtlRecente, default);
+    }
+
+    private async Task ConfirmarInicialAsync(DateTimeOffset ts)
+    {
+        Assert.Equal(PosicaoVeiculoCacheStatus.Accepted,
+            (await _repo.TentarAtualizarAsync(_ordem, Posicao(ts, _ordem), ts, TtlAtivo, TtlRecente, default)).Status);
+        await AssertEstadoIntegralAsync(ts);
+    }
 
     private async Task<PosicaoVeiculoDto?> LerAtivoViaIDistributedCacheAsync()
     {
@@ -653,12 +814,9 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
     private async Task EscreverAtivoComoHashViaIDistributedCacheAsync(
         DateTimeOffset timestamp, TimeSpan? ttl = null)
     {
-        var dto = Posicao(timestamp, _ordem);
-        var json = JsonSerializer.Serialize(dto, JsonOptions);
-
         await _distributedCache.SetStringAsync(
             $"veiculo:{_ordem}:ativo",
-            json,
+            JsonSerializer.Serialize(Posicao(timestamp, _ordem), JsonOptions),
             new DistributedCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = ttl ?? TimeSpan.FromSeconds(60)
@@ -667,36 +825,31 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
 
     private async Task EscreverAtivoDiretoComoStringAsync(DateTimeOffset timestamp)
     {
-        var dto = Posicao(timestamp, _ordem);
-        var json = JsonSerializer.Serialize(dto, JsonOptions);
-        await _redis.GetDatabase().StringSetAsync(
-            $"veiculo:{_ordem}:ativo", json, TimeSpan.FromSeconds(60));
+        await _redis.GetDatabase().StringSetAsync($"veiculo:{_ordem}:ativo",
+            JsonSerializer.Serialize(Posicao(timestamp, _ordem), JsonOptions), TimeSpan.FromSeconds(60));
     }
 
-    /// <summary>
-    /// Decorator de teste: encapsula o writer REAL (fencing real contra Redis
-    /// real), adicionando apenas dois hooks para orquestração determinística:
-    /// um ponto de pausa opcional antes da escrita, e simulação de falha.
-    /// Nunca substitui a lógica de fencing em si — apenas a envolve.
-    /// </summary>
+    // Os hooks envolvem o commit REAL; não substituem Lua, fencing ou armazenamento.
     private sealed class HookedPayloadWriter : IPosicaoVeiculoPayloadWriter
     {
         private readonly IPosicaoVeiculoPayloadWriter _real;
-        public Func<string, Task>? AntesDeGravar { get; init; }
-        public Func<string, bool>? FalharPara { get; init; }
+        public Func<Task>? AntesDeCommit { get; init; }
+        public Func<Task>? DepoisDeCommit { get; init; }
+        public int Commits { get; private set; }
 
         public HookedPayloadWriter(IPosicaoVeiculoPayloadWriter real) => _real = real;
 
-        public async Task<bool> GravarComFencingAsync(
-            string chave, string chaveLock, string token, string json, TimeSpan ttl, CancellationToken ct)
+        public async Task<PosicaoVeiculoCommitStatus> TentarCommitAtomicoAsync(
+            string chaveTs, string chaveAtivo, string chaveRecente, string chaveLock,
+            string token, string json, long timestampMs,
+            TimeSpan ttlAtivo, TimeSpan ttlRecente, TimeSpan ttlControle, CancellationToken ct)
         {
-            if (AntesDeGravar is not null)
-                await AntesDeGravar(chave);
-
-            if (FalharPara?.Invoke(chave) ?? false)
-                throw new InvalidOperationException($"falha simulada de escrita em {chave}");
-
-            return await _real.GravarComFencingAsync(chave, chaveLock, token, json, ttl, ct);
+            Commits++;
+            if (AntesDeCommit is not null) await AntesDeCommit();
+            var status = await _real.TentarCommitAtomicoAsync(chaveTs, chaveAtivo, chaveRecente, chaveLock,
+                token, json, timestampMs, ttlAtivo, ttlRecente, ttlControle, ct);
+            if (DepoisDeCommit is not null) await DepoisDeCommit();
+            return status;
         }
     }
 }

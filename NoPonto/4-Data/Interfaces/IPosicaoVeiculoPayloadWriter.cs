@@ -1,30 +1,26 @@
 namespace NoPonto.Data.Interfaces;
 
-/// <summary>
-/// Grava atomicamente o payload de posição do veículo, condicionado à posse
-/// do lock de escrita — o "fencing token" da Etapa 1.
-///
-/// A verificação de posse do lock ("veiculo:{ordem}:gps-lock" ainda contém
-/// exatamente <paramref name="token"/>") e a gravação do payload acontecem
-/// dentro da MESMA operação atômica no Redis. Não existe nenhuma janela
-/// entre "verificar" e "escrever": se o lock não pertencer mais ao token
-/// informado no exato instante da gravação, nada é escrito.
-/// </summary>
+/// <summary>Resultados do preflight e commit Lua; falhas de estado não são rejeições de GPS antigo.</summary>
+public enum PosicaoVeiculoCommitStatus
+{
+    Accepted = 1,
+    RejectedOlder = 2,
+    RejectedEqual = 3,
+    FencingLost = 4,
+    FailClosed = 5,
+    InvalidState = 6,
+    InvalidArguments = 7,
+}
+
+/// <summary>Commit único de :ts/:ativo/:recente, condicionado atomicamente à posse do lock.</summary>
 public interface IPosicaoVeiculoPayloadWriter
 {
     /// <summary>
-    /// Tenta gravar <paramref name="json"/> em <paramref name="chave"/>,
-    /// condicionado a <paramref name="chaveLock"/> ainda conter exatamente
-    /// <paramref name="token"/>.
-    /// Retorna true se a escrita foi confirmada; false se o fencing rejeitou
-    /// a escrita (lock expirado, tomado por outro dono, ou inexistente) —
-    /// nesse caso NADA é alterado em <paramref name="chave"/>.
+    /// Valida estado e monotonicidade antes de qualquer write e confirma as três chaves no mesmo EVAL.
+    /// Timeout pode significar commit já aplicado; o chamador nunca deve executar compensação.
     /// </summary>
-    Task<bool> GravarComFencingAsync(
-        string chave,
-        string chaveLock,
-        string token,
-        string json,
-        TimeSpan ttl,
-        CancellationToken ct);
+    Task<PosicaoVeiculoCommitStatus> TentarCommitAtomicoAsync(
+        string chaveTs, string chaveAtivo, string chaveRecente, string chaveLock,
+        string token, string json, long timestampMs,
+        TimeSpan ttlAtivo, TimeSpan ttlRecente, TimeSpan ttlControle, CancellationToken ct);
 }
