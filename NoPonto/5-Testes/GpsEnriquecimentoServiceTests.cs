@@ -8,13 +8,33 @@ namespace NoPonto.Tests;
 /// <summary>
 /// Fake em memória de IGpsItinerarioRepository — evita dependência de Postgres/PostGIS
 /// real para testar a lógica de estabilização de GpsEnriquecimentoService. O teste de
-/// matching real contra geometria (ruas paralelas, loops) precisa de um banco PostGIS
-/// de fato e está fora do alcance deste ambiente (ver observações finais).
+/// matching real é exercido separadamente em GpsItinerarioRepositoryPostgisTests.
 /// </summary>
 internal sealed class FakeGpsItinerarioRepository : IGpsItinerarioRepository
 {
     public Queue<EnriquecimentoRotaDto?> Respostas { get; } = new();
     public int ChamadasBuscarEnriquecimento { get; private set; }
+    public Queue<ResultadoBuscaItinerario> RespostasDirecionadas { get; } = new();
+    public List<FaixaProjecao?> FaixasDirecionadas { get; } = new();
+    private EnriquecimentoRotaDto? _globalAtual;
+    public List<(string Linha, Guid Id, double Lat, double Lon, double Bearing, double Limite)>
+        ChamadasDirecionadas { get; } = new();
+
+    public Task<ResultadoBuscaItinerario> BuscarEnriquecimentoDoItinerarioAsync(
+        string codigoLinha, Guid itinerarioId, double latitude, double longitude, double bearing,
+        double distanciaMaximaMetros, CancellationToken cancellationToken = default,
+        FaixaProjecao? faixa = null)
+    {
+        ChamadasDirecionadas.Add((codigoLinha, itinerarioId, latitude, longitude, bearing, distanciaMaximaMetros));
+        FaixasDirecionadas.Add(faixa);
+        // Nos testes anteriores de 2.2, o DTO programado representa também a resposta
+        // direcionada do mesmo itinerário. Respostas explícitas têm prioridade na 2.5.
+        return Task.FromResult(RespostasDirecionadas.Count > 0
+            ? RespostasDirecionadas.Dequeue()
+            : _globalAtual?.ItinerarioId == itinerarioId
+                ? ResultadoBuscaItinerario.Found(_globalAtual)
+                : ResultadoBuscaItinerario.InfrastructureFailure());
+    }
 
     public Task<EnriquecimentoRotaDto?> BuscarEnriquecimentoAsync(
         string codigoLinha, double latitude, double longitude, double bearing,
@@ -22,6 +42,7 @@ internal sealed class FakeGpsItinerarioRepository : IGpsItinerarioRepository
     {
         ChamadasBuscarEnriquecimento++;
         var resposta = Respostas.Count > 0 ? Respostas.Dequeue() : null;
+        _globalAtual = resposta;
         return Task.FromResult(resposta);
     }
 
@@ -727,16 +748,17 @@ public class GpsEnriquecimentoServiceTests
     }
 
     [Fact]
-    public async Task Histerese22_PreservaTimestampAntigo_EComparacaoR1UsaT0()
+    public async Task Histerese22_RecalculoImpossivelPreservaTimestampAntigo_EComparacaoR1UsaT0()
     {
         var repo = new FakeGpsItinerarioRepository();
         repo.Respostas.Enqueue(Rota22(0.20));
         repo.Respostas.Enqueue(Rota22(0.90, id: Guid.NewGuid(), distancia: 4));
         repo.Respostas.Enqueue(Rota22(0.29));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(Rota22(0.85)));
         var servico = CriarServico(repo);
         await servico.EnriquecerAsync(Posicao22(0), default);
-        Assert.Equal(0.20, (await servico.EnriquecerAsync(Posicao22(19), default)).PosicaoNaRota);
-        AssertReferencia22(servico, 0.20, 0);
+        AssertGpsAtualSemMatching21(Posicao22(19), await servico.EnriquecerAsync(Posicao22(19), default));
+        AssertReferencia22(servico, 0.20, 0, 1);
         Assert.Equal(0.29, (await servico.EnriquecerAsync(Posicao22(20), default)).PosicaoNaRota);
         AssertReferencia22(servico, 0.29, 20);
     }
@@ -748,6 +770,7 @@ public class GpsEnriquecimentoServiceTests
         var novoId = Guid.NewGuid();
         repo.Respostas.Enqueue(Rota22(0.98, distancia: 150));
         repo.Respostas.Enqueue(Rota22(0.02, id: novoId));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(Rota22(0.98, distancia: 150)));
         var servico = CriarServico(repo);
         await servico.EnriquecerAsync(Posicao22(0), default);
         var resultado = await servico.EnriquecerAsync(Posicao22(1), default);
@@ -837,10 +860,219 @@ public class GpsEnriquecimentoServiceTests
         }
     }
 
+    // Correção 2.3: distância de ambas as rotas medida no GPS atual.
+    [Theory]
+    [InlineData(5, 140, 20, 30, true)]
+    [InlineData(80, 10, 20, 30, false)]
+    [InlineData(80, 15, 12, 30, false)]
+    [InlineData(5, 50, 20, 30, false)] // Melhoria exatamente 30.
+    [InlineData(5, 50.01, 20, 30, true)]
+    [InlineData(5, 120, 20, 0, false)] // Parado, exatamente 100.
+    [InlineData(5, 120.01, 20, 0, true)]
+    public async Task Histerese23_UsaDistanciasAtuais_EPreservaThresholds(
+        double distanciaAntiga, double distanciaR1, double distanciaR2, double velocidade, bool troca)
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var r2 = Guid.NewGuid();
+        repo.Respostas.Enqueue(Rota22(0.20, distancia: distanciaAntiga));
+        repo.Respostas.Enqueue(Rota22(0.90, id: r2, distancia: distanciaR2));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(Rota22(0.21, distancia: distanciaR1)));
+        var servico = CriarServico(repo);
+        await servico.EnriquecerAsync(Posicao22(0) with { Velocidade = velocidade }, default);
+        var gps = Posicao22(20) with { Velocidade = velocidade, CodigoLinha = "100" };
+        var resultado = await servico.EnriquecerAsync(gps, default);
+        Assert.Equal(gps.Latitude, resultado.Latitude);
+        Assert.Equal(gps.Longitude, resultado.Longitude);
+        Assert.Equal(gps.TimestampGps, resultado.TimestampGps);
+        Assert.Equal(troca ? r2 : RotaInicial21().ItinerarioId, resultado.ItinerarioId);
+        Assert.Equal(troca ? 0.90 : 0.21, resultado.PosicaoNaRota);
+        AssertReferencia22(servico, troca ? 0.90 : 0.21, 20);
+        Assert.Equal("Parada 22", resultado.ProximaParadaNome);
+        var chamada = Assert.Single(repo.ChamadasDirecionadas);
+        Assert.Equal((gps.CodigoLinha, RotaInicial21().ItinerarioId, gps.Latitude, gps.Longitude, 90.0, 250.0), chamada);
+        var faixa = Assert.Single(repo.FaixasDirecionadas)!.Value;
+        Assert.Equal(0.095, faixa.Min, 12);
+        Assert.Equal(0.305, faixa.Max, 12);
+    }
+
+    [Theory]
+    [InlineData("distancia")]
+    [InlineData("bearing")]
+    public async Task R1Inelegivel23_NaoBloqueiaR2(string motivo)
+    {
+        // Motivo espacial é comprovado na SQL real; o service recebe o status explícito.
+        Assert.NotEmpty(motivo);
+        var repo = new FakeGpsItinerarioRepository();
+        var r2 = Guid.NewGuid();
+        repo.Respostas.Enqueue(Rota22(0.20));
+        repo.Respostas.Enqueue(Rota22(0.85, id: r2));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.NotEligible());
+        var servico = CriarServico(repo);
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        var resultado = await servico.EnriquecerAsync(Posicao22(1), default);
+        Assert.Equal(r2, resultado.ItinerarioId);
+        AssertReferencia22(servico, 0.85, 1);
+    }
+
+    [Fact]
+    public async Task FalhaDirecionada23_PreservaT0_ContaCiclos_ERecupera()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(Rota22(0.20));
+        var servico = CriarServico(repo);
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        for (var ciclo = 1; ciclo <= 2; ciclo++)
+        {
+            repo.Respostas.Enqueue(Rota22(0.90, id: Guid.NewGuid()));
+            repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.InfrastructureFailure());
+            AssertGpsAtualSemMatching21(Posicao22(ciclo), await servico.EnriquecerAsync(Posicao22(ciclo), default));
+            AssertReferencia22(servico, 0.20, 0, ciclo);
+        }
+        repo.Respostas.Enqueue(Rota22(0.22));
+        Assert.Equal(0.22, (await servico.EnriquecerAsync(Posicao22(5), default)).PosicaoNaRota);
+        AssertReferencia22(servico, 0.22, 5);
+    }
+
+    [Fact]
+    public async Task R1RecalculadoImpossivel23_NaoPublicaAntigoNemR2_RecuperaComT0()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(Rota22(0.20));
+        repo.Respostas.Enqueue(Rota22(0.10, id: Guid.NewGuid(), distancia: 12));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(Rota22(0.85, distancia: 15)));
+        repo.Respostas.Enqueue(Rota22(0.22));
+        var servico = CriarServico(repo);
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        AssertGpsAtualSemMatching21(Posicao22(4), await servico.EnriquecerAsync(Posicao22(4), default));
+        AssertReferencia22(servico, 0.20, 0, 1);
+        Assert.Equal(0.22, (await servico.EnriquecerAsync(Posicao22(5), default)).PosicaoNaRota);
+    }
+
+    [Fact]
+    public async Task SemGlobal23_NaoConsultaDirecionada_MesmoItinerario25UsaFaixa()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(Rota22(0.20));
+        repo.Respostas.Enqueue(null);
+        repo.Respostas.Enqueue(Rota22(0.21));
+        var servico = CriarServico(repo);
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        AssertGpsAtualSemMatching21(Posicao22(1), await servico.EnriquecerAsync(Posicao22(1), default));
+        Assert.Empty(repo.ChamadasDirecionadas);
+        Assert.Equal(0.21, (await servico.EnriquecerAsync(Posicao22(3), default)).PosicaoNaRota);
+        Assert.Single(repo.ChamadasDirecionadas);
+        Assert.NotNull(Assert.Single(repo.FaixasDirecionadas));
+    }
+
+    [Theory]
+    [InlineData(0.25, 0.27, 10, 0.195, 0.305)]
+    [InlineData(0.25, 0.24, 10, 0.195, 0.305)]
+    [InlineData(0.01, 0.02, 10, 0, 0.065)]
+    [InlineData(0.99, 0.98, 10, 0.935, 1)]
+    [InlineData(0.25, 0.75, 1000, 0, 1)]
+    public async Task Continuidade25_PublicaRestrito_ClampaFaixa_EPermiteRegressao(
+        double anterior, double restrito, double segundos, double min, double max)
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(Rota22(anterior));
+        repo.Respostas.Enqueue(Rota22(0.85)); // Global nunca pode ser publicado neste ciclo.
+        var dtoRestrito = new EnriquecimentoRotaDto
+        {
+            ItinerarioId = RotaInicial21().ItinerarioId, PosicaoNaRota = restrito,
+            ComprimentoRotaMetros = 10000, DistanciaARotaMetros = 12,
+            ProximaParadaNome = "Parada restrita", DistanciaProximaParadaMetros = 75,
+        };
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(dtoRestrito));
+        var servico = CriarServico(repo);
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        var gps = Posicao22(segundos);
+        var resultado = await servico.EnriquecerAsync(gps, default);
+        Assert.Equal(restrito, resultado.PosicaoNaRota);
+        Assert.Equal("Parada restrita", resultado.ProximaParadaNome);
+        Assert.Equal(75, resultado.DistanciaProximaParadaMetros);
+        Assert.Equal(gps.Latitude, resultado.Latitude);
+        Assert.Equal(gps.Longitude, resultado.Longitude);
+        Assert.Equal(gps.TimestampGps, resultado.TimestampGps);
+        AssertReferencia22(servico, restrito, segundos);
+        var faixa = Assert.Single(repo.FaixasDirecionadas)!.Value;
+        Assert.Equal(min, faixa.Min, 12);
+        Assert.Equal(max, faixa.Max, 12);
+        var estado = Estados22(servico)[gps.Ordem]!;
+        Assert.Same(dtoRestrito, estado.GetType().GetProperty("Rota")!.GetValue(estado));
+    }
+
+    [Theory]
+    [InlineData(false, StatusBuscaItinerario.NotEligible)]
+    [InlineData(false, StatusBuscaItinerario.InfrastructureFailure)]
+    [InlineData(true, StatusBuscaItinerario.NotEligible)]
+    [InlineData(true, StatusBuscaItinerario.InfrastructureFailure)]
+    public async Task Continuidade25_FalhaRestritaRespeita2_1E2_3(
+        bool outroItinerario, StatusBuscaItinerario status)
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var r2 = Guid.NewGuid();
+        repo.Respostas.Enqueue(Rota22(0.25));
+        repo.Respostas.Enqueue(Rota22(0.75, id: outroItinerario ? r2 : null));
+        repo.RespostasDirecionadas.Enqueue(status == StatusBuscaItinerario.NotEligible
+            ? ResultadoBuscaItinerario.NotEligible() : ResultadoBuscaItinerario.InfrastructureFailure());
+        var servico = CriarServico(repo);
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        var gps = Posicao22(5);
+        var resultado = await servico.EnriquecerAsync(gps, default);
+        Assert.Equal(new FaixaProjecao(0.22, 0.28), Assert.Single(repo.FaixasDirecionadas)!.Value);
+        Assert.Equal(RotaInicial21().ItinerarioId, Assert.Single(repo.ChamadasDirecionadas).Id);
+        if (outroItinerario && status == StatusBuscaItinerario.NotEligible)
+        {
+            Assert.Equal(r2, resultado.ItinerarioId);
+            AssertReferencia22(servico, 0.75, 5);
+        }
+        else
+        {
+            AssertGpsAtualSemMatching21(gps, resultado);
+            AssertReferencia22(servico, 0.25, 0, 1);
+        }
+    }
+
+    [Fact]
+    public async Task Continuidade25_ResultadoRestritoAindaPassaPela2_2()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(Rota22(0.25));
+        repo.Respostas.Enqueue(Rota22(0.26));
+        // Resposta inconsistente de infraestrutura/fake: a defesa temporal continua obrigatória.
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(Rota22(0.85)));
+        var servico = CriarServico(repo);
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        AssertGpsAtualSemMatching21(Posicao22(5), await servico.EnriquecerAsync(Posicao22(5), default));
+        AssertReferencia22(servico, 0.25, 0, 1);
+        Assert.NotNull(Assert.Single(repo.FaixasDirecionadas));
+    }
+
+    [Theory]
+    [InlineData(double.NaN, 10000, true)]
+    [InlineData(0.25, 0, true)]
+    [InlineData(0.25, double.PositiveInfinity, true)]
+    [InlineData(0.25, 10000, false)]
+    public async Task Continuidade25_ReferenciaInvalidaNaoEnviaFaixa(
+        double progresso, double comprimento, bool temTimestamp)
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var servico = CriarServico(repo);
+        var tipo = typeof(GpsEnriquecimentoService).GetNestedType("ItinerarioConfirmado",
+            System.Reflection.BindingFlags.NonPublic)!;
+        Estados22(servico)[PosicaoInicial21().Ordem] = Activator.CreateInstance(tipo,
+            new object?[] { Rota22(progresso, comprimento), 90.0, 0,
+                temTimestamp ? Posicao22(0).TimestampGps : null });
+        repo.Respostas.Enqueue(Rota22(0.27));
+        Assert.Equal(0.27, (await servico.EnriquecerAsync(Posicao22(5), default)).PosicaoNaRota);
+        Assert.Empty(repo.FaixasDirecionadas);
+        AssertReferencia22(servico, 0.27, 5);
+    }
+
     // ── 8. Mudança de itinerário ──────────────────────────────────────────────
 
     [Fact]
-    public async Task TrocaDeItinerarioBloqueada_MantemDtoAnteriorIntacto()
+    public async Task TrocaDeItinerarioBloqueada_MantemMatchingAtualDoAnterior()
     {
         var repo = new FakeGpsItinerarioRepository();
         var servico = CriarServico(repo);
@@ -864,6 +1096,11 @@ public class GpsEnriquecimentoServiceTests
         };
         var resultado1 = await servico.EnriquecerAsync(primeira, default);
         Assert.Equal(itinerarioA, resultado1.ItinerarioId);
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(new EnriquecimentoRotaDto
+        {
+            ItinerarioId = itinerarioA, PosicaoNaRota = 0.5,
+            ComprimentoRotaMetros = 2000, DistanciaARotaMetros = 5,
+        }));
 
         // Melhoria de distância pequena (1m) — insuficiente para justificar a troca.
         repo.Respostas.Enqueue(new EnriquecimentoRotaDto
@@ -913,6 +1150,11 @@ public class GpsEnriquecimentoServiceTests
         await servico.EnriquecerAsync(primeira, default);
 
         // Melhoria de distância grande (45m) — justifica a troca.
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(new EnriquecimentoRotaDto
+        {
+            ItinerarioId = itinerarioA, PosicaoNaRota = 0.5,
+            ComprimentoRotaMetros = 2000, DistanciaARotaMetros = 50,
+        }));
         repo.Respostas.Enqueue(new EnriquecimentoRotaDto
         {
             ItinerarioId = itinerarioB, PosicaoNaRota = 0.1,

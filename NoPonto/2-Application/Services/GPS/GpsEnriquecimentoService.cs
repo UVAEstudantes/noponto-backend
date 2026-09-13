@@ -109,6 +109,48 @@ public sealed class GpsEnriquecimentoService
             bearing = semBearing.Bearing;
         }
 
+        // Reprojeta o confirmado com continuidade, inclusive quando vence a busca global.
+        if (rota is not null && RotaValida(rota)
+            && _itinerarioAtual.TryGetValue(posicao.Ordem, out var confirmadoAnterior)
+            && confirmadoAnterior.Rota is { } rotaAnterior)
+        {
+            var mesmoItinerario = rota.ItinerarioId == rotaAnterior.ItinerarioId;
+            // A 2.2 reinicia a referência quando o comprimento da geometria muda.
+            var faixa = mesmoItinerario && rota.ComprimentoRotaMetros != rotaAnterior.ComprimentoRotaMetros
+                ? null : CalcularFaixaProjecao(posicao, confirmadoAnterior);
+            if (!mesmoItinerario || faixa.HasValue)
+            {
+                var resultado = await _repositorio.BuscarEnriquecimentoDoItinerarioAsync(
+                    posicao.CodigoLinha, rotaAnterior.ItinerarioId, posicao.Latitude, posicao.Longitude,
+                    bearing!.Value, _opcoes.DistanciaMaximaRotaMetros, ct, faixa);
+
+                if (resultado.Status == StatusBuscaItinerario.Found)
+                {
+                    var anteriorAtual = resultado.Rota!;
+                    if (anteriorAtual.ItinerarioId != rotaAnterior.ItinerarioId || !RotaValida(anteriorAtual)
+                        || !double.IsFinite(anteriorAtual.DistanciaARotaMetros) || anteriorAtual.DistanciaARotaMetros < 0)
+                        rota = null; // Contrato inconsistente não autoriza troca.
+                    else if (mesmoItinerario)
+                        rota = anteriorAtual;
+                    else
+                    {
+                        var melhoriaDistancia = anteriorAtual.DistanciaARotaMetros - rota.DistanciaARotaMetros;
+                        var podeTracar = (!veiculoParado && bearing.HasValue && melhoriaDistancia > 30)
+                                      || melhoriaDistancia > 100;
+                        if (!podeTracar) rota = anteriorAtual; // Matching do GPS atual, nunca o snapshot antigo.
+                    }
+                }
+                else if (resultado.Status != StatusBuscaItinerario.NotEligible)
+                {
+                    _logger.LogWarning("Veiculo {ordem}: falha ao reavaliar itinerario anterior; sem matching neste ciclo.",
+                        posicao.Ordem);
+                    rota = null;
+                }
+                else if (mesmoItinerario)
+                    rota = null; // O matching global irrestrito não substitui o restrito inelegível.
+            }
+        }
+
         // Valida antes de substituir o último matching realmente confirmado.
         // Fração em geometry(4326) × comprimento geography é uma estimativa;
         // o teto conservador e a margem de projeção evitam uma precisão fictícia.
@@ -122,48 +164,8 @@ public sealed class GpsEnriquecimentoService
         // ── 3. Estabilidade de itinerario ─────────────────────────────────────
         if (rota is not null)
         {
-            var rotaNova      = rota;
-            var bearingAtual  = bearing;
-            var parado        = veiculoParado;
-            var ordemLog      = posicao.Ordem;
-
-            _itinerarioAtual.AddOrUpdate(
-                posicao.Ordem,
-                _ => new ItinerarioConfirmado(rotaNova, bearingAtual, timestampGpsConfirmado: posicao.TimestampGps),
-                (_, anterior) =>
-                {
-                    var trocouItinerario = rotaNova.ItinerarioId != anterior.Rota?.ItinerarioId;
-
-                    if (!trocouItinerario)
-                        return new ItinerarioConfirmado(rotaNova, bearingAtual, timestampGpsConfirmado: posicao.TimestampGps);
-
-                    var melhoriaDistancia = (anterior.Rota?.DistanciaARotaMetros ?? 999)
-                                         - rotaNova.DistanciaARotaMetros;
-
-                    var podeTracar = (!parado && bearingAtual.HasValue && melhoriaDistancia > 30)
-                                  || melhoriaDistancia > 100;
-
-                    if (podeTracar || anterior.Rota is null)
-                        return new ItinerarioConfirmado(rotaNova, bearingAtual, timestampGpsConfirmado: posicao.TimestampGps);
-
-                    _logger.LogDebug(
-                        "Veiculo {ordem}: troca de itinerario bloqueada (parado={parado}, melhoria={melhoria:F0}m). " +
-                        "Mantendo itinerario e PosicaoNaRota anteriores intactos.",
-                        ordemLog, parado, melhoriaDistancia);
-
-                    // IMPORTANTE: mantém o EnriquecimentoRotaDto anterior INTEIRO
-                    // (mesmo ItinerarioId, mesma PosicaoNaRota, mesma distância) —
-                    // nunca misturar ItinerarioId antigo com PosicaoNaRota calculada
-                    // para a rota nova. Fazer isso produziria um estado
-                    // geometricamente incoerente (posição relatada em uma rota que
-                    // não é a que o veículo está sinalizando pertencer).
-                    return new ItinerarioConfirmado(anterior.Rota, bearingAtual,
-                        timestampGpsConfirmado: anterior.TimestampGpsConfirmado);
-                });
-
-            rota = _itinerarioAtual.TryGetValue(posicao.Ordem, out var confirmado)
-                ? confirmado.Rota
-                : rota;
+            _itinerarioAtual[posicao.Ordem] = new ItinerarioConfirmado(rota, bearing,
+                timestampGpsConfirmado: posicao.TimestampGps);
         }
         else
         {
@@ -219,6 +221,24 @@ public sealed class GpsEnriquecimentoService
         double.IsFinite(rota.PosicaoNaRota) && rota.PosicaoNaRota is >= 0 and <= 1
         && double.IsFinite(rota.ComprimentoRotaMetros) && rota.ComprimentoRotaMetros > 0;
 
+    private double OrcamentoProjecaoMetros(double segundos) =>
+        (_opcoes.VelocidadeMaximaKmh * FatorToleranciaSalto / 3.6) * segundos
+        + _opcoes.ToleranciaProjecaoMetros;
+
+    private FaixaProjecao? CalcularFaixaProjecao(PosicaoVeiculoDto posicao, ItinerarioConfirmado confirmado)
+    {
+        if (confirmado.Rota is not { } anterior || !RotaValida(anterior)
+            || confirmado.TimestampGpsConfirmado is not { } timestamp)
+            return null;
+        var segundos = (posicao.TimestampGps - timestamp).TotalSeconds;
+        if (segundos <= 0) return null;
+        var delta = OrcamentoProjecaoMetros(segundos) / anterior.ComprimentoRotaMetros;
+        if (!double.IsFinite(delta) || delta <= 0) return null;
+        var faixa = new FaixaProjecao(Math.Max(0, anterior.PosicaoNaRota - delta),
+            Math.Min(1, anterior.PosicaoNaRota + delta));
+        return faixa.Valida ? faixa : null;
+    }
+
     private bool MatchingTemporalAceitavel(PosicaoVeiculoDto posicao, EnriquecimentoRotaDto atual)
     {
         if (!RotaValida(atual)) return false;
@@ -240,8 +260,7 @@ public sealed class GpsEnriquecimentoService
 
         var distancia = Math.Abs(atual.PosicaoNaRota - anterior.PosicaoNaRota)
                       * atual.ComprimentoRotaMetros;
-        var limite = (_opcoes.VelocidadeMaximaKmh * FatorToleranciaSalto / 3.6) * segundos
-                   + _opcoes.ToleranciaProjecaoMetros;
+        var limite = OrcamentoProjecaoMetros(segundos);
         return distancia <= limite;
     }
 

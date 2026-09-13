@@ -17,12 +17,39 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
         _logger = logger;
     }
 
-    public async Task<EnriquecimentoRotaDto?> BuscarEnriquecimentoAsync(
+    public Task<EnriquecimentoRotaDto?> BuscarEnriquecimentoAsync(
+        string codigoLinha, double latitude, double longitude, double bearing,
+        double distanciaMaximaMetros, CancellationToken cancellationToken = default)
+        => BuscarMatchingAsync(codigoLinha, latitude, longitude, bearing,
+            distanciaMaximaMetros, null, null, cancellationToken);
+
+    public async Task<ResultadoBuscaItinerario> BuscarEnriquecimentoDoItinerarioAsync(
+        string codigoLinha, Guid itinerarioId, double latitude, double longitude, double bearing,
+        double distanciaMaximaMetros, CancellationToken cancellationToken = default,
+        FaixaProjecao? faixa = null)
+    {
+        // Faixa degenerada produziria POINT em ST_LineSubstring, não LineString.
+        if (faixa is { } limites && !limites.Valida)
+            return ResultadoBuscaItinerario.InfrastructureFailure();
+        try
+        {
+            var rota = await BuscarMatchingAsync(codigoLinha, latitude, longitude, bearing,
+                distanciaMaximaMetros, itinerarioId, faixa, cancellationToken);
+            return rota is null ? ResultadoBuscaItinerario.NotEligible() : ResultadoBuscaItinerario.Found(rota);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception) { return ResultadoBuscaItinerario.InfrastructureFailure(); }
+    }
+
+    // Núcleo único: a busca global mantém seus filtros/score/ORDER BY/LIMIT.
+    private async Task<EnriquecimentoRotaDto?> BuscarMatchingAsync(
         string codigoLinha,
         double latitude,
         double longitude,
         double bearing,
         double distanciaMaximaMetros,
+        Guid? itinerarioId,
+        FaixaProjecao? faixa,
         CancellationToken cancellationToken = default)
     {
         const string sql = """
@@ -31,19 +58,37 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
                     ST_SetSRID(ST_MakePoint(@lon, @lat), 4326)::geography AS ponto,
                     ST_SetSRID(ST_MakePoint(@lon, @lat), 4326)            AS ponto_geom
             ),
-            candidatos AS (
+            rotas AS (
                 SELECT
                     i."Id",
-                    i."Geometria",
-                    ST_Length(i."Geometria"::geography)                             AS comprimento_metros,
-                    ST_Distance(v.ponto, i."Geometria"::geography)                  AS distancia_rota_metros,
-                    ST_LineLocatePoint(i."Geometria", v.ponto_geom)                 AS posicao_na_rota
+                    i."Geometria"
                 FROM "Itinerarios" i
                 JOIN "Sentidos" s ON s."Id" = i."SentidoId"
                 JOIN "Linhas"   l ON l."Id" = s."LinhaId"
                 CROSS JOIN veiculo v
                 WHERE l."Codigo" = @codigo
-                  AND ST_Distance(v.ponto, i."Geometria"::geography) <= @dist_max
+                  /*FILTRO_ITINERARIO*/
+            ),
+            geometrias_projecao AS (
+                SELECT r.*,
+                    CASE WHEN @usar_faixa
+                        THEN ST_LineSubstring(r."Geometria", @fracao_min, @fracao_max)
+                        ELSE r."Geometria"
+                    END AS geometria_projecao
+                FROM rotas r
+            ),
+            candidatos AS (
+                SELECT r."Id", r."Geometria",
+                    ST_Length(r."Geometria"::geography) AS comprimento_metros,
+                    ST_Distance(v.ponto, r.geometria_projecao::geography) AS distancia_rota_metros,
+                    CASE WHEN @usar_faixa THEN
+                        @fracao_min + ST_LineLocatePoint(r.geometria_projecao, v.ponto_geom)
+                            * (@fracao_max - @fracao_min)
+                        ELSE ST_LineLocatePoint(r.geometria_projecao, v.ponto_geom)
+                    END AS posicao_na_rota
+                FROM geometrias_projecao r
+                CROSS JOIN veiculo v
+                WHERE ST_Distance(v.ponto, r.geometria_projecao::geography) <= @dist_max
             ),
             com_bearing_local AS (
                 SELECT
@@ -118,12 +163,17 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
             await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
             await using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = sql;
+            cmd.CommandText = sql.Replace("/*FILTRO_ITINERARIO*/",
+                itinerarioId.HasValue ? "AND i.\"Id\" = @itinerario_id" : "");
+            if (itinerarioId.HasValue) cmd.Parameters.AddWithValue("itinerario_id", itinerarioId.Value);
             cmd.Parameters.AddWithValue("lat", latitude);
             cmd.Parameters.AddWithValue("lon", longitude);
             cmd.Parameters.AddWithValue("codigo", codigoLinha);
             cmd.Parameters.AddWithValue("bearing", bearing);
             cmd.Parameters.AddWithValue("dist_max", distanciaMaximaMetros);
+            cmd.Parameters.AddWithValue("usar_faixa", faixa.HasValue);
+            cmd.Parameters.AddWithValue("fracao_min", faixa?.Min ?? 0.0);
+            cmd.Parameters.AddWithValue("fracao_max", faixa?.Max ?? 1.0);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
 
@@ -161,6 +211,8 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
             _logger.LogWarning(ex,
                 "Falha ao enriquecer rota para linha {linha} em ({lat},{lon})",
                 codigoLinha, latitude, longitude);
+            // A operação direcionada nunca confunde erro com ausência de matching.
+            if (itinerarioId.HasValue) throw;
             return null;
         }
     }
