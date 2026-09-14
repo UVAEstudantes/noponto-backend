@@ -21,6 +21,7 @@ public class TransporteDbContext : DbContext
     public DbSet<ParadaItinerario> ParadasItinerario => Set<ParadaItinerario>();
     public DbSet<Poi> Pois => Set<Poi>();
     public DbSet<HistoricoPassagem> HistoricoPassagens => Set<HistoricoPassagem>();
+    public DbSet<EventoViagemPersistido> EventosViagem => Set<EventoViagemPersistido>();
     public DbSet<PoiParada> PoiParadas => Set<PoiParada>();
     public DbSet<Tarifa> Tarifas => Set<Tarifa>();
 
@@ -100,5 +101,20 @@ public class TransporteDbContext : DbContext
         // TimestampGps como índice para range queries (consultas por período)
         modelBuilder.Entity<HistoricoPassagem>()
             .HasIndex(h => h.TimestampGps);
+        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ViagemId, h.ParadaItinerarioId })
+            .IsUnique().HasFilter("\"ViagemId\" IS NOT NULL AND \"ParadaItinerarioId\" IS NOT NULL");
+        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ViagemId, h.TimestampPassagem });
+        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ParadaItinerarioId, h.TimestampPassagem });
+        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.SentidoId, h.TimestampPassagem });
+        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ItinerarioId, h.TimestampPassagem });
+        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.Ordem, h.TimestampPassagem });
+        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.CodigoLinha, h.TimestampPassagem });
+        modelBuilder.Entity<HistoricoPassagem>().HasOne(h => h.ParadaItinerario).WithMany()
+            .HasForeignKey(h => h.ParadaItinerarioId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<HistoricoPassagem>().HasOne(h => h.Sentido).WithMany()
+            .HasForeignKey(h => h.SentidoId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<EventoViagemPersistido>().HasKey(e => e.EventId);
+        modelBuilder.Entity<EventoViagemPersistido>().Property(e => e.Payload).HasColumnType("jsonb");
+        modelBuilder.Entity<EventoViagemPersistido>().HasIndex(e => e.TimestampEvento);
     }
 }

@@ -11,6 +11,7 @@ using NoPonto.Application.Interfaces;
 using NoPonto.Application.Services;
 using NoPonto.Application.Services.BackgroundServices;
 using NoPonto.Data.Interfaces;
+using NoPonto.Data.Configuration;
 using NoPonto.Data.Repositories;
 using StackExchange.Redis;
 using System.Net.Sockets;
@@ -143,16 +144,7 @@ var connectionString =
     $"Username={GetEnv("POSTGRES_USER")};" +
     $"Password={GetEnv("POSTGRES_PASSWORD")}";
 
-// Pool externo do Npgsql
-builder.Services.AddSingleton(
-    NpgsqlDataSource.Create(connectionString));
-
-builder.Services.AddDbContext<TransporteDbContext>(options =>
-    options.UseNpgsql(
-        connectionString,
-        x => x.UseNetTopologySuite()
-    )
-);
+builder.Services.AdicionarPostgresCompartilhado(connectionString);
 
 // --------------------------------------------------------------------
 // HTTP CLIENTS
@@ -329,14 +321,9 @@ builder.Services
     .Validate(
         o => o.DistanciaMaximaRotaMetros > 0,
         "GpsPolling:DistanciaMaximaRotaMetros deve ser > 0")
+    .Validate(o => o.GrauParalelismoViagemObservada > 0,
+        "GpsPolling:GrauParalelismoViagemObservada deve ser > 0")
     .ValidateOnStart();
-
-builder.Services
-    .AddOptions<GpsHistoricoOptions>()
-    .Bind(builder.Configuration.GetSection(GpsHistoricoOptions.Secao));
-
-builder.Services.AddSingleton<GpsHistoricoOptions>(sp =>
-    sp.GetRequiredService<IOptions<GpsHistoricoOptions>>().Value);
 
 // --------------------------------------------------------------------
 // REDIS
@@ -354,6 +341,9 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(
     _ => ConnectionMultiplexer.Connect(redisConnection));
 
 builder.Services.AddSingleton<IPosicaoVeiculoCacheRepository, PosicaoVeiculoCacheRepository>();
+builder.Services.AddSingleton<IViagemObservadaRepository, ViagemOperacionalRepository>();
+builder.Services.AddSingleton<IOcorrenciaParadaRepository, OcorrenciaParadaRepository>();
+builder.Services.AddSingleton<ViagemObservadaService>();
 builder.Services.AddSingleton<IPosicaoVeiculoPayloadWriter, PosicaoVeiculoPayloadWriter>();
 builder.Services.AddSingleton<PosicaoVeiculoTsBootstrapper>();
 
@@ -368,7 +358,9 @@ builder.Services.AddSingleton<
 
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 
-builder.Services.AddSingleton<GpsHistoricoService>();
+builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();
+builder.Services.AddSingleton(new HistoricoStreamOptions(redisConnection));
+builder.Services.AddHostedService<HistoricoPassagemWorker>();
 
 builder.Services.AddSignalR();
 

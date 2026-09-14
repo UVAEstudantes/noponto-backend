@@ -4,9 +4,9 @@ namespace NoPonto.Domain.Entities;
 /// Registro de uma passagem de veículo por uma parada.
 /// Usado como dataset para treinar modelos de predição de ETA.
 ///
-/// Uma passagem é registrada quando o veículo está dentro de
-/// DistanciaRegistroMetros da parada e ainda não foi registrado
-/// nessa parada nessa viagem.
+/// Novas passagens vêm exclusivamente de ocorrências estruturais confirmadas
+/// e são persistidas idempotentemente pelo consumer da outbox.
+/// Identificadores nullable preservam registros legados, sem backfill artificial.
 /// </summary>
 public class HistoricoPassagem : BaseEntity
 {
@@ -18,6 +18,10 @@ public class HistoricoPassagem : BaseEntity
 
     public Guid ItinerarioId { get; set; }
     public Guid ParadaId     { get; set; }
+    public Guid? ViagemId { get; set; }
+    public Guid? ParadaItinerarioId { get; set; }
+    public Guid? SentidoId { get; set; }
+    public DateTimeOffset? TimestampPassagem { get; set; }
 
     // ── Posição e tempo ───────────────────────────────────────────────────────
 
@@ -25,7 +29,7 @@ public class HistoricoPassagem : BaseEntity
     public double PosicaoNaRota { get; set; }
 
     /// <summary>Distância real ao centro da parada em metros.</summary>
-    public double DistanciaParadaMetros { get; set; }
+    public double? DistanciaParadaMetros { get; set; }
 
     /// <summary>Timestamp GPS do veículo no momento da passagem.</summary>
     public DateTimeOffset TimestampGps { get; set; }
@@ -69,4 +73,6 @@ public class HistoricoPassagem : BaseEntity
 
     public Itinerario Itinerario { get; set; } = null!;
     public Parada     Parada     { get; set; } = null!;
+    public ParadaItinerario? ParadaItinerario { get; set; }
+    public Sentido? Sentido { get; set; }
 }

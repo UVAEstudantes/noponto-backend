@@ -26,11 +26,11 @@ public sealed class GpsPollingService : BackgroundService
     private readonly GpsEnriquecimentoService _enriquecedor;
     private readonly Dictionary<string, string> _linhaPorVeiculo =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly GpsHistoricoService _historicoService;
     private readonly GpsEtaClient _etaClient;
     private readonly GpsBrtClient _brtClient;
 
     private readonly IPosicaoVeiculoCacheRepository _posicaoCache;
+    private readonly ViagemObservadaService _viagemObservada;
 
     public GpsPollingService(
         GpsSppoClient cliente,
@@ -40,10 +40,10 @@ public sealed class GpsPollingService : BackgroundService
         IOptionsMonitor<GpsPollingOptions> opcoes,
         IServiceScopeFactory scopeFactory,
         GpsEnriquecimentoService enriquecedor,
-        GpsHistoricoService historicoService,
         GpsEtaClient etaClient,
         GpsBrtClient brtClient,
-        IPosicaoVeiculoCacheRepository posicaoCache)
+        IPosicaoVeiculoCacheRepository posicaoCache,
+        ViagemObservadaService viagemObservada)
     {
         _cliente = cliente;
         _cache = cache;
@@ -52,10 +52,10 @@ public sealed class GpsPollingService : BackgroundService
         _opcoesMonitor = opcoes;
         _scopeFactory = scopeFactory;
         _enriquecedor = enriquecedor;
-        _historicoService = historicoService;
         _etaClient = etaClient;
         _brtClient = brtClient;
         _posicaoCache = posicaoCache;
+        _viagemObservada = viagemObservada;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -281,12 +281,8 @@ public sealed class GpsPollingService : BackgroundService
         var ttlAtivo   = TimeSpan.FromSeconds(opcoes.TtlAtivoSegundos);
         var ttlRecente = TimeSpan.FromSeconds(opcoes.TtlRecenteSegundos);
 
-        var resultadosGravacao = await Task.WhenAll(todosProcessados.Select(async final =>
-        {
-            var resultado = await _posicaoCache.TentarAtualizarAsync(
-                final.Ordem, final, final.TimestampGps, ttlAtivo, ttlRecente, ct);
-            return (Posicao: final, Resultado: resultado);
-        }));
+        var resultadosGravacao = await ConfirmarLoteAsync(todosProcessados,
+            ttlAtivo, ttlRecente, opcoes.GrauParalelismoViagemObservada, ct);
 
         // Só posições cuja gravação foi CONFIRMADA como aceita avançam para
         // broadcast/histórico. Falha de infraestrutura NUNCA é tratada como
@@ -323,8 +319,6 @@ public sealed class GpsPollingService : BackgroundService
                 "(não confundir com rejeição por timestamp — nada foi confirmado para esses veículos neste ciclo).",
                 falhasInfraestrutura);
 
-        var ordensAceitas = new HashSet<string>(aceitos.Select(a => a.Ordem), StringComparer.OrdinalIgnoreCase);
-
         var ativosPorLinha = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var tarefasEscrita = new List<Task>();
 
@@ -336,17 +330,6 @@ public sealed class GpsPollingService : BackgroundService
                 ativosPorLinha[final.CodigoLinha] = set;
             }
             set.Add(final.Ordem);
-        }
-
-        // ── 5.5. Coleta histórico de passagens (somente leituras confirmadas) ────
-        if (opcoes.HistoricoHabilitado && resultadosEnriquecidos.Length > 0)
-        {
-            var enriquecidosAceitos = resultadosEnriquecidos
-                .Where(p => ordensAceitas.Contains(p.Ordem))
-                .ToList();
-
-            if (enriquecidosAceitos.Count > 0)
-                await _historicoService.ProcessarLoteAsync(enriquecidosAceitos, ct);
         }
 
         // ── 6. Merge sets de linha ────────────────────────────────────────────
@@ -465,6 +448,39 @@ public sealed class GpsPollingService : BackgroundService
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    // Aguarda o lote inteiro, limitando commit GPS e pós-processamento por veículo.
+    internal async Task<(PosicaoVeiculoDto Posicao, PosicaoVeiculoCacheResultado Resultado)[]> ConfirmarLoteAsync(
+        IReadOnlyList<PosicaoVeiculoDto> posicoes, TimeSpan ttlAtivo, TimeSpan ttlRecente,
+        int grauParalelismo, CancellationToken ct)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(grauParalelismo);
+        using var limite = new SemaphoreSlim(grauParalelismo, grauParalelismo);
+        return await Task.WhenAll(posicoes.Select(async posicao =>
+        {
+            await limite.WaitAsync(ct);
+            try
+            {
+                var resultado = await ConfirmarPosicaoAsync(posicao, ttlAtivo, ttlRecente, ct);
+                return (Posicao: posicao, Resultado: resultado);
+            }
+            finally
+            {
+                limite.Release();
+            }
+        }));
+    }
+
+    // Falhas da viagem não alteram o aceite/publicação do GPS.
+    internal async Task<PosicaoVeiculoCacheResultado> ConfirmarPosicaoAsync(
+        PosicaoVeiculoDto posicao, TimeSpan ttlAtivo, TimeSpan ttlRecente, CancellationToken ct)
+    {
+        var resultado = await _posicaoCache.TentarAtualizarAsync(
+            posicao.Ordem, posicao, posicao.TimestampGps, ttlAtivo, ttlRecente, ct);
+        if (resultado.Aceito)
+            await _viagemObservada.AtualizarAsync(posicao, ct);
+        return resultado;
+    }
 
     private static PosicaoVeiculoDto MontarComHistorico(
         PosicaoVeiculoDto nova, PosicaoVeiculoDto? anterior) => nova with

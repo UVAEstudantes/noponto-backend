@@ -15,6 +15,7 @@ public sealed class GpsPollingOptions
     public int    JanelaRetroativaSegundos        { get; set; } = 60;
     public double DistanciaMaximaRotaMetros       { get; set; } = 250;
     public int    GrauParalelismoEnriquecimento   { get; set; } = 20;
+    public int    GrauParalelismoViagemObservada  { get; set; } = 20;
     public int    MaxIdadeGpsSegundos             { get; set; } = 300;
 
     /// <summary>
