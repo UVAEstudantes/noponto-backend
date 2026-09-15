@@ -84,6 +84,7 @@ services:
       TREM__HORARIO_FIM: ${TREM__HORARIO_FIM}
 
       GpsPolling__IntervaloSegundos: ${GpsPolling__IntervaloSegundos}
+      GpsPolling__IntervaloBrtSegundos: ${GpsPolling__IntervaloBrtSegundos:-20}
       GpsPolling__TtlAtivoSegundos: ${GpsPolling__TtlAtivoSegundos}
       GpsPolling__TtlRecenteSegundos: ${GpsPolling__TtlRecenteSegundos}
       GpsPolling__TtlLinhaSegundos: ${GpsPolling__TtlLinhaSegundos}
@@ -91,7 +92,10 @@ services:
       GpsPolling__JanelaVelocidadeLeituras: ${GpsPolling__JanelaVelocidadeLeituras}
       GpsPolling__DistanciaMaximaRotaMetros: ${GpsPolling__DistanciaMaximaRotaMetros}
       GpsPolling__EnriquecerTodasLinhas: ${GpsPolling__EnriquecerTodasLinhas}
-      GpsPolling__JanelaRetroativaSegundos: ${GpsPolling__JanelaRetroativaSegundos}
+      GpsSppoCollector__TimeoutSegundos: ${GpsSppoCollector__TimeoutSegundos:-90}
+      GpsSppoCollector__JanelaInicialSegundos: ${GpsSppoCollector__JanelaInicialSegundos:-20}
+      GpsSppoCollector__OverlapSegundos: ${GpsSppoCollector__OverlapSegundos:-10}
+      GpsSppoCollector__IntervaloEntreColetasSegundos: ${GpsSppoCollector__IntervaloEntreColetasSegundos:-10}
       GpsPolling__GrauParalelismoEnriquecimento: ${GpsPolling__GrauParalelismoEnriquecimento}
       GpsPolling__MaxIdadeGpsSegundos: ${GpsPolling__MaxIdadeGpsSegundos}
       GpsPolling__VelocidadeMinimaBearingKmh: ${GpsPolling__VelocidadeMinimaBearingKmh}

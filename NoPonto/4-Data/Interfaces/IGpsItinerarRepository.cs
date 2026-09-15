@@ -6,6 +6,15 @@ namespace NoPonto.Application.GPS;
 /// </summary>
 public interface IGpsItinerarioRepository
 {
+    /// <summary>
+    /// Executa em um comando o matching global e o matching de continuidade do
+    /// itinerario anterior dentro de uma faixa valida.
+    /// </summary>
+    Task<ResultadoMatchingCombinado> BuscarMatchingCombinadoAsync(
+        string codigoLinha, Guid itinerarioAnteriorId, double latitude, double longitude,
+        double bearing, double distanciaMaximaMetros, FaixaProjecao faixa,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Reavalia um itinerário na linha/GPS/bearing atuais, distinguindo inelegibilidade de falha.</summary>
     Task<ResultadoBuscaItinerario> BuscarEnriquecimentoDoItinerarioAsync(
         string codigoLinha, Guid itinerarioId, double latitude, double longitude,
@@ -63,3 +72,8 @@ public sealed class ResultadoBuscaItinerario
     public static ResultadoBuscaItinerario NotEligible() => new(StatusBuscaItinerario.NotEligible);
     public static ResultadoBuscaItinerario InfrastructureFailure() => new(StatusBuscaItinerario.InfrastructureFailure);
 }
+
+// Contrato interno do pipeline de matching; nao faz parte dos contratos HTTP.
+public sealed record ResultadoMatchingCombinado(
+    ResultadoBuscaItinerario Global,
+    ResultadoBuscaItinerario Anterior);

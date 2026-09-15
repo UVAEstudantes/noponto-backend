@@ -67,6 +67,129 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
     private PosicaoVeiculoCacheRepository NovoRepositorio(IPosicaoVeiculoPayloadWriter writer) =>
         new(_redis, writer, NullLogger<PosicaoVeiculoCacheRepository>.Instance);
 
+    [Fact]
+    public async Task MetricasCommit_PrimeiraTentativa_MedeSerializacaoLuaEUnlockUmaVez()
+    {
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
+        using var scope = GpsCommitPerformanceContext.Push(metrics);
+        var timestamp = DateTimeOffset.UtcNow;
+
+        var resultado = await _repo.TentarAtualizarAsync(
+            _ordem, Posicao(timestamp, _ordem), timestamp, TtlAtivo, TtlRecente, default);
+
+        Assert.Equal(PosicaoVeiculoCacheStatus.Accepted, resultado.Status);
+        Assert.Equal(1, metrics.LockOperacoes);
+        Assert.Equal(1, metrics.LockTentativas);
+        Assert.Equal(1, metrics.LockPrimeiraTentativa);
+        Assert.Equal(0, metrics.LockComRetry);
+        Assert.Equal(0, metrics.LockRetries);
+        Assert.Equal(1, metrics.Serializacoes);
+        Assert.True(metrics.SerializacaoCaracteres > 0);
+        Assert.Equal(1, metrics.CommitLuaExecucoes);
+        Assert.Equal(0, metrics.Unlocks);
+        Assert.Equal(1, metrics.UnlocksNoLua);
+    }
+
+    [Fact]
+    public async Task MetricasCommit_LockEsgotado_MedeRetriesSemSerializarNemExecutarLua()
+    {
+        var db = _redis.GetDatabase();
+        await db.StringSetAsync(
+            PosicaoVeiculoCacheRepository.ChaveVeiculoLock(_ordem), "outro-writer", TimeSpan.FromSeconds(5));
+        var repo = new PosicaoVeiculoCacheRepository(
+            _redis, new PosicaoVeiculoPayloadWriter(_redis),
+            NullLogger<PosicaoVeiculoCacheRepository>.Instance,
+            TimeSpan.FromSeconds(5), 3);
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
+        using var scope = GpsCommitPerformanceContext.Push(metrics);
+        var timestamp = DateTimeOffset.UtcNow;
+
+        var resultado = await repo.TentarAtualizarAsync(
+            _ordem, Posicao(timestamp, _ordem), timestamp, TtlAtivo, TtlRecente, default);
+
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultado.Status);
+        Assert.Equal(1, metrics.LockOperacoes);
+        Assert.Equal(3, metrics.LockTentativas);
+        Assert.Equal(2, metrics.LockRetries);
+        Assert.Equal(3, metrics.LockMaxTentativas);
+        Assert.Equal(0, metrics.LockPrimeiraTentativa);
+        Assert.Equal(0, metrics.LockComRetry);
+        Assert.Equal(0, metrics.Serializacoes);
+        Assert.Equal(0, metrics.CommitLuaExecucoes);
+        Assert.Equal(0, metrics.Unlocks);
+        Assert.Equal(0, metrics.UnlocksNoLua);
+        Assert.True(metrics.LockSomaMs >= 50);
+    }
+
+    [Fact]
+    public async Task MetricasCommit_LockLiberadoDuranteEspera_RegistraAquisicaoComRetry()
+    {
+        var db = _redis.GetDatabase();
+        var chaveLock = PosicaoVeiculoCacheRepository.ChaveVeiculoLock(_ordem);
+        await db.StringSetAsync(chaveLock, "outro-writer", TimeSpan.FromSeconds(5));
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
+        using var scope = GpsCommitPerformanceContext.Push(metrics);
+        var timestamp = DateTimeOffset.UtcNow;
+        var liberarLock = Task.Run(async () =>
+        {
+            await Task.Delay(10);
+            await db.KeyDeleteAsync(chaveLock);
+        });
+
+        var resultado = await _repo.TentarAtualizarAsync(
+            _ordem, Posicao(timestamp, _ordem), timestamp, TtlAtivo, TtlRecente, default);
+        await liberarLock;
+
+        Assert.Equal(PosicaoVeiculoCacheStatus.Accepted, resultado.Status);
+        Assert.Equal(1, metrics.LockComRetry);
+        Assert.True(metrics.LockTentativas >= 2);
+        Assert.True(metrics.LockRetries >= 1);
+        Assert.Equal(metrics.LockTentativas, metrics.LockMaxTentativas);
+        Assert.Equal(1, metrics.Serializacoes);
+        Assert.Equal(1, metrics.CommitLuaExecucoes);
+        Assert.Equal(0, metrics.Unlocks);
+        Assert.Equal(1, metrics.UnlocksNoLua);
+    }
+
+    [Fact]
+    public async Task MetricasCommit_CasRejeitado_AindaMedeLuaEUnlock()
+    {
+        var timestamp = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(timestamp);
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
+        using var scope = GpsCommitPerformanceContext.Push(metrics);
+
+        var resultado = await _repo.TentarAtualizarAsync(
+            _ordem, Posicao(timestamp, _ordem), timestamp, TtlAtivo, TtlRecente, default);
+
+        Assert.Equal(PosicaoVeiculoCacheStatus.RejectedOlderOrEqual, resultado.Status);
+        Assert.Equal(1, metrics.Serializacoes);
+        Assert.Equal(1, metrics.CommitLuaExecucoes);
+        Assert.Equal(0, metrics.Unlocks);
+        Assert.Equal(1, metrics.UnlocksNoLua);
+    }
+
+    [Fact]
+    public async Task MetricasCommit_FalhaDoWriter_AindaMedeLuaEUnlock()
+    {
+        var writer = new HookedPayloadWriter(new PosicaoVeiculoPayloadWriter(_redis))
+        {
+            AntesDeCommit = () => Task.FromException(new InvalidOperationException("falha de infraestrutura"))
+        };
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
+        using var scope = GpsCommitPerformanceContext.Push(metrics);
+        var timestamp = DateTimeOffset.UtcNow;
+
+        var resultado = await NovoRepositorio(writer).TentarAtualizarAsync(
+            _ordem, Posicao(timestamp, _ordem), timestamp, TtlAtivo, TtlRecente, default);
+
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultado.Status);
+        Assert.Equal(1, metrics.Serializacoes);
+        Assert.Equal(1, metrics.CommitLuaExecucoes);
+        Assert.Equal(1, metrics.Unlocks);
+        Assert.Equal(0, metrics.UnlocksNoLua);
+    }
+
     // ── Regras básicas de monotonicidade ──────────────────────────────────────
 
     [Fact]
@@ -121,6 +244,41 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
         Assert.Equal(
             maxEsperado.ToUnixTimeMilliseconds(),
             (long)(await _redis.GetDatabase().StringGetAsync($"veiculo:{_ordem}:ts"))!);
+    }
+
+    [Fact]
+    public async Task EscritasConcorrentes_OrdensDiferentes_IsolamLocksEEstados()
+    {
+        var timestamp = DateTimeOffset.UtcNow;
+        var ordens = Enumerable.Range(0, 20)
+            .Select(indice => $"{_ordem}-D{indice}")
+            .ToArray();
+        var db = _redis.GetDatabase();
+
+        try
+        {
+            var resultados = await Task.WhenAll(ordens.Select(ordem =>
+                _repo.TentarAtualizarAsync(
+                    ordem, Posicao(timestamp, ordem), timestamp, TtlAtivo, TtlRecente, default)));
+
+            Assert.All(resultados,
+                resultado => Assert.Equal(PosicaoVeiculoCacheStatus.Accepted, resultado.Status));
+            foreach (var ordem in ordens)
+            {
+                Assert.Equal(timestamp.ToUnixTimeMilliseconds(),
+                    (long)await db.StringGetAsync($"veiculo:{ordem}:ts"));
+                Assert.False(await db.KeyExistsAsync($"veiculo:{ordem}:gps-lock"));
+            }
+        }
+        finally
+        {
+            var chaves = ordens.SelectMany(ordem => new RedisKey[]
+            {
+                $"veiculo:{ordem}:ts", $"veiculo:{ordem}:ativo",
+                $"veiculo:{ordem}:recente", $"veiculo:{ordem}:gps-lock"
+            }).ToArray();
+            await db.KeyDeleteAsync(chaves);
+        }
     }
 
     [Fact]
@@ -344,6 +502,73 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
         Assert.Equal(PosicaoVeiculoCommitStatus.Accepted,
             await CommitDiretoAsync(new PosicaoVeiculoPayloadWriter(_redis), "A", t));
         await AssertEstadoIntegralAsync(t);
+        Assert.False(await _redis.GetDatabase().KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
+    }
+
+    [Fact]
+    public async Task Writer_TimestampAntigo_RejeitaELiberaLockNoMesmoLua()
+    {
+        var t1 = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(t1);
+        var db = _redis.GetDatabase();
+        var chaveLock = $"veiculo:{_ordem}:gps-lock";
+        await db.StringSetAsync(chaveLock, "A", TimeSpan.FromSeconds(15));
+        var antes = await CapturarDadosAsync();
+
+        Assert.Equal(PosicaoVeiculoCommitStatus.RejectedOlder,
+            await CommitDiretoAsync(new PosicaoVeiculoPayloadWriter(_redis), "A", t1.AddSeconds(-1)));
+
+        await AssertDadosPreservadosAsync(antes);
+        Assert.False(await db.KeyExistsAsync(chaveLock));
+    }
+
+    [Fact]
+    public async Task Writer_TimestampIgual_RejeitaELiberaLockNoMesmoLua()
+    {
+        var timestamp = DateTimeOffset.UtcNow;
+        await ConfirmarInicialAsync(timestamp);
+        var db = _redis.GetDatabase();
+        var chaveLock = $"veiculo:{_ordem}:gps-lock";
+        await db.StringSetAsync(chaveLock, "A", TimeSpan.FromSeconds(15));
+        var antes = await CapturarDadosAsync();
+
+        Assert.Equal(PosicaoVeiculoCommitStatus.RejectedEqual,
+            await CommitDiretoAsync(new PosicaoVeiculoPayloadWriter(_redis), "A", timestamp));
+
+        await AssertDadosPreservadosAsync(antes);
+        Assert.False(await db.KeyExistsAsync(chaveLock));
+    }
+
+    [Fact]
+    public async Task Writer_TipoInvalidoAposOwnership_RejeitaELiberaLockNoMesmoLua()
+    {
+        var db = _redis.GetDatabase();
+        var chaveLock = $"veiculo:{_ordem}:gps-lock";
+        await db.StringSetAsync(ChavesPosicao[1], "tipo-invalido", TimeSpan.FromSeconds(60));
+        await db.StringSetAsync(chaveLock, "A", TimeSpan.FromSeconds(15));
+        var antes = await CapturarDadosAsync();
+
+        Assert.Equal(PosicaoVeiculoCommitStatus.InvalidState,
+            await CommitDiretoAsync(new PosicaoVeiculoPayloadWriter(_redis), "A"));
+
+        await AssertDadosPreservadosAsync(antes);
+        Assert.False(await db.KeyExistsAsync(chaveLock));
+    }
+
+    [Fact]
+    public async Task Writer_ArgumentoInvalidoAntesDoOwnership_NaoRemoveLock()
+    {
+        var db = _redis.GetDatabase();
+        var chaveLock = $"veiculo:{_ordem}:gps-lock";
+        await db.StringSetAsync(chaveLock, "A", TimeSpan.FromSeconds(15));
+
+        var status = await new PosicaoVeiculoPayloadWriter(_redis).TentarCommitAtomicoAsync(
+            ChavesPosicao[0].ToString(), ChavesPosicao[1].ToString(), ChavesPosicao[2].ToString(),
+            chaveLock, "", "{}", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            TtlAtivo, TtlRecente, TtlRecente, default);
+
+        Assert.Equal(PosicaoVeiculoCommitStatus.InvalidArguments, status);
+        Assert.Equal("A", (string?)await db.StringGetAsync(chaveLock));
     }
 
     [Fact]
@@ -585,6 +810,35 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
         await ConfirmarInicialAsync(t1.AddSeconds(1));
     }
 
+    [Fact]
+    public async Task RespostaPerdidaAposLua_NovoOwnerAdquire_FallbackNaoRemoveLockDeTerceiro()
+    {
+        var db = _redis.GetDatabase();
+        var chaveLock = $"veiculo:{_ordem}:gps-lock";
+        var writer = new HookedPayloadWriter(new PosicaoVeiculoPayloadWriter(_redis))
+        {
+            DepoisDeCommit = async () =>
+            {
+                Assert.True(await db.StringSetAsync(
+                    chaveLock, "B", TimeSpan.FromSeconds(15), When.NotExists));
+                throw new RedisTimeoutException(
+                    "Resposta perdida depois do Lua", CommandStatus.Sent);
+            }
+        };
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
+        using var scope = GpsCommitPerformanceContext.Push(metrics);
+        var timestamp = DateTimeOffset.UtcNow;
+
+        var resultado = await NovoRepositorio(writer).TentarAtualizarAsync(
+            _ordem, Posicao(timestamp, _ordem), timestamp, TtlAtivo, TtlRecente, default);
+
+        Assert.Equal(PosicaoVeiculoCacheStatus.InfrastructureFailure, resultado.Status);
+        await AssertEstadoIntegralAsync(timestamp);
+        Assert.Equal("B", (string?)await db.StringGetAsync(chaveLock));
+        Assert.Equal(1, metrics.Unlocks);
+        Assert.Equal(0, metrics.UnlocksNoLua);
+    }
+
     [Theory]
     [InlineData("timeout")]
     [InlineData("connection")]
@@ -646,6 +900,7 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
             (await _repo.TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
                 TimeSpan.FromSeconds(ativo), TimeSpan.FromSeconds(recente), default)).Status);
         await AssertDadosPreservadosAsync(antes);
+        Assert.False(await _redis.GetDatabase().KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
     }
 
     [Fact]

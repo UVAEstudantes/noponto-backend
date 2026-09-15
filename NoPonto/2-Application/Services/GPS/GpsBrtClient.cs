@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
@@ -22,7 +23,11 @@ public sealed class GpsBrtClient
 
     public async Task<IReadOnlyList<PosicaoVeiculoDto>> BuscarPosicoesAsync(
         CancellationToken ct = default)
+        => (await BuscarResultadoAsync(ct)).Posicoes;
+
+    internal async Task<ResultadoFonteGps> BuscarResultadoAsync(CancellationToken ct = default)
     {
+        var cronometro = Stopwatch.StartNew();
         try
         {
             var resposta = await _http.GetFromJsonAsync<BrtRespostaDto>("", ct);
@@ -30,7 +35,7 @@ public sealed class GpsBrtClient
             if (resposta?.Veiculos is null || resposta.Veiculos.Count == 0)
             {
                 _logger.LogWarning("API BRT retornou resposta vazia.");
-                return [];
+                return ResultadoFonteGps.Vazio(cronometro.Elapsed);
             }
 
             var posicoes = resposta.Veiculos
@@ -49,12 +54,21 @@ public sealed class GpsBrtClient
                 "API BRT retornou {total} veículos, {validos} em operação",
                 resposta.Veiculos.Count, posicoes.Count);
 
-            return posicoes;
+            return ResultadoFonteGps.Sucesso(posicoes, cronometro.Elapsed);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Falha HTTP/transporte BRT após {totalMs}ms.", cronometro.Elapsed.TotalMilliseconds);
+            return ResultadoFonteGps.Falha("http_transporte", cronometro.Elapsed);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Falha ao consultar API GPS BRT");
-            return [];
+            return ResultadoFonteGps.Falha("inesperada", cronometro.Elapsed);
         }
     }
 

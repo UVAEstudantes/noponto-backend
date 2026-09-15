@@ -49,23 +49,33 @@ public sealed class PosicaoVeiculoPayloadWriter : IPosicaoVeiculoPayloadWriter
         if redis.call('TYPE', KEYS[4]).ok ~= 'string' then return FENCING end
         if redis.call('GET', KEYS[4]) ~= ARGV[1] then return FENCING end
 
+        -- A partir daqui o ownership foi comprovado. O recheck torna cada DEL
+        -- explicitamente fenced, embora nenhum outro cliente intercale comandos no Lua.
+        local function retornar_liberando_lock(codigo)
+            if redis.call('TYPE', KEYS[4]).ok == 'string'
+                and redis.call('GET', KEYS[4]) == ARGV[1] then
+                redis.call('DEL', KEYS[4])
+            end
+            return codigo
+        end
+
         local tipo_ts = redis.call('TYPE', KEYS[1]).ok
-        if tipo_ts ~= 'none' and tipo_ts ~= 'string' then return STATE end
+        if tipo_ts ~= 'none' and tipo_ts ~= 'string' then return retornar_liberando_lock(STATE) end
         local atual = nil
         if tipo_ts == 'string' then
             atual = inteiro(redis.call('GET', KEYS[1]), 1, 253402300799999)
-            if not atual then return STATE end
+            if not atual then return retornar_liberando_lock(STATE) end
         end
 
         local tipo_ativo = redis.call('TYPE', KEYS[2]).ok
         local tipo_recente = redis.call('TYPE', KEYS[3]).ok
-        if tipo_ativo ~= 'none' and tipo_ativo ~= 'hash' then return STATE end
-        if tipo_recente ~= 'none' and tipo_recente ~= 'hash' then return STATE end
-        if tipo_ts == 'none' and tipo_ativo ~= 'none' then return CLOSED end
+        if tipo_ativo ~= 'none' and tipo_ativo ~= 'hash' then return retornar_liberando_lock(STATE) end
+        if tipo_recente ~= 'none' and tipo_recente ~= 'hash' then return retornar_liberando_lock(STATE) end
+        if tipo_ts == 'none' and tipo_ativo ~= 'none' then return retornar_liberando_lock(CLOSED) end
 
         if atual then
-            if novo < atual then return OLDER end
-            if novo == atual then return EQUAL end
+            if novo < atual then return retornar_liberando_lock(OLDER) end
+            if novo == atual then return retornar_liberando_lock(EQUAL) end
         end
 
         -- Evita NOPERM depois do primeiro write; ACLs não mudam enquanto o Lua executa.
@@ -73,8 +83,9 @@ public sealed class PosicaoVeiculoPayloadWriter : IPosicaoVeiculoPayloadWriter
             or not redis.acl_check_cmd('HSET', KEYS[2], 'absexp', '-1', 'sldexp', '-1', 'data', ARGV[2])
             or not redis.acl_check_cmd('EXPIRE', KEYS[2], ARGV[4])
             or not redis.acl_check_cmd('HSET', KEYS[3], 'absexp', '-1', 'sldexp', '-1', 'data', ARGV[2])
-            or not redis.acl_check_cmd('EXPIRE', KEYS[3], ARGV[5]) then
-            return STATE
+            or not redis.acl_check_cmd('EXPIRE', KEYS[3], ARGV[5])
+            or not redis.acl_check_cmd('DEL', KEYS[4]) then
+            return retornar_liberando_lock(STATE)
         end
 
         -- Fase B: somente writes de formato/argumentos já validados; sem compensação.
@@ -83,7 +94,7 @@ public sealed class PosicaoVeiculoPayloadWriter : IPosicaoVeiculoPayloadWriter
         redis.call('EXPIRE', KEYS[2], ARGV[4])
         redis.call('HSET', KEYS[3], 'absexp', '-1', 'sldexp', '-1', 'data', ARGV[2])
         redis.call('EXPIRE', KEYS[3], ARGV[5])
-        return ACCEPTED
+        return retornar_liberando_lock(ACCEPTED)
         """;
 
     private readonly IConnectionMultiplexer _redis;

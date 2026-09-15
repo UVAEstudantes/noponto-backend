@@ -19,22 +19,31 @@ public sealed class GpsEtaClient
         _logger = logger;
     }
 
-    public async Task<Dictionary<string, (double EtaSegundos, string Confianca)>> PredizirLoteAsync(
+    public Task<Dictionary<string, (double EtaSegundos, string Confianca)>> PredizirLoteAsync(
         IEnumerable<PosicaoVeiculoDto> veiculos,
-        CancellationToken ct)
+        CancellationToken ct) => PredizirLoteAsync(veiculos, ct, null);
+
+    internal async Task<Dictionary<string, (double EtaSegundos, string Confianca)>> PredizirLoteAsync(
+        IEnumerable<PosicaoVeiculoDto> veiculos,
+        CancellationToken ct,
+        GpsCicloPerformance? performance)
     {
         var resultado = new Dictionary<string, (double, string)>(StringComparer.OrdinalIgnoreCase);
 
         if (DateTimeOffset.UtcNow < _proximaTentativa)
+        {
+            if (performance is not null)
+            {
+                performance.EtaCooldownIgnorado = 1;
+                performance.EtaVeiculosElegiveis = veiculos.Count(Elegivel);
+                performance.EtaChunksIgnoradosCooldown =
+                    (performance.EtaVeiculosElegiveis + ChunkSize - 1) / ChunkSize;
+            }
             return resultado;
+        }
 
         var elegíveis = veiculos
-            .Where(v =>
-                v.DistanciaProximaParadaMetros is > 10 and < 5000 &&
-                v.VelocidadeMedia.HasValue &&
-                v.VelocidadeMedia >= 0 &&
-                v.PosicaoNaRota is > 0 and < 1 &&
-                !string.IsNullOrEmpty(v.CodigoLinha))
+            .Where(Elegivel)
             .ToList();
 
         if (elegíveis.Count == 0)
@@ -56,35 +65,57 @@ public sealed class GpsEtaClient
             .Select(g => g.Select(x => x.v).ToList())
             .ToList();
 
+        if (performance is not null)
+        {
+            performance.EtaVeiculosElegiveis = elegíveis.Count;
+            performance.EtaChunksPlanejados = chunks.Count;
+        }
+
         try
         {
             foreach (var chunk in chunks)
             {
-                var payloadChunk = chunk.Select(v => new
+                var inicioRequisicao = System.Diagnostics.Stopwatch.GetTimestamp();
+                var resultadoRequisicao = ResultadoRequisicaoEta.Falha;
+                try
                 {
-                    linha            = v.CodigoLinha,
-                    hora_dia         = horaDia,
-                    dia_semana       = diaSemana,
-                    distancia_metros = v.DistanciaProximaParadaMetros!.Value,
-                    velocidade_media = v.VelocidadeMedia ?? 0,
-                    posicao_na_rota  = v.PosicaoNaRota!.Value,
-                }).ToList();
+                    var payloadChunk = chunk.Select(v => new
+                    {
+                        linha            = v.CodigoLinha,
+                        hora_dia         = horaDia,
+                        dia_semana       = diaSemana,
+                        distancia_metros = v.DistanciaProximaParadaMetros!.Value,
+                        velocidade_media = v.VelocidadeMedia ?? 0,
+                        posicao_na_rota  = v.PosicaoNaRota!.Value,
+                    }).ToList();
 
-                var resposta = await _http.PostAsJsonAsync("/eta/batch", payloadChunk, ct);
-                resposta.EnsureSuccessStatusCode();
+                    var resposta = await _http.PostAsJsonAsync("/eta/batch", payloadChunk, ct);
+                    resposta.EnsureSuccessStatusCode();
 
-                var predicoes = await resposta.Content
-                    .ReadFromJsonAsync<List<EtaRespostaDto>>(jsonOptions, cancellationToken: ct);
+                    var predicoes = await resposta.Content
+                        .ReadFromJsonAsync<List<EtaRespostaDto>>(jsonOptions, cancellationToken: ct);
 
-                if (predicoes is null || predicoes.Count != chunk.Count)
-                    continue;
+                    if (predicoes is null || predicoes.Count != chunk.Count)
+                        continue;
 
-                for (int i = 0; i < chunk.Count; i++)
+                    for (int i = 0; i < chunk.Count; i++)
+                    {
+                        resultado[chunk[i].Ordem] = (
+                            predicoes[i].EtaSegundos,
+                            predicoes[i].Confianca
+                        );
+                    }
+                    resultadoRequisicao = ResultadoRequisicaoEta.Sucesso;
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
-                    resultado[chunk[i].Ordem] = (
-                        predicoes[i].EtaSegundos,
-                        predicoes[i].Confianca
-                    );
+                    resultadoRequisicao = ResultadoRequisicaoEta.Timeout;
+                    throw;
+                }
+                finally
+                {
+                    performance?.RegistrarEtaRequisicao(resultadoRequisicao,
+                        System.Diagnostics.Stopwatch.GetElapsedTime(inicioRequisicao));
                 }
             }
 
@@ -104,6 +135,13 @@ public sealed class GpsEtaClient
             return resultado;
         }
     }
+
+    private static bool Elegivel(PosicaoVeiculoDto v) =>
+        v.DistanciaProximaParadaMetros is > 10 and < 5000 &&
+        v.VelocidadeMedia.HasValue &&
+        v.VelocidadeMedia >= 0 &&
+        v.PosicaoNaRota is > 0 and < 1 &&
+        !string.IsNullOrEmpty(v.CodigoLinha);
 
     private sealed class EtaRespostaDto
     {

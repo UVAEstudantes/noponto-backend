@@ -154,7 +154,16 @@ builder.Services.AdicionarPostgresCompartilhado(connectionString);
 builder.Services.AddHttpClient<GpsSppoClient>(client =>
 {
     client.BaseAddress = gpsApiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(gpsHttpTimeoutSeconds);
+    // O timeout SPPO pertence ao coletor dedicado. O handler tipado nao deve
+    // encerrar a transferencia antes do budget proprio configurado nele.
+    client.Timeout = Timeout.InfiniteTimeSpan;
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AutomaticDecompression =
+        System.Net.DecompressionMethods.GZip |
+        System.Net.DecompressionMethods.Deflate |
+        System.Net.DecompressionMethods.Brotli
 });
 
 // GPS BRT
@@ -304,6 +313,9 @@ builder.Services
         o => o.IntervaloSegundos > 0,
         "GpsPolling:IntervaloSegundos deve ser > 0")
     .Validate(
+        o => o.IntervaloBrtSegundos > 0,
+        "GpsPolling:IntervaloBrtSegundos deve ser > 0")
+    .Validate(
         o => o.TtlAtivoSegundos > 0,
         "GpsPolling:TtlAtivoSegundos deve ser > 0")
     .Validate(
@@ -323,6 +335,19 @@ builder.Services
         "GpsPolling:DistanciaMaximaRotaMetros deve ser > 0")
     .Validate(o => o.GrauParalelismoViagemObservada > 0,
         "GpsPolling:GrauParalelismoViagemObservada deve ser > 0")
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<GpsSppoCollectorOptions>()
+    .Bind(builder.Configuration.GetSection(GpsSppoCollectorOptions.Secao))
+    .Validate(o => o.TimeoutSegundos > 0,
+        "GpsSppoCollector:TimeoutSegundos deve ser > 0")
+    .Validate(o => o.JanelaInicialSegundos > 0,
+        "GpsSppoCollector:JanelaInicialSegundos deve ser > 0")
+    .Validate(o => o.OverlapSegundos >= 0,
+        "GpsSppoCollector:OverlapSegundos deve ser >= 0")
+    .Validate(o => o.IntervaloEntreColetasSegundos > 0,
+        "GpsSppoCollector:IntervaloEntreColetasSegundos deve ser > 0")
     .ValidateOnStart();
 
 // --------------------------------------------------------------------
@@ -364,6 +389,8 @@ builder.Services.AddHostedService<HistoricoPassagemWorker>();
 
 builder.Services.AddSignalR();
 
+builder.Services.AddSingleton<GpsSppoSnapshotStore>();
+builder.Services.AddHostedService<GpsSppoCollectorService>();
 builder.Services.AddHostedService<GpsPollingService>();
 
 //builder.Services.AddScoped<ImportacaoTremService>();

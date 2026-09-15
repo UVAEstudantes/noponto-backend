@@ -41,6 +41,239 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
         catch (Exception) { return ResultadoBuscaItinerario.InfrastructureFailure(); }
     }
 
+    public async Task<ResultadoMatchingCombinado> BuscarMatchingCombinadoAsync(
+        string codigoLinha,
+        Guid itinerarioAnteriorId,
+        double latitude,
+        double longitude,
+        double bearing,
+        double distanciaMaximaMetros,
+        FaixaProjecao faixa,
+        CancellationToken cancellationToken = default)
+    {
+        if (!faixa.Valida)
+            return FalhaCombinada();
+
+        const string sql = """
+            WITH veiculo AS (
+                SELECT
+                    ST_SetSRID(ST_MakePoint(@lon, @lat), 4326)::geography AS ponto,
+                    ST_SetSRID(ST_MakePoint(@lon, @lat), 4326)            AS ponto_geom
+            ),
+            rotas_global AS (
+                SELECT i."Id", i."Geometria"
+                FROM "Itinerarios" i
+                JOIN "Sentidos" s ON s."Id" = i."SentidoId"
+                JOIN "Linhas"   l ON l."Id" = s."LinhaId"
+                CROSS JOIN veiculo v
+                WHERE l."Codigo" = @codigo
+            ),
+            candidatos_global AS (
+                SELECT r."Id", r."Geometria",
+                    ST_Length(r."Geometria"::geography) AS comprimento_metros,
+                    ST_Distance(v.ponto, r."Geometria"::geography) AS distancia_rota_metros,
+                    ST_LineLocatePoint(r."Geometria", v.ponto_geom) AS posicao_na_rota
+                FROM rotas_global r
+                CROSS JOIN veiculo v
+                WHERE ST_Distance(v.ponto, r."Geometria"::geography) <= @dist_max
+            ),
+            bearing_global AS (
+                SELECT c.*,
+                    degrees(ST_Azimuth(
+                        ST_LineInterpolatePoint(
+                            c."Geometria", GREATEST(0.0, c.posicao_na_rota - 0.025)
+                        )::geography,
+                        ST_LineInterpolatePoint(
+                            c."Geometria", LEAST(1.0, c.posicao_na_rota + 0.025)
+                        )::geography
+                    )) AS bearing_local
+                FROM candidatos_global c
+            ),
+            diff_global AS (
+                SELECT bg.*,
+                    ABS(MOD((bg.bearing_local - @bearing + 540.0)::numeric, 360.0) - 180.0) AS diff_bearing
+                FROM bearing_global bg
+            ),
+            score_global AS (
+                SELECT dg.*,
+                    (dg.diff_bearing / 80.0) + (dg.distancia_rota_metros / @dist_max) AS score
+                FROM diff_global dg
+                WHERE dg.diff_bearing < 80
+            ),
+            global_escolhido AS (
+                SELECT sg.*,
+                    ST_LineInterpolatePoint(sg."Geometria", sg.posicao_na_rota) AS ponto_rota
+                FROM score_global sg
+                ORDER BY sg.score ASC
+                LIMIT 1
+            ),
+            proxima_parada_global AS (
+                SELECT p."Nome" AS parada_nome,
+                    ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros
+                FROM "ParadasItinerario" pi
+                JOIN "Paradas" p ON p."Id" = pi."ParadaId"
+                JOIN global_escolhido ge ON ge."Id" = pi."ItinerarioId"
+                CROSS JOIN veiculo v
+                WHERE pi."PosicaoLinha" > ge.posicao_na_rota
+                ORDER BY pi."PosicaoLinha" ASC
+                LIMIT 1
+            ),
+            rota_anterior AS (
+                SELECT i."Id", i."Geometria"
+                FROM "Itinerarios" i
+                JOIN "Sentidos" s ON s."Id" = i."SentidoId"
+                JOIN "Linhas"   l ON l."Id" = s."LinhaId"
+                CROSS JOIN veiculo v
+                WHERE l."Codigo" = @codigo
+                  AND i."Id" = @itinerario_id
+            ),
+            geometria_anterior AS (
+                SELECT r.*,
+                    ST_LineSubstring(r."Geometria", @fracao_min, @fracao_max) AS geometria_projecao
+                FROM rota_anterior r
+            ),
+            candidatos_anterior AS (
+                SELECT r."Id", r."Geometria",
+                    ST_Length(r."Geometria"::geography) AS comprimento_metros,
+                    ST_Distance(v.ponto, r.geometria_projecao::geography) AS distancia_rota_metros,
+                    @fracao_min + ST_LineLocatePoint(r.geometria_projecao, v.ponto_geom)
+                        * (@fracao_max - @fracao_min) AS posicao_na_rota
+                FROM geometria_anterior r
+                CROSS JOIN veiculo v
+                WHERE ST_Distance(v.ponto, r.geometria_projecao::geography) <= @dist_max
+            ),
+            bearing_anterior AS (
+                SELECT c.*,
+                    degrees(ST_Azimuth(
+                        ST_LineInterpolatePoint(
+                            c."Geometria", GREATEST(0.0, c.posicao_na_rota - 0.025)
+                        )::geography,
+                        ST_LineInterpolatePoint(
+                            c."Geometria", LEAST(1.0, c.posicao_na_rota + 0.025)
+                        )::geography
+                    )) AS bearing_local
+                FROM candidatos_anterior c
+            ),
+            diff_anterior AS (
+                SELECT ba.*,
+                    ABS(MOD((ba.bearing_local - @bearing + 540.0)::numeric, 360.0) - 180.0) AS diff_bearing
+                FROM bearing_anterior ba
+            ),
+            score_anterior AS (
+                SELECT da.*,
+                    (da.diff_bearing / 80.0) + (da.distancia_rota_metros / @dist_max) AS score
+                FROM diff_anterior da
+                WHERE da.diff_bearing < 80
+            ),
+            anterior_escolhido AS (
+                SELECT sa.*,
+                    ST_LineInterpolatePoint(sa."Geometria", sa.posicao_na_rota) AS ponto_rota
+                FROM score_anterior sa
+                ORDER BY sa.score ASC
+                LIMIT 1
+            ),
+            proxima_parada_anterior AS (
+                SELECT p."Nome" AS parada_nome,
+                    ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros
+                FROM "ParadasItinerario" pi
+                JOIN "Paradas" p ON p."Id" = pi."ParadaId"
+                JOIN anterior_escolhido ae ON ae."Id" = pi."ItinerarioId"
+                CROSS JOIN veiculo v
+                WHERE pi."PosicaoLinha" > ae.posicao_na_rota
+                ORDER BY pi."PosicaoLinha" ASC
+                LIMIT 1
+            )
+            SELECT
+                'GLOBAL'::text AS ramo,
+                ge."Id" AS itinerario_id,
+                ge.posicao_na_rota,
+                ge.comprimento_metros,
+                ge.distancia_rota_metros,
+                ge.bearing_local,
+                ST_Y(ge.ponto_rota) AS lat_rota,
+                ST_X(ge.ponto_rota) AS lon_rota,
+                ppg.parada_nome,
+                ppg.distancia_parada_metros
+            FROM global_escolhido ge
+            LEFT JOIN proxima_parada_global ppg ON true
+            UNION ALL
+            SELECT
+                'ANTERIOR'::text AS ramo,
+                ae."Id" AS itinerario_id,
+                ae.posicao_na_rota,
+                ae.comprimento_metros,
+                ae.distancia_rota_metros,
+                ae.bearing_local,
+                ST_Y(ae.ponto_rota) AS lat_rota,
+                ST_X(ae.ponto_rota) AS lon_rota,
+                ppa.parada_nome,
+                ppa.distancia_parada_metros
+            FROM anterior_escolhido ae
+            LEFT JOIN proxima_parada_anterior ppa ON true
+            """;
+
+        try
+        {
+            await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.Parameters.AddWithValue("itinerario_id", itinerarioAnteriorId);
+            cmd.Parameters.AddWithValue("lat", latitude);
+            cmd.Parameters.AddWithValue("lon", longitude);
+            cmd.Parameters.AddWithValue("codigo", codigoLinha);
+            cmd.Parameters.AddWithValue("bearing", bearing);
+            cmd.Parameters.AddWithValue("dist_max", distanciaMaximaMetros);
+            cmd.Parameters.AddWithValue("fracao_min", faixa.Min);
+            cmd.Parameters.AddWithValue("fracao_max", faixa.Max);
+
+            ResultadoBuscaItinerario global = ResultadoBuscaItinerario.NotEligible();
+            ResultadoBuscaItinerario anterior = ResultadoBuscaItinerario.NotEligible();
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var resultado = ResultadoBuscaItinerario.Found(LerRota(reader));
+                switch (reader.GetString(reader.GetOrdinal("ramo")))
+                {
+                    case "GLOBAL": global = resultado; break;
+                    case "ANTERIOR": anterior = resultado; break;
+                    default: throw new InvalidOperationException("Ramo inesperado no matching combinado.");
+                }
+            }
+
+            return new ResultadoMatchingCombinado(global, anterior);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Falha no matching combinado experimental para linha {linha} em ({lat},{lon})",
+                codigoLinha, latitude, longitude);
+            return FalhaCombinada();
+        }
+    }
+
+    private static ResultadoMatchingCombinado FalhaCombinada() => new(
+        ResultadoBuscaItinerario.InfrastructureFailure(),
+        ResultadoBuscaItinerario.InfrastructureFailure());
+
+    private static EnriquecimentoRotaDto LerRota(NpgsqlDataReader reader) => new()
+    {
+        ItinerarioId = reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+        PosicaoNaRota = reader.GetDouble(reader.GetOrdinal("posicao_na_rota")),
+        ComprimentoRotaMetros = reader.GetDouble(reader.GetOrdinal("comprimento_metros")),
+        DistanciaARotaMetros = reader.GetDouble(reader.GetOrdinal("distancia_rota_metros")),
+        LatitudeProjetada = reader.IsDBNull(reader.GetOrdinal("lat_rota"))
+            ? null : reader.GetDouble(reader.GetOrdinal("lat_rota")),
+        LongitudeProjetada = reader.IsDBNull(reader.GetOrdinal("lon_rota"))
+            ? null : reader.GetDouble(reader.GetOrdinal("lon_rota")),
+        BearingLocal = reader.IsDBNull(reader.GetOrdinal("bearing_local"))
+            ? null : reader.GetDouble(reader.GetOrdinal("bearing_local")),
+        ProximaParadaNome = reader.IsDBNull(reader.GetOrdinal("parada_nome"))
+            ? null : reader.GetString(reader.GetOrdinal("parada_nome")),
+        DistanciaProximaParadaMetros = reader.IsDBNull(reader.GetOrdinal("distancia_parada_metros"))
+            ? null : reader.GetDouble(reader.GetOrdinal("distancia_parada_metros")),
+    };
+
     // Núcleo único: a busca global mantém seus filtros/score/ORDER BY/LIMIT.
     private async Task<EnriquecimentoRotaDto?> BuscarMatchingAsync(
         string codigoLinha,

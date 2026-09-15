@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using NoPonto.Application.GPS;
@@ -62,16 +63,29 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
         var token = Guid.NewGuid().ToString("N");
         IDatabase? db = null;
         var lockAdquirido = false;
+        var performance = GpsCommitPerformanceContext.Current;
+        var tentativasLock = 0;
+        var lockLiberadoPeloCommitLua = false;
 
         try
         {
             db = _redis.GetDatabase();
-            for (var tentativa = 0; tentativa < _tentativasLock && !ct.IsCancellationRequested; tentativa++)
+            var inicioLock = Stopwatch.GetTimestamp();
+            try
             {
-                lockAdquirido = await db.StringSetAsync(chaveLock, token, _ttlLock, When.NotExists)
-                    .ConfigureAwait(false);
-                if (lockAdquirido) break;
-                await Task.Delay(EsperaEntreTentativasMs, ct).ConfigureAwait(false);
+                for (var tentativa = 0; tentativa < _tentativasLock && !ct.IsCancellationRequested; tentativa++)
+                {
+                    tentativasLock++;
+                    lockAdquirido = await db.StringSetAsync(chaveLock, token, _ttlLock, When.NotExists)
+                        .ConfigureAwait(false);
+                    if (lockAdquirido) break;
+                    await Task.Delay(EsperaEntreTentativasMs, ct).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                performance?.RegistrarLock(tentativasLock, lockAdquirido,
+                    Stopwatch.GetElapsedTime(inicioLock));
             }
 
             if (!lockAdquirido)
@@ -80,13 +94,41 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
                 return PosicaoVeiculoCacheResultado.InfrastructureFailure;
             }
 
-            var json = JsonSerializer.Serialize(posicao, JsonOptions);
+            string? json = null;
+            var inicioSerializacao = Stopwatch.GetTimestamp();
+            try
+            {
+                json = JsonSerializer.Serialize(posicao, JsonOptions);
+            }
+            finally
+            {
+                performance?.RegistrarSerializacao(
+                    Stopwatch.GetElapsedTime(inicioSerializacao), json?.Length ?? 0);
+            }
             var ttlControle = ttlRecente > ttlAtivo ? ttlRecente : ttlAtivo;
-            var status = await _payloadWriter.TentarCommitAtomicoAsync(
-                ChaveVeiculoTimestamp(ordem), GpsPollingService.ChaveVeiculoAtivo(ordem),
-                GpsPollingService.ChaveVeiculoRecente(ordem), chaveLock,
-                token, json, timestampGps.ToUnixTimeMilliseconds(), ttlAtivo, ttlRecente, ttlControle, ct
-            ).ConfigureAwait(false);
+            PosicaoVeiculoCommitStatus status;
+            var inicioCommitLua = Stopwatch.GetTimestamp();
+            try
+            {
+                status = await _payloadWriter.TentarCommitAtomicoAsync(
+                    ChaveVeiculoTimestamp(ordem), GpsPollingService.ChaveVeiculoAtivo(ordem),
+                    GpsPollingService.ChaveVeiculoRecente(ordem), chaveLock,
+                    token, json, timestampGps.ToUnixTimeMilliseconds(), ttlAtivo, ttlRecente, ttlControle, ct
+                ).ConfigureAwait(false);
+            }
+            finally
+            {
+                performance?.RegistrarCommitLua(Stopwatch.GetElapsedTime(inicioCommitLua));
+            }
+
+            lockLiberadoPeloCommitLua = status is
+                PosicaoVeiculoCommitStatus.Accepted or
+                PosicaoVeiculoCommitStatus.RejectedOlder or
+                PosicaoVeiculoCommitStatus.RejectedEqual or
+                PosicaoVeiculoCommitStatus.FailClosed or
+                PosicaoVeiculoCommitStatus.InvalidState;
+            if (lockLiberadoPeloCommitLua)
+                performance?.RegistrarUnlockNoLua();
 
             switch (status)
             {
@@ -108,12 +150,20 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
         }
         finally
         {
-            if (lockAdquirido && db is not null)
+            if (lockAdquirido && !lockLiberadoPeloCommitLua && db is not null)
             {
                 try
                 {
-                    await db.ScriptEvaluateAsync(ScriptLiberarLock,
-                        new RedisKey[] { chaveLock }, new RedisValue[] { token }).ConfigureAwait(false);
+                    var inicioUnlock = Stopwatch.GetTimestamp();
+                    try
+                    {
+                        await db.ScriptEvaluateAsync(ScriptLiberarLock,
+                            new RedisKey[] { chaveLock }, new RedisValue[] { token }).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        performance?.RegistrarUnlock(Stopwatch.GetElapsedTime(inicioUnlock));
+                    }
                 }
                 catch (Exception ex)
                 {

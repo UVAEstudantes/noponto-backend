@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace NoPonto.Application.GPS;
@@ -46,14 +48,7 @@ public sealed class GpsSppoClient
         DateTimeOffset de,
         DateTimeOffset ate,
         CancellationToken cancellationToken = default)
-    {
-        // Ignora o parâmetro "de" — usamos sempre uma janela fixa retroativa
-        // para garantir que posições com atraso de envio não sejam perdidas.
-        // O deduplicador no PollingService já descarta duplicatas.
-        _ = de;
-
-        return await BuscarComJanelaAsync(ate, cancellationToken);
-    }
+        => (await BuscarResultadoPorIntervaloAsync(de, ate, cancellationToken)).Posicoes;
 
     /// <summary>
     /// Busca usando janela retroativa a partir de "referencia".
@@ -63,9 +58,28 @@ public sealed class GpsSppoClient
         DateTimeOffset referencia,
         CancellationToken cancellationToken = default,
         int janelaSegundos = 60)
+        => (await BuscarResultadoComJanelaAsync(referencia, cancellationToken, janelaSegundos)).Posicoes;
+
+    internal async Task<ResultadoFonteGps> BuscarResultadoComJanelaAsync(
+        DateTimeOffset referencia,
+        CancellationToken cancellationToken = default,
+        int janelaSegundos = 60)
     {
         var inicio = referencia.AddSeconds(-janelaSegundos);
         var fim    = referencia;
+
+        return await BuscarResultadoPorIntervaloAsync(inicio, fim, cancellationToken);
+    }
+
+    internal async Task<ResultadoFonteGps> BuscarResultadoPorIntervaloAsync(
+        DateTimeOffset inicio,
+        DateTimeOffset fim,
+        CancellationToken cancellationToken = default)
+    {
+        if (fim <= inicio)
+            throw new ArgumentOutOfRangeException(nameof(fim), "O fim da janela SPPO deve ser posterior ao inicio.");
+
+        var janelaSegundos = (fim - inicio).TotalSeconds;
 
         // ATENÇÃO: novo endpoint espera UTC em ISO 8601, não mais hora local.
         var dataInicial = inicio.ToUniversalTime().ToString(FormatoData, CultureInfo.InvariantCulture);
@@ -74,22 +88,69 @@ public sealed class GpsSppoClient
 
         _logger.LogDebug("Buscando GPS SPPO janela {janela}s: {url}", janelaSegundos, url);
 
+        var cronometro = Stopwatch.StartNew();
+        long? contentLength = null;
+        int? statusCode = null;
+        string? contentEncoding = null;
+        using var timeoutDaOperacao = _http.Timeout == Timeout.InfiniteTimeSpan
+            ? null
+            : new CancellationTokenSource(_http.Timeout);
+        using var cancelamento = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, timeoutDaOperacao?.Token ?? CancellationToken.None);
+
         try
         {
-            var raw = await _http.GetFromJsonAsync<List<PosicaoApiDto>>(url, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var resposta = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead,
+                cancelamento.Token);
+            statusCode = (int)resposta.StatusCode;
+            contentLength = resposta.Content.Headers.ContentLength;
+            contentEncoding = resposta.Content.Headers.ContentEncoding.Count == 0
+                ? "identity/ausente"
+                : string.Join(',', resposta.Content.Headers.ContentEncoding);
+
+            _logger.LogDebug(
+                "SPPO headers recebidos: janela [{inicio}, {fim}] ({janela}s), status {status}, " +
+                "headers em {headersMs}ms, Content-Length {contentLength}, Content-Encoding {contentEncoding}",
+                inicio, fim, janelaSegundos, statusCode, cronometro.Elapsed.TotalMilliseconds, contentLength,
+                contentEncoding);
+
+            if (!resposta.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "SPPO respondeu HTTP {status} para janela [{inicio}, {fim}] após {totalMs}ms; " +
+                    "Content-Length {contentLength}, Content-Encoding {contentEncoding}",
+                    statusCode, inicio, fim, cronometro.Elapsed.TotalMilliseconds, contentLength, contentEncoding);
+                return ResultadoFonteGps.Falha($"http_{statusCode}", cronometro.Elapsed);
+            }
+
+            var raw = await resposta.Content.ReadFromJsonAsync<List<PosicaoApiDto>>(cancelamento.Token);
 
             if (raw is null || raw.Count == 0)
             {
-                _logger.LogWarning("API GPS retornou resposta vazia para janela [{inicio}, {fim}]", inicio, fim);
-                return [];
+                _logger.LogWarning(
+                    "SPPO respondeu 200 sem posições para janela [{inicio}, {fim}] após {totalMs}ms; " +
+                    "Content-Length {contentLength}, Content-Encoding {contentEncoding}",
+                    inicio, fim, cronometro.Elapsed.TotalMilliseconds, contentLength, contentEncoding);
+                return ResultadoFonteGps.Vazio(cronometro.Elapsed);
             }
 
             var normalizadas = new List<PosicaoVeiculoDto>(raw.Count);
             var foraDeOperacao = 0;
             var invalidas = 0;
+            DateTimeOffset? watermarkFonte = null;
+            var agoraWatermark = DateTimeOffset.UtcNow;
 
             foreach (var dto in raw)
             {
+                if (GpsLeituraValidator.TimestampValido(
+                        dto.DataHoraServidor, agoraWatermark, out var timestampServidorFonte)
+                    && timestampServidorFonte <= fim
+                    && (!watermarkFonte.HasValue || timestampServidorFonte > watermarkFonte.Value))
+                {
+                    watermarkFonte = timestampServidorFonte;
+                }
+
                 var normalizado = Normalizar(dto, out var motivo);
 
                 if (normalizado is not null)
@@ -107,16 +168,52 @@ public sealed class GpsSppoClient
             }
 
             _logger.LogInformation(
-                "API GPS retornou {total} posições (janela {janela}s): {ativas} ativas, " +
-                "{fora} fora de operação, {inv} inválidas",
-                raw.Count, janelaSegundos, normalizadas.Count, foraDeOperacao, invalidas);
+                "SPPO retornou {total} registros (janela {janela}s): {ativas} normalizadas, " +
+                "{fora} fora de operação, {inv} inválidas; status {status}; total {totalMs}ms; " +
+                "Content-Length {contentLength}, Content-Encoding {contentEncoding}",
+                raw.Count, janelaSegundos, normalizadas.Count, foraDeOperacao, invalidas,
+                statusCode, cronometro.Elapsed.TotalMilliseconds, contentLength, contentEncoding);
 
-            return normalizadas;
+            return ResultadoFonteGps.Sucesso(normalizadas, cronometro.Elapsed, watermarkFonte);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Consulta SPPO cancelada pelo chamador após {totalMs}ms.",
+                cronometro.Elapsed.TotalMilliseconds);
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogError(ex,
+                "Timeout/cancelamento interno ao consultar SPPO após {totalMs}ms; status {status}; " +
+                "Content-Length {contentLength}; Content-Encoding {contentEncoding}; janela [{inicio}, {fim}]",
+                cronometro.Elapsed.TotalMilliseconds, statusCode, contentLength, contentEncoding, inicio, fim);
+            return ResultadoFonteGps.Falha("timeout_http", cronometro.Elapsed);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex,
+                "JSON inválido na resposta SPPO; status {status}; Content-Length {contentLength}; Content-Encoding {contentEncoding}; " +
+                "janela [{inicio}, {fim}] após {totalMs}ms",
+                statusCode, contentLength, contentEncoding, inicio, fim, cronometro.Elapsed.TotalMilliseconds);
+            return ResultadoFonteGps.Falha("json_invalido", cronometro.Elapsed);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex,
+                "Falha HTTP/transporte SPPO; status {status}; Content-Length {contentLength}; Content-Encoding {contentEncoding}; " +
+                "janela [{inicio}, {fim}] após {totalMs}ms",
+                ex.StatusCode is { } statusHttp ? (int)statusHttp : statusCode,
+                contentLength, contentEncoding, inicio, fim, cronometro.Elapsed.TotalMilliseconds);
+            return ResultadoFonteGps.Falha("http_transporte", cronometro.Elapsed);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha ao consultar API GPS SPPO");
-            return [];
+            _logger.LogError(ex,
+                "Falha inesperada ao ler resposta SPPO; status {status}; Content-Length {contentLength}; Content-Encoding {contentEncoding}; " +
+                "janela [{inicio}, {fim}] após {totalMs}ms",
+                statusCode, contentLength, contentEncoding, inicio, fim, cronometro.Elapsed.TotalMilliseconds);
+            return ResultadoFonteGps.Falha("inesperada", cronometro.Elapsed);
         }
     }
 
@@ -132,7 +229,6 @@ public sealed class GpsSppoClient
     {
         if (string.IsNullOrWhiteSpace(dto.Ordem))
         {
-            _logger.LogWarning("Posição SPPO ignorada: id_veiculo ausente");
             motivo = MotivoDescarte.Invalida;
             return null;
         }
@@ -147,9 +243,6 @@ public sealed class GpsSppoClient
             !TryParseDecimalBr(dto.Longitude, out var lon) ||
             !GpsLeituraValidator.CoordenadaValida(lat, lon))
         {
-            _logger.LogWarning(
-                "Coordenada inválida/sentinela para veículo {ordem}: lat={lat} lon={lon}",
-                dto.Ordem, dto.Latitude, dto.Longitude);
             motivo = MotivoDescarte.Invalida;
             return null;
         }
@@ -157,10 +250,6 @@ public sealed class GpsSppoClient
         var agora = DateTimeOffset.UtcNow;
         if (!GpsLeituraValidator.TimestampValido(dto.DataHora, agora, out var timestampGps))
         {
-            _logger.LogWarning(
-                "Timestamp GPS ausente/inválido/futuro para veículo {ordem} — leitura descartada " +
-                "(não é substituída por UtcNow).",
-                dto.Ordem);
             motivo = MotivoDescarte.SemTimestampConfiavel;
             return null;
         }
@@ -181,6 +270,8 @@ public sealed class GpsSppoClient
             Velocidade        = velocidade,
             TimestampGps      = timestampGps,
             TimestampServidor = timestampServidor,
+            TimestampEnvioFonte = dto.DataHoraEnvio,
+            TimestampServidorFonte = dto.DataHoraServidor,
         };
     }
 

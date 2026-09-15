@@ -154,6 +154,14 @@ public sealed record PosicaoVeiculoDto
     public DateTimeOffset TimestampGps { get; init; }
     public DateTimeOffset TimestampServidor { get; init; }
 
+    // Metadados internos da fonte. Nao fazem parte do contrato HTTP nem do
+    // payload persistido no Redis nesta etapa.
+    [JsonIgnore]
+    public DateTimeOffset? TimestampEnvioFonte { get; init; }
+
+    [JsonIgnore]
+    public DateTimeOffset? TimestampServidorFonte { get; init; }
+
     // ── Posição anterior (para interpolação linear simples) ───────────────────
 
     public double? LatitudeAnterior { get; init; }

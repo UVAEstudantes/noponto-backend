@@ -51,9 +51,14 @@ public sealed class GpsEnriquecimentoService
         _logger      = logger;
     }
 
-    public async Task<PosicaoVeiculoDto> EnriquecerAsync(
+    public Task<PosicaoVeiculoDto> EnriquecerAsync(
         PosicaoVeiculoDto posicao,
-        CancellationToken ct)
+        CancellationToken ct) => EnriquecerAsync(posicao, ct, null);
+
+    internal async Task<PosicaoVeiculoDto> EnriquecerAsync(
+        PosicaoVeiculoDto posicao,
+        CancellationToken ct,
+        GpsCicloPerformance? performance)
     {
         // ── 1. Bearing e velocidade ───────────────────────────────────────────
         double? bearing     = CalcularBearingConfiavel(posicao);
@@ -92,16 +97,61 @@ public sealed class GpsEnriquecimentoService
 
         // ── 2. Busca rota via PostGIS ─────────────────────────────────────────
         EnriquecimentoRotaDto? rota = null;
+        ResultadoMatchingCombinado? matchingCombinado = null;
+        ItinerarioConfirmado? historicoParaCombinado = null;
+        FaixaProjecao? faixaCandidata = null;
 
         if (bearing.HasValue)
         {
-            rota = await _repositorio.BuscarEnriquecimentoAsync(
-                posicao.CodigoLinha,
-                posicao.Latitude,
-                posicao.Longitude,
-                bearing.Value,
-                _opcoes.DistanciaMaximaRotaMetros,
-                ct);
+            if (_itinerarioAtual.TryGetValue(posicao.Ordem, out historicoParaCombinado)
+                && historicoParaCombinado.Rota is not null)
+                faixaCandidata = CalcularFaixaProjecao(posicao, historicoParaCombinado);
+
+            if (faixaCandidata is { } faixaValida
+                && historicoParaCombinado?.Rota is { } rotaHistorica)
+            {
+                var inicioMatching = System.Diagnostics.Stopwatch.GetTimestamp();
+                try
+                {
+                    matchingCombinado = await _repositorio.BuscarMatchingCombinadoAsync(
+                        posicao.CodigoLinha, rotaHistorica.ItinerarioId,
+                        posicao.Latitude, posicao.Longitude, bearing.Value,
+                        _opcoes.DistanciaMaximaRotaMetros, faixaValida, ct);
+                }
+                finally
+                {
+                    performance?.RegistrarMatchingCombinado(
+                        System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatching),
+                        matchingCombinado);
+                }
+
+                rota = matchingCombinado?.Global.Status == StatusBuscaItinerario.Found
+                    ? matchingCombinado.Global.Rota
+                    : null;
+                if (matchingCombinado?.Global.Status == StatusBuscaItinerario.InfrastructureFailure)
+                    _logger.LogWarning(
+                        "Veiculo {ordem}: falha no matching combinado; sem matching neste ciclo.",
+                        posicao.Ordem);
+            }
+            else
+            {
+                var inicioMatching = System.Diagnostics.Stopwatch.GetTimestamp();
+                try
+                {
+                    rota = await _repositorio.BuscarEnriquecimentoAsync(
+                        posicao.CodigoLinha,
+                        posicao.Latitude,
+                        posicao.Longitude,
+                        bearing.Value,
+                        _opcoes.DistanciaMaximaRotaMetros,
+                        ct);
+                }
+                finally
+                {
+                    performance?.RegistrarMatchingGlobal(
+                        System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatching));
+                }
+            }
         }
         else if (_itinerarioAtual.TryGetValue(posicao.Ordem, out var semBearing))
         {
@@ -110,19 +160,63 @@ public sealed class GpsEnriquecimentoService
         }
 
         // Reprojeta o confirmado com continuidade, inclusive quando vence a busca global.
-        if (rota is not null && RotaValida(rota)
-            && _itinerarioAtual.TryGetValue(posicao.Ordem, out var confirmadoAnterior)
-            && confirmadoAnterior.Rota is { } rotaAnterior)
+        var rotaGlobalValida = rota is not null && RotaValida(rota);
+        ItinerarioConfirmado? confirmadoAnterior = null;
+        var temHistoricoConfirmado = rotaGlobalValida
+            && _itinerarioAtual.TryGetValue(posicao.Ordem, out confirmadoAnterior)
+            && confirmadoAnterior.Rota is { };
+        if (rotaGlobalValida && !temHistoricoConfirmado)
+            performance?.RegistrarMatchingGlobalSemHistorico();
+
+        if (rotaGlobalValida && rota is not null && temHistoricoConfirmado
+            && confirmadoAnterior!.Rota is { } rotaAnterior)
         {
             var mesmoItinerario = rota.ItinerarioId == rotaAnterior.ItinerarioId;
+            performance?.RegistrarMatchingGlobalComHistorico(mesmoItinerario);
             // A 2.2 reinicia a referência quando o comprimento da geometria muda.
             var faixa = mesmoItinerario && rota.ComprimentoRotaMetros != rotaAnterior.ComprimentoRotaMetros
                 ? null : CalcularFaixaProjecao(posicao, confirmadoAnterior);
             if (!mesmoItinerario || faixa.HasValue)
             {
-                var resultado = await _repositorio.BuscarEnriquecimentoDoItinerarioAsync(
-                    posicao.CodigoLinha, rotaAnterior.ItinerarioId, posicao.Latitude, posicao.Longitude,
-                    bearing!.Value, _opcoes.DistanciaMaximaRotaMetros, ct, faixa);
+                ResultadoBuscaItinerario resultado;
+                var podeUsarAnteriorCombinado = mesmoItinerario
+                    && faixa.HasValue
+                    && matchingCombinado is not null
+                    && historicoParaCombinado?.Rota?.ItinerarioId == rotaAnterior.ItinerarioId
+                    && faixaCandidata == faixa;
+                if (podeUsarAnteriorCombinado)
+                {
+                    resultado = matchingCombinado!.Anterior;
+                    performance?.RegistrarContinuidadeSemSegundaQuery();
+                }
+                else
+                {
+                    // Em troca, o ramo anterior restrito do combinado nao participa
+                    // da decisao: preserva a consulta direcionada antiga sem faixa.
+                    var faixaDirecionada = mesmoItinerario ? faixa : null;
+                    performance?.RegistrarMotivoMatchingDirecionado(
+                        mesmoItinerario, faixaDirecionada.HasValue);
+                    var inicioMatchingDirecionado = System.Diagnostics.Stopwatch.GetTimestamp();
+                    try
+                    {
+                        resultado = await _repositorio.BuscarEnriquecimentoDoItinerarioAsync(
+                            posicao.CodigoLinha, rotaAnterior.ItinerarioId,
+                            posicao.Latitude, posicao.Longitude, bearing!.Value,
+                            _opcoes.DistanciaMaximaRotaMetros, ct, faixaDirecionada);
+                    }
+                    finally
+                    {
+                        performance?.RegistrarMatchingDirecionado(
+                            System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatchingDirecionado));
+                    }
+
+                    performance?.RegistrarResultadoMatchingDirecionado(resultado.Status);
+                    if (!mesmoItinerario)
+                        performance?.RegistrarTrocaQueryAntiga();
+                }
+
+                if (mesmoItinerario && faixa.HasValue)
+                    performance?.RegistrarComparacaoContinuidade(rota, resultado);
 
                 if (resultado.Status == StatusBuscaItinerario.Found)
                 {

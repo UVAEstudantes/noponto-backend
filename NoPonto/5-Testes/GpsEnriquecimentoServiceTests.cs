@@ -14,8 +14,12 @@ internal sealed class FakeGpsItinerarioRepository : IGpsItinerarioRepository
 {
     public Queue<EnriquecimentoRotaDto?> Respostas { get; } = new();
     public int ChamadasBuscarEnriquecimento { get; private set; }
+    public int ChamadasGlobaisSimples { get; private set; }
+    public int ChamadasMatchingCombinado { get; private set; }
+    public Queue<ResultadoMatchingCombinado> RespostasCombinadas { get; } = new();
     public Queue<ResultadoBuscaItinerario> RespostasDirecionadas { get; } = new();
     public List<FaixaProjecao?> FaixasDirecionadas { get; } = new();
+    public List<FaixaProjecao> FaixasCombinadas { get; } = new();
     private EnriquecimentoRotaDto? _globalAtual;
     public List<(string Linha, Guid Id, double Lat, double Lon, double Bearing, double Limite)>
         ChamadasDirecionadas { get; } = new();
@@ -41,9 +45,33 @@ internal sealed class FakeGpsItinerarioRepository : IGpsItinerarioRepository
         double distanciaMaximaMetros, CancellationToken cancellationToken = default)
     {
         ChamadasBuscarEnriquecimento++;
+        ChamadasGlobaisSimples++;
         var resposta = Respostas.Count > 0 ? Respostas.Dequeue() : null;
         _globalAtual = resposta;
         return Task.FromResult(resposta);
+    }
+
+    public Task<ResultadoMatchingCombinado> BuscarMatchingCombinadoAsync(
+        string codigoLinha, Guid itinerarioAnteriorId, double latitude, double longitude,
+        double bearing, double distanciaMaximaMetros, FaixaProjecao faixa,
+        CancellationToken cancellationToken = default)
+    {
+        ChamadasMatchingCombinado++;
+        ChamadasBuscarEnriquecimento++;
+        FaixasCombinadas.Add(faixa);
+        if (RespostasCombinadas.Count > 0)
+            return Task.FromResult(RespostasCombinadas.Dequeue());
+        var global = Respostas.Count > 0 ? Respostas.Dequeue() : null;
+        _globalAtual = global;
+        var resultadoGlobal = global is null
+            ? ResultadoBuscaItinerario.NotEligible()
+            : ResultadoBuscaItinerario.Found(global);
+        var anterior = global?.ItinerarioId == itinerarioAnteriorId
+            ? RespostasDirecionadas.Count > 0
+                ? RespostasDirecionadas.Dequeue()
+                : ResultadoBuscaItinerario.Found(global)
+            : ResultadoBuscaItinerario.NotEligible();
+        return Task.FromResult(new ResultadoMatchingCombinado(resultadoGlobal, anterior));
     }
 
     public Task<string?> BuscarGeometriaGeoJsonAsync(
@@ -890,7 +918,8 @@ public class GpsEnriquecimentoServiceTests
         Assert.Equal("Parada 22", resultado.ProximaParadaNome);
         var chamada = Assert.Single(repo.ChamadasDirecionadas);
         Assert.Equal((gps.CodigoLinha, RotaInicial21().ItinerarioId, gps.Latitude, gps.Longitude, 90.0, 250.0), chamada);
-        var faixa = Assert.Single(repo.FaixasDirecionadas)!.Value;
+        Assert.Null(Assert.Single(repo.FaixasDirecionadas));
+        var faixa = Assert.Single(repo.FaixasCombinadas);
         Assert.Equal(0.095, faixa.Min, 12);
         Assert.Equal(0.305, faixa.Max, 12);
     }
@@ -960,8 +989,8 @@ public class GpsEnriquecimentoServiceTests
         AssertGpsAtualSemMatching21(Posicao22(1), await servico.EnriquecerAsync(Posicao22(1), default));
         Assert.Empty(repo.ChamadasDirecionadas);
         Assert.Equal(0.21, (await servico.EnriquecerAsync(Posicao22(3), default)).PosicaoNaRota);
-        Assert.Single(repo.ChamadasDirecionadas);
-        Assert.NotNull(Assert.Single(repo.FaixasDirecionadas));
+        Assert.Empty(repo.ChamadasDirecionadas);
+        Assert.Equal(2, repo.FaixasCombinadas.Count);
     }
 
     [Theory]
@@ -994,7 +1023,8 @@ public class GpsEnriquecimentoServiceTests
         Assert.Equal(gps.Longitude, resultado.Longitude);
         Assert.Equal(gps.TimestampGps, resultado.TimestampGps);
         AssertReferencia22(servico, restrito, segundos);
-        var faixa = Assert.Single(repo.FaixasDirecionadas)!.Value;
+        Assert.Empty(repo.FaixasDirecionadas);
+        var faixa = Assert.Single(repo.FaixasCombinadas);
         Assert.Equal(min, faixa.Min, 12);
         Assert.Equal(max, faixa.Max, 12);
         var estado = Estados22(servico)[gps.Ordem]!;
@@ -1019,8 +1049,17 @@ public class GpsEnriquecimentoServiceTests
         await servico.EnriquecerAsync(Posicao22(0), default);
         var gps = Posicao22(5);
         var resultado = await servico.EnriquecerAsync(gps, default);
-        Assert.Equal(new FaixaProjecao(0.22, 0.28), Assert.Single(repo.FaixasDirecionadas)!.Value);
-        Assert.Equal(RotaInicial21().ItinerarioId, Assert.Single(repo.ChamadasDirecionadas).Id);
+        Assert.Equal(new FaixaProjecao(0.22, 0.28), Assert.Single(repo.FaixasCombinadas));
+        if (outroItinerario)
+        {
+            Assert.Null(Assert.Single(repo.FaixasDirecionadas));
+            Assert.Equal(RotaInicial21().ItinerarioId, Assert.Single(repo.ChamadasDirecionadas).Id);
+        }
+        else
+        {
+            Assert.Empty(repo.FaixasDirecionadas);
+            Assert.Empty(repo.ChamadasDirecionadas);
+        }
         if (outroItinerario && status == StatusBuscaItinerario.NotEligible)
         {
             Assert.Equal(r2, resultado.ItinerarioId);
@@ -1045,7 +1084,8 @@ public class GpsEnriquecimentoServiceTests
         await servico.EnriquecerAsync(Posicao22(0), default);
         AssertGpsAtualSemMatching21(Posicao22(5), await servico.EnriquecerAsync(Posicao22(5), default));
         AssertReferencia22(servico, 0.25, 0, 1);
-        Assert.NotNull(Assert.Single(repo.FaixasDirecionadas));
+        Assert.Empty(repo.FaixasDirecionadas);
+        Assert.Single(repo.FaixasCombinadas);
     }
 
     [Theory]
@@ -1173,5 +1213,105 @@ public class GpsEnriquecimentoServiceTests
         Assert.Equal(itinerarioB, resultado.ItinerarioId);
         Assert.Equal(0.1, resultado.PosicaoNaRota);
         Assert.Equal(4000, resultado.ComprimentoRotaMetros);
+    }
+
+    [Fact]
+    public async Task MatchingCombinado_ContinuidadeUsaUmComandoESemDirecionadoAntigo()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var id = RotaInicial21().ItinerarioId;
+        repo.Respostas.Enqueue(Rota22(.20));
+        repo.Respostas.Enqueue(Rota22(.21));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(Rota22(.205)));
+        var servico = CriarServico(repo);
+
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        var resultado = await servico.EnriquecerAsync(Posicao22(5), default);
+
+        Assert.Equal(id, resultado.ItinerarioId);
+        Assert.Equal(.205, resultado.PosicaoNaRota);
+        Assert.Equal(1, repo.ChamadasMatchingCombinado);
+        Assert.Empty(repo.ChamadasDirecionadas);
+        Assert.Single(repo.FaixasCombinadas);
+    }
+
+    [Fact]
+    public async Task MatchingCombinado_TrocaDescartaAnteriorRestritoEUsaDirecionadoAntigoSemFaixa()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var novo = Guid.NewGuid();
+        repo.Respostas.Enqueue(Rota22(.20, distancia: 80));
+        repo.Respostas.Enqueue(Rota22(.80, id: novo, distancia: 10));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(Rota22(.21, distancia: 60)));
+        var servico = CriarServico(repo);
+
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        var resultado = await servico.EnriquecerAsync(Posicao22(5), default);
+
+        Assert.Equal(novo, resultado.ItinerarioId);
+        Assert.Equal(1, repo.ChamadasMatchingCombinado);
+        Assert.Single(repo.ChamadasDirecionadas);
+        Assert.Null(Assert.Single(repo.FaixasDirecionadas));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task MatchingCombinado_StatusPreservaFailClosed(int caso)
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var anterior = Rota22(.20);
+        repo.Respostas.Enqueue(anterior);
+        repo.RespostasCombinadas.Enqueue(caso switch
+        {
+            0 => new(ResultadoBuscaItinerario.Found(Rota22(.21)),
+                ResultadoBuscaItinerario.NotEligible()),
+            1 => new(ResultadoBuscaItinerario.NotEligible(),
+                ResultadoBuscaItinerario.Found(Rota22(.21))),
+            _ => new(ResultadoBuscaItinerario.InfrastructureFailure(),
+                ResultadoBuscaItinerario.InfrastructureFailure()),
+        });
+        var servico = CriarServico(repo);
+
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        var resultado = await servico.EnriquecerAsync(Posicao22(5), default);
+
+        Assert.Null(resultado.ItinerarioId);
+        Assert.Null(resultado.PosicaoNaRota);
+        Assert.Equal(1, repo.ChamadasMatchingCombinado);
+        Assert.Empty(repo.ChamadasDirecionadas);
+    }
+
+    [Fact]
+    public async Task MatchingCombinado_ComprimentoIncompativelPreservaGlobalSemDirecionado()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(Rota22(.20, 10_000));
+        repo.Respostas.Enqueue(Rota22(.21, 20_000));
+        var servico = CriarServico(repo);
+
+        await servico.EnriquecerAsync(Posicao22(0), default);
+        var resultado = await servico.EnriquecerAsync(Posicao22(5), default);
+
+        Assert.Equal(.21, resultado.PosicaoNaRota);
+        Assert.Equal(20_000, resultado.ComprimentoRotaMetros);
+        Assert.Equal(1, repo.ChamadasMatchingCombinado);
+        Assert.Empty(repo.ChamadasDirecionadas);
+    }
+
+    [Fact]
+    public async Task MatchingCombinado_SemHistoricoUsaSomenteGlobalSimples()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(Rota22(.20));
+        var servico = CriarServico(repo);
+
+        var resultado = await servico.EnriquecerAsync(Posicao22(0), default);
+
+        Assert.Equal(.20, resultado.PosicaoNaRota);
+        Assert.Equal(1, repo.ChamadasGlobaisSimples);
+        Assert.Equal(0, repo.ChamadasMatchingCombinado);
+        Assert.Empty(repo.ChamadasDirecionadas);
     }
 }
