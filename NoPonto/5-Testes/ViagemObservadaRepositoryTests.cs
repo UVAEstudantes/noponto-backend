@@ -248,7 +248,8 @@ public sealed class ViagemObservadaRepositoryTests : IAsyncLifetime
     {
         await Write(_t0);
         var before = await Snapshot();
-        var service = new ViagemObservadaService(_repo, NullLogger<ViagemObservadaService>.Instance);
+        var service = new ViagemObservadaService(_repo, NullLogger<ViagemObservadaService>.Instance,
+            new ItineraryDivergenceTracker());
         Assert.Null(await service.AtualizarAsync(new PosicaoVeiculoDto
         {
             Ordem = _ordem, ItinerarioId = noId ? null : _r1, PosicaoNaRota = noProgress ? null : .3,

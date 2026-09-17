@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Collections.Concurrent;
 
 namespace NoPonto.Application.GPS;
 
@@ -108,6 +109,11 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     private int _viagemConcluidas;
     private int _viagemConflitos;
     private int _viagemInfra;
+    private int _itineraryChangedOcorrencias;
+    private readonly ConcurrentDictionary<string, byte> _itineraryChangedVeiculos =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ItineraryDivergenceSnapshot> _itineraryChangedDetalhes =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public DateTimeOffset Inicio { get; } = inicio;
     public long IntervaloConfiguradoMs { get; } = intervaloConfiguradoMs;
@@ -274,6 +280,16 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
         TimeSpan.FromTicks(Volatile.Read(ref _viagemProcessadaMaxTicks)).TotalMilliseconds;
     public double ViagemProcessadaMediaMs => ViagemProcessadas == 0
         ? 0 : ViagemProcessadaSomaMs / ViagemProcessadas;
+    public int ItineraryChangedOcorrencias => Volatile.Read(ref _itineraryChangedOcorrencias);
+    public int ItineraryChangedVeiculos => _itineraryChangedVeiculos.Count;
+    public int ItineraryChangedPersistentesMais2 =>
+        _itineraryChangedDetalhes.Values.Count(v => v.OcorrenciasConsecutivas > 2);
+    public int ItineraryChangedMais30s =>
+        _itineraryChangedDetalhes.Values.Count(v => v.Duracao >= TimeSpan.FromSeconds(30));
+    public int ItineraryChangedMais60s =>
+        _itineraryChangedDetalhes.Values.Count(v => v.Duracao >= TimeSpan.FromSeconds(60));
+    public double ItineraryChangedMaiorDuracaoSegundos => _itineraryChangedDetalhes.IsEmpty
+        ? 0 : _itineraryChangedDetalhes.Values.Max(v => v.Duracao.TotalSeconds);
 
     public void RegistrarMatchingGlobal(TimeSpan duracao)
     {
@@ -500,6 +516,19 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
             Interlocked.Increment(ref _viagemConflitos);
         if (resultado.Value.Status == ViagemObservadaStatus.InfrastructureFailure)
             Interlocked.Increment(ref _viagemInfra);
+    }
+
+    public void RegistrarDivergenciaItinerario(string ordem, ItineraryDivergenceSnapshot snapshot)
+    {
+        Interlocked.Increment(ref _itineraryChangedOcorrencias);
+        _itineraryChangedVeiculos.TryAdd(ordem, 0);
+        _itineraryChangedDetalhes[ordem] = snapshot;
+    }
+
+    public void RegistrarDivergenciaItinerarioSemDetalhes(string ordem)
+    {
+        Interlocked.Increment(ref _itineraryChangedOcorrencias);
+        _itineraryChangedVeiculos.TryAdd(ordem, 0);
     }
 
     private static void RegistrarDuracao(ref long acumulado, ref long maximo, TimeSpan duracao)

@@ -6,11 +6,14 @@ public sealed class ViagemObservadaService
 {
     private readonly IViagemObservadaRepository _repository;
     private readonly ILogger<ViagemObservadaService> _logger;
+    private readonly ItineraryDivergenceTracker _divergences;
 
-    public ViagemObservadaService(IViagemObservadaRepository repository, ILogger<ViagemObservadaService> logger)
+    public ViagemObservadaService(IViagemObservadaRepository repository, ILogger<ViagemObservadaService> logger,
+        ItineraryDivergenceTracker divergences)
     {
         _repository = repository;
         _logger = logger;
+        _divergences = divergences;
     }
 
     /// <summary>Sem matching atual, a viagem permanece intacta, inclusive seu timestamp.</summary>
@@ -35,7 +38,24 @@ public sealed class ViagemObservadaService
                     result.Estado?.ViagemId, posicao.Ordem, posicao.ItinerarioId);
                 break;
             case ViagemObservadaStatus.ItineraryChanged:
-                _logger.LogInformation("Troca de itinerário detectada para {ordem}; viagem observada preservada.", posicao.Ordem);
+                var anterior = result.Estado?.ItinerarioId;
+                if (anterior is { } itinerarioAnterior && posicao.ItinerarioId is { } itinerarioNovo)
+                {
+                    var snapshot = _divergences.Registrar(posicao.Ordem, itinerarioAnterior, itinerarioNovo);
+                    GpsCommitPerformanceContext.Current?.RegistrarDivergenciaItinerario(posicao.Ordem, snapshot);
+                    _logger.LogDebug(
+                        "Divergência de itinerário para {ordem}: viagem={itinerarioViagem}, matching={itinerarioMatching}, " +
+                        "ocorrências consecutivas={ocorrencias}, duração={duracao:F1}s; viagem observada preservada.",
+                        posicao.Ordem, itinerarioAnterior, itinerarioNovo,
+                        snapshot.OcorrenciasConsecutivas, snapshot.Duracao.TotalSeconds);
+                }
+                else
+                {
+                    _logger.LogDebug(
+                        "Divergência de itinerário para {ordem}; IDs indisponíveis, viagem observada preservada.",
+                        posicao.Ordem);
+                    GpsCommitPerformanceContext.Current?.RegistrarDivergenciaItinerarioSemDetalhes(posicao.Ordem);
+                }
                 break;
             case ViagemObservadaStatus.InvalidState:
             case ViagemObservadaStatus.InvalidSequence:
@@ -45,6 +65,8 @@ public sealed class ViagemObservadaService
                 _logger.LogWarning("Viagem observada de {ordem} não avançou: {status}.", posicao.Ordem, result.Status);
                 break;
         }
+        if (result.Status != ViagemObservadaStatus.ItineraryChanged)
+            _divergences.Resolver(posicao.Ordem);
         return result;
     }
 }

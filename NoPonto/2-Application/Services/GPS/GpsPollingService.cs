@@ -698,6 +698,12 @@ public sealed class GpsPollingService : BackgroundService
                 "viagem_processada_soma_ms={viagem_processada_soma_ms:F1} " +
                 "viagem_processada_media_ms={viagem_processada_media_ms:F1} " +
                 "viagem_processada_max_ms={viagem_processada_max_ms:F1} " +
+                "itinerary_changed_ocorrencias={itinerary_changed_ocorrencias} " +
+                "itinerary_changed_veiculos={itinerary_changed_veiculos} " +
+                "itinerary_changed_persistentes_mais_2={itinerary_changed_persistentes_mais_2} " +
+                "itinerary_changed_mais_30s={itinerary_changed_mais_30s} " +
+                "itinerary_changed_mais_60s={itinerary_changed_mais_60s} " +
+                "itinerary_changed_maior_duracao_s={itinerary_changed_maior_duracao_s:F1} " +
                 "linhas_publicadas={linhas_publicadas} " +
                 "veiculos_enviados={veiculos_enviados}",
                 performance.Inicio, fim, totalMs,
@@ -786,6 +792,10 @@ public sealed class GpsPollingService : BackgroundService
                 performance.ViagemMediaMs, performance.ViagemMaxMs,
                 performance.ViagemProcessadaSomaMs, performance.ViagemProcessadaMediaMs,
                 performance.ViagemProcessadaMaxMs,
+                performance.ItineraryChangedOcorrencias, performance.ItineraryChangedVeiculos,
+                performance.ItineraryChangedPersistentesMais2,
+                performance.ItineraryChangedMais30s, performance.ItineraryChangedMais60s,
+                performance.ItineraryChangedMaiorDuracaoSegundos,
                 performance.LinhasPublicadas, performance.VeiculosEnviados);
         }
     }
