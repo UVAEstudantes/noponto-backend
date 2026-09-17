@@ -32,6 +32,7 @@ public sealed class GpsPollingService : BackgroundService
 
     private readonly IPosicaoVeiculoCacheRepository _posicaoCache;
     private readonly ViagemObservadaService _viagemObservada;
+    private readonly ITelemetriaMlIngress? _telemetriaMl;
 
     public GpsPollingService(
         GpsSppoSnapshotStore snapshotSppo,
@@ -44,7 +45,8 @@ public sealed class GpsPollingService : BackgroundService
         GpsEtaClient etaClient,
         GpsBrtClient brtClient,
         IPosicaoVeiculoCacheRepository posicaoCache,
-        ViagemObservadaService viagemObservada)
+        ViagemObservadaService viagemObservada,
+        ITelemetriaMlIngress? telemetriaMl = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -57,6 +59,7 @@ public sealed class GpsPollingService : BackgroundService
         _brtClient = brtClient;
         _posicaoCache = posicaoCache;
         _viagemObservada = viagemObservada;
+        _telemetriaMl = telemetriaMl;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -841,6 +844,23 @@ public sealed class GpsPollingService : BackgroundService
             var viagem = await _viagemObservada.AtualizarAsync(posicao, ct);
             performance?.RegistrarViagem(viagem,
                 System.Diagnostics.Stopwatch.GetElapsedTime(inicioViagem));
+            if (_telemetriaMl is not null)
+            {
+                try
+                {
+                    var evento = EventoTelemetriaMlFactory.Criar(posicao, viagem, DateTimeOffset.UtcNow);
+                    if (!_telemetriaMl.TentarPublicar(evento))
+                        _logger.LogWarning(
+                            "Telemetria ML de {ordem} descartada por fila local saturada; GPS permanece aceito.",
+                            posicao.Ordem);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "Falha ao produzir telemetria ML de {ordem}; GPS e viagem permanecem aceitos.",
+                        posicao.Ordem);
+                }
+            }
         }
         return resultado;
     }

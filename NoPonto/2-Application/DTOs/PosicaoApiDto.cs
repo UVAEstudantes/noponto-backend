@@ -162,6 +162,19 @@ public sealed record PosicaoVeiculoDto
     [JsonIgnore]
     public DateTimeOffset? TimestampServidorFonte { get; init; }
 
+    /// <summary>
+    /// Instante em que o body completo da fonte ficou disponível ao NoPonto.
+    /// É metadado interno e não altera o contrato HTTP/Redis da posição.
+    /// </summary>
+    [JsonIgnore]
+    public DateTimeOffset RecebidoEmUtc { get; init; }
+
+    [JsonIgnore]
+    public string ModalFonte { get; init; } = "";
+
+    [JsonIgnore]
+    public string ProvedorFonte { get; init; } = "";
+
     // ── Posição anterior (para interpolação linear simples) ───────────────────
 
     public double? LatitudeAnterior { get; init; }

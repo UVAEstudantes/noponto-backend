@@ -350,6 +350,15 @@ builder.Services
         "GpsSppoCollector:IntervaloEntreColetasSegundos deve ser > 0")
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<TelemetriaMlRetentionOptions>()
+    .Bind(builder.Configuration.GetSection(TelemetriaMlRetentionOptions.Secao))
+    .Validate(o => o.IntervalMinutes > 0, "TelemetriaMlRetention:IntervalMinutes deve ser > 0")
+    .Validate(o => o.MainStreamSafetyMarginMinutes > 0, "TelemetriaMlRetention:MainStreamSafetyMarginMinutes deve ser > 0")
+    .Validate(o => o.DeadLetterRetentionDays > 0, "TelemetriaMlRetention:DeadLetterRetentionDays deve ser > 0")
+    .Validate(o => o.TrimLimit > 0, "TelemetriaMlRetention:TrimLimit deve ser > 0")
+    .ValidateOnStart();
+
 // --------------------------------------------------------------------
 // REDIS
 // --------------------------------------------------------------------
@@ -386,6 +395,18 @@ builder.Services.AddSingleton<GpsEnriquecimentoService>();
 builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();
 builder.Services.AddSingleton(new HistoricoStreamOptions(redisConnection));
 builder.Services.AddHostedService<HistoricoPassagemWorker>();
+
+builder.Services.AddSingleton<TelemetriaMlMetrics>();
+builder.Services.AddHostedService<TelemetriaMlMetricsReporter>();
+builder.Services.AddSingleton<TelemetriaMlStreamPublisher>();
+builder.Services.AddSingleton<ITelemetriaMlIngress>(sp =>
+    sp.GetRequiredService<TelemetriaMlStreamPublisher>());
+builder.Services.AddHostedService(sp =>
+    sp.GetRequiredService<TelemetriaMlStreamPublisher>());
+builder.Services.AddSingleton<ITelemetriaMlRepository, TelemetriaMlRepository>();
+builder.Services.AddHostedService<TelemetriaMlWorker>();
+builder.Services.AddSingleton<TelemetriaMlRetentionMetrics>();
+builder.Services.AddHostedService<TelemetriaMlRetentionService>();
 
 builder.Services.AddSignalR();
 

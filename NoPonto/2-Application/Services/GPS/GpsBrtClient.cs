@@ -38,6 +38,7 @@ public sealed class GpsBrtClient
                 return ResultadoFonteGps.Vazio(cronometro.Elapsed);
             }
 
+            var recebidoEmUtc = DateTimeOffset.UtcNow;
             var posicoes = resposta.Veiculos
                 .Where(v =>
                     !string.IsNullOrWhiteSpace(v.Codigo) &&
@@ -45,7 +46,7 @@ public sealed class GpsBrtClient
                     v.Linha != "0" &&                          // fora de viagem
                     v.Latitude != 0 &&
                     v.Longitude != 0)
-                .Select(Normalizar)
+                .Select(v => Normalizar(v, recebidoEmUtc))
                 .Where(p => p is not null)
                 .Cast<PosicaoVeiculoDto>()
                 .ToList();
@@ -72,7 +73,7 @@ public sealed class GpsBrtClient
         }
     }
 
-    private static PosicaoVeiculoDto? Normalizar(BrtVeiculoDto dto)
+    private static PosicaoVeiculoDto? Normalizar(BrtVeiculoDto dto, DateTimeOffset recebidoEmUtc)
     {
         if (!GpsLeituraValidator.CoordenadaValida(dto.Latitude, dto.Longitude))
             return null;
@@ -102,6 +103,9 @@ public sealed class GpsBrtClient
             TimestampGps      = timestampGps,
             TimestampServidor = timestampGps,
             Bearing           = direcao,
+            RecebidoEmUtc     = recebidoEmUtc,
+            ModalFonte        = "BRT",
+            ProvedorFonte     = "BRT_RIO",
         };
     }
 

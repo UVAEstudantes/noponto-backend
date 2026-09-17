@@ -22,6 +22,7 @@ public class TransporteDbContext : DbContext
     public DbSet<Poi> Pois => Set<Poi>();
     public DbSet<HistoricoPassagem> HistoricoPassagens => Set<HistoricoPassagem>();
     public DbSet<EventoViagemPersistido> EventosViagem => Set<EventoViagemPersistido>();
+    public DbSet<TelemetriaVeiculoMl> TelemetriasVeiculoMl => Set<TelemetriaVeiculoMl>();
     public DbSet<PoiParada> PoiParadas => Set<PoiParada>();
     public DbSet<Tarifa> Tarifas => Set<Tarifa>();
 
@@ -116,5 +117,16 @@ public class TransporteDbContext : DbContext
         modelBuilder.Entity<EventoViagemPersistido>().HasKey(e => e.EventId);
         modelBuilder.Entity<EventoViagemPersistido>().Property(e => e.Payload).HasColumnType("jsonb");
         modelBuilder.Entity<EventoViagemPersistido>().HasIndex(e => e.TimestampEvento);
+        modelBuilder.Entity<TelemetriaVeiculoMl>().Property(t => t.ObservacaoId).HasMaxLength(64);
+        modelBuilder.Entity<TelemetriaVeiculoMl>().Property(t => t.Modal).HasMaxLength(20);
+        modelBuilder.Entity<TelemetriaVeiculoMl>().Property(t => t.Provedor).HasMaxLength(40);
+        modelBuilder.Entity<TelemetriaVeiculoMl>().Property(t => t.OrdemVeiculo).HasMaxLength(80);
+        modelBuilder.Entity<TelemetriaVeiculoMl>().Property(t => t.CodigoLinha).HasMaxLength(40);
+        modelBuilder.Entity<TelemetriaVeiculoMl>().Property(t => t.OrigemPosicao).HasMaxLength(20);
+        modelBuilder.Entity<TelemetriaVeiculoMl>().HasIndex(t => t.ObservacaoId).IsUnique();
+        modelBuilder.Entity<TelemetriaVeiculoMl>().HasIndex(t => new { t.OrdemVeiculo, t.TimestampGps });
+        modelBuilder.Entity<TelemetriaVeiculoMl>().HasIndex(t => new { t.CodigoLinha, t.TimestampGps });
+        modelBuilder.Entity<TelemetriaVeiculoMl>().HasIndex(t => new { t.ViagemId, t.TimestampGps })
+            .HasFilter("\"ViagemId\" IS NOT NULL");
     }
 }

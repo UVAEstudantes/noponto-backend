@@ -125,6 +125,7 @@ public sealed class GpsSppoClient
             }
 
             var raw = await resposta.Content.ReadFromJsonAsync<List<PosicaoApiDto>>(cancelamento.Token);
+            var recebidoEmUtc = DateTimeOffset.UtcNow;
 
             if (raw is null || raw.Count == 0)
             {
@@ -151,7 +152,7 @@ public sealed class GpsSppoClient
                     watermarkFonte = timestampServidorFonte;
                 }
 
-                var normalizado = Normalizar(dto, out var motivo);
+                var normalizado = Normalizar(dto, recebidoEmUtc, out var motivo);
 
                 if (normalizado is not null)
                 {
@@ -225,7 +226,10 @@ public sealed class GpsSppoClient
         SemTimestampConfiavel,
     }
 
-    private PosicaoVeiculoDto? Normalizar(PosicaoApiDto dto, out MotivoDescarte motivo)
+    private PosicaoVeiculoDto? Normalizar(
+        PosicaoApiDto dto,
+        DateTimeOffset recebidoEmUtc,
+        out MotivoDescarte motivo)
     {
         if (string.IsNullOrWhiteSpace(dto.Ordem))
         {
@@ -272,6 +276,9 @@ public sealed class GpsSppoClient
             TimestampServidor = timestampServidor,
             TimestampEnvioFonte = dto.DataHoraEnvio,
             TimestampServidorFonte = dto.DataHoraServidor,
+            RecebidoEmUtc = recebidoEmUtc,
+            ModalFonte = "ONIBUS",
+            ProvedorFonte = "SPPO_ZIRIX",
         };
     }
 
