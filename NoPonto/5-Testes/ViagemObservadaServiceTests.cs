@@ -8,8 +8,9 @@ public sealed class ViagemObservadaServiceTests
 {
     private static PosicaoVeiculoDto Position() => new()
     {
-        Ordem = "TESTE", ItinerarioId = Guid.NewGuid(), PosicaoNaRota = .54,
-        TimestampGps = DateTimeOffset.UtcNow,
+        Ordem = "TESTE", CodigoLinha = "10", ItinerarioId = Guid.NewGuid(), PosicaoNaRota = .54,
+        TimestampGps = DateTimeOffset.UtcNow, RecebidoEmUtc = DateTimeOffset.UtcNow,
+        ModalFonte = "ONIBUS", ProvedorFonte = "SPPO_ZIRIX", Latitude = -22.9, Longitude = -43.2,
     };
 
     private sealed class Repository : IViagemObservadaRepository
@@ -42,9 +43,21 @@ public sealed class ViagemObservadaServiceTests
     private static ViagemObservadaService Service(Repository repo) =>
         new(repo, NullLogger<ViagemObservadaService>.Instance);
 
-    private static GpsPollingService Polling(PositionCache cache, Repository repo) =>
+    private static GpsPollingService Polling(PositionCache cache, Repository repo, ITelemetriaMlIngress? telemetria = null) =>
         new(null!, null!, null!, NullLogger<GpsPollingService>.Instance, null!, null!,
-            null!, null!, null!, cache, Service(repo));
+            null!, null!, null!, cache, Service(repo), telemetria);
+
+    private sealed class Telemetria : ITelemetriaMlIngress
+    {
+        public List<EventoTelemetriaMl> Eventos { get; } = [];
+        public bool Falhar { get; init; }
+        public bool TentarPublicar(EventoTelemetriaMl evento)
+        {
+            if (Falhar) throw new InvalidOperationException("telemetria indisponível");
+            Eventos.Add(evento);
+            return true;
+        }
+    }
 
     [Theory]
     [InlineData(true, false)]
@@ -110,5 +123,29 @@ public sealed class ViagemObservadaServiceTests
             TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default)).Aceito);
         Assert.Equal(ViagemObservadaStatus.InfrastructureFailure,
             (await Service(repo).AtualizarAsync(Position(), default))!.Value.Status);
+    }
+
+    [Theory]
+    [InlineData(PosicaoVeiculoCacheStatus.Accepted, 1)]
+    [InlineData(PosicaoVeiculoCacheStatus.RejectedOlderOrEqual, 0)]
+    [InlineData(PosicaoVeiculoCacheStatus.InfrastructureFailure, 0)]
+    public async Task Telemetria_SomenteDepoisDeCommitAceito(PosicaoVeiculoCacheStatus status, int eventos)
+    {
+        var telemetria = new Telemetria();
+        await Polling(new PositionCache(status), new Repository(), telemetria).ConfirmarPosicaoAsync(
+            Position(), TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
+        Assert.Equal(eventos, telemetria.Eventos.Count);
+    }
+
+    [Fact]
+    public async Task FalhaDaTelemetria_NaoAlteraAceiteGpsNemViagem()
+    {
+        var repo = new Repository();
+        var resultado = await Polling(
+            new PositionCache(PosicaoVeiculoCacheStatus.Accepted), repo,
+            new Telemetria { Falhar = true }).ConfirmarPosicaoAsync(
+                Position(), TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
+        Assert.True(resultado.Aceito);
+        Assert.Single(repo.Calls);
     }
 }

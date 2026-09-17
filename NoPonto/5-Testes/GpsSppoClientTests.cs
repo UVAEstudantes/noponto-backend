@@ -31,6 +31,9 @@ public sealed class GpsSppoClientTests
         Assert.Equal(DateTimeOffset.Parse("2026-09-14T12:00:01Z"), posicao.TimestampEnvioFonte);
         Assert.Equal(DateTimeOffset.Parse("2026-09-14T12:00:02Z"), posicao.TimestampServidorFonte);
         Assert.Equal(posicao.TimestampServidorFonte, resposta.WatermarkFonte);
+        Assert.True(posicao.RecebidoEmUtc > DateTimeOffset.UnixEpoch);
+        Assert.Equal("ONIBUS", posicao.ModalFonte);
+        Assert.Equal("SPPO_ZIRIX", posicao.ProvedorFonte);
     }
 
     [Fact]
