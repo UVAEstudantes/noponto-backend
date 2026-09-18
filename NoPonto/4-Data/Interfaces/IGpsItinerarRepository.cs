@@ -11,8 +11,9 @@ public interface IGpsItinerarioRepository
     /// itinerario anterior dentro de uma faixa valida.
     /// </summary>
     Task<ResultadoMatchingCombinado> BuscarMatchingCombinadoAsync(
-        string codigoLinha, Guid itinerarioAnteriorId, double latitude, double longitude,
-        double bearing, double distanciaMaximaMetros, FaixaProjecao faixa,
+        string codigoLinha, Guid? itinerarioAnteriorId, double latitude, double longitude,
+        double bearing, double distanciaMaximaMetros, FaixaProjecao? faixa,
+        SolicitacaoProjecaoOperacional? projecaoOperacional = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Reavalia um itinerário na linha/GPS/bearing atuais, distinguindo inelegibilidade de falha.</summary>
@@ -76,4 +77,5 @@ public sealed class ResultadoBuscaItinerario
 // Contrato interno do pipeline de matching; nao faz parte dos contratos HTTP.
 public sealed record ResultadoMatchingCombinado(
     ResultadoBuscaItinerario Global,
-    ResultadoBuscaItinerario Anterior);
+    ResultadoBuscaItinerario Anterior,
+    ResultadoProjecaoOperacional? Operacional = null);

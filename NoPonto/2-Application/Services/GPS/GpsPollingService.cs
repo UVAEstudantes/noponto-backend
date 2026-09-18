@@ -306,12 +306,31 @@ public sealed class GpsPollingService : BackgroundService
         }
 
         // ── 4. Enriquecimento PostGIS paralelo ────────────────────────────────
+        ResultadoEnriquecimentoGps[] enriquecimentos;
         PosicaoVeiculoDto[] resultadosEnriquecidos;
         performance.EnriquecimentoSolicitado = paraEnriquecer.Count;
+        ContextoOperacional?[] contextosOperacionais;
+        if (paraEnriquecer.Count == 0)
+            contextosOperacionais = [];
+        else
+        {
+            var inicioSnapshotOperacional = System.Diagnostics.Stopwatch.GetTimestamp();
+            var grauSnapshot = Math.Min(paraEnriquecer.Count, opcoes.GrauParalelismoViagemObservada);
+            using var limiteSnapshot = new SemaphoreSlim(grauSnapshot, grauSnapshot);
+            contextosOperacionais = await Task.WhenAll(paraEnriquecer.Select(async x =>
+            {
+                await limiteSnapshot.WaitAsync(ct);
+                try { return await _viagemObservada.LerContextoAsync(x.Nova.Ordem, ct); }
+                finally { limiteSnapshot.Release(); }
+            }));
+            performance.RedisLeituraInicialMs += (long)System.Diagnostics.Stopwatch
+                .GetElapsedTime(inicioSnapshotOperacional).TotalMilliseconds;
+        }
         inicioEtapa = System.Diagnostics.Stopwatch.GetTimestamp();
 
         if (paraEnriquecer.Count == 0)
         {
+            enriquecimentos = [];
             resultadosEnriquecidos = [];
         }
         else
@@ -319,17 +338,19 @@ public sealed class GpsPollingService : BackgroundService
             var grau = Math.Min(paraEnriquecer.Count, opcoes.GrauParalelismoEnriquecimento);
             var semaforo = new SemaphoreSlim(grau, grau);
 
-            resultadosEnriquecidos = await Task.WhenAll(
-                paraEnriquecer.Select(async x =>
+            enriquecimentos = await Task.WhenAll(
+                paraEnriquecer.Select(async (x, indice) =>
                 {
                     await semaforo.WaitAsync(ct);
                     try
                     {
-                        return await _enriquecedor.EnriquecerAsync(
-                            MontarComHistorico(x.Nova, x.Anterior), ct, performance);
+                        return await _enriquecedor.EnriquecerComContextoAsync(
+                            MontarComHistorico(x.Nova, x.Anterior),
+                            contextosOperacionais[indice], ct, performance);
                     }
                     finally { semaforo.Release(); }
                 }));
+            resultadosEnriquecidos = enriquecimentos.Select(x => x.Posicao).ToArray();
         }
         performance.MatchingEtapaMs = (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
@@ -364,12 +385,19 @@ public sealed class GpsPollingService : BackgroundService
                         };
                     })
                     .ToArray();
+                var porOrdem = resultadosEnriquecidos.ToDictionary(x => x.Ordem,
+                    StringComparer.OrdinalIgnoreCase);
+                enriquecimentos = enriquecimentos.Select(x => x with
+                {
+                    Posicao = porOrdem[x.Posicao.Ordem],
+                }).ToArray();
             }
         }
 
         // ── Reconstrói todosProcessados com ETA aplicado ──────────────────────
-        var todosProcessados = resultadosEnriquecidos
-            .Concat(resultadosSemEnriquecimento)
+        var todosProcessados = enriquecimentos
+            .Concat(resultadosSemEnriquecimento.Select(x => new ResultadoEnriquecimentoGps(
+                x, null, ResultadoProjecaoOperacional.NaoSolicitada())))
             .ToList();
 
         // ── 5. Escrita atômica no Redis (CAS por timestamp) ─────────────────────
@@ -377,7 +405,7 @@ public sealed class GpsPollingService : BackgroundService
         var ttlRecente = TimeSpan.FromSeconds(opcoes.TtlRecenteSegundos);
 
         inicioEtapa = System.Diagnostics.Stopwatch.GetTimestamp();
-        var resultadosGravacao = await ConfirmarLoteAsync(todosProcessados,
+        var resultadosGravacao = await ConfirmarLoteDetalhadoAsync(todosProcessados,
             ttlAtivo, ttlRecente, opcoes.GrauParalelismoViagemObservada, ct, performance);
         performance.CommitViagemEtapaMs = (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
@@ -566,7 +594,7 @@ public sealed class GpsPollingService : BackgroundService
             resultadosEnriquecidos.Count(p => p.PosicaoNaRota.HasValue),
             paraEnriquecer.Count,
             semEnriquecimento.Count,
-            todosProcessados.Count(p => (agora - p.TimestampGps).TotalSeconds > 60),
+            todosProcessados.Count(p => (agora - p.Posicao.TimestampGps).TotalSeconds > 60),
             sw.ElapsedMilliseconds);
 
         if (falhasInfraestrutura == 0)
@@ -663,7 +691,15 @@ public sealed class GpsPollingService : BackgroundService
                 "continuidade_distancia_proxima_diff_ate_20m={continuidade_distancia_proxima_diff_ate_20m} " +
                 "continuidade_distancia_proxima_diff_maior_20m={continuidade_distancia_proxima_diff_maior_20m} " +
                 "matching_soma_ms={matching_soma_ms:F1} matching_media_ms={matching_media_ms:F1} " +
-                "matching_max_ms={matching_max_ms:F1} eta_elegiveis={eta_elegiveis} " +
+                "matching_max_ms={matching_max_ms:F1} " +
+                "projecao_operacional_solicitada={projecao_operacional_solicitada} " +
+                "projecao_operacional_encontrada={projecao_operacional_encontrada} " +
+                "projecao_operacional_inelegivel={projecao_operacional_inelegivel} " +
+                "projecao_operacional_falha={projecao_operacional_falha} " +
+                "projecao_operacional_comandos={projecao_operacional_comandos} " +
+                "projecao_operacional_soma_ms={projecao_operacional_soma_ms:F1} " +
+                "projecao_operacional_media_ms={projecao_operacional_media_ms:F1} " +
+                "eta_elegiveis={eta_elegiveis} " +
                 "eta_chunks_planejados={eta_chunks} eta_requisicoes={eta_requisicoes} " +
                 "eta_chunks_sucesso={eta_sucessos} eta_chunks_timeout={eta_timeouts} " +
                 "eta_chunks_falha={eta_falhas} eta_cooldown_ignorado={eta_cooldown} " +
@@ -699,11 +735,6 @@ public sealed class GpsPollingService : BackgroundService
                 "viagem_processada_media_ms={viagem_processada_media_ms:F1} " +
                 "viagem_processada_max_ms={viagem_processada_max_ms:F1} " +
                 "itinerary_changed_ocorrencias={itinerary_changed_ocorrencias} " +
-                "itinerary_changed_veiculos={itinerary_changed_veiculos} " +
-                "itinerary_changed_persistentes_mais_2={itinerary_changed_persistentes_mais_2} " +
-                "itinerary_changed_mais_30s={itinerary_changed_mais_30s} " +
-                "itinerary_changed_mais_60s={itinerary_changed_mais_60s} " +
-                "itinerary_changed_maior_duracao_s={itinerary_changed_maior_duracao_s:F1} " +
                 "linhas_publicadas={linhas_publicadas} " +
                 "veiculos_enviados={veiculos_enviados}",
                 performance.Inicio, fim, totalMs,
@@ -764,6 +795,13 @@ public sealed class GpsPollingService : BackgroundService
                 performance.ContinuidadeDistanciaProximaDiffAte20m,
                 performance.ContinuidadeDistanciaProximaDiffMaior20m,
                 performance.MatchingSomaMs, performance.MatchingMediaMs, performance.MatchingMaxMs,
+                performance.ProjecaoOperacionalSolicitada,
+                performance.ProjecaoOperacionalEncontrada,
+                performance.ProjecaoOperacionalInelegivel,
+                performance.ProjecaoOperacionalFalha,
+                performance.ProjecaoOperacionalComandos,
+                performance.ProjecaoOperacionalSomaMs,
+                performance.ProjecaoOperacionalMediaMs,
                 performance.EtaVeiculosElegiveis, performance.EtaChunksPlanejados,
                 performance.EtaRequisicoes, performance.EtaSucessos, performance.EtaTimeouts,
                 performance.EtaFalhas, performance.EtaCooldownIgnorado,
@@ -792,10 +830,7 @@ public sealed class GpsPollingService : BackgroundService
                 performance.ViagemMediaMs, performance.ViagemMaxMs,
                 performance.ViagemProcessadaSomaMs, performance.ViagemProcessadaMediaMs,
                 performance.ViagemProcessadaMaxMs,
-                performance.ItineraryChangedOcorrencias, performance.ItineraryChangedVeiculos,
-                performance.ItineraryChangedPersistentesMais2,
-                performance.ItineraryChangedMais30s, performance.ItineraryChangedMais60s,
-                performance.ItineraryChangedMaiorDuracaoSegundos,
+                performance.ItineraryChangedOcorrencias,
                 performance.LinhasPublicadas, performance.VeiculosEnviados);
         }
     }
@@ -807,17 +842,27 @@ public sealed class GpsPollingService : BackgroundService
         IReadOnlyList<PosicaoVeiculoDto> posicoes, TimeSpan ttlAtivo, TimeSpan ttlRecente,
         int grauParalelismo, CancellationToken ct, GpsCicloPerformance? performance = null)
     {
+        var detalhadas = posicoes.Select(x => new ResultadoEnriquecimentoGps(
+            x, null, ResultadoProjecaoOperacional.NaoSolicitada())).ToArray();
+        return await ConfirmarLoteDetalhadoAsync(detalhadas, ttlAtivo, ttlRecente,
+            grauParalelismo, ct, performance);
+    }
+
+    private async Task<(PosicaoVeiculoDto Posicao, PosicaoVeiculoCacheResultado Resultado)[]> ConfirmarLoteDetalhadoAsync(
+        IReadOnlyList<ResultadoEnriquecimentoGps> posicoes, TimeSpan ttlAtivo, TimeSpan ttlRecente,
+        int grauParalelismo, CancellationToken ct, GpsCicloPerformance? performance = null)
+    {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(grauParalelismo);
         using var limite = new SemaphoreSlim(grauParalelismo, grauParalelismo);
         using var performanceScope = GpsCommitPerformanceContext.Push(performance);
-        return await Task.WhenAll(posicoes.Select(async posicao =>
+        return await Task.WhenAll(posicoes.Select(async enriquecimento =>
         {
             await limite.WaitAsync(ct);
             try
             {
                 var resultado = await ConfirmarPosicaoAsync(
-                    posicao, ttlAtivo, ttlRecente, ct, performance);
-                return (Posicao: posicao, Resultado: resultado);
+                    enriquecimento, ttlAtivo, ttlRecente, ct, performance);
+                return (Posicao: enriquecimento.Posicao, Resultado: resultado);
             }
             finally
             {
@@ -840,8 +885,16 @@ public sealed class GpsPollingService : BackgroundService
     // Falhas da viagem não alteram o aceite/publicação do GPS.
     internal async Task<PosicaoVeiculoCacheResultado> ConfirmarPosicaoAsync(
         PosicaoVeiculoDto posicao, TimeSpan ttlAtivo, TimeSpan ttlRecente, CancellationToken ct,
-        GpsCicloPerformance? performance = null)
+        GpsCicloPerformance? performance = null) => await ConfirmarPosicaoAsync(
+            new ResultadoEnriquecimentoGps(
+                posicao, null, ResultadoProjecaoOperacional.NaoSolicitada()),
+            ttlAtivo, ttlRecente, ct, performance);
+
+    private async Task<PosicaoVeiculoCacheResultado> ConfirmarPosicaoAsync(
+        ResultadoEnriquecimentoGps enriquecimento, TimeSpan ttlAtivo, TimeSpan ttlRecente,
+        CancellationToken ct, GpsCicloPerformance? performance = null)
     {
+        var posicao = enriquecimento.Posicao;
         var inicioCommit = System.Diagnostics.Stopwatch.GetTimestamp();
         var resultado = await _posicaoCache.TentarAtualizarAsync(
             posicao.Ordem, posicao, posicao.TimestampGps, ttlAtivo, ttlRecente, ct);
@@ -851,7 +904,7 @@ public sealed class GpsPollingService : BackgroundService
         {
             performance?.RegistrarViagemChamada();
             var inicioViagem = System.Diagnostics.Stopwatch.GetTimestamp();
-            var viagem = await _viagemObservada.AtualizarAsync(posicao, ct);
+            var viagem = await _viagemObservada.AtualizarAsync(enriquecimento, ct);
             performance?.RegistrarViagem(viagem,
                 System.Diagnostics.Stopwatch.GetElapsedTime(inicioViagem));
             if (_telemetriaMl is not null)

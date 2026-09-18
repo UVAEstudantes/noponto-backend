@@ -56,8 +56,7 @@ public sealed class PostgresEstabilidadeTests
 
     private static GpsPollingService Polling(Repository repo) => new(null!, null!, null!,
         NullLogger<GpsPollingService>.Instance, null!, null!, null!, null!, null!,
-        new Cache(), new ViagemObservadaService(repo, NullLogger<ViagemObservadaService>.Instance,
-            new ItineraryDivergenceTracker()));
+        new Cache(), new ViagemObservadaService(repo, NullLogger<ViagemObservadaService>.Instance));
 
     [Theory]
     [InlineData(false)]

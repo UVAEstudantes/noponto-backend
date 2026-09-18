@@ -39,6 +39,12 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     private int _matchingCombinadoGlobalInelegivel;
     private int _matchingCombinadoAnteriorInelegivel;
     private int _matchingCombinadoFalha;
+    private int _projecaoOperacionalSolicitada;
+    private int _projecaoOperacionalEncontrada;
+    private int _projecaoOperacionalInelegivel;
+    private int _projecaoOperacionalFalha;
+    private int _projecaoOperacionalComandos;
+    private long _projecaoOperacionalTicks;
     private int _continuidadeComparacoes;
     private int _continuidadeDirecionadoFound;
     private int _continuidadeDirecionadoInelegivel;
@@ -110,10 +116,6 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     private int _viagemConflitos;
     private int _viagemInfra;
     private int _itineraryChangedOcorrencias;
-    private readonly ConcurrentDictionary<string, byte> _itineraryChangedVeiculos =
-        new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, ItineraryDivergenceSnapshot> _itineraryChangedDetalhes =
-        new(StringComparer.OrdinalIgnoreCase);
 
     public DateTimeOffset Inicio { get; } = inicio;
     public long IntervaloConfiguradoMs { get; } = intervaloConfiguradoMs;
@@ -211,6 +213,15 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     public double MatchingMaxMs => TimeSpan.FromTicks(Volatile.Read(ref _matchingMaxTicks)).TotalMilliseconds;
     public double MatchingMediaMs => MatchingComandosPostgres == 0
         ? 0 : MatchingSomaMs / MatchingComandosPostgres;
+    public int ProjecaoOperacionalSolicitada => Volatile.Read(ref _projecaoOperacionalSolicitada);
+    public int ProjecaoOperacionalEncontrada => Volatile.Read(ref _projecaoOperacionalEncontrada);
+    public int ProjecaoOperacionalInelegivel => Volatile.Read(ref _projecaoOperacionalInelegivel);
+    public int ProjecaoOperacionalFalha => Volatile.Read(ref _projecaoOperacionalFalha);
+    public int ProjecaoOperacionalComandos => Volatile.Read(ref _projecaoOperacionalComandos);
+    public double ProjecaoOperacionalSomaMs =>
+        TimeSpan.FromTicks(Volatile.Read(ref _projecaoOperacionalTicks)).TotalMilliseconds;
+    public double ProjecaoOperacionalMediaMs => ProjecaoOperacionalComandos == 0
+        ? 0 : ProjecaoOperacionalSomaMs / ProjecaoOperacionalComandos;
 
     public int EtaRequisicoes => Volatile.Read(ref _etaRequisicoes);
     public int EtaSucessos => Volatile.Read(ref _etaSucessos);
@@ -281,15 +292,6 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     public double ViagemProcessadaMediaMs => ViagemProcessadas == 0
         ? 0 : ViagemProcessadaSomaMs / ViagemProcessadas;
     public int ItineraryChangedOcorrencias => Volatile.Read(ref _itineraryChangedOcorrencias);
-    public int ItineraryChangedVeiculos => _itineraryChangedVeiculos.Count;
-    public int ItineraryChangedPersistentesMais2 =>
-        _itineraryChangedDetalhes.Values.Count(v => v.OcorrenciasConsecutivas > 2);
-    public int ItineraryChangedMais30s =>
-        _itineraryChangedDetalhes.Values.Count(v => v.Duracao >= TimeSpan.FromSeconds(30));
-    public int ItineraryChangedMais60s =>
-        _itineraryChangedDetalhes.Values.Count(v => v.Duracao >= TimeSpan.FromSeconds(60));
-    public double ItineraryChangedMaiorDuracaoSegundos => _itineraryChangedDetalhes.IsEmpty
-        ? 0 : _itineraryChangedDetalhes.Values.Max(v => v.Duracao.TotalSeconds);
 
     public void RegistrarMatchingGlobal(TimeSpan duracao)
     {
@@ -322,6 +324,29 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
         Interlocked.Increment(ref _matchingDirecionados);
         Interlocked.Increment(ref _matchingComandosPostgres);
         RegistrarDuracao(ref _matchingDirecionadoTicks, ref _matchingMaxTicks, duracao);
+    }
+
+    public void RegistrarProjecaoOperacional(StatusProjecaoOperacional status, TimeSpan duracaoComando)
+    {
+        if (status == StatusProjecaoOperacional.NaoSolicitada) return;
+        Interlocked.Increment(ref _projecaoOperacionalSolicitada);
+        switch (status)
+        {
+            case StatusProjecaoOperacional.Encontrada:
+                Interlocked.Increment(ref _projecaoOperacionalEncontrada);
+                break;
+            case StatusProjecaoOperacional.Inelegivel:
+                Interlocked.Increment(ref _projecaoOperacionalInelegivel);
+                break;
+            case StatusProjecaoOperacional.FalhaInfraestrutura:
+                Interlocked.Increment(ref _projecaoOperacionalFalha);
+                break;
+        }
+        if (duracaoComando > TimeSpan.Zero)
+        {
+            Interlocked.Increment(ref _projecaoOperacionalComandos);
+            Interlocked.Add(ref _projecaoOperacionalTicks, duracaoComando.Ticks);
+        }
     }
 
     public void RegistrarContinuidadeSemSegundaQuery() =>
@@ -518,18 +543,8 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
             Interlocked.Increment(ref _viagemInfra);
     }
 
-    public void RegistrarDivergenciaItinerario(string ordem, ItineraryDivergenceSnapshot snapshot)
-    {
+    public void RegistrarDivergenciaItinerario() =>
         Interlocked.Increment(ref _itineraryChangedOcorrencias);
-        _itineraryChangedVeiculos.TryAdd(ordem, 0);
-        _itineraryChangedDetalhes[ordem] = snapshot;
-    }
-
-    public void RegistrarDivergenciaItinerarioSemDetalhes(string ordem)
-    {
-        Interlocked.Increment(ref _itineraryChangedOcorrencias);
-        _itineraryChangedVeiculos.TryAdd(ordem, 0);
-    }
 
     private static void RegistrarDuracao(ref long acumulado, ref long maximo, TimeSpan duracao)
     {

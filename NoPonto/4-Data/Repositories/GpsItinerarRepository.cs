@@ -43,16 +43,18 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
 
     public async Task<ResultadoMatchingCombinado> BuscarMatchingCombinadoAsync(
         string codigoLinha,
-        Guid itinerarioAnteriorId,
+        Guid? itinerarioAnteriorId,
         double latitude,
         double longitude,
         double bearing,
         double distanciaMaximaMetros,
-        FaixaProjecao faixa,
+        FaixaProjecao? faixa,
+        SolicitacaoProjecaoOperacional? projecaoOperacional = null,
         CancellationToken cancellationToken = default)
     {
-        if (!faixa.Valida)
-            return FalhaCombinada();
+        if ((faixa is { } faixaInformada && !faixaInformada.Valida)
+            || (projecaoOperacional is { } operacionalInformada && !operacionalInformada.Valida))
+            return FalhaCombinada(projecaoOperacional is not null);
 
         const string sql = """
             WITH veiculo AS (
@@ -124,7 +126,7 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
                 JOIN "Sentidos" s ON s."Id" = i."SentidoId"
                 JOIN "Linhas"   l ON l."Id" = s."LinhaId"
                 CROSS JOIN veiculo v
-                WHERE l."Codigo" = @codigo
+                WHERE @usar_anterior AND l."Codigo" = @codigo
                   AND i."Id" = @itinerario_id
             ),
             geometria_anterior AS (
@@ -182,6 +184,43 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
                 WHERE pi."PosicaoLinha" > ae.posicao_na_rota
                 ORDER BY pi."PosicaoLinha" ASC
                 LIMIT 1
+            ),
+            rota_operacional AS (
+                SELECT i."Id", i."Geometria",
+                    ST_Length(i."Geometria"::geography) AS comprimento_metros
+                FROM "Itinerarios" i
+                WHERE @usar_operacional
+                  AND i."Id" = @itinerario_operacional
+                  AND EXISTS (SELECT 1 FROM global_escolhido ge
+                      WHERE ge."Id" <> @itinerario_operacional)
+            ),
+            geometria_operacional AS (
+                SELECT ro.*,
+                    GREATEST(0.0, @posicao_operacional_anterior
+                        - (@orcamento_operacional_metros / ro.comprimento_metros)) AS fracao_min,
+                    LEAST(1.0, @posicao_operacional_anterior
+                        + (@orcamento_operacional_metros / ro.comprimento_metros)) AS fracao_max
+                FROM rota_operacional ro
+                WHERE ro.comprimento_metros > 0
+            ),
+            projecao_operacional AS (
+                SELECT go.*,
+                    ST_Distance(v.ponto,
+                        ST_LineSubstring(go."Geometria", go.fracao_min, go.fracao_max)::geography)
+                        AS distancia_rota_metros,
+                    go.fracao_min + ST_LineLocatePoint(
+                        ST_LineSubstring(go."Geometria", go.fracao_min, go.fracao_max), v.ponto_geom)
+                        * (go.fracao_max - go.fracao_min) AS posicao_na_rota
+                FROM geometria_operacional go
+                CROSS JOIN veiculo v
+                WHERE go.fracao_min < go.fracao_max
+                  AND ST_DWithin(
+                      ST_LineSubstring(go."Geometria", go.fracao_min, go.fracao_max)::geography,
+                      v.ponto, @dist_max)
+            ),
+            operacional_elegivel AS (
+                SELECT * FROM projecao_operacional
+                WHERE posicao_na_rota >= @posicao_operacional_anterior
             )
             SELECT
                 'GLOBAL'::text AS ramo,
@@ -210,6 +249,19 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
                 ppa.distancia_parada_metros
             FROM anterior_escolhido ae
             LEFT JOIN proxima_parada_anterior ppa ON true
+            UNION ALL
+            SELECT
+                'OPERACIONAL'::text AS ramo,
+                oe."Id" AS itinerario_id,
+                oe.posicao_na_rota,
+                oe.comprimento_metros,
+                oe.distancia_rota_metros,
+                NULL::double precision AS bearing_local,
+                NULL::double precision AS lat_rota,
+                NULL::double precision AS lon_rota,
+                NULL::text AS parada_nome,
+                NULL::double precision AS distancia_parada_metros
+            FROM operacional_elegivel oe
             """;
 
         try
@@ -217,30 +269,47 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
             await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = sql;
-            cmd.Parameters.AddWithValue("itinerario_id", itinerarioAnteriorId);
+            cmd.Parameters.AddWithValue("usar_anterior", itinerarioAnteriorId.HasValue && faixa.HasValue);
+            cmd.Parameters.AddWithValue("itinerario_id", itinerarioAnteriorId ?? Guid.Empty);
             cmd.Parameters.AddWithValue("lat", latitude);
             cmd.Parameters.AddWithValue("lon", longitude);
             cmd.Parameters.AddWithValue("codigo", codigoLinha);
             cmd.Parameters.AddWithValue("bearing", bearing);
             cmd.Parameters.AddWithValue("dist_max", distanciaMaximaMetros);
-            cmd.Parameters.AddWithValue("fracao_min", faixa.Min);
-            cmd.Parameters.AddWithValue("fracao_max", faixa.Max);
+            cmd.Parameters.AddWithValue("fracao_min", faixa?.Min ?? 0.0);
+            cmd.Parameters.AddWithValue("fracao_max", faixa?.Max ?? 1.0);
+            cmd.Parameters.AddWithValue("usar_operacional", projecaoOperacional.HasValue);
+            cmd.Parameters.AddWithValue("itinerario_operacional",
+                projecaoOperacional?.ItinerarioId ?? Guid.Empty);
+            cmd.Parameters.AddWithValue("posicao_operacional_anterior",
+                projecaoOperacional?.PosicaoAnterior ?? 0.0);
+            cmd.Parameters.AddWithValue("orcamento_operacional_metros",
+                projecaoOperacional?.OrcamentoMetros ?? 1.0);
 
             ResultadoBuscaItinerario global = ResultadoBuscaItinerario.NotEligible();
             ResultadoBuscaItinerario anterior = ResultadoBuscaItinerario.NotEligible();
+            var operacional = projecaoOperacional.HasValue
+                ? ResultadoProjecaoOperacional.Inelegivel()
+                : ResultadoProjecaoOperacional.NaoSolicitada();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                var resultado = ResultadoBuscaItinerario.Found(LerRota(reader));
                 switch (reader.GetString(reader.GetOrdinal("ramo")))
                 {
-                    case "GLOBAL": global = resultado; break;
-                    case "ANTERIOR": anterior = resultado; break;
+                    case "GLOBAL": global = ResultadoBuscaItinerario.Found(LerRota(reader)); break;
+                    case "ANTERIOR": anterior = ResultadoBuscaItinerario.Found(LerRota(reader)); break;
+                    case "OPERACIONAL":
+                        operacional = ResultadoProjecaoOperacional.Encontrada(new(
+                            reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+                            reader.GetDouble(reader.GetOrdinal("posicao_na_rota")),
+                            reader.GetDouble(reader.GetOrdinal("distancia_rota_metros")),
+                            reader.GetDouble(reader.GetOrdinal("comprimento_metros"))));
+                        break;
                     default: throw new InvalidOperationException("Ramo inesperado no matching combinado.");
                 }
             }
 
-            return new ResultadoMatchingCombinado(global, anterior);
+            return new ResultadoMatchingCombinado(global, anterior, operacional);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
@@ -248,13 +317,14 @@ public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
             _logger.LogWarning(ex,
                 "Falha no matching combinado experimental para linha {linha} em ({lat},{lon})",
                 codigoLinha, latitude, longitude);
-            return FalhaCombinada();
+            return FalhaCombinada(projecaoOperacional is not null);
         }
     }
 
-    private static ResultadoMatchingCombinado FalhaCombinada() => new(
+    private static ResultadoMatchingCombinado FalhaCombinada(bool operacionalSolicitada = false) => new(
         ResultadoBuscaItinerario.InfrastructureFailure(),
-        ResultadoBuscaItinerario.InfrastructureFailure());
+        ResultadoBuscaItinerario.InfrastructureFailure(),
+        operacionalSolicitada ? ResultadoProjecaoOperacional.Falha() : null);
 
     private static EnriquecimentoRotaDto LerRota(NpgsqlDataReader reader) => new()
     {

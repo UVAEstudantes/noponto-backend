@@ -87,6 +87,62 @@ public sealed class GpsMatchingCombinadoDiferencialPostgisTests : IClassFixture<
     }
 
     [Fact]
+    public async Task GlobalB_EProjecaoOperacionalADeOutraLinha_RetornamNoMesmoComando()
+    {
+        var resultado = await _repo.BuscarMatchingCombinadoAsync(
+            "GPS23", null, -22.8998, -43.2, 90, 250, null,
+            new(_db.OutraLinha, .45, 300));
+
+        Assert.Equal(StatusBuscaItinerario.Found, resultado.Global.Status);
+        Assert.Equal(_db.R2, resultado.Global.Rota!.ItinerarioId);
+        Assert.Equal(StatusProjecaoOperacional.Encontrada, resultado.Operacional!.Status);
+        Assert.Equal(_db.OutraLinha, resultado.Operacional.Projecao!.ItinerarioId);
+        Assert.InRange(resultado.Operacional.Projecao.PosicaoNaRota, .49, .51);
+        Assert.InRange(resultado.Operacional.Projecao.DistanciaRotaMetros, 20, 25);
+    }
+
+    [Fact]
+    public async Task ProjecaoOperacional_DistingueInelegibilidadeDeFalhaDeInfraestrutura()
+    {
+        var inelegivel = await _repo.BuscarMatchingCombinadoAsync(
+            "GPS23", null, -22.8998, -43.2, 90, 25, null,
+            new(_db.X, .45, 300));
+
+        var builder = new NpgsqlConnectionStringBuilder(
+            Environment.GetEnvironmentVariable("POSTGIS_TEST_CONNECTION"))
+        {
+            SearchPath = "pg_catalog"
+        };
+        await using var fonte = NpgsqlDataSource.Create(builder.ConnectionString);
+        var repoFalho = new GpsItinerarioRepository(
+            fonte, NullLogger<GpsItinerarioRepository>.Instance);
+        var falha = await repoFalho.BuscarMatchingCombinadoAsync(
+            "GPS23", null, -22.8998, -43.2, 90, 25, null,
+            new(_db.R1, .45, 300));
+
+        Assert.Equal(StatusProjecaoOperacional.Inelegivel, inelegivel.Operacional!.Status);
+        Assert.Equal(StatusProjecaoOperacional.FalhaInfraestrutura, falha.Operacional!.Status);
+    }
+
+    [Fact]
+    public async Task ProjecaoOperacional_RejeitaRegressaoAvancoExageradoEGpsDistante()
+    {
+        var regressao = await _repo.BuscarMatchingCombinadoAsync(
+            "GPS23", null, -22.8998, -43.2, 90, 250, null,
+            new(_db.OutraLinha, .60, 300));
+        var avancoExagerado = await _repo.BuscarMatchingCombinadoAsync(
+            "GPS23", null, -22.8998, -43.2, 90, 250, null,
+            new(_db.OutraLinha, .10, 50));
+        var distante = await _repo.BuscarMatchingCombinadoAsync(
+            "GPS23", null, -22.8998, -43.2, 90, 25, null,
+            new(_db.X, .45, 300));
+
+        Assert.Equal(StatusProjecaoOperacional.Inelegivel, regressao.Operacional!.Status);
+        Assert.Equal(StatusProjecaoOperacional.Inelegivel, avancoExagerado.Operacional!.Status);
+        Assert.Equal(StatusProjecaoOperacional.Inelegivel, distante.Operacional!.Status);
+    }
+
+    [Fact]
     public async Task DecisaoCSharpAtual_ProduzMesmoResultadoComParesAntigoECombinado()
     {
         var inicial = (await _repo.BuscarEnriquecimentoDoItinerarioAsync(
@@ -250,14 +306,18 @@ public sealed class GpsMatchingCombinadoDiferencialPostgisTests : IClassFixture<
             FaixaProjecao? faixa = null) => Task.FromResult(_anteriores.Dequeue());
 
         public Task<ResultadoMatchingCombinado> BuscarMatchingCombinadoAsync(
-            string codigoLinha, Guid itinerarioAnteriorId, double latitude, double longitude,
-            double bearing, double distanciaMaximaMetros, FaixaProjecao faixa,
+            string codigoLinha, Guid? itinerarioAnteriorId, double latitude, double longitude,
+            double bearing, double distanciaMaximaMetros, FaixaProjecao? faixa,
+            SolicitacaoProjecaoOperacional? projecaoOperacional = null,
             CancellationToken cancellationToken = default)
         {
             var global = _globais.Dequeue();
             return Task.FromResult(new ResultadoMatchingCombinado(
                 global is null ? ResultadoBuscaItinerario.NotEligible() : ResultadoBuscaItinerario.Found(global),
-                _anteriores.Peek()));
+                _anteriores.Peek(),
+                projecaoOperacional is null
+                    ? ResultadoProjecaoOperacional.NaoSolicitada()
+                    : ResultadoProjecaoOperacional.Inelegivel()));
         }
 
         public Task<string?> BuscarGeometriaGeoJsonAsync(

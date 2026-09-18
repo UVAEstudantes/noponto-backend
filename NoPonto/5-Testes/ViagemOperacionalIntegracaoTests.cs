@@ -482,4 +482,139 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         Assert.Empty(result.OcorrenciasUltrapassadas);Assert.Single(await Redis.StreamRangeAsync(_stream));
         Assert.Equal(0,(await State()).Observada.UltimaParadaOrdem);
     }
+
+    [Fact]
+    public async Task Ativa_GlobalB_ProjecaoAAvancaA_EEmiteSomenteParadaA_SemDuplicarNoRetorno()
+    {
+        var repository=Repository();
+        Assert.Equal(ViagemObservadaStatus.Created,
+            (await repository.TentarAtualizarAsync(G(0,.19),default)).Status);
+        var contexto=Assert.IsType<ContextoOperacional>(
+            await repository.LerContextoAsync(_ordem,default));
+        var observacionalB=G(10,.80,true) with { CodigoLinha="414" };
+        var projecaoA=ResultadoProjecaoOperacional.Encontrada(
+            new(db.R1,.21,3,2220));
+
+        var resultado=await repository.TentarAtualizarAsync(
+            observacionalB,contexto,projecaoA,default);
+
+        Assert.Equal(ViagemObservadaStatus.Updated,resultado.Status);
+        var estado=await State();
+        Assert.Equal(db.R1,estado.Observada.ItinerarioId);
+        Assert.Equal("VIAGEM3",estado.CodigoLinha);
+        Assert.Equal(db.S1,estado.SentidoId);
+        Assert.Equal(.21,estado.Observada.PosicaoNaRotaConfirmada);
+        var passagem=Assert.Single(resultado.OcorrenciasUltrapassadas);
+        Assert.Equal(db.Occurrences[0],passagem.Id);
+        Assert.Equal(db.R1,passagem.ItinerarioId);
+        Assert.Equal(2,await Redis.StreamLengthAsync(_stream));
+        var eventos=(await Redis.StreamRangeAsync(_stream))
+            .Select(x=>EventoViagemValidator.Parse(x.Values.ToDictionary(
+                v=>v.Name.ToString(),v=>v.Value.ToString()))).ToArray();
+        Assert.DoesNotContain(eventos,e=>e.ItinerarioId==db.R2);
+
+        var retorno=await repository.TentarAtualizarAsync(G(20,.21),
+            Assert.IsType<ContextoOperacional>(await repository.LerContextoAsync(_ordem,default)),
+            ResultadoProjecaoOperacional.Encontrada(new(db.R1,.21,2,2220)),default);
+        Assert.Equal(ViagemObservadaStatus.Updated,retorno.Status);
+        Assert.Empty(retorno.OcorrenciasUltrapassadas);
+        Assert.Equal(2,await Redis.StreamLengthAsync(_stream));
+    }
+
+    [Fact]
+    public async Task SnapshotAusente_ETransportadoComoCasVazio()
+    {
+        var contexto=Assert.IsType<ContextoOperacional>(
+            await Repository().LerContextoAsync(_ordem,default));
+
+        Assert.Empty(contexto.SnapshotCas);
+        Assert.Null(contexto.Observada);
+        Assert.Null(contexto.Estado);
+        Assert.False(contexto.PodeProjetar);
+    }
+
+    [Fact]
+    public async Task PossivelFim_GlobalB_ProjecaoTerminalAContinuaConfirmacoesEFinalizaA()
+    {
+        await Terminal();
+        var repository=Repository();
+        var primeira=await repository.TentarAtualizarAsync(G(110,.10,true),
+            Assert.IsType<ContextoOperacional>(await repository.LerContextoAsync(_ordem,default)),
+            ResultadoProjecaoOperacional.Encontrada(new(db.R1,.66,2,2220)),default);
+        Assert.Equal(ViagemObservadaStatus.Updated,primeira.Status);
+        Assert.Equal(1,(await State()).ConfirmacoesPosTerminal);
+
+        var segunda=await repository.TentarAtualizarAsync(G(120,.11,true),
+            Assert.IsType<ContextoOperacional>(await repository.LerContextoAsync(_ordem,default)),
+            ResultadoProjecaoOperacional.Encontrada(new(db.R1,.67,2,2220)),default);
+        var final=await State();
+        Assert.Equal(ViagemObservadaStatus.Updated,segunda.Status);
+        Assert.Equal(EstadoViagem.Finalizada,final.Estado);
+        Assert.Equal(db.R1,final.Observada.ItinerarioId);
+        Assert.Equal(db.S1,final.SentidoId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DivergenciaComProjecaoInelegivelOuFalha_CongelaA_SemEvento(bool infraestrutura)
+    {
+        await Terminal();
+        var repository=Repository();
+        var contexto=Assert.IsType<ContextoOperacional>(
+            await repository.LerContextoAsync(_ordem,default));
+        var antes=(await Redis.HashGetAllAsync(Key)).OrderBy(x=>x.Name.ToString()).ToArray();
+        var eventosAntes=await Redis.StreamLengthAsync(_stream);
+        var projecao=infraestrutura
+            ? ResultadoProjecaoOperacional.Falha()
+            : ResultadoProjecaoOperacional.Inelegivel();
+
+        var resultado=await repository.TentarAtualizarAsync(
+            G(110,.10,true),contexto,projecao,default);
+
+        Assert.Equal(infraestrutura
+            ? ViagemObservadaStatus.InfrastructureFailure
+            : ViagemObservadaStatus.ItineraryChanged,resultado.Status);
+        Assert.Equal(antes,(await Redis.HashGetAllAsync(Key)).OrderBy(x=>x.Name.ToString()).ToArray());
+        Assert.Equal(eventosAntes,await Redis.StreamLengthAsync(_stream));
+        Assert.Equal(0,(await State()).ConfirmacoesPosTerminal);
+    }
+
+    [Fact]
+    public async Task ProjecaoARegressiva_ERejeitadaSemAlterarCursorOuHash()
+    {
+        var repository=Repository();
+        await repository.TentarAtualizarAsync(G(0,.30),default);
+        var contexto=Assert.IsType<ContextoOperacional>(
+            await repository.LerContextoAsync(_ordem,default));
+        var antes=(await Redis.HashGetAllAsync(Key)).OrderBy(x=>x.Name.ToString()).ToArray();
+
+        var resultado=await repository.TentarAtualizarAsync(G(10,.80,true),contexto,
+            ResultadoProjecaoOperacional.Encontrada(new(db.R1,.29,2,2220)),default);
+
+        Assert.Equal(ViagemObservadaStatus.ItineraryChanged,resultado.Status);
+        Assert.Equal(antes,(await Redis.HashGetAllAsync(Key)).OrderBy(x=>x.Name.ToString()).ToArray());
+        Assert.Single(await Redis.StreamRangeAsync(_stream));
+    }
+
+    [Fact]
+    public async Task SnapshotMudaDepoisDaProjecao_CasRejeitaESemPassagemIncorreta()
+    {
+        var repository=Repository();
+        await repository.TentarAtualizarAsync(G(0,.19),default);
+        var contextoAntigo=Assert.IsType<ContextoOperacional>(
+            await repository.LerContextoAsync(_ordem,default));
+        await repository.TentarAtualizarAsync(G(10,.21),default);
+        var hashDepoisDoConcorrente=(await Redis.HashGetAllAsync(Key))
+            .OrderBy(x=>x.Name.ToString()).ToArray();
+        var eventosDepoisDoConcorrente=await Redis.StreamLengthAsync(_stream);
+
+        var resultado=await repository.TentarAtualizarAsync(G(20,.80,true),contextoAntigo,
+            ResultadoProjecaoOperacional.Encontrada(new(db.R1,.41,2,2220)),default);
+
+        Assert.Equal(ViagemObservadaStatus.Conflict,resultado.Status);
+        Assert.Equal(hashDepoisDoConcorrente,(await Redis.HashGetAllAsync(Key))
+            .OrderBy(x=>x.Name.ToString()).ToArray());
+        Assert.Equal(eventosDepoisDoConcorrente,await Redis.StreamLengthAsync(_stream));
+    }
 }

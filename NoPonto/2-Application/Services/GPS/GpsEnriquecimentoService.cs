@@ -51,14 +51,24 @@ public sealed class GpsEnriquecimentoService
         _logger      = logger;
     }
 
-    public Task<PosicaoVeiculoDto> EnriquecerAsync(
+    public async Task<PosicaoVeiculoDto> EnriquecerAsync(
         PosicaoVeiculoDto posicao,
-        CancellationToken ct) => EnriquecerAsync(posicao, ct, null);
+        CancellationToken ct) => (await EnriquecerCoreAsync(posicao, null, ct, null)).Posicao;
 
     internal async Task<PosicaoVeiculoDto> EnriquecerAsync(
         PosicaoVeiculoDto posicao,
         CancellationToken ct,
-        GpsCicloPerformance? performance)
+        GpsCicloPerformance? performance) =>
+        (await EnriquecerCoreAsync(posicao, null, ct, performance)).Posicao;
+
+    internal Task<ResultadoEnriquecimentoGps> EnriquecerComContextoAsync(
+        PosicaoVeiculoDto posicao, ContextoOperacional? contexto,
+        CancellationToken ct, GpsCicloPerformance? performance) =>
+        EnriquecerCoreAsync(posicao, contexto, ct, performance);
+
+    private async Task<ResultadoEnriquecimentoGps> EnriquecerCoreAsync(
+        PosicaoVeiculoDto posicao, ContextoOperacional? contexto,
+        CancellationToken ct, GpsCicloPerformance? performance)
     {
         // ── 1. Bearing e velocidade ───────────────────────────────────────────
         double? bearing     = CalcularBearingConfiavel(posicao);
@@ -97,9 +107,25 @@ public sealed class GpsEnriquecimentoService
 
         // ── 2. Busca rota via PostGIS ─────────────────────────────────────────
         EnriquecimentoRotaDto? rota = null;
+        EnriquecimentoRotaDto? rotaGlobalObservacional = null;
         ResultadoMatchingCombinado? matchingCombinado = null;
         ItinerarioConfirmado? historicoParaCombinado = null;
         FaixaProjecao? faixaCandidata = null;
+        SolicitacaoProjecaoOperacional? solicitacaoOperacional = null;
+        var resultadoOperacional = ResultadoProjecaoOperacional.NaoSolicitada();
+        TimeSpan? duracaoComandoOperacional = null;
+
+        if (contexto?.PodeProjetar == true && contexto.Estado is { } estadoOperacional)
+        {
+            var segundos = (posicao.TimestampGps
+                - estadoOperacional.Observada.TimestampUltimaAtualizacao).TotalSeconds;
+            var orcamento = segundos > 0 ? OrcamentoProjecaoMetros(segundos) : 0;
+            if (double.IsFinite(orcamento) && orcamento > 0)
+                solicitacaoOperacional = new(estadoOperacional.Observada.ItinerarioId,
+                    estadoOperacional.Observada.PosicaoNaRotaConfirmada, orcamento);
+            else
+                resultadoOperacional = ResultadoProjecaoOperacional.Inelegivel();
+        }
 
         if (bearing.HasValue)
         {
@@ -107,27 +133,30 @@ public sealed class GpsEnriquecimentoService
                 && historicoParaCombinado.Rota is not null)
                 faixaCandidata = CalcularFaixaProjecao(posicao, historicoParaCombinado);
 
-            if (faixaCandidata is { } faixaValida
-                && historicoParaCombinado?.Rota is { } rotaHistorica)
+            if ((faixaCandidata.HasValue && historicoParaCombinado?.Rota is not null)
+                || solicitacaoOperacional.HasValue)
             {
                 var inicioMatching = System.Diagnostics.Stopwatch.GetTimestamp();
                 try
                 {
                     matchingCombinado = await _repositorio.BuscarMatchingCombinadoAsync(
-                        posicao.CodigoLinha, rotaHistorica.ItinerarioId,
+                        posicao.CodigoLinha, historicoParaCombinado?.Rota?.ItinerarioId,
                         posicao.Latitude, posicao.Longitude, bearing.Value,
-                        _opcoes.DistanciaMaximaRotaMetros, faixaValida, ct);
+                        _opcoes.DistanciaMaximaRotaMetros, faixaCandidata,
+                        solicitacaoOperacional, ct);
                 }
                 finally
                 {
+                    var duracao = System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatching);
                     performance?.RegistrarMatchingCombinado(
-                        System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatching),
-                        matchingCombinado);
+                        duracao, matchingCombinado);
+                    if (solicitacaoOperacional.HasValue) duracaoComandoOperacional = duracao;
                 }
 
                 rota = matchingCombinado?.Global.Status == StatusBuscaItinerario.Found
                     ? matchingCombinado.Global.Rota
                     : null;
+                rotaGlobalObservacional = rota;
                 if (matchingCombinado?.Global.Status == StatusBuscaItinerario.InfrastructureFailure)
                     _logger.LogWarning(
                         "Veiculo {ordem}: falha no matching combinado; sem matching neste ciclo.",
@@ -151,6 +180,7 @@ public sealed class GpsEnriquecimentoService
                     performance?.RegistrarMatchingGlobal(
                         System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatching));
                 }
+                rotaGlobalObservacional = rota;
             }
         }
         else if (_itinerarioAtual.TryGetValue(posicao.Ordem, out var semBearing))
@@ -255,6 +285,34 @@ public sealed class GpsEnriquecimentoService
             rota = null;
         }
 
+        if (contexto?.PodeProjetar == true && contexto.Estado is { } operacional)
+        {
+            if (rotaGlobalObservacional is not null
+                && rotaGlobalObservacional.ItinerarioId == operacional.Observada.ItinerarioId)
+            {
+                var avancoMetros = (rotaGlobalObservacional.PosicaoNaRota
+                    - operacional.Observada.PosicaoNaRotaConfirmada)
+                    * rotaGlobalObservacional.ComprimentoRotaMetros;
+                var segundos = (posicao.TimestampGps
+                    - operacional.Observada.TimestampUltimaAtualizacao).TotalSeconds;
+                var limite = segundos > 0 ? OrcamentoProjecaoMetros(segundos) : 0;
+                resultadoOperacional = avancoMetros >= 0 && avancoMetros <= limite
+                    ? ResultadoProjecaoOperacional.Encontrada(new(rotaGlobalObservacional.ItinerarioId,
+                        rotaGlobalObservacional.PosicaoNaRota,
+                        rotaGlobalObservacional.DistanciaARotaMetros,
+                        rotaGlobalObservacional.ComprimentoRotaMetros))
+                    : ResultadoProjecaoOperacional.Inelegivel();
+            }
+            else if (solicitacaoOperacional.HasValue)
+            {
+                resultadoOperacional = matchingCombinado?.Operacional
+                    ?? ResultadoProjecaoOperacional.Inelegivel();
+            }
+
+            performance?.RegistrarProjecaoOperacional(resultadoOperacional.Status,
+                duracaoComandoOperacional ?? TimeSpan.Zero);
+        }
+
         // ── 3. Estabilidade de itinerario ─────────────────────────────────────
         if (rota is not null)
         {
@@ -291,7 +349,7 @@ public sealed class GpsEnriquecimentoService
 
         }
 
-        return posicao with
+        return new(posicao with
         {
             Bearing                      = bearing,
             VelocidadeMedia              = velocidadeMedia,
@@ -300,7 +358,7 @@ public sealed class GpsEnriquecimentoService
             ItinerarioId                 = rota?.ItinerarioId,
             ProximaParadaNome            = rota?.ProximaParadaNome,
             DistanciaProximaParadaMetros = rota?.DistanciaProximaParadaMetros,
-        };
+        }, contexto, resultadoOperacional);
     }
 
     public PosicaoVeiculoDto AtualizarHistoricoVelocidade(PosicaoVeiculoDto posicao)

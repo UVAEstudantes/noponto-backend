@@ -377,7 +377,6 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(
 builder.Services.AddSingleton<IPosicaoVeiculoCacheRepository, PosicaoVeiculoCacheRepository>();
 builder.Services.AddSingleton<IViagemObservadaRepository, ViagemOperacionalRepository>();
 builder.Services.AddSingleton<IOcorrenciaParadaRepository, OcorrenciaParadaRepository>();
-builder.Services.AddSingleton<ItineraryDivergenceTracker>();
 builder.Services.AddSingleton<ViagemObservadaService>();
 builder.Services.AddSingleton<IPosicaoVeiculoPayloadWriter, PosicaoVeiculoPayloadWriter>();
 builder.Services.AddSingleton<PosicaoVeiculoTsBootstrapper>();

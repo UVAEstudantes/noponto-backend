@@ -2,6 +2,14 @@ namespace NoPonto.Application.GPS;
 
 public interface IViagemObservadaRepository
 {
+    Task<ContextoOperacional?> LerContextoAsync(string ordem, CancellationToken ct) =>
+        Task.FromResult<ContextoOperacional?>(null);
+
+    Task<ViagemObservadaResultado> TentarAtualizarAsync(
+        PosicaoVeiculoDto posicao, ContextoOperacional? contexto,
+        ResultadoProjecaoOperacional projecao, CancellationToken ct) =>
+        TentarAtualizarAsync(posicao, ct);
+
     Task<ViagemObservadaResultado> TentarAtualizarAsync(PosicaoVeiculoDto posicao, CancellationToken ct) =>
         TentarAtualizarAsync(posicao.Ordem, posicao.ItinerarioId!.Value,
             posicao.TimestampGps, posicao.PosicaoNaRota!.Value, ct);

@@ -21,7 +21,33 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
         DateTimeOffset timestampGps, double posicaoNaRota, CancellationToken ct) =>
         Task.FromResult(new ViagemObservadaResultado(ViagemObservadaStatus.InvalidState));
 
-    public async Task<ViagemObservadaResultado> TentarAtualizarAsync(PosicaoVeiculoDto gps, CancellationToken ct)
+    public async Task<ContextoOperacional?> LerContextoAsync(string ordem, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(ordem)) return null;
+        var read = (RedisResult[])(await redis.GetDatabase().ScriptEvaluateAsync(
+            ViagemOperacionalRedisScript.Read,
+            [ViagemObservadaRepository.ChaveVeiculoViagem(ordem)]))!;
+        var snapshot = read.Select(v => (string)v!).ToArray();
+        if (snapshot.Length == 0) return new(snapshot, null, null);
+        var values = Enumerable.Range(0, snapshot.Length / 2)
+            .ToDictionary(i => snapshot[2 * i], i => snapshot[2 * i + 1]);
+        var observed = ViagemOperacionalCodec.Observada(values, ordem);
+        var state = values.Count is 19 or 21
+            ? ViagemOperacionalCodec.Decode(values, ordem) : null;
+        return new(snapshot, observed, state);
+    }
+
+    public Task<ViagemObservadaResultado> TentarAtualizarAsync(PosicaoVeiculoDto gps, CancellationToken ct) =>
+        TentarAtualizarInternoAsync(gps, null, ResultadoProjecaoOperacional.NaoSolicitada(), false, ct);
+
+    public Task<ViagemObservadaResultado> TentarAtualizarAsync(
+        PosicaoVeiculoDto gps, ContextoOperacional? contexto,
+        ResultadoProjecaoOperacional projecao, CancellationToken ct) =>
+        TentarAtualizarInternoAsync(gps, contexto, projecao, true, ct);
+
+    private async Task<ViagemObservadaResultado> TentarAtualizarInternoAsync(
+        PosicaoVeiculoDto gps, ContextoOperacional? contexto,
+        ResultadoProjecaoOperacional projecao, bool snapshotFornecido, CancellationToken ct)
     {
         if (gps.ItinerarioId is not { } itinerary || itinerary == Guid.Empty || gps.PosicaoNaRota is not { } p
             || !double.IsFinite(p) || p is < 0 or > 1 || string.IsNullOrWhiteSpace(gps.Ordem)
@@ -36,8 +62,10 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             for (var attempt = 0; attempt < ViagemObservadaRepository.MaxTentativas; attempt++)
             {
                 ct.ThrowIfCancellationRequested();
-                var read = (RedisResult[])(await db.ScriptEvaluateAsync(ViagemOperacionalRedisScript.Read, [key]))!;
-                var snapshot = read.Select(v => (string)v!).ToArray();
+                var snapshot = snapshotFornecido && attempt == 0
+                    ? contexto?.SnapshotCas.ToArray() ?? []
+                    : ((RedisResult[])(await db.ScriptEvaluateAsync(
+                        ViagemOperacionalRedisScript.Read, [key]))!).Select(v => (string)v!).ToArray();
                 var values = Enumerable.Range(0, snapshot.Length / 2).ToDictionary(i => snapshot[2*i], i => snapshot[2*i+1]);
                 var observed = snapshot.Length == 0 ? null : ViagemOperacionalCodec.Observada(values, gps.Ordem);
                 var legacy = observed is not null && values.Count is 6 or 8;
@@ -45,8 +73,34 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                 var previous = observed is null || legacy ? null : ViagemOperacionalCodec.Decode(values, gps.Ordem);
                 if (observed is not null && gps.TimestampGps <= observed.TimestampUltimaAtualizacao)
                     return new(ViagemObservadaStatus.RejectedOlderOrEqual, observed);
+                var gpsOperacional = gps;
+                var usandoProjecao = false;
+                var divergente = previous?.Estado is EstadoViagem.Ativa or EstadoViagem.PossivelFim
+                    && observed!.ItinerarioId != itinerary;
+                if (divergente && projecao.Status != StatusProjecaoOperacional.NaoSolicitada)
+                {
+                    if (projecao.Status == StatusProjecaoOperacional.FalhaInfraestrutura)
+                        return new(ViagemObservadaStatus.InfrastructureFailure, observed);
+                    if (projecao.Status != StatusProjecaoOperacional.Encontrada
+                        || projecao.Projecao is not { } op
+                        || op.ItinerarioId != observed!.ItinerarioId
+                        || !double.IsFinite(op.PosicaoNaRota) || op.PosicaoNaRota is < 0 or > 1
+                        || op.PosicaoNaRota < observed.PosicaoNaRotaConfirmada
+                        || !double.IsFinite(op.ComprimentoRotaMetros) || op.ComprimentoRotaMetros <= 0)
+                        return Divergencia(observed!);
+                    gpsOperacional = gps with
+                    {
+                        CodigoLinha = previous!.CodigoLinha,
+                        ItinerarioId = previous.Observada.ItinerarioId,
+                        PosicaoNaRota = op.PosicaoNaRota,
+                        ComprimentoRotaMetros = op.ComprimentoRotaMetros,
+                    };
+                    itinerary = op.ItinerarioId;
+                    p = op.PosicaoNaRota;
+                    usandoProjecao = true;
+                }
                 if (previous?.Estado == EstadoViagem.Ativa && observed!.ItinerarioId != itinerary)
-                    return new(ViagemObservadaStatus.ItineraryChanged, observed);
+                    return Divergencia(observed);
                 // O mesmo snapshot SQL identifica linha/sentido e valida a sequência de paradas.
                 EstruturaViagem? structure;
                 TransicaoParadas transition;
@@ -54,7 +108,10 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                 {
                     await using var connection = await source.OpenConnectionAsync(ct);
                     await using var transaction = await connection.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
-                    structure = await EstruturaAsync(connection, transaction, gps, ct);
+                    structure = usandoProjecao && previous is not null
+                        ? new(previous.Observada.ItinerarioId, previous.LinhaId,
+                            previous.SentidoId, previous.CodigoLinha, true)
+                        : await EstruturaAsync(connection, transaction, gpsOperacional, ct);
                     if (structure is null) return new(ViagemObservadaStatus.InvalidSequence);
                     if (legacy)
                     {
@@ -71,7 +128,8 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                     if (transition.Status != ViagemObservadaStatus.Updated) return new(transition.Status);
                     await transaction.CommitAsync(ct);
                 }
-                var decision = ViagemOperacionalRegra.Decidir(previous, structure, gps, transition, Guid.NewGuid(), legacySemCursor);
+                var decision = ViagemOperacionalRegra.Decidir(previous, structure, gpsOperacional,
+                    transition, Guid.NewGuid(), legacySemCursor);
                 var next = ViagemOperacionalCodec.Encode(decision.Estado);
                 _ = ViagemOperacionalCodec.Decode(ViagemOperacionalCodec.Names.Zip(next).ToDictionary(x => x.First, x => x.Second), gps.Ordem);
                 var events = decision.Eventos.Select(Fields).ToArray();
@@ -79,7 +137,12 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                 var status = (ViagemObservadaStatus)(int)await db.ScriptEvaluateAsync(ViagemOperacionalRedisScript.Commit,
                     [key, StreamKey], [JsonSerializer.Serialize(snapshot), JsonSerializer.Serialize(next),
                         JsonSerializer.Serialize(events), ViagemOperacionalCodec.Tick(DateTimeOffset.UtcNow.Add(GpsLeituraValidator.ToleranciaFuturo))]);
-                if (status == ViagemObservadaStatus.Conflict) continue;
+                if (status == ViagemObservadaStatus.Conflict)
+                {
+                    if (!snapshotFornecido) continue;
+                    _ = await LerContextoAsync(gps.Ordem, ct); // Não reutiliza projeção contra snapshot novo.
+                    return new(ViagemObservadaStatus.Conflict, observed);
+                }
                 return new(status, status is ViagemObservadaStatus.Created or ViagemObservadaStatus.Updated
                     ? decision.Estado.Observada : observed)
                 {
@@ -101,6 +164,9 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             return new(ViagemObservadaStatus.InfrastructureFailure);
         }
     }
+
+    private static ViagemObservadaResultado Divergencia(ViagemObservadaState observed) =>
+        new(ViagemObservadaStatus.ItineraryChanged, observed);
 
     internal static Dictionary<string, string> Fields(EventoViagem evento)
     {

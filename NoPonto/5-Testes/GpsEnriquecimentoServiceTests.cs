@@ -20,6 +20,8 @@ internal sealed class FakeGpsItinerarioRepository : IGpsItinerarioRepository
     public Queue<ResultadoBuscaItinerario> RespostasDirecionadas { get; } = new();
     public List<FaixaProjecao?> FaixasDirecionadas { get; } = new();
     public List<FaixaProjecao> FaixasCombinadas { get; } = new();
+    public List<SolicitacaoProjecaoOperacional?> SolicitacoesOperacionais { get; } = new();
+    public Queue<ResultadoProjecaoOperacional> RespostasOperacionais { get; } = new();
     private EnriquecimentoRotaDto? _globalAtual;
     public List<(string Linha, Guid Id, double Lat, double Lon, double Bearing, double Limite)>
         ChamadasDirecionadas { get; } = new();
@@ -52,13 +54,16 @@ internal sealed class FakeGpsItinerarioRepository : IGpsItinerarioRepository
     }
 
     public Task<ResultadoMatchingCombinado> BuscarMatchingCombinadoAsync(
-        string codigoLinha, Guid itinerarioAnteriorId, double latitude, double longitude,
-        double bearing, double distanciaMaximaMetros, FaixaProjecao faixa,
+        string codigoLinha, Guid? itinerarioAnteriorId, double latitude, double longitude,
+        double bearing, double distanciaMaximaMetros, FaixaProjecao? faixa,
+        SolicitacaoProjecaoOperacional? projecaoOperacional = null,
         CancellationToken cancellationToken = default)
     {
         ChamadasMatchingCombinado++;
         ChamadasBuscarEnriquecimento++;
-        FaixasCombinadas.Add(faixa);
+        if (faixa is { } faixaValida)
+            FaixasCombinadas.Add(faixaValida);
+        SolicitacoesOperacionais.Add(projecaoOperacional);
         if (RespostasCombinadas.Count > 0)
             return Task.FromResult(RespostasCombinadas.Dequeue());
         var global = Respostas.Count > 0 ? Respostas.Dequeue() : null;
@@ -66,12 +71,17 @@ internal sealed class FakeGpsItinerarioRepository : IGpsItinerarioRepository
         var resultadoGlobal = global is null
             ? ResultadoBuscaItinerario.NotEligible()
             : ResultadoBuscaItinerario.Found(global);
-        var anterior = global?.ItinerarioId == itinerarioAnteriorId
+        var anterior = itinerarioAnteriorId.HasValue && global?.ItinerarioId == itinerarioAnteriorId.Value
             ? RespostasDirecionadas.Count > 0
                 ? RespostasDirecionadas.Dequeue()
                 : ResultadoBuscaItinerario.Found(global)
             : ResultadoBuscaItinerario.NotEligible();
-        return Task.FromResult(new ResultadoMatchingCombinado(resultadoGlobal, anterior));
+        var operacional = projecaoOperacional is null
+            ? ResultadoProjecaoOperacional.NaoSolicitada()
+            : RespostasOperacionais.Count > 0
+                ? RespostasOperacionais.Dequeue()
+                : ResultadoProjecaoOperacional.Inelegivel();
+        return Task.FromResult(new ResultadoMatchingCombinado(resultadoGlobal, anterior, operacional));
     }
 
     public Task<string?> BuscarGeometriaGeoJsonAsync(
@@ -1313,5 +1323,71 @@ public class GpsEnriquecimentoServiceTests
         Assert.Equal(1, repo.ChamadasGlobaisSimples);
         Assert.Equal(0, repo.ChamadasMatchingCombinado);
         Assert.Empty(repo.ChamadasDirecionadas);
+    }
+
+    [Fact]
+    public async Task ProjecaoOperacional_GlobalB_EAInterno_SaemDaMesmaChamadaSemContaminarDto()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var servico = CriarServico(repo);
+        var itinerarioA = Guid.NewGuid();
+        var itinerarioB = Guid.NewGuid();
+        var linhaA = Guid.NewGuid();
+        var sentidoA = Guid.NewGuid();
+        var gps = Posicao22(5) with { CodigoLinha = "414" };
+        var observada = new ViagemObservadaState(Guid.NewGuid(), gps.Ordem, itinerarioA,
+            Posicao22(0).TimestampGps, Posicao22(0).TimestampGps, .20);
+        var contexto = new ContextoOperacional([], observada,
+            new(observada, "313", linhaA, sentidoA));
+
+        repo.Respostas.Enqueue(Rota22(.70, id: itinerarioB, distancia: 3));
+        repo.RespostasOperacionais.Enqueue(ResultadoProjecaoOperacional.Encontrada(
+            new(itinerarioA, .21, 4, 10_000)));
+
+        var resultado = await servico.EnriquecerComContextoAsync(gps, contexto, default, null);
+
+        Assert.Equal(itinerarioB, resultado.Posicao.ItinerarioId);
+        Assert.Equal("414", resultado.Posicao.CodigoLinha);
+        Assert.Equal(.70, resultado.Posicao.PosicaoNaRota);
+        Assert.Equal(StatusProjecaoOperacional.Encontrada, resultado.ProjecaoOperacional.Status);
+        Assert.Equal(itinerarioA, resultado.ProjecaoOperacional.Projecao!.ItinerarioId);
+        Assert.Equal(.21, resultado.ProjecaoOperacional.Projecao.PosicaoNaRota);
+        Assert.Equal(1, repo.ChamadasMatchingCombinado);
+        Assert.Equal(0, repo.ChamadasGlobaisSimples);
+        Assert.Empty(repo.ChamadasDirecionadas);
+        Assert.Equal(itinerarioA,
+            Assert.Single(repo.SolicitacoesOperacionais)!.Value.ItinerarioId);
+    }
+
+    [Fact]
+    public async Task GlobalA_ComHisteresePublicandoB_ReutilizaAParaOperacaoSemRamoRedundante()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var servico = CriarServico(repo);
+        var itinerarioA = Guid.NewGuid();
+        var itinerarioB = Guid.NewGuid();
+        var primeira = Posicao22(0);
+        repo.Respostas.Enqueue(Rota22(.50, id: itinerarioB, distancia: 4));
+        await servico.EnriquecerAsync(primeira, default);
+
+        var observada = new ViagemObservadaState(Guid.NewGuid(), primeira.Ordem, itinerarioA,
+            primeira.TimestampGps, primeira.TimestampGps, .20);
+        var contexto = new ContextoOperacional([], observada,
+            new(observada, "313", Guid.NewGuid(), Guid.NewGuid()));
+        repo.Respostas.Enqueue(Rota22(.21, id: itinerarioA, distancia: 3));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(
+            Rota22(.51, id: itinerarioB, distancia: 4)));
+
+        var resultado = await servico.EnriquecerComContextoAsync(
+            Posicao22(5), contexto, default, null);
+
+        Assert.Equal(itinerarioB, resultado.Posicao.ItinerarioId);
+        Assert.Equal(.51, resultado.Posicao.PosicaoNaRota);
+        Assert.Equal(StatusProjecaoOperacional.Encontrada,
+            resultado.ProjecaoOperacional.Status);
+        Assert.Equal(itinerarioA, resultado.ProjecaoOperacional.Projecao!.ItinerarioId);
+        Assert.Equal(.21, resultado.ProjecaoOperacional.Projecao.PosicaoNaRota);
+        Assert.Single(repo.SolicitacoesOperacionais);
+        Assert.Empty(repo.RespostasOperacionais);
     }
 }

@@ -46,7 +46,7 @@ public sealed class ViagemObservadaServiceTests
     }
 
     private static ViagemObservadaService Service(Repository repo) =>
-        new(repo, NullLogger<ViagemObservadaService>.Instance, new ItineraryDivergenceTracker());
+        new(repo, NullLogger<ViagemObservadaService>.Instance);
 
     private static GpsPollingService Polling(PositionCache cache, Repository repo, ITelemetriaMlIngress? telemetria = null) =>
         new(null!, null!, null!, NullLogger<GpsPollingService>.Instance, null!, null!,
@@ -155,7 +155,7 @@ public sealed class ViagemObservadaServiceTests
     }
 
     [Fact]
-    public async Task DivergenciaIsolada_RegistraOcorrenciaEUmVeiculo_SemAlterarResultado()
+    public async Task Divergencia_RegistraContadorAgregadoSemAlterarResultado()
     {
         var posicao = Position();
         var repo = new Repository { Status = ViagemObservadaStatus.ItineraryChanged,
@@ -167,76 +167,5 @@ public sealed class ViagemObservadaServiceTests
 
         Assert.Equal(ViagemObservadaStatus.ItineraryChanged, result!.Value.Status);
         Assert.Equal(1, metrics.ItineraryChangedOcorrencias);
-        Assert.Equal(1, metrics.ItineraryChangedVeiculos);
-        Assert.Equal(0, metrics.ItineraryChangedPersistentesMais2);
-    }
-
-    [Fact]
-    public async Task DivergenciaRepetida_DoisVeiculos_AgregaPersistenciaEDistintos()
-    {
-        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
-        using var scope = GpsCommitPerformanceContext.Push(metrics);
-        var tracker = new ItineraryDivergenceTracker();
-        var old = Guid.NewGuid();
-        var service = new ViagemObservadaService(
-            new Repository { Status = ViagemObservadaStatus.ItineraryChanged, ItinerarioAnterior = old },
-            NullLogger<ViagemObservadaService>.Instance, tracker);
-        var first = Position() with { Ordem = "V1" };
-        var second = Position() with { Ordem = "V2" };
-
-        await service.AtualizarAsync(first, default);
-        await service.AtualizarAsync(first with { TimestampGps = first.TimestampGps.AddSeconds(1) }, default);
-        await service.AtualizarAsync(first with { TimestampGps = first.TimestampGps.AddSeconds(2) }, default);
-        await service.AtualizarAsync(second, default);
-
-        Assert.Equal(4, metrics.ItineraryChangedOcorrencias);
-        Assert.Equal(2, metrics.ItineraryChangedVeiculos);
-        Assert.Equal(1, metrics.ItineraryChangedPersistentesMais2);
-    }
-
-    [Fact]
-    public void RetornoAoOriginal_LimpaENovaDivergenciaReiniciaContagem()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var tracker = new ItineraryDivergenceTracker(() => now);
-        var old = Guid.NewGuid(); var next = Guid.NewGuid();
-
-        Assert.Equal(1, tracker.Registrar("V1", old, next).OcorrenciasConsecutivas);
-        now = now.AddSeconds(31);
-        var repeated = tracker.Registrar("V1", old, next);
-        Assert.Equal(2, repeated.OcorrenciasConsecutivas);
-        Assert.Equal(TimeSpan.FromSeconds(31), repeated.Duracao);
-
-        tracker.Resolver("V1");
-        Assert.Equal(0, tracker.Count);
-        Assert.Equal(1, tracker.Registrar("V1", old, next).OcorrenciasConsecutivas);
-    }
-
-    [Fact]
-    public void MetricasAgregadas_ClassificamDuracaoECalculamMaior()
-    {
-        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
-        metrics.RegistrarDivergenciaItinerario("V1", new(3, TimeSpan.FromSeconds(61), Guid.NewGuid(), Guid.NewGuid()));
-        metrics.RegistrarDivergenciaItinerario("V2", new(2, TimeSpan.FromSeconds(31), Guid.NewGuid(), Guid.NewGuid()));
-
-        Assert.Equal(2, metrics.ItineraryChangedOcorrencias);
-        Assert.Equal(2, metrics.ItineraryChangedVeiculos);
-        Assert.Equal(1, metrics.ItineraryChangedPersistentesMais2);
-        Assert.Equal(2, metrics.ItineraryChangedMais30s);
-        Assert.Equal(1, metrics.ItineraryChangedMais60s);
-        Assert.Equal(61, metrics.ItineraryChangedMaiorDuracaoSegundos);
-    }
-
-    [Fact]
-    public void Tracker_LimpaEntradaDeVeiculoQueDesapareceu()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var tracker = new ItineraryDivergenceTracker(() => now);
-        tracker.Registrar("V1", Guid.NewGuid(), Guid.NewGuid());
-
-        now = now.Add(ItineraryDivergenceTracker.EntryLifetime).AddSeconds(1);
-        tracker.Registrar("V2", Guid.NewGuid(), Guid.NewGuid());
-
-        Assert.Equal(1, tracker.Count);
     }
 }
