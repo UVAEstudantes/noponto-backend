@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
@@ -22,7 +23,11 @@ public sealed class GpsBrtClient
 
     public async Task<IReadOnlyList<PosicaoVeiculoDto>> BuscarPosicoesAsync(
         CancellationToken ct = default)
+        => (await BuscarResultadoAsync(ct)).Posicoes;
+
+    internal async Task<ResultadoFonteGps> BuscarResultadoAsync(CancellationToken ct = default)
     {
+        var cronometro = Stopwatch.StartNew();
         try
         {
             var resposta = await _http.GetFromJsonAsync<BrtRespostaDto>("", ct);
@@ -30,9 +35,10 @@ public sealed class GpsBrtClient
             if (resposta?.Veiculos is null || resposta.Veiculos.Count == 0)
             {
                 _logger.LogWarning("API BRT retornou resposta vazia.");
-                return [];
+                return ResultadoFonteGps.Vazio(cronometro.Elapsed);
             }
 
+            var recebidoEmUtc = DateTimeOffset.UtcNow;
             var posicoes = resposta.Veiculos
                 .Where(v =>
                     !string.IsNullOrWhiteSpace(v.Codigo) &&
@@ -40,7 +46,7 @@ public sealed class GpsBrtClient
                     v.Linha != "0" &&                          // fora de viagem
                     v.Latitude != 0 &&
                     v.Longitude != 0)
-                .Select(Normalizar)
+                .Select(v => Normalizar(v, recebidoEmUtc))
                 .Where(p => p is not null)
                 .Cast<PosicaoVeiculoDto>()
                 .ToList();
@@ -49,24 +55,40 @@ public sealed class GpsBrtClient
                 "API BRT retornou {total} veículos, {validos} em operação",
                 resposta.Veiculos.Count, posicoes.Count);
 
-            return posicoes;
+            return ResultadoFonteGps.Sucesso(posicoes, cronometro.Elapsed);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Falha HTTP/transporte BRT após {totalMs}ms.", cronometro.Elapsed.TotalMilliseconds);
+            return ResultadoFonteGps.Falha("http_transporte", cronometro.Elapsed);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Falha ao consultar API GPS BRT");
-            return [];
+            return ResultadoFonteGps.Falha("inesperada", cronometro.Elapsed);
         }
     }
 
-    private static PosicaoVeiculoDto? Normalizar(BrtVeiculoDto dto)
+    private static PosicaoVeiculoDto? Normalizar(BrtVeiculoDto dto, DateTimeOffset recebidoEmUtc)
     {
-        if (dto.Latitude == 0 || dto.Longitude == 0)
+        if (!GpsLeituraValidator.CoordenadaValida(dto.Latitude, dto.Longitude))
+            return null;
+
+        DateTimeOffset? bruto = dto.DataHora > 0
+            ? DateTimeOffset.FromUnixTimeMilliseconds(dto.DataHora)
+            : null;
+
+        if (!GpsLeituraValidator.TimestampValido(bruto, DateTimeOffset.UtcNow, out var timestampGps))
             return null;
 
         double? direcao = null;
         if (!string.IsNullOrWhiteSpace(dto.Direcao) &&
             double.TryParse(dto.Direcao.Trim(), out var dir) &&
-            dir >= 0 && dir <= 360)
+            dir is >= 0 and <= 360)
         {
             direcao = dir;
         }
@@ -78,9 +100,12 @@ public sealed class GpsBrtClient
             Latitude          = dto.Latitude,
             Longitude         = dto.Longitude,
             Velocidade        = dto.Velocidade,
-            TimestampGps      = DateTimeOffset.FromUnixTimeMilliseconds(dto.DataHora),
-            TimestampServidor = DateTimeOffset.FromUnixTimeMilliseconds(dto.DataHora),
+            TimestampGps      = timestampGps,
+            TimestampServidor = timestampGps,
             Bearing           = direcao,
+            RecebidoEmUtc     = recebidoEmUtc,
+            ModalFonte        = "BRT",
+            ProvedorFonte     = "BRT_RIO",
         };
     }
 

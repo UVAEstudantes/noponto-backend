@@ -23,6 +23,29 @@ namespace NoPonto.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("NoPonto.Domain.Entities.EventoViagemPersistido", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("TimestampEvento")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("EventId");
+
+                    b.HasIndex("TimestampEvento");
+
+                    b.ToTable("EventosViagem");
+                });
+
             modelBuilder.Entity("NoPonto.Domain.Entities.HistoricoPassagem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -42,7 +65,7 @@ namespace NoPonto.Migrations
                     b.Property<int>("DiaSemana")
                         .HasColumnType("integer");
 
-                    b.Property<double>("DistanciaParadaMetros")
+                    b.Property<double?>("DistanciaParadaMetros")
                         .HasColumnType("double precision");
 
                     b.Property<double?>("DistanciaTrechoMetros")
@@ -61,13 +84,22 @@ namespace NoPonto.Migrations
                     b.Property<Guid>("ParadaId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ParadaItinerarioId")
+                        .HasColumnType("uuid");
+
                     b.Property<double>("PosicaoNaRota")
                         .HasColumnType("double precision");
+
+                    b.Property<Guid?>("SentidoId")
+                        .HasColumnType("uuid");
 
                     b.Property<double?>("TempoDesdeParadaAnteriorSegundos")
                         .HasColumnType("double precision");
 
                     b.Property<DateTimeOffset>("TimestampGps")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("TimestampPassagem")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("TimestampRegistro")
@@ -82,15 +114,32 @@ namespace NoPonto.Migrations
                     b.Property<double?>("VelocidadeMedia")
                         .HasColumnType("double precision");
 
-                    b.HasKey("Id");
+                    b.Property<Guid?>("ViagemId")
+                        .HasColumnType("uuid");
 
-                    b.HasIndex("ItinerarioId");
+                    b.HasKey("Id");
 
                     b.HasIndex("TimestampGps");
 
+                    b.HasIndex("CodigoLinha", "TimestampPassagem");
+
+                    b.HasIndex("ItinerarioId", "TimestampPassagem");
+
                     b.HasIndex("Ordem", "TimestampGps");
 
+                    b.HasIndex("Ordem", "TimestampPassagem");
+
                     b.HasIndex("ParadaId", "TimestampGps");
+
+                    b.HasIndex("ParadaItinerarioId", "TimestampPassagem");
+
+                    b.HasIndex("SentidoId", "TimestampPassagem");
+
+                    b.HasIndex("ViagemId", "ParadaItinerarioId")
+                        .IsUnique()
+                        .HasFilter("\"ViagemId\" IS NOT NULL AND \"ParadaItinerarioId\" IS NOT NULL");
+
+                    b.HasIndex("ViagemId", "TimestampPassagem");
 
                     b.HasIndex("CodigoLinha", "ItinerarioId", "TimestampGps");
 
@@ -462,6 +511,123 @@ namespace NoPonto.Migrations
                     b.ToTable("Tarifas");
                 });
 
+            modelBuilder.Entity("NoPonto.Domain.Entities.TelemetriaVeiculoMl", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Ativo")
+                        .HasColumnType("boolean");
+
+                    b.Property<double?>("Bearing")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("CodigoLinha")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<double?>("ComprimentoRotaMetros")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("DistanciaProximaParadaMetros")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTimeOffset>("EventoCriadoEmUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ItinerarioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double?>("LatitudeProjetada")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("LatitudeRecebida")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("LongitudeProjetada")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("LongitudeRecebida")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Modal")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ObservacaoId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("OrdemVeiculo")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("OrigemPosicao")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<double?>("PosicaoNaRota")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Provedor")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<Guid?>("ProximaParadaItinerarioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("RecebidoEmUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("SentidoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("TimestampEnvioFonte")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("TimestampGps")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("TimestampServidorFonte")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("VelocidadeInstantanea")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("VelocidadeMediaCausal")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid?>("ViagemId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObservacaoId")
+                        .IsUnique();
+
+                    b.HasIndex("CodigoLinha", "TimestampGps");
+
+                    b.HasIndex("OrdemVeiculo", "TimestampGps");
+
+                    b.HasIndex("ViagemId", "TimestampGps")
+                        .HasFilter("\"ViagemId\" IS NOT NULL");
+
+                    b.ToTable("TelemetriasVeiculoMl");
+                });
+
             modelBuilder.Entity("NoPonto.Domain.Entities.Veiculo", b =>
                 {
                     b.Property<Guid>("Id")
@@ -505,9 +671,23 @@ namespace NoPonto.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("NoPonto.Domain.Entities.ParadaItinerario", "ParadaItinerario")
+                        .WithMany()
+                        .HasForeignKey("ParadaItinerarioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("NoPonto.Domain.Entities.Sentido", "Sentido")
+                        .WithMany()
+                        .HasForeignKey("SentidoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Itinerario");
 
                     b.Navigation("Parada");
+
+                    b.Navigation("ParadaItinerario");
+
+                    b.Navigation("Sentido");
                 });
 
             modelBuilder.Entity("NoPonto.Domain.Entities.Itinerario", b =>

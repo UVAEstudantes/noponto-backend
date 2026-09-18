@@ -7,6 +7,22 @@ namespace NoPonto.Application.GPS;
 public interface IGpsItinerarioRepository
 {
     /// <summary>
+    /// Executa em um comando o matching global e o matching de continuidade do
+    /// itinerario anterior dentro de uma faixa valida.
+    /// </summary>
+    Task<ResultadoMatchingCombinado> BuscarMatchingCombinadoAsync(
+        string codigoLinha, Guid? itinerarioAnteriorId, double latitude, double longitude,
+        double bearing, double distanciaMaximaMetros, FaixaProjecao? faixa,
+        SolicitacaoProjecaoOperacional? projecaoOperacional = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reavalia um itinerário na linha/GPS/bearing atuais, distinguindo inelegibilidade de falha.</summary>
+    Task<ResultadoBuscaItinerario> BuscarEnriquecimentoDoItinerarioAsync(
+        string codigoLinha, Guid itinerarioId, double latitude, double longitude,
+        double bearing, double distanciaMaximaMetros, CancellationToken cancellationToken = default,
+        FaixaProjecao? faixa = null);
+
+    /// <summary>
     /// Para um veículo em (latitude, longitude) numa determinada linha, retorna:
     /// - O itinerário (ida ou volta) mais próximo ao veículo;
     /// - A posição na rota (0.0 → 1.0) via ST_LineLocatePoint;
@@ -35,3 +51,31 @@ public interface IGpsItinerarioRepository
         Guid itinerarioId,
         CancellationToken cancellationToken = default);
 }
+
+// Contrato do pipeline GPS; não faz parte dos DTOs HTTP.
+public enum StatusBuscaItinerario { Found, NotEligible, InfrastructureFailure }
+
+// Frações globais da mesma LineString; o orçamento temporal pertence ao service.
+public readonly record struct FaixaProjecao(double Min, double Max)
+{
+    public bool Valida => double.IsFinite(Min) && double.IsFinite(Max)
+        && Min >= 0 && Max <= 1 && Min < Max;
+}
+
+public sealed class ResultadoBuscaItinerario
+{
+    public StatusBuscaItinerario Status { get; }
+    public EnriquecimentoRotaDto? Rota { get; }
+    private ResultadoBuscaItinerario(StatusBuscaItinerario status, EnriquecimentoRotaDto? rota = null)
+        => (Status, Rota) = (status, rota);
+    public static ResultadoBuscaItinerario Found(EnriquecimentoRotaDto rota)
+        => new(StatusBuscaItinerario.Found, rota ?? throw new ArgumentNullException(nameof(rota)));
+    public static ResultadoBuscaItinerario NotEligible() => new(StatusBuscaItinerario.NotEligible);
+    public static ResultadoBuscaItinerario InfrastructureFailure() => new(StatusBuscaItinerario.InfrastructureFailure);
+}
+
+// Contrato interno do pipeline de matching; nao faz parte dos contratos HTTP.
+public sealed record ResultadoMatchingCombinado(
+    ResultadoBuscaItinerario Global,
+    ResultadoBuscaItinerario Anterior,
+    ResultadoProjecaoOperacional? Operacional = null);

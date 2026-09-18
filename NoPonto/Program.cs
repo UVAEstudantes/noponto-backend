@@ -11,6 +11,7 @@ using NoPonto.Application.Interfaces;
 using NoPonto.Application.Services;
 using NoPonto.Application.Services.BackgroundServices;
 using NoPonto.Data.Interfaces;
+using NoPonto.Data.Configuration;
 using NoPonto.Data.Repositories;
 using StackExchange.Redis;
 using System.Net.Sockets;
@@ -143,16 +144,7 @@ var connectionString =
     $"Username={GetEnv("POSTGRES_USER")};" +
     $"Password={GetEnv("POSTGRES_PASSWORD")}";
 
-// Pool externo do Npgsql
-builder.Services.AddSingleton(
-    NpgsqlDataSource.Create(connectionString));
-
-builder.Services.AddDbContext<TransporteDbContext>(options =>
-    options.UseNpgsql(
-        connectionString,
-        x => x.UseNetTopologySuite()
-    )
-);
+builder.Services.AdicionarPostgresCompartilhado(connectionString);
 
 // --------------------------------------------------------------------
 // HTTP CLIENTS
@@ -162,7 +154,16 @@ builder.Services.AddDbContext<TransporteDbContext>(options =>
 builder.Services.AddHttpClient<GpsSppoClient>(client =>
 {
     client.BaseAddress = gpsApiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(gpsHttpTimeoutSeconds);
+    // O timeout SPPO pertence ao coletor dedicado. O handler tipado nao deve
+    // encerrar a transferencia antes do budget proprio configurado nele.
+    client.Timeout = Timeout.InfiniteTimeSpan;
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AutomaticDecompression =
+        System.Net.DecompressionMethods.GZip |
+        System.Net.DecompressionMethods.Deflate |
+        System.Net.DecompressionMethods.Brotli
 });
 
 // GPS BRT
@@ -312,6 +313,9 @@ builder.Services
         o => o.IntervaloSegundos > 0,
         "GpsPolling:IntervaloSegundos deve ser > 0")
     .Validate(
+        o => o.IntervaloBrtSegundos > 0,
+        "GpsPolling:IntervaloBrtSegundos deve ser > 0")
+    .Validate(
         o => o.TtlAtivoSegundos > 0,
         "GpsPolling:TtlAtivoSegundos deve ser > 0")
     .Validate(
@@ -321,19 +325,39 @@ builder.Services
         o => o.VelocidadeMaximaKmh > 0,
         "GpsPolling:VelocidadeMaximaKmh deve ser > 0")
     .Validate(
+        o => double.IsFinite(o.ToleranciaProjecaoMetros) && o.ToleranciaProjecaoMetros > 0,
+        "GpsPolling:ToleranciaProjecaoMetros deve ser finita e > 0")
+    .Validate(
         o => o.JanelaVelocidadeLeituras > 0,
         "GpsPolling:JanelaVelocidadeLeituras deve ser > 0")
     .Validate(
         o => o.DistanciaMaximaRotaMetros > 0,
         "GpsPolling:DistanciaMaximaRotaMetros deve ser > 0")
+    .Validate(o => o.GrauParalelismoViagemObservada > 0,
+        "GpsPolling:GrauParalelismoViagemObservada deve ser > 0")
     .ValidateOnStart();
 
 builder.Services
-    .AddOptions<GpsHistoricoOptions>()
-    .Bind(builder.Configuration.GetSection(GpsHistoricoOptions.Secao));
+    .AddOptions<GpsSppoCollectorOptions>()
+    .Bind(builder.Configuration.GetSection(GpsSppoCollectorOptions.Secao))
+    .Validate(o => o.TimeoutSegundos > 0,
+        "GpsSppoCollector:TimeoutSegundos deve ser > 0")
+    .Validate(o => o.JanelaInicialSegundos > 0,
+        "GpsSppoCollector:JanelaInicialSegundos deve ser > 0")
+    .Validate(o => o.OverlapSegundos >= 0,
+        "GpsSppoCollector:OverlapSegundos deve ser >= 0")
+    .Validate(o => o.IntervaloEntreColetasSegundos > 0,
+        "GpsSppoCollector:IntervaloEntreColetasSegundos deve ser > 0")
+    .ValidateOnStart();
 
-builder.Services.AddSingleton<GpsHistoricoOptions>(sp =>
-    sp.GetRequiredService<IOptions<GpsHistoricoOptions>>().Value);
+builder.Services
+    .AddOptions<TelemetriaMlRetentionOptions>()
+    .Bind(builder.Configuration.GetSection(TelemetriaMlRetentionOptions.Secao))
+    .Validate(o => o.IntervalMinutes > 0, "TelemetriaMlRetention:IntervalMinutes deve ser > 0")
+    .Validate(o => o.MainStreamSafetyMarginMinutes > 0, "TelemetriaMlRetention:MainStreamSafetyMarginMinutes deve ser > 0")
+    .Validate(o => o.DeadLetterRetentionDays > 0, "TelemetriaMlRetention:DeadLetterRetentionDays deve ser > 0")
+    .Validate(o => o.TrimLimit > 0, "TelemetriaMlRetention:TrimLimit deve ser > 0")
+    .ValidateOnStart();
 
 // --------------------------------------------------------------------
 // REDIS
@@ -350,6 +374,13 @@ builder.Services.AddStackExchangeRedisCache(options =>
 builder.Services.AddSingleton<IConnectionMultiplexer>(
     _ => ConnectionMultiplexer.Connect(redisConnection));
 
+builder.Services.AddSingleton<IPosicaoVeiculoCacheRepository, PosicaoVeiculoCacheRepository>();
+builder.Services.AddSingleton<IViagemObservadaRepository, ViagemOperacionalRepository>();
+builder.Services.AddSingleton<IOcorrenciaParadaRepository, OcorrenciaParadaRepository>();
+builder.Services.AddSingleton<ViagemObservadaService>();
+builder.Services.AddSingleton<IPosicaoVeiculoPayloadWriter, PosicaoVeiculoPayloadWriter>();
+builder.Services.AddSingleton<PosicaoVeiculoTsBootstrapper>();
+
 // --------------------------------------------------------------------
 // SERVICES
 // --------------------------------------------------------------------
@@ -361,10 +392,26 @@ builder.Services.AddSingleton<
 
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 
-builder.Services.AddSingleton<GpsHistoricoService>();
+builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();
+builder.Services.AddSingleton(new HistoricoStreamOptions(redisConnection));
+builder.Services.AddHostedService<HistoricoPassagemWorker>();
+
+builder.Services.AddSingleton<TelemetriaMlMetrics>();
+builder.Services.AddHostedService<TelemetriaMlMetricsReporter>();
+builder.Services.AddSingleton<TelemetriaMlStreamPublisher>();
+builder.Services.AddSingleton<ITelemetriaMlIngress>(sp =>
+    sp.GetRequiredService<TelemetriaMlStreamPublisher>());
+builder.Services.AddHostedService(sp =>
+    sp.GetRequiredService<TelemetriaMlStreamPublisher>());
+builder.Services.AddSingleton<ITelemetriaMlRepository, TelemetriaMlRepository>();
+builder.Services.AddHostedService<TelemetriaMlWorker>();
+builder.Services.AddSingleton<TelemetriaMlRetentionMetrics>();
+builder.Services.AddHostedService<TelemetriaMlRetentionService>();
 
 builder.Services.AddSignalR();
 
+builder.Services.AddSingleton<GpsSppoSnapshotStore>();
+builder.Services.AddHostedService<GpsSppoCollectorService>();
 builder.Services.AddHostedService<GpsPollingService>();
 
 //builder.Services.AddScoped<ImportacaoTremService>();
@@ -412,6 +459,12 @@ using (var scope = app.Services.CreateScope())
         .GetRequiredService<TransporteDbContext>();
 
     db.Database.Migrate();
+
+    // Bootstrap idempotente de "veiculo:{ordem}:ts" a partir de "veiculo:{ordem}:ativo"
+    // já existentes. DEVE rodar antes do GpsPollingService começar a escrever,
+    // para que o CAS nunca encontre um :ativo sem :ts correspondente.
+    var bootstrapper = scope.ServiceProvider.GetRequiredService<PosicaoVeiculoTsBootstrapper>();
+    await bootstrapper.ExecutarAsync(CancellationToken.None);
 }
 
 // --------------------------------------------------------------------
