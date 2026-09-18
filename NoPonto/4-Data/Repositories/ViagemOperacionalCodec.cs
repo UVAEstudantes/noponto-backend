@@ -9,7 +9,8 @@ internal static class ViagemOperacionalCodec
         "TimestampObservacaoInicial", "TimestampUltimaAtualizacao", "PosicaoNaRotaConfirmada",
         "UltimaParadaItinerarioId", "UltimaParadaOrdem", "CodigoLinha", "LinhaId", "SentidoId",
         "EstadoViagem", "ConfirmacoesPosTerminal", "TimestampFim", "CandidatoItinerarioId",
-        "CandidatoSentidoId", "CandidatoTimestamp", "CandidatoPosicao", "CandidatoLinhaId"];
+        "CandidatoSentidoId", "CandidatoTimestamp", "CandidatoPosicao", "CandidatoLinhaId",
+        "CandidatoLatitudeInicial", "CandidatoLongitudeInicial"];
     private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
     internal static string Tick(DateTimeOffset t) => t.UtcTicks.ToString("D19", Culture);
     internal static string[] Encode(ViagemOperacionalState state)
@@ -22,11 +23,13 @@ internal static class ViagemOperacionalCodec
             state.LinhaId.ToString("N"), state.SentidoId.ToString("N"), state.Estado.ToString(),
             state.ConfirmacoesPosTerminal.ToString(Culture), state.TimestampFim is { } fim ? Tick(fim) : "",
             c?.ItinerarioId.ToString("N") ?? "", c?.SentidoId.ToString("N") ?? "",
-            c is null ? "" : Tick(c.Timestamp), c?.Posicao.ToString("R", Culture) ?? "", c?.LinhaId.ToString("N") ?? ""];
+            c is null ? "" : Tick(c.Timestamp), c?.Posicao.ToString("R", Culture) ?? "", c?.LinhaId.ToString("N") ?? "",
+            c?.LatitudeInicial?.ToString("R", Culture) ?? "",
+            c?.LongitudeInicial?.ToString("R", Culture) ?? ""];
     }
     internal static ViagemObservadaState Observada(IReadOnlyDictionary<string, string> values, string ordem)
     {
-        if (values.Count is not (6 or 8 or 19) || values.Keys.Any(k => !Names.Contains(k)))
+        if (values.Count is not (6 or 8 or 19 or 21) || values.Keys.Any(k => !Names.Contains(k)))
             throw new FormatException("Hash parcial ou versão desconhecida.");
         string V(int i) => values[Names[i]];
         var initial = Time(V(3));
@@ -39,7 +42,7 @@ internal static class ViagemOperacionalCodec
     }
     internal static ViagemOperacionalState Decode(IReadOnlyDictionary<string, string> values, string ordem)
     {
-        if (values.Count != Names.Length) throw new FormatException("Hash operacional parcial.");
+        if (values.Count is not (19 or 21)) throw new FormatException("Hash operacional parcial.");
         var obs = Observada(values, ordem);
         string V(int i) => values[Names[i]];
         if (string.IsNullOrWhiteSpace(V(8)) || !Enum.TryParse<EstadoViagem>(V(11), out var phase)
@@ -55,11 +58,15 @@ internal static class ViagemOperacionalCodec
         CandidatoViagem? candidate = null;
         if (Enumerable.Range(14, 5).Any(i => V(i) != ""))
         {
-            candidate = new(Id(V(14)), Id(V(15)), Id(V(18)), Time(V(16)), Progress(V(17)));
-            if (phase != EstadoViagem.Finalizada || candidate.SentidoId == Id(V(10))
-                || candidate.LinhaId != Id(V(9)) || candidate.Timestamp != obs.TimestampUltimaAtualizacao)
+            double? latitude = values.Count == 21 ? Coordinate(V(19), -90, 90) : null;
+            double? longitude = values.Count == 21 ? Coordinate(V(20), -180, 180) : null;
+            candidate = new(Id(V(14)), Id(V(15)), Id(V(18)), Time(V(16)), Progress(V(17)),
+                latitude, longitude);
+            if (phase != EstadoViagem.Finalizada || candidate.Timestamp > obs.TimestampUltimaAtualizacao)
                 throw new FormatException("Candidato inconsistente.");
         }
+        else if (values.Count == 21 && (V(19) != "" || V(20) != ""))
+            throw new FormatException("Coordenada de candidato órfã.");
         return new(obs, V(8), Id(V(9)), Id(V(10)), phase, count, end, candidate);
     }
     private static Guid Id(string v) => Guid.TryParseExact(v, "N", out var id) && id != Guid.Empty
@@ -68,6 +75,10 @@ internal static class ViagemOperacionalCodec
         ? n : throw new FormatException("Inteiro inválido.");
     private static double Progress(string v) => double.TryParse(v, NumberStyles.Float, Culture, out var p)
         && double.IsFinite(p) && p is >= 0 and <= 1 ? p : throw new FormatException("Progresso inválido.");
+    private static double Coordinate(string v, double min, double max) =>
+        double.TryParse(v, NumberStyles.Float, Culture, out var coordinate)
+        && double.IsFinite(coordinate) && coordinate >= min && coordinate <= max
+            ? coordinate : throw new FormatException("Coordenada inválida.");
     private static DateTimeOffset Time(string v)
     {
         if (v.Length != 19 || !long.TryParse(v, NumberStyles.None, Culture, out var t)) throw new FormatException("Timestamp inválido.");

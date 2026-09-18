@@ -23,7 +23,8 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     private ViagemOperacionalRepository Repository()=>new(db.Redis,db.Source,Options.Create(new GpsPollingOptions()),NullLogger<ViagemOperacionalRepository>.Instance){StreamKey=_stream};
     private HistoricoPassagemWorker Worker(IHistoricoEventoRepository? repository=null)=>new(db.Redis,repository??new HistoricoEventoRepository(db.Source),NullLogger<HistoricoPassagemWorker>.Instance){StreamKey=_stream,DeadLetterKey=_stream+":dlq"};
     private PosicaoVeiculoDto G(int seconds,double p=.1,bool novo=false)=>new(){Ordem=_ordem,CodigoLinha="VIAGEM3",ItinerarioId=novo?db.R2:db.R1,
-        PosicaoNaRota=p,TimestampGps=_t.AddSeconds(seconds),Latitude=-22.9,Longitude=novo?-43.19-.02*p:-43.21+.02*p,Bearing=novo?270:90,Velocidade=20};
+        PosicaoNaRota=p,ComprimentoRotaMetros=2220,TimestampGps=_t.AddSeconds(seconds),Latitude=-22.9,
+        Longitude=novo?-43.19-.02*p:-43.21+.02*p,Bearing=novo?270:90,Velocidade=20};
     public Task InitializeAsync()=>Task.CompletedTask;
     public async Task DisposeAsync()
     {
@@ -62,27 +63,21 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     }
 
     [Fact]
-    public async Task R2_NaoFinalizaPrematuramente_ResetaTerminalNoRedis()
+    public async Task R2_NaoFinalizaPrematuramente_PreservaTerminalNoRedis()
     {
         await Terminal(); var old=(await State()).Observada.ViagemId;
         await Repository().TentarAtualizarAsync(G(110,.66),default);
         Assert.Equal(1,(await State()).ConfirmacoesPosTerminal);
         Assert.Equal(ViagemObservadaStatus.Updated,(await Repository().TentarAtualizarAsync(G(120,.1,true),default)).Status);
-        var first=await State();Assert.Equal(EstadoViagem.Ativa,first.Estado);Assert.Equal(old,first.Observada.ViagemId);Assert.Null(first.Candidato);
-        Assert.Equal(0,first.ConfirmacoesPosTerminal);
+        var first=await State();Assert.Equal(EstadoViagem.PossivelFim,first.Estado);Assert.Equal(old,first.Observada.ViagemId);Assert.Null(first.Candidato);
+        Assert.Equal(1,first.ConfirmacoesPosTerminal);
         Assert.Equal(4,await Redis.StreamLengthAsync(_stream));
         await Repository().TentarAtualizarAsync(G(130,.67),default);
-        Assert.Equal(EstadoViagem.PossivelFim,(await State()).Estado);
-        Assert.Equal(0,(await State()).ConfirmacoesPosTerminal);
-        await Repository().TentarAtualizarAsync(G(140,.68),default);
-        Assert.Equal(1,(await State()).ConfirmacoesPosTerminal);
-        await Repository().TentarAtualizarAsync(G(150,.69),default);
         Assert.Equal(EstadoViagem.Finalizada,(await State()).Estado);
-        await Repository().TentarAtualizarAsync(G(160,.7),default);
         Assert.Equal(5,await Redis.StreamLengthAsync(_stream));
-        await Repository().TentarAtualizarAsync(G(170,.1,true),default);
+        await Repository().TentarAtualizarAsync(G(140,.1,true),default);
         Assert.NotNull((await State()).Candidato);
-        await Repository().TentarAtualizarAsync(G(180,.2,true),default);
+        await Repository().TentarAtualizarAsync(G(150,.2,true),default);
         var second=await State();Assert.Equal(EstadoViagem.Ativa,second.Estado);Assert.NotEqual(old,second.Observada.ViagemId);Assert.Equal(db.R2,second.Observada.ItinerarioId);
         Assert.Equal(6,await Redis.StreamLengthAsync(_stream));
     }
@@ -96,17 +91,16 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     }
 
     [Fact]
-    public async Task Lua_ResetEspecifico_NaoPermiteReducaoIsolada_NemSnapshotObsoleto()
+    public async Task Lua_PossivelFim_NaoPermiteReducaoNemRetornoParaAtiva()
     {
         await Terminal();await Repository().TentarAtualizarAsync(G(110,.66),default);
         var snapshot=await Redis.HashGetAllAsync(Key);var s=await State();
         var proposed=s with { Observada=s.Observada with { TimestampUltimaAtualizacao=G(120).TimestampGps },ConfirmacoesPosTerminal=0 };
         Assert.Equal(5,await CommitState(snapshot,proposed));
         Assert.Equal(1,(await State()).ConfirmacoesPosTerminal);
-        Assert.Equal(2,await CommitState(snapshot,proposed with { Estado=EstadoViagem.Ativa }));
-        Assert.Equal(EstadoViagem.Ativa,(await State()).Estado);
-        Assert.Equal(0,(await State()).ConfirmacoesPosTerminal);
-        Assert.Equal(7,await CommitState(snapshot,proposed with { Estado=EstadoViagem.Ativa }));
+        Assert.Equal(5,await CommitState(snapshot,proposed with { Estado=EstadoViagem.Ativa }));
+        Assert.Equal(EstadoViagem.PossivelFim,(await State()).Estado);
+        Assert.Equal(1,(await State()).ConfirmacoesPosTerminal);
         Assert.Equal(4,await Redis.StreamLengthAsync(_stream));
     }
 
@@ -273,6 +267,8 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     [InlineData("EstadoViagem","Desconhecido")]
     [InlineData("TimestampFim","invalid")]
     [InlineData("CandidatoTimestamp","invalid")]
+    [InlineData("CandidatoLatitudeInicial","invalid")]
+    [InlineData("CandidatoLongitudeInicial","invalid")]
     [InlineData("SentidoId","invalid")]
     public async Task MaquinaCorrompida_FailClosedSemWrite(string field,string value)
     {
@@ -302,18 +298,20 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     }
 
     [Fact]
-    public async Task R1Finalizada_NaoReabre_LimpaCandidato()
+    public async Task R1Finalizada_NaoReabre_RegistraNovoCandidato()
     {
         await Terminal();await Repository().TentarAtualizarAsync(G(110,.66),default);await Repository().TentarAtualizarAsync(G(120,.67),default);
         var id=(await State()).Observada.ViagemId;
         await Repository().TentarAtualizarAsync(G(130,.1,true),default);Assert.NotNull((await State()).Candidato);
         await Repository().TentarAtualizarAsync(G(140,.68),default);
-        Assert.Null((await State()).Candidato);Assert.Equal(id,(await State()).Observada.ViagemId);Assert.Equal(EstadoViagem.Finalizada,(await State()).Estado);
+        var finalizada = await State();
+        Assert.NotNull(finalizada.Candidato);Assert.Equal(db.R1,finalizada.Candidato!.ItinerarioId);
+        Assert.Equal(id,finalizada.Observada.ViagemId);Assert.Equal(EstadoViagem.Finalizada,finalizada.Estado);
         Assert.Equal(5,await Redis.StreamLengthAsync(_stream));
     }
 
     [Fact]
-    public async Task AmbiguidadeEntreSentidos_Reais_NaoFinalizaNemRegistraCandidato()
+    public async Task AmbiguidadeEntreSentidos_Reais_PreservaPossivelFimSemCandidato()
     {
         await Terminal();var sense=Guid.NewGuid();var route=Guid.NewGuid();
         using var scope=db.Provider.CreateScope();var context=scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
@@ -323,14 +321,14 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         try
         {
             await Repository().TentarAtualizarAsync(G(110,.1,true),default);
-            Assert.Equal(EstadoViagem.Ativa,(await State()).Estado);Assert.Null((await State()).Candidato);
+            Assert.Equal(EstadoViagem.PossivelFim,(await State()).Estado);Assert.Null((await State()).Candidato);
             Assert.Equal(4,await Redis.StreamLengthAsync(_stream));
         }
         finally{await context.Itinerarios.Where(i=>i.Id==route).ExecuteDeleteAsync();await context.Sentidos.Where(s=>s.Id==sense).ExecuteDeleteAsync();}
     }
 
     [Fact]
-    public async Task LinhaDiferenteEstrutural_RejeitaCandidato()
+    public async Task LinhaDiferenteEstrutural_PreservaPossivelFimSemCandidato()
     {
         await Terminal();var line=Guid.NewGuid();var sense=Guid.NewGuid();var route=Guid.NewGuid();
         using var scope=db.Provider.CreateScope();var context=scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
@@ -342,7 +340,7 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         try
         {
             await Repository().TentarAtualizarAsync(G(110,.1,true) with{CodigoLinha="OUTRA3",ItinerarioId=route},default);
-            Assert.Equal(EstadoViagem.Ativa,(await State()).Estado);Assert.Null((await State()).Candidato);
+            Assert.Equal(EstadoViagem.PossivelFim,(await State()).Estado);Assert.Null((await State()).Candidato);
             Assert.Equal(db.Linha,(await State()).LinhaId);Assert.Equal(4,await Redis.StreamLengthAsync(_stream));
         }
         finally{await context.Itinerarios.Where(i=>i.Id==route).ExecuteDeleteAsync();await context.Sentidos.Where(s=>s.Id==sense).ExecuteDeleteAsync();await context.Linhas.Where(l=>l.Id==line).ExecuteDeleteAsync();}

@@ -16,16 +16,20 @@ internal static class ViagemOperacionalRedisScript
         local ok2, n = pcall(cjson.decode, ARGV[2])
         local ok3, events = pcall(cjson.decode, ARGV[3])
         if not ok1 or not ok2 or not ok3 or type(snapshot) ~= 'table'
-            or type(n) ~= 'table' or type(events) ~= 'table' or #n ~= 19 then return 5 end
+            or type(n) ~= 'table' or type(events) ~= 'table' or #n ~= 21 then return 5 end
         local names = {'ViagemId','OrdemVeiculo','ItinerarioId','TimestampObservacaoInicial',
             'TimestampUltimaAtualizacao','PosicaoNaRotaConfirmada','UltimaParadaItinerarioId','UltimaParadaOrdem',
             'CodigoLinha','LinhaId','SentidoId','EstadoViagem','ConfirmacoesPosTerminal','TimestampFim',
-            'CandidatoItinerarioId','CandidatoSentidoId','CandidatoTimestamp','CandidatoPosicao','CandidatoLinhaId'}
+            'CandidatoItinerarioId','CandidatoSentidoId','CandidatoTimestamp','CandidatoPosicao','CandidatoLinhaId',
+            'CandidatoLatitudeInicial','CandidatoLongitudeInicial'}
         local empty = '00000000000000000000000000000000'
         local function guid(v) return type(v) == 'string' and #v == 32 and v ~= empty and string.match(v, '^[0-9a-f]+$') end
         local function tick(v) return type(v) == 'string' and #v == 19 and string.match(v, '^%d+$')
             and v > '0621355968000000000' and v <= ARGV[4] and v <= '3155378975999999999' end
         local function progress(v) local x = tonumber(v); return x and x == x and x >= 0 and x <= 1 end
+        local function coordinate(v, minimum, maximum)
+            local x = tonumber(v); return x and x == x and x >= minimum and x <= maximum
+        end
         local function integer(v) return type(v) == 'string' and string.match(v, '^%d+$') and tonumber(v) <= 2147483647 end
         local function within180(later, earlier)
             if later <= earlier then return false end
@@ -37,8 +41,9 @@ internal static class ViagemOperacionalRedisScript
             end
             return table.concat(digits) <= '0000000001800000000'
         end
-        local function valid(s, legacy)
-            for i = 1, legacy and 6 or 19 do if type(s[i]) ~= 'string' then return false end end
+        local function valid(s, fields)
+            local legacy = fields == 6 or fields == 8
+            for i = 1,fields do if type(s[i]) ~= 'string' then return false end end
             if not guid(s[1]) or s[2] == '' or not guid(s[3]) or not tick(s[4]) or not tick(s[5])
                 or s[4] > s[5] or not progress(s[6]) then return false end
             if legacy and s[7] == nil and s[8] == nil then return true end
@@ -53,11 +58,15 @@ internal static class ViagemOperacionalRedisScript
             else return false end
             local candidate = false
             for i = 15,19 do if s[i] ~= '' then candidate = true end end
-            if candidate and (s[12] ~= 'Finalizada' or not guid(s[15]) or not guid(s[16]) or s[16] == s[11]
-                or not tick(s[17]) or s[17] ~= s[5] or not progress(s[18]) or s[19] ~= s[10]) then return false end
+            if candidate and (s[12] ~= 'Finalizada' or not guid(s[15]) or not guid(s[16])
+                or not tick(s[17]) or s[17] > s[5] or not progress(s[18]) or not guid(s[19])) then return false end
+            if fields == 21 then
+                if candidate and (not coordinate(s[20],-90,90) or not coordinate(s[21],-180,180)) then return false end
+                if not candidate and (s[20] ~= '' or s[21] ~= '') then return false end
+            end
             return true
         end
-        if not tick(ARGV[4]) or not valid(n, false) then return 5 end
+        if not tick(ARGV[4]) or not valid(n, 21) then return 5 end
         local kind = redis.call('TYPE', KEYS[1]).ok
         local streamkind = redis.call('TYPE', KEYS[2]).ok
         if (kind ~= 'none' and kind ~= 'hash') or (streamkind ~= 'none' and streamkind ~= 'stream') then return 5 end
@@ -77,9 +86,10 @@ internal static class ViagemOperacionalRedisScript
         end
         local legacy = #current == 12 or #current == 16
         if #current > 0 then
-            if not legacy and #current ~= 38 then return 5 end
-            for i = 1,19 do old[i] = oldmap[names[i]] end
-            if not valid(old, legacy) then return 5 end
+            if not legacy and #current ~= 38 and #current ~= 42 then return 5 end
+            local oldfields = #current / 2
+            for i = 1,oldfields do old[i] = oldmap[names[i]] end
+            if not valid(old, oldfields) then return 5 end
             if n[5] <= old[5] then return 3 end
             local replacement = n[1] ~= old[1]
             if legacy and #current == 16 and (old[7] == nil or old[8] == nil) then return 5 end
@@ -87,16 +97,16 @@ internal static class ViagemOperacionalRedisScript
             if replacement then
                 if legacy or old[12] ~= 'Finalizada' or n[12] ~= 'Ativa' or old[15] ~= n[3]
                     or old[16] ~= n[11] or old[19] ~= n[10] or old[17] >= n[5]
-                    or not within180(n[5],old[17]) or n[4] ~= n[5] then return 5 end
+                    or oldfields ~= 21 or old[20] == '' or old[21] == ''
+                    or not within180(n[5],old[17]) or n[4] ~= n[5]
+                    or tonumber(n[6]) <= tonumber(old[18]) then return 5 end
             else
                 if n[2] ~= old[2] or n[3] ~= old[3] or n[4] ~= old[4] then return 5 end
                 if old[8] and old[8] ~= '' and (tonumber(n[8]) < tonumber(old[8])
                     or (tonumber(n[8]) == tonumber(old[8]) and n[7] ~= old[7])) then return 5 end
                 if not legacy then
                     if n[9] ~= old[9] or n[10] ~= old[10] or n[11] ~= old[11] then return 5 end
-                    local terminalreset = old[12] == 'PossivelFim' and n[12] == 'Ativa'
-                        and n[13] == '0' and n[14] == '' and n[15] == ''
-                    if old[12] == 'PossivelFim' and not terminalreset
+                    if old[12] == 'PossivelFim'
                         and (n[12] == 'Ativa' or n[13] < old[13]) then return 5 end
                     if old[12] == 'Finalizada' and (n[12] ~= 'Finalizada' or n[14] ~= old[14]) then return 5 end
                     if old[12] == 'Ativa' and n[12] == 'Finalizada' then return 5 end
@@ -117,7 +127,7 @@ internal static class ViagemOperacionalRedisScript
             end
         elseif n[4] ~= n[5] or n[12] ~= 'Ativa' then return 5 end
         local hashargs = {}
-        for i = 1,19 do hashargs[#hashargs+1] = names[i]; hashargs[#hashargs+1] = n[i] end
+        for i = 1,21 do hashargs[#hashargs+1] = names[i]; hashargs[#hashargs+1] = n[i] end
         local eventargs, seen = {}, {}
         local starts, finishes, lastorder = 0, 0, 0
         local function compact(v) return type(v) == 'string' and string.gsub(v, '%-', '') or '' end

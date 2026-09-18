@@ -26,6 +26,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
         if (gps.ItinerarioId is not { } itinerary || itinerary == Guid.Empty || gps.PosicaoNaRota is not { } p
             || !double.IsFinite(p) || p is < 0 or > 1 || string.IsNullOrWhiteSpace(gps.Ordem)
             || string.IsNullOrWhiteSpace(gps.CodigoLinha)
+            || !GpsLeituraValidator.CoordenadaValida(gps.Latitude, gps.Longitude)
             || !GpsLeituraValidator.TimestampValido(gps.TimestampGps, DateTimeOffset.UtcNow, out _))
             return new(ViagemObservadaStatus.InvalidState);
         try
@@ -39,7 +40,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                 var snapshot = read.Select(v => (string)v!).ToArray();
                 var values = Enumerable.Range(0, snapshot.Length / 2).ToDictionary(i => snapshot[2*i], i => snapshot[2*i+1]);
                 var observed = snapshot.Length == 0 ? null : ViagemOperacionalCodec.Observada(values, gps.Ordem);
-                var legacy = observed is not null && values.Count != ViagemOperacionalCodec.Names.Length;
+                var legacy = observed is not null && values.Count is 6 or 8;
                 var legacySemCursor = legacy && (values.Count == 6 || values["UltimaParadaItinerarioId"] == "");
                 var previous = observed is null || legacy ? null : ViagemOperacionalCodec.Decode(values, gps.Ordem);
                 if (observed is not null && gps.TimestampGps <= observed.TimestampUltimaAtualizacao)
@@ -61,7 +62,8 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                         previous = new(observed, structure.CodigoLinha, structure.LinhaId, structure.SentidoId);
                     }
                     // A 3.2 usa a mesma conexão/transação; libera o pool ANTES de esperar o EVAL.
-                    baseline = previous is null || legacySemCursor || previous.Observada.ItinerarioId != itinerary;
+                    baseline = previous is null || legacySemCursor || previous.Estado == EstadoViagem.Finalizada
+                        || previous.Observada.ItinerarioId != itinerary;
                     transition = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(connection, transaction,
                         itinerary, previous is null || previous.Observada.ItinerarioId != itinerary ? p : previous.Observada.PosicaoNaRotaConfirmada, p,
                         baseline ? Guid.Empty : previous!.Observada.UltimaParadaItinerarioId,
