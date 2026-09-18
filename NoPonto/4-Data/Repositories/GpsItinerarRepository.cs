@@ -4,7 +4,7 @@ using NoPonto.Application.GPS;
 
 namespace NoPonto.Data.Repositories;
 
-public sealed class GpsItinerarioRepository : IGpsItinerarioRepository
+public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
 {
     private readonly NpgsqlDataSource _dataSource;
     private readonly ILogger<GpsItinerarioRepository> _logger;

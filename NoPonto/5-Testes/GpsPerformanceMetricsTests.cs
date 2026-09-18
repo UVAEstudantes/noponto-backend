@@ -10,6 +10,36 @@ namespace NoPonto.Tests;
 public sealed class GpsPerformanceMetricsTests
 {
     [Fact]
+    public void MatchingLote_RegistraInputsBatchesTamanhoDuracaoETipos()
+    {
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
+        metrics.RegistrarMatchingBatchInputs(201);
+        metrics.RegistrarMatchingLote(new MetricasMatchingLote(201,
+        [
+            new(TipoBatchMatching.GlobalSimples, OrigemComandoMatchingLote.Batch,
+                100, TimeSpan.FromMilliseconds(12)),
+            new(TipoBatchMatching.GlobalSimples, OrigemComandoMatchingLote.Batch,
+                100, TimeSpan.FromMilliseconds(18)),
+            new(TipoBatchMatching.Direcionado, OrigemComandoMatchingLote.FallbackIndividual,
+                1, TimeSpan.FromMilliseconds(3)),
+        ]));
+
+        Assert.Equal(201, metrics.MatchingBatchInputs);
+        Assert.Equal(201, metrics.MatchingBatchOperations);
+        Assert.Equal(2, metrics.MatchingBatchCommandsPostgres);
+        Assert.Equal(1, metrics.MatchingFallbackCommandsPostgres);
+        Assert.Equal(3, metrics.MatchingComandosPostgres);
+        Assert.Equal(100, metrics.MatchingBatchSize);
+        Assert.Equal(100, metrics.MatchingBatchSizeMax);
+        Assert.Equal(30, metrics.MatchingBatchDurationMs);
+        Assert.Equal(15, metrics.MatchingBatchDurationMediaMs);
+        Assert.Equal(18, metrics.MatchingBatchDurationMaxMs);
+        Assert.Equal(2, metrics.MatchingGlobalSimpleBatches);
+        Assert.Equal(0, metrics.MatchingCombinedBatches);
+        Assert.Equal(0, metrics.MatchingDirectedBatches);
+    }
+
+    [Fact]
     public void Agregador_ContabilizaAtualizacoesConcorrentes()
     {
         var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);

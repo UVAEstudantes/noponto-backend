@@ -658,6 +658,17 @@ public sealed class GpsPollingService : BackgroundService
                 "matching_combinado_global_inelegivel={matching_combinado_global_inelegivel} " +
                 "matching_combinado_anterior_inelegivel={matching_combinado_anterior_inelegivel} " +
                 "matching_combinado_falha={matching_combinado_falha} " +
+                "matching_batch_inputs={matching_batch_inputs} " +
+                "matching_batch_operations={matching_batch_operations} " +
+                "matching_batch_commands_postgres={matching_batch_commands_postgres} " +
+                "matching_fallback_commands_postgres={matching_fallback_commands_postgres} " +
+                "matching_batch_size={matching_batch_size:F1} " +
+                "matching_batch_size_max={matching_batch_size_max} " +
+                "matching_batch_duration_ms={matching_batch_duration_ms:F1} " +
+                "matching_batch_duration_media_ms={matching_batch_duration_media_ms:F1} " +
+                "matching_batch_duration_max_ms={matching_batch_duration_max_ms:F1} " +
+                "global_simple_batches={global_simple_batches} " +
+                "combined_batches={combined_batches} directed_batches={directed_batches} " +
                 "matching_global_sem_historico={matching_global_sem_historico} " +
                 "matching_global_mesmo_itinerario={matching_global_mesmo_itinerario} " +
                 "matching_global_itinerario_diferente={matching_global_itinerario_diferente} " +
@@ -762,6 +773,18 @@ public sealed class GpsPollingService : BackgroundService
                 performance.MatchingCombinadoGlobalInelegivel,
                 performance.MatchingCombinadoAnteriorInelegivel,
                 performance.MatchingCombinadoFalha,
+                performance.MatchingBatchInputs,
+                performance.MatchingBatchOperations,
+                performance.MatchingBatchCommandsPostgres,
+                performance.MatchingFallbackCommandsPostgres,
+                performance.MatchingBatchSize,
+                performance.MatchingBatchSizeMax,
+                performance.MatchingBatchDurationMs,
+                performance.MatchingBatchDurationMediaMs,
+                performance.MatchingBatchDurationMaxMs,
+                performance.MatchingGlobalSimpleBatches,
+                performance.MatchingCombinedBatches,
+                performance.MatchingDirectedBatches,
                 performance.MatchingGlobalSemHistorico,
                 performance.MatchingGlobalMesmoItinerario,
                 performance.MatchingGlobalItinerarioDiferente,
