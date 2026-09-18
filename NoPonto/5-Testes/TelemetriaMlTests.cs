@@ -67,6 +67,19 @@ public sealed class TelemetriaMlTests
     }
 
     [Fact]
+    public void Repository_OrdenaCanonicalmenteSemAlterarColecaoRecebida()
+    {
+        var eventos = new[] { Evento("ML-C"), Evento("ML-A"), Evento("ML-B") };
+        var ordemOriginal = eventos.Select(e => e.ObservacaoId).ToArray();
+
+        var ordenados = TelemetriaMlRepository.OrdenarCanonicalmente(eventos);
+
+        Assert.Equal(ordemOriginal.OrderBy(id => id, StringComparer.Ordinal),
+            ordenados.Select(e => e.ObservacaoId));
+        Assert.Equal(ordemOriginal, eventos.Select(e => e.ObservacaoId));
+    }
+
+    [Fact]
     public void StreamsDeTelemetriaEViagemSaoIndependentes()
     {
         Assert.NotEqual(ViagemOperacionalRepository.Stream, TelemetriaMlContrato.Stream);
