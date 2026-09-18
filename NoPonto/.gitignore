@@ -9,7 +9,6 @@ context.md
 # dotenv files
 .env
 .vscode
-docker-compose.override.yml
 # User-specific files
 *.rsuser
 *.suo

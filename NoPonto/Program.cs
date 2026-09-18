@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Npgsql;
+using NoPonto.API.Configuration;
 using NoPonto.API.Hubs;
 using NoPonto.API.Middlewares;
 using NoPonto.Application.GPS;
@@ -18,17 +19,7 @@ using System.Net.Sockets;
 using NoPonto.Application.Trem;
 using System.Reflection;
 
-Env.Load();
-
-static string GetEnv(string key)
-{
-    var value = Environment.GetEnvironmentVariable(key);
-
-    if (string.IsNullOrWhiteSpace(value))
-        throw new Exception($"Variável de ambiente {key} não encontrada.");
-
-    return value;
-}
+Env.NoClobber().Load();
 
 static int GetOptionalPositiveInt(string? value, int defaultValue, string key)
 {
@@ -130,19 +121,23 @@ builder.Services.AddCors(options =>
     });
 });
 
-var postgresHost = builder.Configuration["POSTGRES_HOST"] ?? "localhost";
-var redisHost = builder.Configuration["REDIS_HOST"] ?? "localhost";
+var infrastructure = EnvironmentIsolationConfiguration.Resolve(
+    builder.Environment.EnvironmentName,
+    key => builder.Configuration[key]);
 
 // --------------------------------------------------------------------
 // DATABASE
 // --------------------------------------------------------------------
 
-var connectionString =
-    $"Host={postgresHost};" +
-    $"Port={GetEnv("POSTGRES_PORT")};" +
-    $"Database={GetEnv("POSTGRES_DB")};" +
-    $"Username={GetEnv("POSTGRES_USER")};" +
-    $"Password={GetEnv("POSTGRES_PASSWORD")}";
+var connectionString = new NpgsqlConnectionStringBuilder
+{
+    Host = infrastructure.PostgresHost,
+    Port = infrastructure.PostgresPort,
+    Database = infrastructure.PostgresDatabase,
+    Username = infrastructure.PostgresUser,
+    Password = infrastructure.PostgresPassword,
+    ApplicationName = infrastructure.PostgresApplicationName
+}.ConnectionString;
 
 builder.Services.AdicionarPostgresCompartilhado(connectionString);
 
@@ -364,7 +359,7 @@ builder.Services
 // --------------------------------------------------------------------
 
 var redisConnection =
-    $"{redisHost}:{GetEnv("REDIS_PORT")},allowAdmin=true";
+    $"{infrastructure.RedisHost}:{infrastructure.RedisPort},allowAdmin=true";
 
 builder.Services.AddStackExchangeRedisCache(options =>
 {
