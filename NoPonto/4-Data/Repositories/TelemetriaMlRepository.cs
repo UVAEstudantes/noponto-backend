@@ -19,11 +19,12 @@ public sealed class TelemetriaMlRepository(NpgsqlDataSource source) : ITelemetri
     {
         if (eventos.Count == 0) return new(0, 0);
         foreach (var evento in eventos) TelemetriaMlValidator.Validar(evento);
+        var eventosOrdenados = OrdenarCanonicalmente(eventos);
 
         await using var connection = await source.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var batch = new NpgsqlBatch(connection, transaction);
-        foreach (var e in eventos)
+        foreach (var e in eventosOrdenados)
         {
             var command = new NpgsqlBatchCommand("""
                 INSERT INTO "TelemetriasVeiculoMl"
@@ -72,6 +73,10 @@ public sealed class TelemetriaMlRepository(NpgsqlDataSource source) : ITelemetri
         await transaction.CommitAsync(ct);
         return new(persistidos, eventos.Count - persistidos);
     }
+
+    internal static EventoTelemetriaMl[] OrdenarCanonicalmente(
+        IReadOnlyList<EventoTelemetriaMl> eventos) =>
+        eventos.OrderBy(e => e.ObservacaoId, StringComparer.Ordinal).ToArray();
 
     private static void AddNullable<T>(NpgsqlBatchCommand command, string name, T? value) where T : struct
     {

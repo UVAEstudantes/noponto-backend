@@ -77,6 +77,29 @@ public sealed class TelemetriaMlIntegracaoTests(ViagemOperacionalFixture fixture
     }
 
     [Fact]
+    public async Task Repository_LotesConcorrentesSobrepostosEmOrdemInversa_PreservamIdempotencia()
+    {
+        var eventos = new[]
+        {
+            Evento("ML-CONCORRENTE-X-" + Guid.NewGuid().ToString("N")) with { ItinerarioId = fixture.R1 },
+            Evento("ML-CONCORRENTE-Y-" + Guid.NewGuid().ToString("N")) with { ItinerarioId = fixture.R1 },
+            Evento("ML-CONCORRENTE-Z-" + Guid.NewGuid().ToString("N")) with { ItinerarioId = fixture.R1 },
+        }.OrderBy(e => e.ObservacaoId, StringComparer.Ordinal).ToArray();
+        var repository = new TelemetriaMlRepository(fixture.Source);
+
+        var resultados = await Task.WhenAll(
+            repository.PersistirLoteAsync(eventos, default),
+            repository.PersistirLoteAsync(eventos.Reverse().ToArray(), default));
+
+        Assert.Equal(eventos.Length, resultados.Sum(r => r.Persistidos));
+        Assert.Equal(eventos.Length, resultados.Sum(r => r.Duplicados));
+        using var scope = fixture.Provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
+        Assert.Equal(eventos.Length, await context.TelemetriasVeiculoMl.CountAsync(
+            t => eventos.Select(e => e.ObservacaoId).Contains(t.ObservacaoId)));
+    }
+
+    [Fact]
     public async Task Worker_PersisteBatchEAckSomenteDepoisDoSucesso()
     {
         var repository = new RepositoryFake();
