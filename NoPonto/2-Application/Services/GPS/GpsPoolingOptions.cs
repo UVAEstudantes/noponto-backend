@@ -47,3 +47,15 @@ public sealed class GpsPollingOptions
     /// </summary>
     public bool EnriquecerTodasLinhas { get; set; } = false;
 }
+
+/// <summary>
+/// Feature flag isolada do ambiente. Somente o literal booleano "true" habilita
+/// o matching em lote; valor ausente, inválido ou false mantém o fluxo individual.
+/// </summary>
+public sealed class GpsMatchingBatchOptions
+{
+    public bool Enabled { get; init; }
+
+    public static GpsMatchingBatchOptions FromConfiguration(string? value) =>
+        new() { Enabled = bool.TryParse(value, out var enabled) && enabled };
+}

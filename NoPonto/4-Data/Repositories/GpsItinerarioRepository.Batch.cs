@@ -75,19 +75,24 @@ public sealed partial class GpsItinerarioRepository
             numeroChunk++;
             var inicio = Stopwatch.GetTimestamp();
             var comandoBatchRegistrado = false;
+            var tentativaPostgres = false;
             try
             {
                 AntesDoComandoBatchParaTeste?.Invoke(TipoBatchMatching.Combinado, numeroChunk);
                 cancellationToken.ThrowIfCancellationRequested();
-                await ExecutarCombinadoChunkAsync(chunk, resultados, cancellationToken);
+                await ExecutarCombinadoChunkAsync(chunk, resultados,
+                    () => tentativaPostgres = true, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
-                comandos.Add(new(TipoBatchMatching.Combinado,
-                    OrigemComandoMatchingLote.Batch, chunk.Length,
-                    Stopwatch.GetElapsedTime(inicio)));
-                comandoBatchRegistrado = true;
+                if (tentativaPostgres)
+                {
+                    comandos.Add(new(TipoBatchMatching.Combinado,
+                        OrigemComandoMatchingLote.Batch, chunk.Length,
+                        Stopwatch.GetElapsedTime(inicio)));
+                    comandoBatchRegistrado = true;
+                }
                 _logger.LogWarning(ex, "Falha no matching combinado em lote com {quantidade} entradas.", chunk.Length);
                 foreach (var entrada in chunk)
                 {
@@ -113,7 +118,7 @@ public sealed partial class GpsItinerarioRepository
             }
             finally
             {
-                if (!comandoBatchRegistrado)
+                if (tentativaPostgres && !comandoBatchRegistrado)
                     comandos.Add(new(TipoBatchMatching.Combinado,
                         OrigemComandoMatchingLote.Batch, chunk.Length,
                         Stopwatch.GetElapsedTime(inicio)));
@@ -146,6 +151,7 @@ public sealed partial class GpsItinerarioRepository
             numeroChunk++;
             var inicio = Stopwatch.GetTimestamp();
             var comandoBatchRegistrado = false;
+            var tentativaPostgres = false;
             try
             {
                 AntesDoComandoBatchParaTeste?.Invoke(TipoBatchMatching.GlobalSimples, numeroChunk);
@@ -157,15 +163,19 @@ public sealed partial class GpsItinerarioRepository
                     dist_max = x.DistanciaMaximaMetros, itinerario_id = Guid.Empty,
                     usar_faixa = false, fracao_min = 0d, fracao_max = 1d
                 }));
-                await ExecutarRotaChunkAsync(json, direcionado: false, resultados, cancellationToken);
+                await ExecutarRotaChunkAsync(json, direcionado: false, resultados,
+                    () => tentativaPostgres = true, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
-                comandos.Add(new(TipoBatchMatching.GlobalSimples,
-                    OrigemComandoMatchingLote.Batch, chunk.Length,
-                    Stopwatch.GetElapsedTime(inicio)));
-                comandoBatchRegistrado = true;
+                if (tentativaPostgres)
+                {
+                    comandos.Add(new(TipoBatchMatching.GlobalSimples,
+                        OrigemComandoMatchingLote.Batch, chunk.Length,
+                        Stopwatch.GetElapsedTime(inicio)));
+                    comandoBatchRegistrado = true;
+                }
                 _logger.LogWarning(ex, "Falha no matching global em lote com {quantidade} entradas.", chunk.Length);
                 foreach (var entrada in chunk)
                 {
@@ -193,7 +203,7 @@ public sealed partial class GpsItinerarioRepository
             }
             finally
             {
-                if (!comandoBatchRegistrado)
+                if (tentativaPostgres && !comandoBatchRegistrado)
                     comandos.Add(new(TipoBatchMatching.GlobalSimples,
                         OrigemComandoMatchingLote.Batch, chunk.Length,
                         Stopwatch.GetElapsedTime(inicio)));
@@ -234,6 +244,7 @@ public sealed partial class GpsItinerarioRepository
             numeroChunk++;
             var inicio = Stopwatch.GetTimestamp();
             var comandoBatchRegistrado = false;
+            var tentativaPostgres = false;
             try
             {
                 AntesDoComandoBatchParaTeste?.Invoke(TipoBatchMatching.Direcionado, numeroChunk);
@@ -246,15 +257,19 @@ public sealed partial class GpsItinerarioRepository
                     usar_faixa = x.Faixa.HasValue, fracao_min = x.Faixa?.Min ?? 0d,
                     fracao_max = x.Faixa?.Max ?? 1d
                 }));
-                await ExecutarRotaChunkAsync(json, direcionado: true, resultados, cancellationToken);
+                await ExecutarRotaChunkAsync(json, direcionado: true, resultados,
+                    () => tentativaPostgres = true, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
-                comandos.Add(new(TipoBatchMatching.Direcionado,
-                    OrigemComandoMatchingLote.Batch, chunk.Length,
-                    Stopwatch.GetElapsedTime(inicio)));
-                comandoBatchRegistrado = true;
+                if (tentativaPostgres)
+                {
+                    comandos.Add(new(TipoBatchMatching.Direcionado,
+                        OrigemComandoMatchingLote.Batch, chunk.Length,
+                        Stopwatch.GetElapsedTime(inicio)));
+                    comandoBatchRegistrado = true;
+                }
                 _logger.LogWarning(ex, "Falha no matching direcionado em lote com {quantidade} entradas.", chunk.Length);
                 foreach (var entrada in chunk)
                 {
@@ -279,7 +294,7 @@ public sealed partial class GpsItinerarioRepository
             }
             finally
             {
-                if (!comandoBatchRegistrado)
+                if (tentativaPostgres && !comandoBatchRegistrado)
                     comandos.Add(new(TipoBatchMatching.Direcionado,
                         OrigemComandoMatchingLote.Batch, chunk.Length,
                         Stopwatch.GetElapsedTime(inicio)));
@@ -295,6 +310,7 @@ public sealed partial class GpsItinerarioRepository
         string json,
         bool direcionado,
         Dictionary<string, ResultadoBuscaItinerario> resultados,
+        Action registrarTentativaPostgres,
         CancellationToken cancellationToken)
     {
         const string sql = """
@@ -376,6 +392,7 @@ public sealed partial class GpsItinerarioRepository
             ORDER BY entrada.input_id DESC
             """;
 
+        registrarTentativaPostgres();
         await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql.Replace("/*FILTRO_ITINERARIO*/",
@@ -394,6 +411,7 @@ public sealed partial class GpsItinerarioRepository
     private async Task ExecutarCombinadoChunkAsync(
         EntradaMatchingCombinadoLote[] chunk,
         Dictionary<string, ResultadoMatchingCombinado> resultados,
+        Action registrarTentativaPostgres,
         CancellationToken cancellationToken)
     {
         var json = JsonSerializer.Serialize(chunk.Select(x => new
@@ -417,6 +435,7 @@ public sealed partial class GpsItinerarioRepository
                     ? ResultadoProjecaoOperacional.Inelegivel()
                     : ResultadoProjecaoOperacional.NaoSolicitada());
 
+        registrarTentativaPostgres();
         await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = SqlMatchingCombinadoLote;

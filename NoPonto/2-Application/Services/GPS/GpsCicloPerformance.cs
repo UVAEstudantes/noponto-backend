@@ -329,6 +329,12 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
         RegistrarDuracao(ref _matchingGlobalTicks, ref _matchingMaxTicks, duracao);
     }
 
+    public void RegistrarMatchingGlobalLogico()
+    {
+        Interlocked.Increment(ref _matchingGlobais);
+        Interlocked.Increment(ref _matchingGlobaisSimples);
+    }
+
     public void RegistrarMatchingCombinado(
         TimeSpan duracao, ResultadoMatchingCombinado? resultado)
     {
@@ -336,7 +342,18 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
         Interlocked.Increment(ref _matchingCombinados);
         Interlocked.Increment(ref _matchingComandosPostgres);
         RegistrarDuracao(ref _matchingGlobalTicks, ref _matchingMaxTicks, duracao);
+        RegistrarResultadoMatchingCombinado(resultado);
+    }
 
+    public void RegistrarMatchingCombinadoLogico(ResultadoMatchingCombinado resultado)
+    {
+        Interlocked.Increment(ref _matchingGlobais);
+        Interlocked.Increment(ref _matchingCombinados);
+        RegistrarResultadoMatchingCombinado(resultado);
+    }
+
+    private void RegistrarResultadoMatchingCombinado(ResultadoMatchingCombinado? resultado)
+    {
         if (resultado is null
             || resultado.Global.Status == StatusBuscaItinerario.InfrastructureFailure
             || resultado.Anterior.Status == StatusBuscaItinerario.InfrastructureFailure)
@@ -353,6 +370,9 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
         Interlocked.Increment(ref _matchingComandosPostgres);
         RegistrarDuracao(ref _matchingDirecionadoTicks, ref _matchingMaxTicks, duracao);
     }
+
+    public void RegistrarMatchingDirecionadoLogico() =>
+        Interlocked.Increment(ref _matchingDirecionados);
 
     // Deve ser chamado uma unica vez pelo futuro estagio batch, antes de separar
     // as posicoes em operacoes simples/combinadas/dirigidas.

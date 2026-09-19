@@ -335,21 +335,34 @@ public sealed class GpsPollingService : BackgroundService
         }
         else
         {
-            var grau = Math.Min(paraEnriquecer.Count, opcoes.GrauParalelismoEnriquecimento);
-            var semaforo = new SemaphoreSlim(grau, grau);
+            if (_enriquecedor.MatchingBatchHabilitado)
+            {
+                var entradas = paraEnriquecer.Select((x, indice) => new EntradaEnriquecimentoGps(
+                    MontarComHistorico(x.Nova, x.Anterior),
+                    contextosOperacionais[indice])).ToArray();
+                enriquecimentos = await _enriquecedor.EnriquecerLoteComContextoAsync(
+                    entradas, ct, performance);
+            }
+            else
+            {
+                // Caminho produtivo legado: a flag OFF não altera concorrência,
+                // ordem, exceptions, chamadas nem métricas do matching individual.
+                var grau = Math.Min(paraEnriquecer.Count, opcoes.GrauParalelismoEnriquecimento);
+                var semaforo = new SemaphoreSlim(grau, grau);
 
-            enriquecimentos = await Task.WhenAll(
-                paraEnriquecer.Select(async (x, indice) =>
-                {
-                    await semaforo.WaitAsync(ct);
-                    try
+                enriquecimentos = await Task.WhenAll(
+                    paraEnriquecer.Select(async (x, indice) =>
                     {
-                        return await _enriquecedor.EnriquecerComContextoAsync(
-                            MontarComHistorico(x.Nova, x.Anterior),
-                            contextosOperacionais[indice], ct, performance);
-                    }
-                    finally { semaforo.Release(); }
-                }));
+                        await semaforo.WaitAsync(ct);
+                        try
+                        {
+                            return await _enriquecedor.EnriquecerComContextoAsync(
+                                MontarComHistorico(x.Nova, x.Anterior),
+                                contextosOperacionais[indice], ct, performance);
+                        }
+                        finally { semaforo.Release(); }
+                    }));
+            }
             resultadosEnriquecidos = enriquecimentos.Select(x => x.Posicao).ToArray();
         }
         performance.MatchingEtapaMs = (long)System.Diagnostics.Stopwatch

@@ -332,6 +332,10 @@ builder.Services
         "GpsPolling:GrauParalelismoViagemObservada deve ser > 0")
     .ValidateOnStart();
 
+builder.Services.AddSingleton(Options.Create(
+    GpsMatchingBatchOptions.FromConfiguration(
+        builder.Configuration["GPS_MATCHING_BATCH_ENABLED"])));
+
 builder.Services
     .AddOptions<GpsSppoCollectorOptions>()
     .Bind(builder.Configuration.GetSection(GpsSppoCollectorOptions.Secao))
@@ -446,6 +450,11 @@ builder.Services.AddHostedService<PopularPoisWorker>();
 // --------------------------------------------------------------------
 
 var app = builder.Build();
+
+var gpsMatchingBatch = app.Services
+    .GetRequiredService<IOptions<GpsMatchingBatchOptions>>().Value;
+app.Logger.LogInformation("GPS matching batch: {estado}",
+    gpsMatchingBatch.Enabled ? "enabled" : "disabled");
 
 // migrations automáticas
 using (var scope = app.Services.CreateScope())
