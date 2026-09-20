@@ -656,6 +656,130 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         Assert.Equal(0, metricas.MatchingFallbackCommandsPostgres);
     }
 
+    [Fact]
+    public async Task OrquestradorReal_CorpusSemanticoComparaBCompletoEAOperacional()
+    {
+        var individual = CriarEnriquecedor(batch: false);
+        var batch = CriarEnriquecedor(batch: true);
+        var t0 = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var contextoIgual = Contexto("B-IGUAL-A", _db.R1, .40, t0, "GPS23");
+        var contextoDivergente = Contexto("B-DIF-A", _db.R1, .40, t0, "GPS23");
+        var contextoSemBearing = Contexto("SEM-BEARING-A", _db.R1, .40, t0, "GPS23");
+        EntradaEnriquecimentoGps[] entradas =
+        [
+            new(P("PRIMEIRA", "GPS23", -22.9, -43.2, 90, t0.AddSeconds(5)), null),
+            new(P("MESMA-LINHA-2", "GPS23", -22.8998, -43.2, 90, t0.AddSeconds(5)), null),
+            new(P("OUTRA-LINHA", "X25", .00001, .00001, 45, t0.AddSeconds(5)), null),
+            new(P("B-IGUAL-A", "GPS23", -22.9, -43.2, 90, t0.AddSeconds(5)), contextoIgual),
+            new(P("B-DIF-A", "GPS23", -22.8998, -43.2, 90, t0.AddSeconds(5)), contextoDivergente),
+            new(P("SEM-BEARING-A", "GPS23", -22.9, -43.2, null, t0.AddSeconds(5)), contextoSemBearing),
+            new(P("BEARING-ZERO", "GPS23", -22.9, -43.2, 0, t0.AddSeconds(5)), null),
+            new(P("BEARING-WRAP", "GPS23", -22.9, -43.2, 359, t0.AddSeconds(5)), null),
+            new(P("BEARING-GEOMETRICO", "GPS23", -22.9, -43.2, 270, t0.AddSeconds(5)) with
+            {
+                LatitudeAnterior = -22.9,
+                LongitudeAnterior = -43.201,
+                TimestampAnterior = t0,
+            }, null),
+            new(P("FIM-ROTA", "GPS23", -22.9, -43.1901, 90, t0.AddSeconds(5)), null),
+        ];
+
+        var esperado = await Task.WhenAll(entradas.Select(x =>
+            individual.EnriquecerComContextoAsync(x.Posicao, x.Contexto, default, null)));
+        var metricas = new GpsCicloPerformance(DateTimeOffset.UtcNow, 20_000);
+        var atual = await batch.EnriquecerLoteComContextoAsync(entradas, default, metricas);
+
+        AssertDtos(esperado, atual);
+        var porOrdem = atual.ToDictionary(x => x.Posicao.Ordem);
+        Assert.Equal(_db.R1, porOrdem["B-IGUAL-A"].Posicao.ItinerarioId);
+        Assert.Equal(StatusProjecaoOperacional.Encontrada,
+            porOrdem["B-IGUAL-A"].ProjecaoOperacional.Status);
+        Assert.Equal(_db.R1, porOrdem["B-IGUAL-A"].ProjecaoOperacional.Projecao!.ItinerarioId);
+        Assert.Equal(_db.R2, porOrdem["B-DIF-A"].Posicao.ItinerarioId);
+        Assert.Equal(_db.R1, porOrdem["B-DIF-A"].ProjecaoOperacional.Projecao!.ItinerarioId);
+        Assert.Equal(StatusProjecaoOperacional.Inelegivel,
+            porOrdem["SEM-BEARING-A"].ProjecaoOperacional.Status);
+        Assert.Null(porOrdem["FIM-ROTA"].Posicao.ProximaParadaNome);
+        Assert.Null(porOrdem["FIM-ROTA"].Posicao.DistanciaProximaParadaMetros);
+        Assert.Equal(10, metricas.MatchingBatchInputs);
+        Assert.Equal(0, metricas.MatchingFallbackCommandsPostgres);
+    }
+
+    [Fact]
+    public async Task OrquestradorReal_TresCiclos_PreservaMonotonicidadeEOrcamentoFisicoDeA()
+    {
+        var individual = CriarEnriquecedor(batch: false);
+        var batch = CriarEnriquecedor(batch: true);
+        var t0 = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var cenarios = new[]
+        {
+            (P("A-SEQUENCIAL", "GPS23", -22.9, -43.201, 90, t0.AddSeconds(1)),
+                Contexto("A-SEQUENCIAL", _db.R1, .40, t0, "GPS23")),
+            (P("A-SEQUENCIAL", "GPS23", -22.8998, -43.2, 90, t0.AddSeconds(3)),
+                Contexto("A-SEQUENCIAL", _db.R1, .45, t0.AddSeconds(1), "GPS23")),
+            (P("A-SEQUENCIAL", "GPS23", -22.9, -43.199, 90, t0.AddSeconds(5)),
+                Contexto("A-SEQUENCIAL", _db.R1, .50, t0.AddSeconds(3), "GPS23")),
+        };
+        StatusProjecaoOperacional[] statusEsperado =
+        [
+            StatusProjecaoOperacional.Inelegivel, // ~102,6 m para orçamento de 100 m.
+            StatusProjecaoOperacional.Encontrada,
+            StatusProjecaoOperacional.Encontrada,
+        ];
+        var posicoesA = new List<double>();
+
+        for (var ciclo = 0; ciclo < cenarios.Length; ciclo++)
+        {
+            var (posicao, contexto) = cenarios[ciclo];
+            var esperado = await individual.EnriquecerComContextoAsync(
+                posicao, contexto, default, null);
+            var atual = Assert.Single(await batch.EnriquecerLoteComContextoAsync(
+                [new(posicao, contexto)], default,
+                new GpsCicloPerformance(DateTimeOffset.UtcNow, 20_000)));
+
+            AssertDtos([esperado], [atual]);
+            Assert.Equal(statusEsperado[ciclo], atual.ProjecaoOperacional.Status);
+            if (atual.ProjecaoOperacional.Projecao is { } projecao)
+                posicoesA.Add(projecao.PosicaoNaRota);
+        }
+
+        Assert.Equal(2, posicoesA.Count);
+        Assert.True(posicoesA.SequenceEqual(posicoesA.OrderBy(x => x)),
+            $"A regrediu: {string.Join(", ", posicoesA.Select(x => x.ToString("R")))}");
+    }
+
+    [Fact]
+    public async Task OrquestradorReal_TrocaDeItinerario_ExecutaDirigidoNosDoisCaminhos()
+    {
+        var individual = CriarEnriquecedor(batch: false);
+        var batch = CriarEnriquecedor(batch: true);
+        var t0 = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var inicial = P("DIRIGIDO-REAL", "GPS23", -22.9, -43.2, 90, t0);
+
+        var esperadoInicial = await individual.EnriquecerComContextoAsync(
+            inicial, null, default, null);
+        var atualInicial = Assert.Single(await batch.EnriquecerLoteComContextoAsync(
+            [new(inicial, null)], default,
+            new GpsCicloPerformance(DateTimeOffset.UtcNow, 20_000)));
+        AssertDtos([esperadoInicial], [atualInicial]);
+        Assert.Equal(_db.R1, atualInicial.Posicao.ItinerarioId);
+
+        var troca = P("DIRIGIDO-REAL", "GPS23", -22.9, -43.2, 270, t0.AddSeconds(5));
+        var metricasIndividual = new GpsCicloPerformance(DateTimeOffset.UtcNow, 20_000);
+        var metricasBatch = new GpsCicloPerformance(DateTimeOffset.UtcNow, 20_000);
+        var esperado = await individual.EnriquecerComContextoAsync(
+            troca, null, default, metricasIndividual);
+        var atual = Assert.Single(await batch.EnriquecerLoteComContextoAsync(
+            [new(troca, null)], default, metricasBatch));
+
+        AssertDtos([esperado], [atual]);
+        Assert.Equal(_db.Volta, atual.Posicao.ItinerarioId);
+        Assert.Equal(1, metricasIndividual.MatchingDirecionados);
+        Assert.Equal(1, metricasBatch.MatchingDirecionados);
+        Assert.Equal(1, metricasBatch.MatchingDirectedBatches);
+        Assert.Equal(1, metricasBatch.MatchingTrocaQueryAntiga);
+    }
+
     private async Task ExecutarPorTipo(GpsItinerarioRepository repo,
         TipoBatchMatching tipo, int quantidade, CancellationToken ct)
     {
@@ -671,8 +795,22 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
                 D(id, "GPS23", _db.R1, -22.9, -43.2, 90)).ToArray(), 2, ct);
     }
 
+    private GpsEnriquecimentoService CriarEnriquecedor(bool batch) => new(
+        _repo, Options.Create(new GpsPollingOptions()),
+        Options.Create(new GpsMatchingBatchOptions { Enabled = batch }),
+        NullLogger<GpsEnriquecimentoService>.Instance);
+
+    private static ContextoOperacional Contexto(string ordem, Guid itinerario,
+        double posicao, DateTimeOffset timestamp, string codigoLinha)
+    {
+        var observada = new ViagemObservadaState(Guid.NewGuid(), ordem, itinerario,
+            timestamp, timestamp, posicao);
+        return new([], observada, new(observada, codigoLinha,
+            Guid.NewGuid(), Guid.NewGuid()));
+    }
+
     private static PosicaoVeiculoDto P(string ordem, string linha, double lat, double lon,
-        double bearing, DateTimeOffset timestamp) => new()
+        double? bearing, DateTimeOffset timestamp) => new()
     {
         Ordem = ordem, CodigoLinha = linha, Latitude = lat, Longitude = lon,
         Bearing = bearing, Velocidade = 30, TimestampGps = timestamp,
@@ -687,20 +825,70 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         for (var i = 0; i < esperado.Count; i++)
         {
             Assert.Equal(esperado[i].Posicao.Ordem, atual[i].Posicao.Ordem);
+            Assert.Equal(esperado[i].Posicao.CodigoLinha, atual[i].Posicao.CodigoLinha);
+            AssertNumero(esperado[i].Posicao.Latitude, atual[i].Posicao.Latitude,
+                esperado[i].Posicao.Ordem + "/latitude");
+            AssertNumero(esperado[i].Posicao.Longitude, atual[i].Posicao.Longitude,
+                esperado[i].Posicao.Ordem + "/longitude");
+            AssertNumero(esperado[i].Posicao.Velocidade, atual[i].Posicao.Velocidade,
+                esperado[i].Posicao.Ordem + "/velocidade");
+            Assert.Equal(esperado[i].Posicao.TimestampGps, atual[i].Posicao.TimestampGps);
+            Assert.Equal(esperado[i].Posicao.TimestampServidor, atual[i].Posicao.TimestampServidor);
+            Assert.Equal(esperado[i].Posicao.TimestampEnvioFonte,
+                atual[i].Posicao.TimestampEnvioFonte);
+            Assert.Equal(esperado[i].Posicao.TimestampServidorFonte,
+                atual[i].Posicao.TimestampServidorFonte);
+            Assert.Equal(esperado[i].Posicao.RecebidoEmUtc,
+                atual[i].Posicao.RecebidoEmUtc);
+            Assert.Equal(esperado[i].Posicao.ModalFonte, atual[i].Posicao.ModalFonte);
+            Assert.Equal(esperado[i].Posicao.ProvedorFonte, atual[i].Posicao.ProvedorFonte);
+            AssertNullable(esperado[i].Posicao.LatitudeAnterior,
+                atual[i].Posicao.LatitudeAnterior, 10);
+            AssertNullable(esperado[i].Posicao.LongitudeAnterior,
+                atual[i].Posicao.LongitudeAnterior, 10);
+            Assert.Equal(esperado[i].Posicao.TimestampAnterior,
+                atual[i].Posicao.TimestampAnterior);
             Assert.Equal(esperado[i].Posicao.ItinerarioId, atual[i].Posicao.ItinerarioId);
             AssertNullable(esperado[i].Posicao.PosicaoNaRota,
                 atual[i].Posicao.PosicaoNaRota, 10);
             AssertNullable(esperado[i].Posicao.ComprimentoRotaMetros,
                 atual[i].Posicao.ComprimentoRotaMetros, 6);
             AssertNullable(esperado[i].Posicao.Bearing, atual[i].Posicao.Bearing, 10);
+            AssertNullable(esperado[i].Posicao.VelocidadeMedia,
+                atual[i].Posicao.VelocidadeMedia, 10);
             Assert.Equal(esperado[i].Posicao.ProximaParadaNome,
                 atual[i].Posicao.ProximaParadaNome);
             AssertNullable(esperado[i].Posicao.DistanciaProximaParadaMetros,
                 atual[i].Posicao.DistanciaProximaParadaMetros, 6);
+            AssertNullable(esperado[i].Posicao.EtaProximaParadaSegundos,
+                atual[i].Posicao.EtaProximaParadaSegundos, 10);
+            Assert.Equal(esperado[i].Posicao.EtaConfianca,
+                atual[i].Posicao.EtaConfianca);
+            Assert.Equal(esperado[i].Posicao.Status, atual[i].Posicao.Status);
             Assert.Equal(esperado[i].ProjecaoOperacional.Status,
                 atual[i].ProjecaoOperacional.Status);
+            AssertOperacional(esperado[i].ProjecaoOperacional,
+                atual[i].ProjecaoOperacional, esperado[i].Posicao.Ordem + "/A");
+            Assert.Equal(EntradaEta(esperado[i].Posicao), EntradaEta(atual[i].Posicao));
+            var criadoEm = new DateTimeOffset(2026, 1, 1, 13, 0, 0, TimeSpan.Zero);
+            Assert.Equal(EventoTelemetriaMlFactory.Criar(esperado[i].Posicao, null, criadoEm),
+                EventoTelemetriaMlFactory.Criar(atual[i].Posicao, null, criadoEm));
         }
     }
+
+    // Espelha somente os campos lidos por GpsEtaClient. Hora/dia são ambientais e
+    // não pertencem ao resultado do matching, portanto ficam fora do comparador.
+    private static object EntradaEta(PosicaoVeiculoDto posicao) => new
+    {
+        posicao.CodigoLinha,
+        posicao.DistanciaProximaParadaMetros,
+        posicao.VelocidadeMedia,
+        posicao.PosicaoNaRota,
+        Elegivel = posicao.DistanciaProximaParadaMetros is > 10 and < 5000
+            && posicao.VelocidadeMedia is >= 0
+            && posicao.PosicaoNaRota is > 0 and < 1
+            && !string.IsNullOrEmpty(posicao.CodigoLinha),
+    };
 
     private static void AssertNullable(double? esperado, double? atual, int precisao)
     {
