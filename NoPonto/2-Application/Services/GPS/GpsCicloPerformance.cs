@@ -39,6 +39,25 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     private int _matchingCombinadoGlobalInelegivel;
     private int _matchingCombinadoAnteriorInelegivel;
     private int _matchingCombinadoFalha;
+    private int _matchingBatchInputs;
+    private int _matchingBatchOperations;
+    private int _matchingBatchCommandsPostgres;
+    private int _matchingFallbackCommandsPostgres;
+    private int _matchingBatchSizeTotal;
+    private int _matchingBatchSizeMax;
+    private long _matchingBatchTicks;
+    private long _matchingBatchMaxTicks;
+    private int _matchingGlobalSimpleBatches;
+    private int _matchingCombinedBatches;
+    private int _matchingDirectedBatches;
+    private int _matchingBatchCircuitOpened;
+    private int _matchingBatchProbes;
+    private int _matchingBatchProbesSucesso;
+    private int _matchingBatchProbesFalha;
+    private int _matchingBatchEntradasPuladas;
+    private int _matchingBatchComandosEvitados;
+    private int _matchingBatchOperacoesDegradadas;
+    private int _matchingBatchInfrastructureFailures;
     private int _projecaoOperacionalSolicitada;
     private int _projecaoOperacionalEncontrada;
     private int _projecaoOperacionalInelegivel;
@@ -180,6 +199,32 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     public int MatchingCombinadoAnteriorInelegivel =>
         Volatile.Read(ref _matchingCombinadoAnteriorInelegivel);
     public int MatchingCombinadoFalha => Volatile.Read(ref _matchingCombinadoFalha);
+    public int MatchingBatchInputs => Volatile.Read(ref _matchingBatchInputs);
+    public int MatchingBatchOperations => Volatile.Read(ref _matchingBatchOperations);
+    public int MatchingBatchCommandsPostgres => Volatile.Read(ref _matchingBatchCommandsPostgres);
+    public int MatchingFallbackCommandsPostgres =>
+        Volatile.Read(ref _matchingFallbackCommandsPostgres);
+    public double MatchingBatchSize => MatchingBatchCommandsPostgres == 0
+        ? 0 : (double)Volatile.Read(ref _matchingBatchSizeTotal) / MatchingBatchCommandsPostgres;
+    public int MatchingBatchSizeMax => Volatile.Read(ref _matchingBatchSizeMax);
+    public double MatchingBatchDurationMs =>
+        TimeSpan.FromTicks(Volatile.Read(ref _matchingBatchTicks)).TotalMilliseconds;
+    public double MatchingBatchDurationMediaMs => MatchingBatchCommandsPostgres == 0
+        ? 0 : MatchingBatchDurationMs / MatchingBatchCommandsPostgres;
+    public double MatchingBatchDurationMaxMs =>
+        TimeSpan.FromTicks(Volatile.Read(ref _matchingBatchMaxTicks)).TotalMilliseconds;
+    public int MatchingGlobalSimpleBatches => Volatile.Read(ref _matchingGlobalSimpleBatches);
+    public int MatchingCombinedBatches => Volatile.Read(ref _matchingCombinedBatches);
+    public int MatchingDirectedBatches => Volatile.Read(ref _matchingDirectedBatches);
+    public int MatchingBatchCircuitOpened => Volatile.Read(ref _matchingBatchCircuitOpened);
+    public int MatchingBatchProbes => Volatile.Read(ref _matchingBatchProbes);
+    public int MatchingBatchProbesSucesso => Volatile.Read(ref _matchingBatchProbesSucesso);
+    public int MatchingBatchProbesFalha => Volatile.Read(ref _matchingBatchProbesFalha);
+    public int MatchingBatchEntradasPuladas => Volatile.Read(ref _matchingBatchEntradasPuladas);
+    public int MatchingBatchComandosEvitados => Volatile.Read(ref _matchingBatchComandosEvitados);
+    public int MatchingBatchOperacoesDegradadas => Volatile.Read(ref _matchingBatchOperacoesDegradadas);
+    public int MatchingBatchInfrastructureFailures => Volatile.Read(ref _matchingBatchInfrastructureFailures);
+    public string MatchingBatchCircuitReason { get; private set; } = "none";
     public int ContinuidadeComparacoes => Volatile.Read(ref _continuidadeComparacoes);
     public int ContinuidadeDirecionadoFound => Volatile.Read(ref _continuidadeDirecionadoFound);
     public int ContinuidadeDirecionadoInelegivel => Volatile.Read(ref _continuidadeDirecionadoInelegivel);
@@ -301,6 +346,12 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
         RegistrarDuracao(ref _matchingGlobalTicks, ref _matchingMaxTicks, duracao);
     }
 
+    public void RegistrarMatchingGlobalLogico()
+    {
+        Interlocked.Increment(ref _matchingGlobais);
+        Interlocked.Increment(ref _matchingGlobaisSimples);
+    }
+
     public void RegistrarMatchingCombinado(
         TimeSpan duracao, ResultadoMatchingCombinado? resultado)
     {
@@ -308,7 +359,18 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
         Interlocked.Increment(ref _matchingCombinados);
         Interlocked.Increment(ref _matchingComandosPostgres);
         RegistrarDuracao(ref _matchingGlobalTicks, ref _matchingMaxTicks, duracao);
+        RegistrarResultadoMatchingCombinado(resultado);
+    }
 
+    public void RegistrarMatchingCombinadoLogico(ResultadoMatchingCombinado resultado)
+    {
+        Interlocked.Increment(ref _matchingGlobais);
+        Interlocked.Increment(ref _matchingCombinados);
+        RegistrarResultadoMatchingCombinado(resultado);
+    }
+
+    private void RegistrarResultadoMatchingCombinado(ResultadoMatchingCombinado? resultado)
+    {
         if (resultado is null
             || resultado.Global.Status == StatusBuscaItinerario.InfrastructureFailure
             || resultado.Anterior.Status == StatusBuscaItinerario.InfrastructureFailure)
@@ -324,6 +386,66 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
         Interlocked.Increment(ref _matchingDirecionados);
         Interlocked.Increment(ref _matchingComandosPostgres);
         RegistrarDuracao(ref _matchingDirecionadoTicks, ref _matchingMaxTicks, duracao);
+    }
+
+    public void RegistrarMatchingDirecionadoLogico() =>
+        Interlocked.Increment(ref _matchingDirecionados);
+
+    // Deve ser chamado uma unica vez pelo futuro estagio batch, antes de separar
+    // as posicoes em operacoes simples/combinadas/dirigidas.
+    public void RegistrarMatchingBatchInputs(int quantidade) =>
+        Interlocked.Add(ref _matchingBatchInputs, quantidade);
+
+    public void RegistrarMatchingLote(MetricasMatchingLote metricas)
+    {
+        Interlocked.Add(ref _matchingBatchOperations, metricas.MatchingBatchOperations);
+        Interlocked.Add(ref _matchingComandosPostgres, metricas.MatchingCommandsPostgres);
+        foreach (var comando in metricas.Comandos)
+        {
+            if (comando.Tipo == TipoBatchMatching.Direcionado)
+                RegistrarDuracao(ref _matchingDirecionadoTicks, ref _matchingMaxTicks, comando.Duracao);
+            else
+                RegistrarDuracao(ref _matchingGlobalTicks, ref _matchingMaxTicks, comando.Duracao);
+
+            if (comando.Origem == OrigemComandoMatchingLote.FallbackIndividual)
+            {
+                Interlocked.Increment(ref _matchingFallbackCommandsPostgres);
+                continue;
+            }
+
+            Interlocked.Increment(ref _matchingBatchCommandsPostgres);
+            Interlocked.Add(ref _matchingBatchSizeTotal, comando.TamanhoBatch);
+            RegistrarMaximo(ref _matchingBatchSizeMax, comando.TamanhoBatch);
+            RegistrarDuracao(ref _matchingBatchTicks, ref _matchingBatchMaxTicks, comando.Duracao);
+            switch (comando.Tipo)
+            {
+                case TipoBatchMatching.GlobalSimples:
+                    Interlocked.Increment(ref _matchingGlobalSimpleBatches);
+                    break;
+                case TipoBatchMatching.Combinado:
+                    Interlocked.Increment(ref _matchingCombinedBatches);
+                    break;
+                case TipoBatchMatching.Direcionado:
+                    Interlocked.Increment(ref _matchingDirectedBatches);
+                    break;
+            }
+        }
+    }
+
+    public void RegistrarProtecaoBatch(MatchingBatchStageProtection protecao)
+    {
+        if (protecao.CircuitoAberto)
+        {
+            Interlocked.Increment(ref _matchingBatchCircuitOpened);
+            Interlocked.Increment(ref _matchingBatchInfrastructureFailures);
+            MatchingBatchCircuitReason = protecao.MotivoCircuito?.ToString() ?? "unknown";
+        }
+        Interlocked.Add(ref _matchingBatchProbes, protecao.ProbesExecutadas);
+        Interlocked.Add(ref _matchingBatchProbesSucesso, protecao.ProbesSucesso);
+        Interlocked.Add(ref _matchingBatchProbesFalha, protecao.ProbesFalha);
+        Interlocked.Add(ref _matchingBatchEntradasPuladas, protecao.EntradasPuladas);
+        Interlocked.Add(ref _matchingBatchComandosEvitados, protecao.ComandosEvitados);
+        Interlocked.Add(ref _matchingBatchOperacoesDegradadas, protecao.OperacoesDegradadas);
     }
 
     public void RegistrarProjecaoOperacional(StatusProjecaoOperacional status, TimeSpan duracaoComando)

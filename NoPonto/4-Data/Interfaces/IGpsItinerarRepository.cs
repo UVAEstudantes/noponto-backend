@@ -7,6 +7,39 @@ namespace NoPonto.Application.GPS;
 public interface IGpsItinerarioRepository
 {
     /// <summary>
+    /// Primeira versao experimental do matching set-based. Nao e usada pelo fluxo
+    /// de producao; mantem as operacoes separadas para permitir prova diferencial.
+    /// </summary>
+    Task<ResultadoMatchingLote<ResultadoMatchingGlobalLote>> BuscarGlobaisEmLoteAsync(
+        IReadOnlyList<EntradaMatchingGlobalLote> entradas, int tamanhoChunk = 100,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    Task<ResultadoMatchingLote<ResultadoMatchingCombinadoLote>> BuscarCombinadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingCombinadoLote> entradas, int tamanhoChunk = 100,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    Task<ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>> BuscarDirecionadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingDirecionadoLote> entradas, int tamanhoChunk = 100,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    // Sobrecargas usadas somente pelo executor batch com a flag ON. Os contratos
+    // antigos continuam sendo o caminho normal para consumidores existentes e fakes.
+    Task<ResultadoMatchingLote<ResultadoMatchingGlobalLote>> BuscarGlobaisEmLoteAsync(
+        IReadOnlyList<EntradaMatchingGlobalLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao) =>
+        BuscarGlobaisEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+
+    Task<ResultadoMatchingLote<ResultadoMatchingCombinadoLote>> BuscarCombinadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingCombinadoLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao) =>
+        BuscarCombinadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+
+    Task<ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>> BuscarDirecionadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingDirecionadoLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao) =>
+        BuscarDirecionadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+
+    /// <summary>
     /// Executa em um comando o matching global e o matching de continuidade do
     /// itinerario anterior dentro de uma faixa valida.
     /// </summary>
@@ -79,3 +112,62 @@ public sealed record ResultadoMatchingCombinado(
     ResultadoBuscaItinerario Global,
     ResultadoBuscaItinerario Anterior,
     ResultadoProjecaoOperacional? Operacional = null);
+
+// Contratos experimentais exclusivos do pipeline interno. InputId e a unica
+// correlacao entre entrada e saida; nenhuma operacao depende da ordem do PostgreSQL.
+// Bearing null formaliza o mesmo resultado final do runtime atual, que nao chama
+// o repository nesse caso: inelegivel, sem comando PostgreSQL e nunca falha de infraestrutura.
+public sealed record EntradaMatchingGlobalLote(
+    string InputId, string CodigoLinha, double Latitude, double Longitude,
+    double? Bearing, double DistanciaMaximaMetros);
+
+public sealed record EntradaMatchingCombinadoLote(
+    string InputId, string CodigoLinha, Guid? ItinerarioAnteriorId,
+    double Latitude, double Longitude, double? Bearing, double DistanciaMaximaMetros,
+    FaixaProjecao? Faixa, SolicitacaoProjecaoOperacional? ProjecaoOperacional = null);
+
+public sealed record EntradaMatchingDirecionadoLote(
+    string InputId, string CodigoLinha, Guid ItinerarioId,
+    double Latitude, double Longitude, double? Bearing, double DistanciaMaximaMetros,
+    FaixaProjecao? Faixa = null);
+
+public sealed record ResultadoMatchingGlobalLote(string InputId, ResultadoBuscaItinerario Global);
+public sealed record ResultadoMatchingCombinadoLote(string InputId, ResultadoMatchingCombinado Resultado);
+public sealed record ResultadoMatchingDirecionadoLote(string InputId, ResultadoBuscaItinerario Direcionado);
+
+public enum TipoBatchMatching { GlobalSimples, Combinado, Direcionado }
+public enum OrigemComandoMatchingLote { Batch, FallbackIndividual }
+
+public sealed record MetricaComandoMatchingLote(
+    TipoBatchMatching Tipo,
+    OrigemComandoMatchingLote Origem,
+    int TamanhoBatch,
+    TimeSpan Duracao);
+
+public sealed record MetricasMatchingLote(
+    int MatchingBatchOperations,
+    IReadOnlyList<MetricaComandoMatchingLote> Comandos)
+{
+    public int MatchingCommandsPostgres => Comandos.Count;
+    public int MatchingBatchCommandsPostgres =>
+        Comandos.Count(x => x.Origem == OrigemComandoMatchingLote.Batch);
+    public int MatchingFallbackCommandsPostgres =>
+        Comandos.Count(x => x.Origem == OrigemComandoMatchingLote.FallbackIndividual);
+    public IReadOnlyList<int> MatchingBatchSize => Comandos
+        .Where(x => x.Origem == OrigemComandoMatchingLote.Batch)
+        .Select(x => x.TamanhoBatch).ToArray();
+    // Soma do tempo dos comandos batch, nao wall-clock da fase nem tempo de fallback.
+    public TimeSpan MatchingBatchDuration => TimeSpan.FromTicks(Comandos
+        .Where(x => x.Origem == OrigemComandoMatchingLote.Batch)
+        .Sum(x => x.Duracao.Ticks));
+    public int GlobalSimpleBatches => Comandos.Count(x => x.Tipo == TipoBatchMatching.GlobalSimples
+        && x.Origem == OrigemComandoMatchingLote.Batch);
+    public int CombinedBatches => Comandos.Count(x => x.Tipo == TipoBatchMatching.Combinado
+        && x.Origem == OrigemComandoMatchingLote.Batch);
+    public int DirectedBatches => Comandos.Count(x => x.Tipo == TipoBatchMatching.Direcionado
+        && x.Origem == OrigemComandoMatchingLote.Batch);
+}
+
+public sealed record ResultadoMatchingLote<T>(
+    IReadOnlyList<T> Resultados,
+    MetricasMatchingLote Metricas);

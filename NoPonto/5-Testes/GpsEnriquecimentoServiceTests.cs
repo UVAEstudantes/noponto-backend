@@ -16,6 +16,15 @@ internal sealed class FakeGpsItinerarioRepository : IGpsItinerarioRepository
     public int ChamadasBuscarEnriquecimento { get; private set; }
     public int ChamadasGlobaisSimples { get; private set; }
     public int ChamadasMatchingCombinado { get; private set; }
+    public int ChamadasBatchGlobal { get; private set; }
+    public int ChamadasBatchCombinado { get; private set; }
+    public int ChamadasBatchDirecionado { get; private set; }
+    public bool InverterResultadosBatch { get; set; }
+    public bool FalharGlobalProtegidoComInfraestrutura { get; set; }
+    public int ChamadasBatchGlobalProtegido { get; private set; }
+    public int ChamadasBatchCombinadoProtegido { get; private set; }
+    public int ChamadasBatchDirecionadoProtegido { get; private set; }
+    public int TentativasPostgresProtegidas { get; private set; }
     public Queue<ResultadoMatchingCombinado> RespostasCombinadas { get; } = new();
     public Queue<ResultadoBuscaItinerario> RespostasDirecionadas { get; } = new();
     public List<FaixaProjecao?> FaixasDirecionadas { get; } = new();
@@ -87,6 +96,138 @@ internal sealed class FakeGpsItinerarioRepository : IGpsItinerarioRepository
     public Task<string?> BuscarGeometriaGeoJsonAsync(
         Guid itinerarioId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Não utilizado nestes testes.");
+
+    public Task<ResultadoMatchingLote<ResultadoMatchingGlobalLote>> BuscarGlobaisEmLoteAsync(
+        IReadOnlyList<EntradaMatchingGlobalLote> entradas, int tamanhoChunk = 100,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ChamadasBatchGlobal++;
+        var resultados = entradas.Select(x =>
+        {
+            var rota = Respostas.Count > 0 ? Respostas.Dequeue() : null;
+            _globalAtual = rota;
+            return new ResultadoMatchingGlobalLote(x.InputId, rota is null
+                ? ResultadoBuscaItinerario.NotEligible()
+                : ResultadoBuscaItinerario.Found(rota));
+        }).ToArray();
+        return Task.FromResult(new ResultadoMatchingLote<ResultadoMatchingGlobalLote>(
+            InverterResultadosBatch ? resultados.Reverse().ToArray() : resultados,
+            Metricas(TipoBatchMatching.GlobalSimples, entradas.Count)));
+    }
+
+    public Task<ResultadoMatchingLote<ResultadoMatchingCombinadoLote>> BuscarCombinadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingCombinadoLote> entradas, int tamanhoChunk = 100,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ChamadasBatchCombinado++;
+        var resultados = entradas.Select(x =>
+        {
+            var global = Respostas.Count > 0 ? Respostas.Dequeue() : null;
+            _globalAtual = global;
+            var resposta = RespostasCombinadas.Count > 0
+                ? RespostasCombinadas.Dequeue()
+                : new ResultadoMatchingCombinado(
+                    global is null ? ResultadoBuscaItinerario.NotEligible() : ResultadoBuscaItinerario.Found(global),
+                    x.ItinerarioAnteriorId.HasValue && global?.ItinerarioId == x.ItinerarioAnteriorId
+                        ? ResultadoBuscaItinerario.Found(global)
+                        : ResultadoBuscaItinerario.NotEligible(),
+                    x.ProjecaoOperacional.HasValue
+                        ? RespostasOperacionais.Count > 0
+                            ? RespostasOperacionais.Dequeue()
+                            : ResultadoProjecaoOperacional.Inelegivel()
+                        : ResultadoProjecaoOperacional.NaoSolicitada());
+            return new ResultadoMatchingCombinadoLote(x.InputId, resposta);
+        }).ToArray();
+        return Task.FromResult(new ResultadoMatchingLote<ResultadoMatchingCombinadoLote>(
+            InverterResultadosBatch ? resultados.Reverse().ToArray() : resultados,
+            Metricas(TipoBatchMatching.Combinado, entradas.Count)));
+    }
+
+    public Task<ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>> BuscarDirecionadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingDirecionadoLote> entradas, int tamanhoChunk = 100,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ChamadasBatchDirecionado++;
+        var resultados = entradas.Select(x => new ResultadoMatchingDirecionadoLote(x.InputId,
+            RespostasDirecionadas.Count > 0
+                ? RespostasDirecionadas.Dequeue()
+                : _globalAtual?.ItinerarioId == x.ItinerarioId
+                    ? ResultadoBuscaItinerario.Found(_globalAtual)
+                    : ResultadoBuscaItinerario.InfrastructureFailure())).ToArray();
+        return Task.FromResult(new ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>(
+            InverterResultadosBatch ? resultados.Reverse().ToArray() : resultados,
+            Metricas(TipoBatchMatching.Direcionado, entradas.Count)));
+    }
+
+    public Task<ResultadoMatchingLote<ResultadoMatchingGlobalLote>> BuscarGlobaisEmLoteAsync(
+        IReadOnlyList<EntradaMatchingGlobalLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ChamadasBatchGlobalProtegido++;
+        if (!FalharGlobalProtegidoComInfraestrutura)
+            return BuscarGlobaisEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+
+        TentativasPostgresProtegidas++;
+        var acao = protecao.RegistrarFalha(TipoBatchMatching.GlobalSimples,
+            CategoriaFalhaMatchingBatch.Connectivity);
+        Assert.Equal(AcaoFalhaMatchingBatch.ExecutarSonda, acao);
+        TentativasPostgresProtegidas++;
+        Assert.True(protecao.ConcluirSonda(TipoBatchMatching.GlobalSimples, infraestrutura: true));
+        return Task.FromResult(new ResultadoMatchingLote<ResultadoMatchingGlobalLote>(
+            entradas.Select(x => new ResultadoMatchingGlobalLote(x.InputId,
+                ResultadoBuscaItinerario.InfrastructureFailure())).ToArray(),
+            new(entradas.Count,
+            [
+                new(TipoBatchMatching.GlobalSimples, OrigemComandoMatchingLote.Batch,
+                    entradas.Count, TimeSpan.FromMilliseconds(1)),
+                new(TipoBatchMatching.GlobalSimples, OrigemComandoMatchingLote.FallbackIndividual,
+                    1, TimeSpan.FromMilliseconds(1)),
+            ])));
+    }
+
+    public Task<ResultadoMatchingLote<ResultadoMatchingCombinadoLote>> BuscarCombinadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingCombinadoLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ChamadasBatchCombinadoProtegido++;
+        if (!protecao.CircuitoAberto)
+            return BuscarCombinadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+
+        protecao.RegistrarPulo(entradas.Count);
+        return Task.FromResult(new ResultadoMatchingLote<ResultadoMatchingCombinadoLote>(
+            entradas.Select(x => new ResultadoMatchingCombinadoLote(x.InputId, new(
+                ResultadoBuscaItinerario.InfrastructureFailure(),
+                ResultadoBuscaItinerario.InfrastructureFailure(),
+                x.ProjecaoOperacional.HasValue
+                    ? ResultadoProjecaoOperacional.Falha()
+                    : ResultadoProjecaoOperacional.NaoSolicitada()))).ToArray(),
+            new(entradas.Count, [])));
+    }
+
+    public Task<ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>> BuscarDirecionadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingDirecionadoLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ChamadasBatchDirecionadoProtegido++;
+        if (!protecao.CircuitoAberto)
+            return BuscarDirecionadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+
+        protecao.RegistrarPulo(entradas.Count);
+        return Task.FromResult(new ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>(
+            entradas.Select(x => new ResultadoMatchingDirecionadoLote(x.InputId,
+                ResultadoBuscaItinerario.InfrastructureFailure())).ToArray(),
+            new(entradas.Count, [])));
+    }
+
+    private static MetricasMatchingLote Metricas(TipoBatchMatching tipo, int quantidade) =>
+        new(quantidade, quantidade == 0 ? [] :
+            [new(tipo, OrigemComandoMatchingLote.Batch, quantidade, TimeSpan.FromMilliseconds(1))]);
 }
 
 public class GpsEnriquecimentoServiceTests

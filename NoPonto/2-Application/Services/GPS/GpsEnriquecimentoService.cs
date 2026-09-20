@@ -15,11 +15,12 @@ namespace NoPonto.Application.GPS;
 ///   _historicoVelocidades usa ConcurrentDictionary na chave e lock interno na Queue
 ///   porque Queue nao e thread-safe por si so.
 /// </summary>
-public sealed class GpsEnriquecimentoService
+public sealed partial class GpsEnriquecimentoService
 {
     private readonly IGpsItinerarioRepository _repositorio;
     private readonly GpsPollingOptions _opcoes;
     private readonly ILogger<GpsEnriquecimentoService> _logger;
+    private readonly GpsMatchingBatchOptions _opcoesBatch;
 
     // O polling deduplica Ordem e aguarda o ciclo inteiro antes do próximo.
     // Não há outro chamador de EnriquecerAsync em produção.
@@ -45,11 +46,23 @@ public sealed class GpsEnriquecimentoService
         IGpsItinerarioRepository repositorio,
         IOptions<GpsPollingOptions> opcoes,
         ILogger<GpsEnriquecimentoService> logger)
+        : this(repositorio, opcoes, Options.Create(new GpsMatchingBatchOptions()), logger)
+    {
+    }
+
+    public GpsEnriquecimentoService(
+        IGpsItinerarioRepository repositorio,
+        IOptions<GpsPollingOptions> opcoes,
+        IOptions<GpsMatchingBatchOptions> opcoesBatch,
+        ILogger<GpsEnriquecimentoService> logger)
     {
         _repositorio = repositorio;
         _opcoes      = opcoes.Value;
+        _opcoesBatch = opcoesBatch.Value;
         _logger      = logger;
     }
+
+    internal bool MatchingBatchHabilitado => _opcoesBatch.Enabled;
 
     public async Task<PosicaoVeiculoDto> EnriquecerAsync(
         PosicaoVeiculoDto posicao,
@@ -68,7 +81,9 @@ public sealed class GpsEnriquecimentoService
 
     private async Task<ResultadoEnriquecimentoGps> EnriquecerCoreAsync(
         PosicaoVeiculoDto posicao, ContextoOperacional? contexto,
-        CancellationToken ct, GpsCicloPerformance? performance)
+        CancellationToken ct, GpsCicloPerformance? performance,
+        IExecutorMatchingGps? executorBatch = null,
+        string? inputId = null)
     {
         // ── 1. Bearing e velocidade ───────────────────────────────────────────
         double? bearing     = CalcularBearingConfiavel(posicao);
@@ -136,21 +151,34 @@ public sealed class GpsEnriquecimentoService
             if ((faixaCandidata.HasValue && historicoParaCombinado?.Rota is not null)
                 || solicitacaoOperacional.HasValue)
             {
-                var inicioMatching = System.Diagnostics.Stopwatch.GetTimestamp();
-                try
+                if (executorBatch is not null)
                 {
-                    matchingCombinado = await _repositorio.BuscarMatchingCombinadoAsync(
+                    matchingCombinado = await executorBatch.BuscarCombinadoAsync(
+                        inputId!,
                         posicao.CodigoLinha, historicoParaCombinado?.Rota?.ItinerarioId,
                         posicao.Latitude, posicao.Longitude, bearing.Value,
                         _opcoes.DistanciaMaximaRotaMetros, faixaCandidata,
                         solicitacaoOperacional, ct);
+                    performance?.RegistrarMatchingCombinadoLogico(matchingCombinado);
                 }
-                finally
+                else
                 {
-                    var duracao = System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatching);
-                    performance?.RegistrarMatchingCombinado(
-                        duracao, matchingCombinado);
-                    if (solicitacaoOperacional.HasValue) duracaoComandoOperacional = duracao;
+                    var inicioMatching = System.Diagnostics.Stopwatch.GetTimestamp();
+                    try
+                    {
+                        matchingCombinado = await _repositorio.BuscarMatchingCombinadoAsync(
+                            posicao.CodigoLinha, historicoParaCombinado?.Rota?.ItinerarioId,
+                            posicao.Latitude, posicao.Longitude, bearing.Value,
+                            _opcoes.DistanciaMaximaRotaMetros, faixaCandidata,
+                            solicitacaoOperacional, ct);
+                    }
+                    finally
+                    {
+                        var duracao = System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatching);
+                        performance?.RegistrarMatchingCombinado(
+                            duracao, matchingCombinado);
+                        if (solicitacaoOperacional.HasValue) duracaoComandoOperacional = duracao;
+                    }
                 }
 
                 rota = matchingCombinado?.Global.Status == StatusBuscaItinerario.Found
@@ -164,29 +192,50 @@ public sealed class GpsEnriquecimentoService
             }
             else
             {
-                var inicioMatching = System.Diagnostics.Stopwatch.GetTimestamp();
-                try
+                if (executorBatch is not null)
                 {
-                    rota = await _repositorio.BuscarEnriquecimentoAsync(
+                    var resultadoGlobal = await executorBatch.BuscarGlobalAsync(
+                        inputId!,
                         posicao.CodigoLinha,
                         posicao.Latitude,
                         posicao.Longitude,
                         bearing.Value,
                         _opcoes.DistanciaMaximaRotaMetros,
                         ct);
+                    rota = resultadoGlobal.Status == StatusBuscaItinerario.Found
+                        ? resultadoGlobal.Rota
+                        : null;
+                    performance?.RegistrarMatchingGlobalLogico();
                 }
-                finally
+                else
                 {
-                    performance?.RegistrarMatchingGlobal(
-                        System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatching));
+                    var inicioMatching = System.Diagnostics.Stopwatch.GetTimestamp();
+                    try
+                    {
+                        rota = await _repositorio.BuscarEnriquecimentoAsync(
+                            posicao.CodigoLinha,
+                            posicao.Latitude,
+                            posicao.Longitude,
+                            bearing.Value,
+                            _opcoes.DistanciaMaximaRotaMetros,
+                            ct);
+                    }
+                    finally
+                    {
+                        performance?.RegistrarMatchingGlobal(
+                            System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatching));
+                    }
                 }
                 rotaGlobalObservacional = rota;
             }
         }
-        else if (_itinerarioAtual.TryGetValue(posicao.Ordem, out var semBearing))
+        else
         {
+            if (executorBatch is not null)
+                await executorBatch.SemConsultaInicialAsync(inputId!, ct);
             // A consulta não ocorreu: preservar bearing não confirma o matching atual.
-            bearing = semBearing.Bearing;
+            if (_itinerarioAtual.TryGetValue(posicao.Ordem, out var semBearing))
+                bearing = semBearing.Bearing;
         }
 
         // Reprojeta o confirmado com continuidade, inclusive quando vence a busca global.
@@ -198,6 +247,7 @@ public sealed class GpsEnriquecimentoService
         if (rotaGlobalValida && !temHistoricoConfirmado)
             performance?.RegistrarMatchingGlobalSemHistorico();
 
+        var consultaDirecionadaRegistrada = false;
         if (rotaGlobalValida && rota is not null && temHistoricoConfirmado
             && confirmadoAnterior!.Rota is { } rotaAnterior)
         {
@@ -226,18 +276,31 @@ public sealed class GpsEnriquecimentoService
                     var faixaDirecionada = mesmoItinerario ? faixa : null;
                     performance?.RegistrarMotivoMatchingDirecionado(
                         mesmoItinerario, faixaDirecionada.HasValue);
-                    var inicioMatchingDirecionado = System.Diagnostics.Stopwatch.GetTimestamp();
-                    try
+                    if (executorBatch is not null)
                     {
-                        resultado = await _repositorio.BuscarEnriquecimentoDoItinerarioAsync(
+                        consultaDirecionadaRegistrada = true;
+                        resultado = await executorBatch.BuscarDirecionadoAsync(
+                            inputId!,
                             posicao.CodigoLinha, rotaAnterior.ItinerarioId,
                             posicao.Latitude, posicao.Longitude, bearing!.Value,
                             _opcoes.DistanciaMaximaRotaMetros, ct, faixaDirecionada);
+                        performance?.RegistrarMatchingDirecionadoLogico();
                     }
-                    finally
+                    else
                     {
-                        performance?.RegistrarMatchingDirecionado(
-                            System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatchingDirecionado));
+                        var inicioMatchingDirecionado = System.Diagnostics.Stopwatch.GetTimestamp();
+                        try
+                        {
+                            resultado = await _repositorio.BuscarEnriquecimentoDoItinerarioAsync(
+                                posicao.CodigoLinha, rotaAnterior.ItinerarioId,
+                                posicao.Latitude, posicao.Longitude, bearing!.Value,
+                                _opcoes.DistanciaMaximaRotaMetros, ct, faixaDirecionada);
+                        }
+                        finally
+                        {
+                            performance?.RegistrarMatchingDirecionado(
+                                System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatchingDirecionado));
+                        }
                     }
 
                     performance?.RegistrarResultadoMatchingDirecionado(resultado.Status);
@@ -274,6 +337,9 @@ public sealed class GpsEnriquecimentoService
                     rota = null; // O matching global irrestrito não substitui o restrito inelegível.
             }
         }
+
+        if (executorBatch is not null && !consultaDirecionadaRegistrada)
+            await executorBatch.SemConsultaDirecionadaAsync(inputId!, ct);
 
         // Valida antes de substituir o último matching realmente confirmado.
         // Fração em geometry(4326) × comprimento geography é uma estimativa;

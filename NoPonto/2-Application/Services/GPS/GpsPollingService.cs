@@ -335,21 +335,34 @@ public sealed class GpsPollingService : BackgroundService
         }
         else
         {
-            var grau = Math.Min(paraEnriquecer.Count, opcoes.GrauParalelismoEnriquecimento);
-            var semaforo = new SemaphoreSlim(grau, grau);
+            if (_enriquecedor.MatchingBatchHabilitado)
+            {
+                var entradas = paraEnriquecer.Select((x, indice) => new EntradaEnriquecimentoGps(
+                    MontarComHistorico(x.Nova, x.Anterior),
+                    contextosOperacionais[indice])).ToArray();
+                enriquecimentos = await _enriquecedor.EnriquecerLoteComContextoAsync(
+                    entradas, ct, performance);
+            }
+            else
+            {
+                // Caminho produtivo legado: a flag OFF não altera concorrência,
+                // ordem, exceptions, chamadas nem métricas do matching individual.
+                var grau = Math.Min(paraEnriquecer.Count, opcoes.GrauParalelismoEnriquecimento);
+                var semaforo = new SemaphoreSlim(grau, grau);
 
-            enriquecimentos = await Task.WhenAll(
-                paraEnriquecer.Select(async (x, indice) =>
-                {
-                    await semaforo.WaitAsync(ct);
-                    try
+                enriquecimentos = await Task.WhenAll(
+                    paraEnriquecer.Select(async (x, indice) =>
                     {
-                        return await _enriquecedor.EnriquecerComContextoAsync(
-                            MontarComHistorico(x.Nova, x.Anterior),
-                            contextosOperacionais[indice], ct, performance);
-                    }
-                    finally { semaforo.Release(); }
-                }));
+                        await semaforo.WaitAsync(ct);
+                        try
+                        {
+                            return await _enriquecedor.EnriquecerComContextoAsync(
+                                MontarComHistorico(x.Nova, x.Anterior),
+                                contextosOperacionais[indice], ct, performance);
+                        }
+                        finally { semaforo.Release(); }
+                    }));
+            }
             resultadosEnriquecidos = enriquecimentos.Select(x => x.Posicao).ToArray();
         }
         performance.MatchingEtapaMs = (long)System.Diagnostics.Stopwatch
@@ -658,6 +671,26 @@ public sealed class GpsPollingService : BackgroundService
                 "matching_combinado_global_inelegivel={matching_combinado_global_inelegivel} " +
                 "matching_combinado_anterior_inelegivel={matching_combinado_anterior_inelegivel} " +
                 "matching_combinado_falha={matching_combinado_falha} " +
+                "matching_batch_inputs={matching_batch_inputs} " +
+                "matching_batch_operations={matching_batch_operations} " +
+                "matching_batch_commands_postgres={matching_batch_commands_postgres} " +
+                "matching_fallback_commands_postgres={matching_fallback_commands_postgres} " +
+                "matching_batch_size={matching_batch_size:F1} " +
+                "matching_batch_size_max={matching_batch_size_max} " +
+                "matching_batch_duration_ms={matching_batch_duration_ms:F1} " +
+                "matching_batch_duration_media_ms={matching_batch_duration_media_ms:F1} " +
+                "matching_batch_duration_max_ms={matching_batch_duration_max_ms:F1} " +
+                "global_simple_batches={global_simple_batches} " +
+                "combined_batches={combined_batches} directed_batches={directed_batches} " +
+                "matching_batch_circuit_opened={matching_batch_circuit_opened} " +
+                "matching_batch_probes={matching_batch_probes} " +
+                "matching_batch_probes_sucesso={matching_batch_probes_sucesso} " +
+                "matching_batch_probes_falha={matching_batch_probes_falha} " +
+                "matching_batch_entradas_puladas={matching_batch_entradas_puladas} " +
+                "matching_batch_comandos_evitados={matching_batch_comandos_evitados} " +
+                "matching_batch_operacoes_degradadas={matching_batch_operacoes_degradadas} " +
+                "matching_batch_infrastructure_failures={matching_batch_infrastructure_failures} " +
+                "matching_batch_circuit_reason={matching_batch_circuit_reason} " +
                 "matching_global_sem_historico={matching_global_sem_historico} " +
                 "matching_global_mesmo_itinerario={matching_global_mesmo_itinerario} " +
                 "matching_global_itinerario_diferente={matching_global_itinerario_diferente} " +
@@ -762,6 +795,27 @@ public sealed class GpsPollingService : BackgroundService
                 performance.MatchingCombinadoGlobalInelegivel,
                 performance.MatchingCombinadoAnteriorInelegivel,
                 performance.MatchingCombinadoFalha,
+                performance.MatchingBatchInputs,
+                performance.MatchingBatchOperations,
+                performance.MatchingBatchCommandsPostgres,
+                performance.MatchingFallbackCommandsPostgres,
+                performance.MatchingBatchSize,
+                performance.MatchingBatchSizeMax,
+                performance.MatchingBatchDurationMs,
+                performance.MatchingBatchDurationMediaMs,
+                performance.MatchingBatchDurationMaxMs,
+                performance.MatchingGlobalSimpleBatches,
+                performance.MatchingCombinedBatches,
+                performance.MatchingDirectedBatches,
+                performance.MatchingBatchCircuitOpened,
+                performance.MatchingBatchProbes,
+                performance.MatchingBatchProbesSucesso,
+                performance.MatchingBatchProbesFalha,
+                performance.MatchingBatchEntradasPuladas,
+                performance.MatchingBatchComandosEvitados,
+                performance.MatchingBatchOperacoesDegradadas,
+                performance.MatchingBatchInfrastructureFailures,
+                performance.MatchingBatchCircuitReason,
                 performance.MatchingGlobalSemHistorico,
                 performance.MatchingGlobalMesmoItinerario,
                 performance.MatchingGlobalItinerarioDiferente,
