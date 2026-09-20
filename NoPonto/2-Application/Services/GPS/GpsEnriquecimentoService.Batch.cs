@@ -50,7 +50,8 @@ public sealed partial class GpsEnriquecimentoService
         var ids = Enumerable.Range(0, entradas.Count)
             .Select(indice => $"{stageId}:{indice:D8}")
             .ToArray();
-        var executor = new ExecutorMatchingGpsLote(_repositorio, ids, performance, ct);
+        var executor = new ExecutorMatchingGpsLote(
+            _repositorio, ids, performance, _opcoesBatch.TamanhoChunk, ct);
 
         // A concorrência aqui é apenas da decisão C# por posição. O executor
         // emite no máximo um grupo simple, um combined e um directed, nessa ordem;
@@ -74,11 +75,11 @@ public sealed partial class GpsEnriquecimentoService
 
     private sealed class ExecutorMatchingGpsLote : IExecutorMatchingGps
     {
-        private const int TamanhoChunkMatching = 100;
         private readonly IGpsItinerarioRepository _repositorio;
         private readonly GpsCicloPerformance? _performance;
         private readonly object _sync = new();
         private readonly int _quantidade;
+        private readonly int _tamanhoChunk;
         private readonly CancellationToken _ct;
         private readonly MatchingBatchStageProtection _protecao = new();
         internal MatchingBatchStageProtection Protecao => _protecao;
@@ -101,11 +102,14 @@ public sealed partial class GpsEnriquecimentoService
             IGpsItinerarioRepository repositorio,
             IReadOnlyList<string> ids,
             GpsCicloPerformance? performance,
+            int tamanhoChunk,
             CancellationToken ct = default)
         {
+            if (tamanhoChunk <= 0) throw new ArgumentOutOfRangeException(nameof(tamanhoChunk));
             _repositorio = repositorio;
             _performance = performance;
             _quantidade = ids.Count;
+            _tamanhoChunk = tamanhoChunk;
             _ct = ct;
             _resultadosGlobais = ids.ToDictionary(x => x,
                 _ => NovaFonte<ResultadoBuscaItinerario>(), StringComparer.Ordinal);
@@ -192,7 +196,7 @@ public sealed partial class GpsEnriquecimentoService
                 if (_globais.Count > 0)
                 {
                     var lote = await _repositorio.BuscarGlobaisEmLoteAsync(
-                        _globais.Values.ToArray(), TamanhoChunkMatching,
+                        _globais.Values.ToArray(), _tamanhoChunk,
                         _ct, _protecao);
                     _performance?.RegistrarMatchingLote(lote.Metricas);
                     foreach (var resultado in lote.Resultados)
@@ -202,7 +206,7 @@ public sealed partial class GpsEnriquecimentoService
                 if (_combinados.Count > 0)
                 {
                     var lote = await _repositorio.BuscarCombinadosEmLoteAsync(
-                        _combinados.Values.ToArray(), TamanhoChunkMatching,
+                        _combinados.Values.ToArray(), _tamanhoChunk,
                         _ct, _protecao);
                     _performance?.RegistrarMatchingLote(lote.Metricas);
                     foreach (var resultado in lote.Resultados)
@@ -238,7 +242,7 @@ public sealed partial class GpsEnriquecimentoService
             try
             {
                 var lote = await _repositorio.BuscarDirecionadosEmLoteAsync(
-                    _direcionados.Values.ToArray(), TamanhoChunkMatching,
+                    _direcionados.Values.ToArray(), _tamanhoChunk,
                     _ct, _protecao);
                 _performance?.RegistrarMatchingLote(lote.Metricas);
                 foreach (var resultado in lote.Resultados)
