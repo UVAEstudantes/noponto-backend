@@ -353,7 +353,8 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
         double distanciaMaximaMetros,
         Guid? itinerarioId,
         FaixaProjecao? faixa,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool propagarFalhaGlobalParaDiagnostico = false)
     {
         const string sql = """
             WITH veiculo AS (
@@ -511,11 +512,12 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex,
-                "Falha ao enriquecer rota para linha {linha} em ({lat},{lon})",
-                codigoLinha, latitude, longitude);
+            if (!propagarFalhaGlobalParaDiagnostico)
+                _logger.LogWarning(ex,
+                    "Falha ao enriquecer rota para linha {linha} em ({lat},{lon})",
+                    codigoLinha, latitude, longitude);
             // A operação direcionada nunca confunde erro com ausência de matching.
-            if (itinerarioId.HasValue) throw;
+            if (itinerarioId.HasValue || propagarFalhaGlobalParaDiagnostico) throw;
             return null;
         }
     }

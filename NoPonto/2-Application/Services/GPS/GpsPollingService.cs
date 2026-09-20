@@ -682,6 +682,15 @@ public sealed class GpsPollingService : BackgroundService
                 "matching_batch_duration_max_ms={matching_batch_duration_max_ms:F1} " +
                 "global_simple_batches={global_simple_batches} " +
                 "combined_batches={combined_batches} directed_batches={directed_batches} " +
+                "matching_batch_circuit_opened={matching_batch_circuit_opened} " +
+                "matching_batch_probes={matching_batch_probes} " +
+                "matching_batch_probes_sucesso={matching_batch_probes_sucesso} " +
+                "matching_batch_probes_falha={matching_batch_probes_falha} " +
+                "matching_batch_entradas_puladas={matching_batch_entradas_puladas} " +
+                "matching_batch_comandos_evitados={matching_batch_comandos_evitados} " +
+                "matching_batch_operacoes_degradadas={matching_batch_operacoes_degradadas} " +
+                "matching_batch_infrastructure_failures={matching_batch_infrastructure_failures} " +
+                "matching_batch_circuit_reason={matching_batch_circuit_reason} " +
                 "matching_global_sem_historico={matching_global_sem_historico} " +
                 "matching_global_mesmo_itinerario={matching_global_mesmo_itinerario} " +
                 "matching_global_itinerario_diferente={matching_global_itinerario_diferente} " +
@@ -798,6 +807,15 @@ public sealed class GpsPollingService : BackgroundService
                 performance.MatchingGlobalSimpleBatches,
                 performance.MatchingCombinedBatches,
                 performance.MatchingDirectedBatches,
+                performance.MatchingBatchCircuitOpened,
+                performance.MatchingBatchProbes,
+                performance.MatchingBatchProbesSucesso,
+                performance.MatchingBatchProbesFalha,
+                performance.MatchingBatchEntradasPuladas,
+                performance.MatchingBatchComandosEvitados,
+                performance.MatchingBatchOperacoesDegradadas,
+                performance.MatchingBatchInfrastructureFailures,
+                performance.MatchingBatchCircuitReason,
                 performance.MatchingGlobalSemHistorico,
                 performance.MatchingGlobalMesmoItinerario,
                 performance.MatchingGlobalItinerarioDiferente,

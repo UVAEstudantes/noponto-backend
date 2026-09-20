@@ -1,6 +1,10 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
+using NoPonto.Data.Repositories;
+using Npgsql;
+using System.IO;
+using System.Net.Sockets;
 using Xunit;
 
 namespace NoPonto.Tests;
@@ -40,6 +44,13 @@ public class GpsMatchingBatchOrquestracaoTests
         Assert.Equal(0, metrics.MatchingBatchInputs);
         Assert.Equal(0, metrics.MatchingBatchOperations);
         Assert.Equal(0, metrics.MatchingBatchCommandsPostgres);
+        Assert.Equal(0, metrics.MatchingBatchCircuitOpened);
+        Assert.Equal(0, metrics.MatchingBatchProbes);
+        Assert.Equal(0, metrics.MatchingBatchEntradasPuladas);
+        Assert.Equal(0, metrics.MatchingBatchComandosEvitados);
+        Assert.Equal(0, metrics.MatchingBatchOperacoesDegradadas);
+        Assert.Equal(0, metrics.MatchingBatchInfrastructureFailures);
+        Assert.Equal("none", metrics.MatchingBatchCircuitReason);
     }
 
     [Fact]
@@ -221,6 +232,194 @@ public class GpsMatchingBatchOrquestracaoTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             service.EnriquecerLoteComContextoAsync(
                 [new(Posicao("CANCEL", 0), null)], cts.Token, Metricas()));
+    }
+
+    [Fact]
+    public void Protecao_UmaSondaComInfraestrutura_AbreCircuitoEImpedeNovosTipos()
+    {
+        var protecao = new MatchingBatchStageProtection();
+
+        Assert.Equal(AcaoFalhaMatchingBatch.ExecutarSonda,
+            protecao.RegistrarFalha(TipoBatchMatching.GlobalSimples,
+                CategoriaFalhaMatchingBatch.Connectivity));
+        Assert.True(protecao.ConcluirSonda(TipoBatchMatching.GlobalSimples, infraestrutura: true));
+        Assert.True(protecao.CircuitoAberto);
+        Assert.True(protecao.DevePular(TipoBatchMatching.Combinado));
+        Assert.True(protecao.DevePular(TipoBatchMatching.Direcionado));
+        Assert.Equal(1, protecao.ProbesExecutadas);
+        Assert.Equal(1, protecao.ProbesFalha);
+    }
+
+    [Fact]
+    public void Protecao_SondaSaudavel_DegradaSomenteOperacaoFalha()
+    {
+        var protecao = new MatchingBatchStageProtection();
+
+        Assert.Equal(AcaoFalhaMatchingBatch.ExecutarSonda,
+            protecao.RegistrarFalha(TipoBatchMatching.Combinado,
+                CategoriaFalhaMatchingBatch.Timeout));
+        Assert.False(protecao.ConcluirSonda(TipoBatchMatching.Combinado, infraestrutura: false));
+        Assert.False(protecao.CircuitoAberto);
+        Assert.True(protecao.DevePular(TipoBatchMatching.Combinado));
+        Assert.False(protecao.DevePular(TipoBatchMatching.GlobalSimples));
+        Assert.False(protecao.DevePular(TipoBatchMatching.Direcionado));
+        Assert.Equal(1, protecao.OperacoesDegradadas);
+    }
+
+    [Theory]
+    [InlineData(CategoriaFalhaMatchingBatch.TransientPostgres)]
+    [InlineData(CategoriaFalhaMatchingBatch.SqlOrSchema)]
+    [InlineData(CategoriaFalhaMatchingBatch.DataOrMapping)]
+    [InlineData(CategoriaFalhaMatchingBatch.Serialization)]
+    public void Protecao_FalhasNaoInfra_DegradamSemAbrirCircuito(CategoriaFalhaMatchingBatch categoria)
+    {
+        var protecao = new MatchingBatchStageProtection();
+
+        Assert.Equal(AcaoFalhaMatchingBatch.RecuperarChunk,
+            protecao.RegistrarFalha(TipoBatchMatching.Direcionado, categoria));
+        Assert.False(protecao.CircuitoAberto);
+        Assert.Equal(0, protecao.ProbesExecutadas);
+        Assert.True(protecao.DevePular(TipoBatchMatching.Direcionado));
+    }
+
+    [Fact]
+    public void Classificador_DistingueConectividadeTimeoutETransientes()
+    {
+        Assert.Equal(CategoriaFalhaMatchingBatch.Connectivity,
+            GpsItinerarioRepository.ClassificarFalhaBatch(new SocketException()));
+        Assert.Equal(CategoriaFalhaMatchingBatch.Timeout,
+            GpsItinerarioRepository.ClassificarFalhaBatch(new TimeoutException()));
+        Assert.Equal(CategoriaFalhaMatchingBatch.TransientPostgres,
+            GpsItinerarioRepository.ClassificarFalhaBatch(new PostgresException(
+                "deadlock", "ERROR", "ERROR", "40P01")));
+        Assert.Equal(CategoriaFalhaMatchingBatch.SqlOrSchema,
+            GpsItinerarioRepository.ClassificarFalhaBatch(new PostgresException(
+                "schema", "ERROR", "ERROR", "42P01")));
+    }
+
+    [Theory]
+    [InlineData("57P01", CategoriaFalhaMatchingBatch.Connectivity)]
+    [InlineData("57P02", CategoriaFalhaMatchingBatch.Connectivity)]
+    [InlineData("57P03", CategoriaFalhaMatchingBatch.Connectivity)]
+    [InlineData("53300", CategoriaFalhaMatchingBatch.Connectivity)]
+    [InlineData("08006", CategoriaFalhaMatchingBatch.Connectivity)]
+    [InlineData("40001", CategoriaFalhaMatchingBatch.TransientPostgres)]
+    [InlineData("55P03", CategoriaFalhaMatchingBatch.TransientPostgres)]
+    [InlineData("0A000", CategoriaFalhaMatchingBatch.SqlOrSchema)]
+    [InlineData("22003", CategoriaFalhaMatchingBatch.DataOrMapping)]
+    public void Classificador_ClassificaSqlStateSemConfundirTransienteComOutage(
+        string sqlState, CategoriaFalhaMatchingBatch esperado) =>
+        Assert.Equal(esperado, GpsItinerarioRepository.ClassificarFalhaBatch(
+            new PostgresException("teste", "ERROR", "ERROR", sqlState)));
+
+    [Fact]
+    public void Classificador_ClassificaIOExceptionECancelamento()
+    {
+        Assert.Equal(CategoriaFalhaMatchingBatch.Connectivity,
+            GpsItinerarioRepository.ClassificarFalhaBatch(new IOException()));
+        Assert.Equal(CategoriaFalhaMatchingBatch.Cancellation,
+            GpsItinerarioRepository.ClassificarFalhaBatch(new OperationCanceledException()));
+    }
+
+    [Fact]
+    public async Task Protecao_ConcorrenciaPermiteSomenteUmaSondaEAberturaEhIdempotente()
+    {
+        var protecao = new MatchingBatchStageProtection();
+        using var largada = new ManualResetEventSlim(false);
+        var tarefas = Enumerable.Range(0, 32).Select(_ => Task.Run(() =>
+        {
+            largada.Wait();
+            return protecao.RegistrarFalha(TipoBatchMatching.GlobalSimples,
+                CategoriaFalhaMatchingBatch.Connectivity);
+        })).ToArray();
+
+        largada.Set();
+        var acoes = await Task.WhenAll(tarefas);
+        Assert.Equal(1, acoes.Count(x => x == AcaoFalhaMatchingBatch.ExecutarSonda));
+        Assert.Equal(1, protecao.ProbesExecutadas);
+        Assert.True(protecao.ConcluirSonda(TipoBatchMatching.GlobalSimples, infraestrutura: true));
+        Assert.True(protecao.ConcluirSonda(TipoBatchMatching.GlobalSimples, infraestrutura: true));
+        Assert.True(protecao.CircuitoAberto);
+    }
+
+    [Fact]
+    public async Task ExecutorCompleto_GlobalAbreCircuito_BloqueiaCombinadoELiberaTodasBarreiras()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        repo.Respostas.Enqueue(Rota(Guid.NewGuid(), .20, 3));
+        var service = Criar(repo, enabled: true);
+        var existente = Posicao("EXISTENTE", 0);
+        await service.EnriquecerLoteComContextoAsync(
+            [new(existente, null)], default, Metricas());
+        var globaisAntesDoOutage = repo.ChamadasBatchGlobalProtegido;
+
+        repo.FalharGlobalProtegidoComInfraestrutura = true;
+        var metrics = Metricas();
+        var execucao = service.EnriquecerLoteComContextoAsync(
+        [
+            new(Posicao("NOVO", 5), null),
+            new(existente with
+            {
+                TimestampGps = existente.TimestampGps.AddSeconds(5),
+                TimestampServidor = existente.TimestampServidor.AddSeconds(5),
+            }, null),
+        ], default, metrics);
+
+        var resultados = await execucao.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(2, resultados.Length);
+        Assert.Equal(globaisAntesDoOutage + 1, repo.ChamadasBatchGlobalProtegido);
+        Assert.Equal(1, repo.ChamadasBatchCombinadoProtegido);
+        Assert.Equal(0, repo.ChamadasBatchDirecionadoProtegido);
+        Assert.Equal(2, repo.TentativasPostgresProtegidas); // batch + sonda, nada depois.
+        Assert.Equal(1, metrics.MatchingBatchCircuitOpened);
+        Assert.Equal(1, metrics.MatchingBatchProbes);
+        Assert.Equal(1, metrics.MatchingBatchProbesFalha);
+        Assert.Equal(1, metrics.MatchingBatchEntradasPuladas);
+        Assert.All(resultados, x => Assert.Null(x.Posicao.ItinerarioId));
+    }
+
+    [Fact]
+    public async Task ExecutorProtegido_CancelamentoPropagaSemSondaCircuitoOuTcsPendente()
+    {
+        var repo = new FakeGpsItinerarioRepository();
+        var service = Criar(repo, enabled: true);
+        var metrics = Metricas();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var execucao = service.EnriquecerLoteComContextoAsync(
+            [new(Posicao("CANCEL-PROTEGIDO", 0), null)], cts.Token, metrics);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await execucao.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(0, metrics.MatchingBatchProbes);
+        Assert.Equal(0, metrics.MatchingBatchCircuitOpened);
+        Assert.Equal(0, repo.TentativasPostgresProtegidas);
+    }
+
+    [Fact]
+    public async Task Protecao_OutageGlobal_ExecutaUmaSondaEPulaChunksRestantes()
+    {
+        await using var source = NpgsqlDataSource.Create(
+            "Host=127.0.0.1;Port=1;Database=inexistente;Username=x;Password=x;Timeout=1;Command Timeout=1;SSL Mode=Disable");
+        var repo = new GpsItinerarioRepository(source,
+            NullLogger<GpsItinerarioRepository>.Instance);
+        var protecao = new MatchingBatchStageProtection();
+        var entradas = Enumerable.Range(0, 201).Select(i => new EntradaMatchingGlobalLote(
+            $"outage-{i}", "100", -22.9, -43.2, 90, 250)).ToArray();
+
+        var lote = await repo.BuscarGlobaisEmLoteAsync(entradas, 100, default, protecao);
+
+        Assert.True(protecao.CircuitoAberto);
+        Assert.Equal(1, protecao.ProbesExecutadas);
+        Assert.Equal(1, protecao.ProbesFalha);
+        Assert.Equal(101, protecao.EntradasPuladas);
+        Assert.Equal(2, protecao.ComandosEvitados);
+        Assert.Equal(1, lote.Metricas.MatchingBatchCommandsPostgres);
+        Assert.Equal(1, lote.Metricas.MatchingFallbackCommandsPostgres);
+        Assert.All(lote.Resultados,
+            x => Assert.Equal(StatusBuscaItinerario.InfrastructureFailure, x.Global.Status));
     }
 
     private static GpsEnriquecimentoService Criar(

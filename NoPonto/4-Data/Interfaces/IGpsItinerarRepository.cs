@@ -22,6 +22,23 @@ public interface IGpsItinerarioRepository
         IReadOnlyList<EntradaMatchingDirecionadoLote> entradas, int tamanhoChunk = 100,
         CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
+    // Sobrecargas usadas somente pelo executor batch com a flag ON. Os contratos
+    // antigos continuam sendo o caminho normal para consumidores existentes e fakes.
+    Task<ResultadoMatchingLote<ResultadoMatchingGlobalLote>> BuscarGlobaisEmLoteAsync(
+        IReadOnlyList<EntradaMatchingGlobalLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao) =>
+        BuscarGlobaisEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+
+    Task<ResultadoMatchingLote<ResultadoMatchingCombinadoLote>> BuscarCombinadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingCombinadoLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao) =>
+        BuscarCombinadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+
+    Task<ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>> BuscarDirecionadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingDirecionadoLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao) =>
+        BuscarDirecionadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+
     /// <summary>
     /// Executa em um comando o matching global e o matching de continuidade do
     /// itinerario anterior dentro de uma faixa valida.

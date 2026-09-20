@@ -50,6 +50,14 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     private int _matchingGlobalSimpleBatches;
     private int _matchingCombinedBatches;
     private int _matchingDirectedBatches;
+    private int _matchingBatchCircuitOpened;
+    private int _matchingBatchProbes;
+    private int _matchingBatchProbesSucesso;
+    private int _matchingBatchProbesFalha;
+    private int _matchingBatchEntradasPuladas;
+    private int _matchingBatchComandosEvitados;
+    private int _matchingBatchOperacoesDegradadas;
+    private int _matchingBatchInfrastructureFailures;
     private int _projecaoOperacionalSolicitada;
     private int _projecaoOperacionalEncontrada;
     private int _projecaoOperacionalInelegivel;
@@ -208,6 +216,15 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     public int MatchingGlobalSimpleBatches => Volatile.Read(ref _matchingGlobalSimpleBatches);
     public int MatchingCombinedBatches => Volatile.Read(ref _matchingCombinedBatches);
     public int MatchingDirectedBatches => Volatile.Read(ref _matchingDirectedBatches);
+    public int MatchingBatchCircuitOpened => Volatile.Read(ref _matchingBatchCircuitOpened);
+    public int MatchingBatchProbes => Volatile.Read(ref _matchingBatchProbes);
+    public int MatchingBatchProbesSucesso => Volatile.Read(ref _matchingBatchProbesSucesso);
+    public int MatchingBatchProbesFalha => Volatile.Read(ref _matchingBatchProbesFalha);
+    public int MatchingBatchEntradasPuladas => Volatile.Read(ref _matchingBatchEntradasPuladas);
+    public int MatchingBatchComandosEvitados => Volatile.Read(ref _matchingBatchComandosEvitados);
+    public int MatchingBatchOperacoesDegradadas => Volatile.Read(ref _matchingBatchOperacoesDegradadas);
+    public int MatchingBatchInfrastructureFailures => Volatile.Read(ref _matchingBatchInfrastructureFailures);
+    public string MatchingBatchCircuitReason { get; private set; } = "none";
     public int ContinuidadeComparacoes => Volatile.Read(ref _continuidadeComparacoes);
     public int ContinuidadeDirecionadoFound => Volatile.Read(ref _continuidadeDirecionadoFound);
     public int ContinuidadeDirecionadoInelegivel => Volatile.Read(ref _continuidadeDirecionadoInelegivel);
@@ -413,6 +430,22 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
                     break;
             }
         }
+    }
+
+    public void RegistrarProtecaoBatch(MatchingBatchStageProtection protecao)
+    {
+        if (protecao.CircuitoAberto)
+        {
+            Interlocked.Increment(ref _matchingBatchCircuitOpened);
+            Interlocked.Increment(ref _matchingBatchInfrastructureFailures);
+            MatchingBatchCircuitReason = protecao.MotivoCircuito?.ToString() ?? "unknown";
+        }
+        Interlocked.Add(ref _matchingBatchProbes, protecao.ProbesExecutadas);
+        Interlocked.Add(ref _matchingBatchProbesSucesso, protecao.ProbesSucesso);
+        Interlocked.Add(ref _matchingBatchProbesFalha, protecao.ProbesFalha);
+        Interlocked.Add(ref _matchingBatchEntradasPuladas, protecao.EntradasPuladas);
+        Interlocked.Add(ref _matchingBatchComandosEvitados, protecao.ComandosEvitados);
+        Interlocked.Add(ref _matchingBatchOperacoesDegradadas, protecao.OperacoesDegradadas);
     }
 
     public void RegistrarProjecaoOperacional(StatusProjecaoOperacional status, TimeSpan duracaoComando)

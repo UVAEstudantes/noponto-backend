@@ -24,18 +24,38 @@ public sealed partial class GpsItinerarioRepository
         IReadOnlyList<EntradaMatchingGlobalLote> entradas,
         int tamanhoChunk = TamanhoChunkMatchingPadrao,
         CancellationToken cancellationToken = default) =>
-        ExecutarGlobaisEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+        ExecutarGlobaisEmLoteAsync(entradas, tamanhoChunk, cancellationToken, null);
+
+    public Task<ResultadoMatchingLote<ResultadoMatchingGlobalLote>> BuscarGlobaisEmLoteAsync(
+        IReadOnlyList<EntradaMatchingGlobalLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao) =>
+        ExecutarGlobaisEmLoteAsync(entradas, tamanhoChunk, cancellationToken, protecao);
 
     public Task<ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>> BuscarDirecionadosEmLoteAsync(
         IReadOnlyList<EntradaMatchingDirecionadoLote> entradas,
         int tamanhoChunk = TamanhoChunkMatchingPadrao,
         CancellationToken cancellationToken = default) =>
-        ExecutarDirecionadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken);
+        ExecutarDirecionadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken, null);
+
+    public Task<ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>> BuscarDirecionadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingDirecionadoLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao) =>
+        ExecutarDirecionadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken, protecao);
 
     public async Task<ResultadoMatchingLote<ResultadoMatchingCombinadoLote>> BuscarCombinadosEmLoteAsync(
         IReadOnlyList<EntradaMatchingCombinadoLote> entradas,
         int tamanhoChunk = TamanhoChunkMatchingPadrao,
         CancellationToken cancellationToken = default)
+        => await ExecutarCombinadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken, null);
+
+    public Task<ResultadoMatchingLote<ResultadoMatchingCombinadoLote>> BuscarCombinadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingCombinadoLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection protecao) =>
+        ExecutarCombinadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken, protecao);
+
+    private async Task<ResultadoMatchingLote<ResultadoMatchingCombinadoLote>> ExecutarCombinadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingCombinadoLote> entradas, int tamanhoChunk,
+        CancellationToken cancellationToken, MatchingBatchStageProtection? protecao)
     {
         ValidarLote(entradas, tamanhoChunk, x => x.InputId);
         cancellationToken.ThrowIfCancellationRequested();
@@ -73,6 +93,13 @@ public sealed partial class GpsItinerarioRepository
         {
             cancellationToken.ThrowIfCancellationRequested();
             numeroChunk++;
+            if (protecao?.DevePular(TipoBatchMatching.Combinado) == true)
+            {
+                protecao.RegistrarPulo(chunk.Length);
+                foreach (var entrada in chunk)
+                    resultados[entrada.InputId] = FalhaCombinada(entrada.ProjecaoOperacional.HasValue);
+                continue;
+            }
             var inicio = Stopwatch.GetTimestamp();
             var comandoBatchRegistrado = false;
             var tentativaPostgres = false;
@@ -93,8 +120,48 @@ public sealed partial class GpsItinerarioRepository
                         Stopwatch.GetElapsedTime(inicio)));
                     comandoBatchRegistrado = true;
                 }
-                _logger.LogWarning(ex, "Falha no matching combinado em lote com {quantidade} entradas.", chunk.Length);
-                foreach (var entrada in chunk)
+                var acao = protecao?.RegistrarFalha(TipoBatchMatching.Combinado,
+                    ClassificarFalhaBatch(ex)) ?? AcaoFalhaMatchingBatch.RecuperarChunk;
+                if (acao == AcaoFalhaMatchingBatch.AbrirCircuito)
+                {
+                    _logger.LogWarning("Circuito de matching batch aberto apos falha de infraestrutura no COMBINADO.");
+                    foreach (var entrada in chunk)
+                        resultados[entrada.InputId] = FalhaCombinada(entrada.ProjecaoOperacional.HasValue);
+                    continue;
+                }
+
+                var pularPrimeira = false;
+                if (acao == AcaoFalhaMatchingBatch.ExecutarSonda)
+                {
+                    var primeira = chunk[0];
+                    AntesDoFallbackIndividualParaTeste?.Invoke(TipoBatchMatching.Combinado, primeira.InputId);
+                    var inicioSonda = Stopwatch.GetTimestamp();
+                    var sonda = await BuscarMatchingCombinadoAsync(primeira.CodigoLinha,
+                        primeira.ItinerarioAnteriorId, primeira.Latitude, primeira.Longitude,
+                        primeira.Bearing!.Value, primeira.DistanciaMaximaMetros, primeira.Faixa,
+                        primeira.ProjecaoOperacional, cancellationToken);
+                    comandos.Add(new(TipoBatchMatching.Combinado,
+                        OrigemComandoMatchingLote.FallbackIndividual, 1,
+                        Stopwatch.GetElapsedTime(inicioSonda)));
+                    resultados[primeira.InputId] = sonda;
+                    var infraestrutura = sonda.Global.Status == StatusBuscaItinerario.InfrastructureFailure
+                        || sonda.Anterior.Status == StatusBuscaItinerario.InfrastructureFailure
+                        || sonda.Operacional?.Status == StatusProjecaoOperacional.FalhaInfraestrutura;
+                    if (protecao!.ConcluirSonda(TipoBatchMatching.Combinado, infraestrutura))
+                    {
+                        _logger.LogWarning("Circuito de matching batch aberto apos sonda COMBINADA de infraestrutura.");
+                        foreach (var entrada in chunk)
+                            resultados[entrada.InputId] = FalhaCombinada(entrada.ProjecaoOperacional.HasValue);
+                        continue;
+                    }
+                    pularPrimeira = true;
+                }
+                else if (protecao is not null)
+                {
+                    _logger.LogWarning(ex, "Operacao COMBINADA batch degradada no estagio; recuperando somente o chunk de {quantidade} entradas.", chunk.Length);
+                }
+                else _logger.LogWarning(ex, "Falha no matching combinado em lote com {quantidade} entradas.", chunk.Length);
+                foreach (var entrada in pularPrimeira ? chunk.Skip(1) : chunk)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     AntesDoFallbackIndividualParaTeste?.Invoke(
@@ -133,7 +200,7 @@ public sealed partial class GpsItinerarioRepository
     private async Task<ResultadoMatchingLote<ResultadoMatchingGlobalLote>> ExecutarGlobaisEmLoteAsync(
         IReadOnlyList<EntradaMatchingGlobalLote> entradas,
         int tamanhoChunk,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, MatchingBatchStageProtection? protecao)
     {
         ValidarLote(entradas, tamanhoChunk, x => x.InputId);
         cancellationToken.ThrowIfCancellationRequested();
@@ -149,6 +216,13 @@ public sealed partial class GpsItinerarioRepository
         {
             cancellationToken.ThrowIfCancellationRequested();
             numeroChunk++;
+            if (protecao?.DevePular(TipoBatchMatching.GlobalSimples) == true)
+            {
+                protecao.RegistrarPulo(chunk.Length);
+                foreach (var entrada in chunk)
+                    resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                continue;
+            }
             var inicio = Stopwatch.GetTimestamp();
             var comandoBatchRegistrado = false;
             var tentativaPostgres = false;
@@ -176,8 +250,61 @@ public sealed partial class GpsItinerarioRepository
                         Stopwatch.GetElapsedTime(inicio)));
                     comandoBatchRegistrado = true;
                 }
-                _logger.LogWarning(ex, "Falha no matching global em lote com {quantidade} entradas.", chunk.Length);
-                foreach (var entrada in chunk)
+                var acao = protecao?.RegistrarFalha(TipoBatchMatching.GlobalSimples,
+                    ClassificarFalhaBatch(ex)) ?? AcaoFalhaMatchingBatch.RecuperarChunk;
+                if (acao == AcaoFalhaMatchingBatch.AbrirCircuito)
+                {
+                    _logger.LogWarning("Circuito de matching batch aberto apos falha de infraestrutura no GLOBAL.");
+                    foreach (var entrada in chunk)
+                        resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                    continue;
+                }
+
+                var pularPrimeira = false;
+                if (acao == AcaoFalhaMatchingBatch.ExecutarSonda)
+                {
+                    var primeira = chunk[0];
+                    AntesDoFallbackIndividualParaTeste?.Invoke(TipoBatchMatching.GlobalSimples, primeira.InputId);
+                    var inicioSonda = Stopwatch.GetTimestamp();
+                    var infraestrutura = false;
+                    try
+                    {
+                        var rota = await BuscarMatchingAsync(primeira.CodigoLinha,
+                            primeira.Latitude, primeira.Longitude, primeira.Bearing!.Value,
+                            primeira.DistanciaMaximaMetros, null, null, cancellationToken,
+                            propagarFalhaGlobalParaDiagnostico: true);
+                        resultados[primeira.InputId] = rota is null
+                            ? ResultadoBuscaItinerario.NotEligible() : ResultadoBuscaItinerario.Found(rota);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                    catch (Exception probeEx)
+                    {
+                        infraestrutura = ClassificarFalhaBatch(probeEx) is
+                            CategoriaFalhaMatchingBatch.Connectivity or CategoriaFalhaMatchingBatch.Timeout;
+                        resultados[primeira.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                    }
+                    finally
+                    {
+                        comandos.Add(new(TipoBatchMatching.GlobalSimples,
+                            OrigemComandoMatchingLote.FallbackIndividual, 1,
+                            Stopwatch.GetElapsedTime(inicioSonda)));
+                    }
+                    if (protecao!.ConcluirSonda(TipoBatchMatching.GlobalSimples, infraestrutura))
+                    {
+                        _logger.LogWarning("Circuito de matching batch aberto apos sonda GLOBAL de infraestrutura.");
+                        foreach (var entrada in chunk)
+                            resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                        continue;
+                    }
+                    pularPrimeira = true;
+                }
+                else if (protecao is not null)
+                {
+                    _logger.LogWarning(ex, "Operacao GLOBAL batch degradada no estagio; recuperando somente o chunk de {quantidade} entradas.", chunk.Length);
+                }
+                else _logger.LogWarning(ex, "Falha no matching global em lote com {quantidade} entradas.", chunk.Length);
+
+                foreach (var entrada in pularPrimeira ? chunk.Skip(1) : chunk)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     AntesDoFallbackIndividualParaTeste?.Invoke(
@@ -218,7 +345,7 @@ public sealed partial class GpsItinerarioRepository
     private async Task<ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>> ExecutarDirecionadosEmLoteAsync(
         IReadOnlyList<EntradaMatchingDirecionadoLote> entradas,
         int tamanhoChunk,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, MatchingBatchStageProtection? protecao)
     {
         ValidarLote(entradas, tamanhoChunk, x => x.InputId);
         cancellationToken.ThrowIfCancellationRequested();
@@ -242,6 +369,13 @@ public sealed partial class GpsItinerarioRepository
         {
             cancellationToken.ThrowIfCancellationRequested();
             numeroChunk++;
+            if (protecao?.DevePular(TipoBatchMatching.Direcionado) == true)
+            {
+                protecao.RegistrarPulo(chunk.Length);
+                foreach (var entrada in chunk)
+                    resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                continue;
+            }
             var inicio = Stopwatch.GetTimestamp();
             var comandoBatchRegistrado = false;
             var tentativaPostgres = false;
@@ -270,8 +404,46 @@ public sealed partial class GpsItinerarioRepository
                         Stopwatch.GetElapsedTime(inicio)));
                     comandoBatchRegistrado = true;
                 }
-                _logger.LogWarning(ex, "Falha no matching direcionado em lote com {quantidade} entradas.", chunk.Length);
-                foreach (var entrada in chunk)
+                var acao = protecao?.RegistrarFalha(TipoBatchMatching.Direcionado,
+                    ClassificarFalhaBatch(ex)) ?? AcaoFalhaMatchingBatch.RecuperarChunk;
+                if (acao == AcaoFalhaMatchingBatch.AbrirCircuito)
+                {
+                    _logger.LogWarning("Circuito de matching batch aberto apos falha de infraestrutura no DIRECIONADO.");
+                    foreach (var entrada in chunk)
+                        resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                    continue;
+                }
+
+                var pularPrimeira = false;
+                if (acao == AcaoFalhaMatchingBatch.ExecutarSonda)
+                {
+                    var primeira = chunk[0];
+                    AntesDoFallbackIndividualParaTeste?.Invoke(TipoBatchMatching.Direcionado, primeira.InputId);
+                    var inicioSonda = Stopwatch.GetTimestamp();
+                    var sonda = await BuscarEnriquecimentoDoItinerarioAsync(primeira.CodigoLinha,
+                        primeira.ItinerarioId, primeira.Latitude, primeira.Longitude,
+                        primeira.Bearing!.Value, primeira.DistanciaMaximaMetros,
+                        cancellationToken, primeira.Faixa);
+                    comandos.Add(new(TipoBatchMatching.Direcionado,
+                        OrigemComandoMatchingLote.FallbackIndividual, 1,
+                        Stopwatch.GetElapsedTime(inicioSonda)));
+                    resultados[primeira.InputId] = sonda;
+                    if (protecao!.ConcluirSonda(TipoBatchMatching.Direcionado,
+                        sonda.Status == StatusBuscaItinerario.InfrastructureFailure))
+                    {
+                        _logger.LogWarning("Circuito de matching batch aberto apos sonda DIRECIONADA de infraestrutura.");
+                        foreach (var entrada in chunk)
+                            resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                        continue;
+                    }
+                    pularPrimeira = true;
+                }
+                else if (protecao is not null)
+                {
+                    _logger.LogWarning(ex, "Operacao DIRECIONADA batch degradada no estagio; recuperando somente o chunk de {quantidade} entradas.", chunk.Length);
+                }
+                else _logger.LogWarning(ex, "Falha no matching direcionado em lote com {quantidade} entradas.", chunk.Length);
+                foreach (var entrada in pularPrimeira ? chunk.Skip(1) : chunk)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     AntesDoFallbackIndividualParaTeste?.Invoke(
@@ -460,6 +632,40 @@ public sealed partial class GpsItinerarioRepository
             }
             resultados[inputId] = atual;
         }
+    }
+
+    internal static CategoriaFalhaMatchingBatch ClassificarFalhaBatch(Exception ex)
+    {
+        if (ex is OperationCanceledException) return CategoriaFalhaMatchingBatch.Cancellation;
+        if (ex is TimeoutException) return CategoriaFalhaMatchingBatch.Timeout;
+        if (ex is System.Net.Sockets.SocketException or IOException)
+            return CategoriaFalhaMatchingBatch.Connectivity;
+        if (ex is InvalidCastException or FormatException or IndexOutOfRangeException)
+            return CategoriaFalhaMatchingBatch.DataOrMapping;
+        if (ex is JsonException or NotSupportedException or ArgumentException)
+            return CategoriaFalhaMatchingBatch.Serialization;
+        if (ex is PostgresException postgres)
+        {
+            if (postgres.SqlState.StartsWith("08", StringComparison.Ordinal)
+                || postgres.SqlState is "57P01" or "57P02" or "57P03" or "53300")
+                return CategoriaFalhaMatchingBatch.Connectivity;
+            if (postgres.SqlState is "40P01" or "40001" or "55P03")
+                return CategoriaFalhaMatchingBatch.TransientPostgres;
+            if (postgres.SqlState.StartsWith("42", StringComparison.Ordinal)
+                || postgres.SqlState.StartsWith("0A", StringComparison.Ordinal))
+                return CategoriaFalhaMatchingBatch.SqlOrSchema;
+            if (postgres.SqlState.StartsWith("22", StringComparison.Ordinal))
+                return CategoriaFalhaMatchingBatch.DataOrMapping;
+        }
+        if (ex is NpgsqlException npgsql)
+        {
+            for (var inner = npgsql.InnerException; inner is not null; inner = inner.InnerException)
+                if (inner is TimeoutException) return CategoriaFalhaMatchingBatch.Timeout;
+                else if (inner is System.Net.Sockets.SocketException or IOException)
+                    return CategoriaFalhaMatchingBatch.Connectivity;
+            return CategoriaFalhaMatchingBatch.Connectivity;
+        }
+        return CategoriaFalhaMatchingBatch.Unknown;
     }
 
     private static void ValidarLote<T>(IReadOnlyList<T> entradas, int tamanhoChunk, Func<T, string> inputId)
