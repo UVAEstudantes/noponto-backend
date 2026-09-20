@@ -551,7 +551,7 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
     }
 
     [Fact]
-    public async Task EmpateReal_ComScoresIguais_IndividualEBatchPreservamCandidatoAtual()
+    public async Task EmpateReal_IndividualEBatchSimplesECombinadoEscolhemMenorUuid()
     {
         await using var cmd = _db.DataSource.CreateCommand("""
             WITH ponto AS (
@@ -578,15 +578,53 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
             while (await reader.ReadAsync())
                 scores.Add((reader.GetGuid(0), reader.GetDouble(1)));
         Assert.Equal(2, scores.Count);
+        Assert.Equal([_db.EmpateA, _db.EmpateB], scores.Select(x => x.Id));
         Assert.Equal(scores[0].Score, scores[1].Score);
+
+        await using var ordemFisicaCmd = _db.DataSource.CreateCommand("""
+            SELECT i."Id" FROM "Itinerarios" i
+            JOIN "Sentidos" s ON s."Id"=i."SentidoId"
+            JOIN "Linhas" l ON l."Id"=s."LinhaId"
+            WHERE l."Codigo"='EMPATE' ORDER BY i.ctid
+            """);
+        var ordemFisica = new List<Guid>();
+        await using (var reader = await ordemFisicaCmd.ExecuteReaderAsync())
+            while (await reader.ReadAsync()) ordemFisica.Add(reader.GetGuid(0));
+        Assert.Equal([_db.EmpateB, _db.EmpateA], ordemFisica);
 
         var individual = await _repo.BuscarEnriquecimentoAsync(
             "EMPATE", -22.9, -43.2, 90, 250);
         var batch = await _repo.BuscarGlobaisEmLoteAsync(
             [G("empate", "EMPATE", -22.9, -43.2, 90)]);
+        var combinadoIndividual = await _repo.BuscarMatchingCombinadoAsync(
+            "EMPATE", null, -22.9, -43.2, 90, 250, null);
+        var combinadoBatch = await _repo.BuscarCombinadosEmLoteAsync(
+            [C("empate-combinado", "EMPATE", null, -22.9, -43.2, 90, null)]);
 
-        Assert.Contains(individual!.ItinerarioId, new[] { _db.EmpateA, _db.EmpateB });
-        Assert.Equal(individual.ItinerarioId, batch.Resultados[0].Global.Rota!.ItinerarioId);
+        Assert.Equal(_db.EmpateA, individual!.ItinerarioId);
+        Assert.Equal(_db.EmpateA, batch.Resultados[0].Global.Rota!.ItinerarioId);
+        Assert.Equal(_db.EmpateA, combinadoIndividual.Global.Rota!.ItinerarioId);
+        Assert.Equal(_db.EmpateA,
+            combinadoBatch.Resultados[0].Resultado.Global.Rota!.ItinerarioId);
+    }
+
+    [Fact]
+    public async Task ScoreDiferente_PreservaMelhorScoreMesmoComUuidMaior()
+    {
+        var individual = await _repo.BuscarEnriquecimentoAsync(
+            "SCORE", -22.9, -43.2, 90, 250);
+        var batch = await _repo.BuscarGlobaisEmLoteAsync(
+            [G("score", "SCORE", -22.9, -43.2, 90)]);
+        var combinadoIndividual = await _repo.BuscarMatchingCombinadoAsync(
+            "SCORE", null, -22.9, -43.2, 90, 250, null);
+        var combinadoBatch = await _repo.BuscarCombinadosEmLoteAsync(
+            [C("score-combinado", "SCORE", null, -22.9, -43.2, 90, null)]);
+
+        Assert.Equal(_db.ScoreMelhor, individual!.ItinerarioId);
+        Assert.Equal(_db.ScoreMelhor, batch.Resultados[0].Global.Rota!.ItinerarioId);
+        Assert.Equal(_db.ScoreMelhor, combinadoIndividual.Global.Rota!.ItinerarioId);
+        Assert.Equal(_db.ScoreMelhor,
+            combinadoBatch.Resultados[0].Resultado.Global.Rota!.ItinerarioId);
     }
 
     [Fact]

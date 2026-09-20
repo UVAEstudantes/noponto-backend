@@ -106,7 +106,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 SELECT sg.*,
                     ST_LineInterpolatePoint(sg."Geometria", sg.posicao_na_rota) AS ponto_rota
                 FROM score_global sg
-                ORDER BY sg.score ASC
+                ORDER BY sg.score ASC, sg."Id" ASC
                 LIMIT 1
             ),
             proxima_parada_global AS (
@@ -432,7 +432,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                     cs.*,
                     ST_LineInterpolatePoint(cs."Geometria", cs.posicao_na_rota) AS ponto_rota
                 FROM com_score cs
-                ORDER BY cs.score ASC
+                ORDER BY cs.score ASC /*DESEMPATE_GLOBAL*/
                 LIMIT 1
             ),
             proxima_parada AS (
@@ -468,7 +468,9 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             await using var cmd = conn.CreateCommand();
 
             cmd.CommandText = sql.Replace("/*FILTRO_ITINERARIO*/",
-                itinerarioId.HasValue ? "AND i.\"Id\" = @itinerario_id" : "");
+                itinerarioId.HasValue ? "AND i.\"Id\" = @itinerario_id" : "")
+                .Replace("/*DESEMPATE_GLOBAL*/",
+                    itinerarioId.HasValue ? "" : ", cs.\"Id\" ASC");
             if (itinerarioId.HasValue) cmd.Parameters.AddWithValue("itinerario_id", itinerarioId.Value);
             cmd.Parameters.AddWithValue("lat", latitude);
             cmd.Parameters.AddWithValue("lon", longitude);

@@ -20,8 +20,10 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
     public Guid Diagonal { get; } = Guid.NewGuid();
     public Guid X { get; } = Guid.NewGuid();
     public Guid ParalelasMesmaLinha { get; } = Guid.NewGuid();
-    public Guid EmpateA { get; } = Guid.NewGuid();
-    public Guid EmpateB { get; } = Guid.NewGuid();
+    public Guid EmpateA { get; } = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    public Guid EmpateB { get; } = Guid.Parse("00000000-0000-0000-0000-000000000002");
+    public Guid ScoreUuidMenor { get; } = Guid.Parse("00000000-0000-0000-0000-000000000003");
+    public Guid ScoreMelhor { get; } = Guid.Parse("00000000-0000-0000-0000-000000000004");
     public Guid Circular { get; } = Guid.NewGuid();
     private NpgsqlDataSource? _admin;
     private bool _created;
@@ -71,13 +73,15 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
             var sentidoP = Guid.NewGuid();
             var linhaEmpate = Guid.NewGuid();
             var sentidoEmpate = Guid.NewGuid();
+            var linhaScore = Guid.NewGuid();
+            var sentidoScore = Guid.NewGuid();
             var linhaCircular = Guid.NewGuid();
             var sentidoCircular = Guid.NewGuid();
             await using var seed = DataSource.CreateCommand("""
                 INSERT INTO "Linhas" VALUES (@l1,'GPS23'),(@l2,'OUTRA23'),(@lx,'X25'),(@lp,'P25'),
-                    (@le,'EMPATE'),(@lc,'CIRCULAR');
+                    (@le,'EMPATE'),(@ls,'SCORE'),(@lc,'CIRCULAR');
                 INSERT INTO "Sentidos" VALUES (@s1,@l1),(@s2,@l2),(@sx,@lx),(@sp,@lp),
-                    (@se,@le),(@sc,@lc);
+                    (@se,@le),(@ss,@ls),(@sc,@lc);
                 INSERT INTO "Itinerarios" VALUES
                   (@r1,@s1,ST_GeomFromText('LINESTRING(-43.21 -22.9,-43.19 -22.9)',4326)),
                   (@r2,@s1,ST_GeomFromText('LINESTRING(-43.21 -22.8998,-43.19 -22.8998)',4326)),
@@ -86,8 +90,10 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
                   (@diag,@s1,ST_GeomFromText('LINESTRING(-43.201 -22.901,-43.199 -22.899)',4326)),
                   (@x,@sx,ST_GeomFromText('LINESTRING(-0.01 -0.01,0.01 0.01,-0.01 0.01,0.01 -0.01)',4326)),
                   (@p,@sp,ST_GeomFromText('LINESTRING(-0.01 0,0.01 0,0.01 0.005,-0.01 0.005,-0.01 0.00002,0.01 0.00002)',4326)),
-                  (@ea,@se,ST_GeomFromText('LINESTRING(-43.21 -22.9,-43.19 -22.9)',4326)),
                   (@eb,@se,ST_GeomFromText('LINESTRING(-43.21 -22.9,-43.19 -22.9)',4326)),
+                  (@ea,@se,ST_GeomFromText('LINESTRING(-43.21 -22.9,-43.19 -22.9)',4326)),
+                  (@su,@ss,ST_GeomFromText('LINESTRING(-43.21 -22.8998,-43.19 -22.8998)',4326)),
+                  (@sm,@ss,ST_GeomFromText('LINESTRING(-43.21 -22.9,-43.19 -22.9)',4326)),
                   (@circ,@sc,ST_GeomFromText('LINESTRING(0 0,0.01 0,0.01 0.01,0 0.01,0 0)',4326));
                 INSERT INTO "Paradas" VALUES
                   (@parada,'Parada controlada',ST_SetSRID(ST_MakePoint(-43.195,-22.9),4326)),
@@ -100,6 +106,7 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
                 ("parada",Guid.NewGuid()),("parada_r2",Guid.NewGuid()),
                 ("lx",linhaX),("sx",sentidoX),("lp",linhaP),("sp",sentidoP),("x",X),("p",ParalelasMesmaLinha),
                 ("le",linhaEmpate),("se",sentidoEmpate),("ea",EmpateA),("eb",EmpateB),
+                ("ls",linhaScore),("ss",sentidoScore),("su",ScoreUuidMenor),("sm",ScoreMelhor),
                 ("lc",linhaCircular),("sc",sentidoCircular),("circ",Circular) })
                 seed.Parameters.AddWithValue(pair.Item1, pair.Item2);
             await seed.ExecuteNonQueryAsync();

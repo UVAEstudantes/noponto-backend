@@ -543,7 +543,7 @@ public sealed partial class GpsItinerarioRepository
                 ),
                 itinerario_escolhido AS (
                     SELECT cs.*, ST_LineInterpolatePoint(cs."Geometria", cs.posicao_na_rota) AS ponto_rota
-                    FROM com_score cs ORDER BY cs.score ASC LIMIT 1
+                    FROM com_score cs ORDER BY cs.score ASC /*DESEMPATE_GLOBAL*/ LIMIT 1
                 ),
                 proxima_parada AS (
                     SELECT p."Nome" AS parada_nome,
@@ -568,7 +568,9 @@ public sealed partial class GpsItinerarioRepository
         await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql.Replace("/*FILTRO_ITINERARIO*/",
-            direcionado ? "AND i.\"Id\" = entrada.itinerario_id" : "");
+            direcionado ? "AND i.\"Id\" = entrada.itinerario_id" : "")
+            .Replace("/*DESEMPATE_GLOBAL*/",
+                direcionado ? "" : ", cs.\"Id\" ASC");
         cmd.Parameters.AddWithValue("inputs", NpgsqlDbType.Jsonb, json);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -735,7 +737,7 @@ public sealed partial class GpsItinerarioRepository
             ),
             global_escolhido AS (
                 SELECT sg.*,ST_LineInterpolatePoint(sg."Geometria",sg.posicao_na_rota) AS ponto_rota
-                FROM score_global sg ORDER BY sg.score ASC LIMIT 1
+                FROM score_global sg ORDER BY sg.score ASC, sg."Id" ASC LIMIT 1
             ),
             proxima_parada_global AS (
                 SELECT p."Nome" AS parada_nome,ST_Distance(v.ponto,p."Localizacao"::geography) AS distancia_parada_metros
