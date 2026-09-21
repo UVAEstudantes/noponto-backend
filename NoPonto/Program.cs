@@ -332,6 +332,13 @@ builder.Services
         "GpsPolling:GrauParalelismoViagemObservada deve ser > 0")
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<CorrecaoTemporalPosicaoOptions>()
+    .Bind(builder.Configuration.GetSection(CorrecaoTemporalPosicaoOptions.Secao))
+    .Validate(o => o.Valida(),
+        "PositionCorrection contém valores inválidos")
+    .ValidateOnStart();
+
 builder.Services.AddSingleton(Options.Create(
     GpsMatchingBatchOptions.FromConfiguration(
         builder.Configuration["GPS_MATCHING_BATCH_ENABLED"])));
