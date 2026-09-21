@@ -33,6 +33,9 @@ public sealed class GpsPollingService : BackgroundService
     private readonly IPosicaoVeiculoCacheRepository _posicaoCache;
     private readonly ViagemObservadaService _viagemObservada;
     private readonly ITelemetriaMlIngress? _telemetriaMl;
+    private readonly CorrecaoTemporalPosicaoCoordinator? _correcaoTemporal;
+    private readonly IPositionCorrectionShadowIngress? _shadowIngress;
+    private readonly IOptionsMonitor<CorrecaoTemporalPosicaoOptions>? _shadowOptions;
 
     public GpsPollingService(
         GpsSppoSnapshotStore snapshotSppo,
@@ -46,7 +49,10 @@ public sealed class GpsPollingService : BackgroundService
         GpsBrtClient brtClient,
         IPosicaoVeiculoCacheRepository posicaoCache,
         ViagemObservadaService viagemObservada,
-        ITelemetriaMlIngress? telemetriaMl = null)
+        ITelemetriaMlIngress? telemetriaMl = null,
+        CorrecaoTemporalPosicaoCoordinator? correcaoTemporal = null,
+        IPositionCorrectionShadowIngress? shadowIngress = null,
+        IOptionsMonitor<CorrecaoTemporalPosicaoOptions>? shadowOptions = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -60,6 +66,9 @@ public sealed class GpsPollingService : BackgroundService
         _posicaoCache = posicaoCache;
         _viagemObservada = viagemObservada;
         _telemetriaMl = telemetriaMl;
+        _correcaoTemporal = correcaoTemporal;
+        _shadowIngress = shadowIngress;
+        _shadowOptions = shadowOptions;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -413,6 +422,12 @@ public sealed class GpsPollingService : BackgroundService
                 x, null, ResultadoProjecaoOperacional.NaoSolicitada())))
             .ToList();
 
+        // C é estritamente auxiliar: com a flag OFF não há leitura, serialização
+        // ou cálculo causal. O candidato é preparado antes do CAS B, mas só pode
+        // ser persistido depois que B confirmar o aceite da mesma observação.
+        var preparacaoCausal = await PrepararEstadoCausalSeHabilitadoAsync(
+            todosProcessados.Select(x => x.Posicao).ToArray(), ct);
+
         // ── 5. Escrita atômica no Redis (CAS por timestamp) ─────────────────────
         var ttlAtivo   = TimeSpan.FromSeconds(opcoes.TtlAtivoSegundos);
         var ttlRecente = TimeSpan.FromSeconds(opcoes.TtlRecenteSegundos);
@@ -445,6 +460,12 @@ public sealed class GpsPollingService : BackgroundService
                     falhasInfraestrutura++;
                     break;
             }
+        }
+
+        if (preparacaoCausal is not null && aceitos.Count > 0)
+        {
+            var estadosAceitos = await _correcaoTemporal!.PersistirAceitosAsync(preparacaoCausal, aceitos, ct);
+            ProduzirShadowSeHabilitado(aceitos, estadosAceitos);
         }
 
         if (rejeitadosPorTimestamp > 0)
@@ -928,6 +949,67 @@ public sealed class GpsPollingService : BackgroundService
     internal static LoteSppoSnapshot? LerSnapshotPendente(
         GpsSppoSnapshotStore snapshot) => snapshot.Ler();
 
+    internal Task<PreparacaoEstadoCausal?> PrepararEstadoCausalSeHabilitadoAsync(
+        IReadOnlyCollection<PosicaoVeiculoDto> posicoes,
+        CancellationToken ct) => _correcaoTemporal?.Enabled == true
+            ? PrepararEstadoCausalAsync(posicoes, ct)
+            : Task.FromResult<PreparacaoEstadoCausal?>(null);
+
+    private async Task<PreparacaoEstadoCausal?> PrepararEstadoCausalAsync(
+        IReadOnlyCollection<PosicaoVeiculoDto> posicoes,
+        CancellationToken ct) => await _correcaoTemporal!.PrepararAsync(posicoes, ct);
+
+    internal void ProduzirShadowSeHabilitado(IReadOnlyCollection<PosicaoVeiculoDto> aceitos,
+        IReadOnlyDictionary<string, CandidatoEstadoCausal> estadosAceitos)
+    {
+        if (_shadowIngress is null || _shadowOptions is null) return;
+        CorrecaoTemporalPosicaoOptions opcoes;
+        try { opcoes = _shadowOptions.CurrentValue; }
+        catch (Exception)
+        {
+            _logger.LogDebug("Shadow GPS: configuração indisponível; ciclo operacional preservado.");
+            return;
+        }
+        if (!opcoes.Enabled || !opcoes.ShadowEnabled) return;
+
+        var falhas = 0;
+        var descartados = 0;
+        foreach (var posicao in aceitos)
+        {
+            try
+            {
+                if (!estadosAceitos.TryGetValue(posicao.Ordem, out var candidato)
+                    || !ReferenceEquals(candidato.OpcoesEfetivas, opcoes)
+                    || !CorrespondeAoBAceito(candidato.Observacao, posicao))
+                    continue;
+                if (!ShadowPosicaoContrato.Selecionar(candidato.Observacao.ObservacaoId,
+                    opcoes.ShadowSamplingPercent)) continue;
+                var origem = ShadowPosicaoFactory.Criar(candidato.Observacao, candidato.Estado, opcoes);
+                if (!_shadowIngress.TryOffer(origem)) descartados++;
+            }
+            catch (Exception)
+            {
+                falhas++;
+            }
+        }
+        if (falhas > 0 || descartados > 0)
+            _logger.LogDebug("Shadow GPS: {Falhas} falhas isoladas e {Descartados} descartes no ciclo.",
+                falhas, descartados);
+    }
+
+    private static bool CorrespondeAoBAceito(ObservacaoPosicaoTemporal observacao,
+        PosicaoVeiculoDto posicao) =>
+        observacao.TimestampGps == posicao.TimestampGps
+        && observacao.Ordem == posicao.Ordem
+        && observacao.CodigoLinha == posicao.CodigoLinha
+        && observacao.Modal == (posicao.ModalFonte ?? string.Empty)
+        && observacao.Provedor == (posicao.ProvedorFonte ?? string.Empty)
+        && observacao.ItinerarioId == posicao.ItinerarioId
+        && observacao.PosicaoOriginal == posicao.PosicaoNaRota
+        && observacao.ComprimentoRotaMetros == posicao.ComprimentoRotaMetros
+        && observacao.VelocidadeInstantaneaKmh == posicao.Velocidade
+        && observacao.VelocidadeMediaLegacyKmh == posicao.VelocidadeMedia;
+
     private void ConfirmarSnapshotProcessado(LoteSppoSnapshot? lote)
     {
         if (lote is not null && !_snapshotSppo.Confirmar(lote.Geracao))
@@ -979,6 +1061,7 @@ public sealed class GpsPollingService : BackgroundService
                 }
             }
         }
+
         return resultado;
     }
 

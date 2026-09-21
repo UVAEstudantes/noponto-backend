@@ -8,6 +8,7 @@ using NoPonto.Data.Repositories;
 using StackExchange.Redis;
 using Xunit;
 using System.Reflection;
+using System.Text.Json;
 using Npgsql;
 using NoPonto.Domain.Entities;
 
@@ -161,20 +162,80 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     {
         public Task PersistirAsync(EventoViagem e,CancellationToken ct)=>throw new TimeoutException("PG indisponível simulado");
     }
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task CincoFalhas_DeadLetterPreservaPayload_AckELimpaContador(bool permanente)
+    [Fact]
+    public async Task FalhaTransitoria_PrimeiraTentativa_PermanecePendingERecuperaPorXAutoClaim()
     {
-        if(permanente) await Redis.StreamAddAsync(_stream,[new("tipo","INVALIDO")]);
-        else await Repository().TentarAtualizarAsync(G(0),default);
+        await Repository().TentarAtualizarAsync(G(0),default);
+        var worker=Worker(new Falha());await worker.GarantirGrupoAsync();
+        var entry=Assert.Single(await Redis.StreamReadGroupAsync(_stream,HistoricoPassagemWorker.Group,worker.Consumer,">",100));
+        await worker.ProcessarAsync(entry,default);
+        Assert.Equal(1,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
+        Assert.Empty(await Redis.StreamRangeAsync(_stream+":dlq"));
+        Assert.Equal("1",(await Redis.StringGetAsync(HistoricoPassagemWorker.Tentativas(entry.Id))).ToString());
+        await Worker().RecuperarPendentesAsync(default,0);
+        Assert.Equal(0,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
+        Assert.False(await Redis.KeyExistsAsync(HistoricoPassagemWorker.Tentativas(entry.Id)));
+        Assert.Empty(await Redis.StreamRangeAsync(_stream+":dlq"));
+    }
+
+    [Fact]
+    public async Task ErroPermanente_VaiParaDlqNaPrimeiraFalha_AckELimpaContador()
+    {
+        await Redis.StreamAddAsync(_stream,[new("tipo","INVALIDO")]);
+        var worker=Worker(new Falha());await worker.GarantirGrupoAsync();
+        var entry=Assert.Single(await Redis.StreamReadGroupAsync(_stream,HistoricoPassagemWorker.Group,worker.Consumer,">",100));
+        await worker.ProcessarAsync(entry,default);
+        Assert.Equal(0,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
+        var dead=Assert.Single(await Redis.StreamRangeAsync(_stream+":dlq"));
+        Assert.Equal("permanente",dead.Values.Single(v=>v.Name=="classe").Value.ToString());
+        Assert.False(await Redis.KeyExistsAsync(HistoricoPassagemWorker.Tentativas(entry.Id)));
+        Assert.False(await Redis.KeyExistsAsync(HistoricoPassagemWorker.UltimoErro(entry.Id)));
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task ErroPermanente_ComContadorAntigo_VaiParaDlqNaProximaFalha(int anteriores)
+    {
+        await Redis.StreamAddAsync(_stream,[new("tipo","INVALIDO")]);
+        var worker=Worker();await worker.GarantirGrupoAsync();
+        var entry=Assert.Single(await Redis.StreamReadGroupAsync(_stream,HistoricoPassagemWorker.Group,worker.Consumer,">",100));
+        await Redis.StringSetAsync(HistoricoPassagemWorker.Tentativas(entry.Id),anteriores);
+        await worker.ProcessarAsync(entry,default);
+        Assert.Equal(0,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
+        Assert.Single(await Redis.StreamRangeAsync(_stream+":dlq"));
+        Assert.False(await Redis.KeyExistsAsync(HistoricoPassagemWorker.Tentativas(entry.Id)));
+    }
+
+    [Fact]
+    public async Task ErroPermanente_DlqIndisponivel_PreservaPendingParaRecuperacao()
+    {
+        await Redis.StreamAddAsync(_stream,[new("tipo","INVALIDO")]);
+        var worker=Worker();await worker.GarantirGrupoAsync();
+        var entry=Assert.Single(await Redis.StreamReadGroupAsync(_stream,HistoricoPassagemWorker.Group,worker.Consumer,">",100));
+        await Redis.StringSetAsync(_stream+":dlq","WRONGTYPE");
+        await Assert.ThrowsAsync<RedisServerException>(()=>worker.ProcessarAsync(entry,default));
+        Assert.Equal(1,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
+        Assert.Equal("1",(await Redis.StringGetAsync(HistoricoPassagemWorker.Tentativas(entry.Id))).ToString());
+        await Redis.KeyDeleteAsync(_stream+":dlq");
+        await Worker().RecuperarPendentesAsync(default,0);
+        Assert.Equal(0,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
+        Assert.Single(await Redis.StreamRangeAsync(_stream+":dlq"));
+    }
+
+    [Fact]
+    public async Task CincoFalhasTransitorias_DeadLetterPreservaPayload_AckELimpaContador()
+    {
+        await Repository().TentarAtualizarAsync(G(0),default);
         var worker=Worker(new Falha());await worker.GarantirGrupoAsync();
         var entry=Assert.Single(await Redis.StreamReadGroupAsync(_stream,HistoricoPassagemWorker.Group,worker.Consumer,">",100));
         for(var i=0;i<4;i++) await worker.ProcessarAsync(entry,default);
         Assert.Equal(1,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
+        Assert.Empty(await Redis.StreamRangeAsync(_stream+":dlq"));
         await worker.ProcessarAsync(entry,default);
         Assert.Equal(0,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
-        Assert.Single(await Redis.StreamRangeAsync(_stream+":dlq"));
+        var dead=Assert.Single(await Redis.StreamRangeAsync(_stream+":dlq"));
+        Assert.Equal("transitorio",dead.Values.Single(v=>v.Name=="classe").Value.ToString());
         Assert.False(await Redis.KeyExistsAsync(HistoricoPassagemWorker.Tentativas(entry.Id)));
     }
 
@@ -285,7 +346,23 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         await Terminal();var fields=(await Redis.StreamRangeAsync(_stream))[1].Values.ToDictionary(v=>v.Name.ToString(),v=>v.Value.ToString());
         var e=EventoViagemValidator.Parse(fields);var repository=new HistoricoEventoRepository(db.Source);
         await repository.PersistirAsync(e,default);
-        await Assert.ThrowsAsync<FormatException>(()=>repository.PersistirAsync(e with{TimestampGps=e.TimestampGps!.Value.AddSeconds(1)},default));
+        await repository.PersistirAsync(e,default); // Identidade e payload iguais continuam idempotentes.
+        var conflict=await Assert.ThrowsAsync<EventoViagemPayloadConflictException>(
+            ()=>repository.PersistirAsync(e with{TimestampGps=e.TimestampGps!.Value.AddSeconds(1)},default));
+        Assert.Equal(e.EventId,conflict.EventId);
+        Assert.Equal(new[]{"timestamp_gps"},conflict.CamposDivergentes);
+        Assert.False(conflict.CamposTruncados);
+        Assert.DoesNotContain(e.TimestampGps!.Value.ToString("O"),conflict.ToString());
+        var originalJson=JsonSerializer.Serialize(e);
+        using var parsed=JsonDocument.Parse(originalJson);
+        var reversed=JsonSerializer.Serialize(parsed.RootElement.EnumerateObject().Reverse()
+            .ToDictionary(p=>p.Name,p=>p.Value));
+        await using(var semantic=db.Source.CreateCommand("SELECT @a::jsonb = @b::jsonb"))
+        {
+            semantic.Parameters.AddWithValue("a",originalJson);
+            semantic.Parameters.AddWithValue("b",reversed);
+            Assert.Equal(true,await semantic.ExecuteScalarAsync());
+        }
         using var scope=db.Provider.CreateScope();var context=scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
         HistoricoPassagem H(Guid ocorrencia)=>new(){Id=Guid.NewGuid(),Ordem=_ordem,CodigoLinha="VIAGEM3",ItinerarioId=db.R1,ParadaId=db.Stop,
             ViagemId=e.ViagemId,ParadaItinerarioId=ocorrencia,SentidoId=db.S1,TimestampPassagem=e.TimestampPassagem,TimestampGps=G(100).TimestampGps,TimestampRegistro=DateTimeOffset.UtcNow};
@@ -295,6 +372,38 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         context.ChangeTracker.Clear();context.HistoricoPassagens.Add(H(Guid.NewGuid()));
         var foreign=await Assert.ThrowsAsync<DbUpdateException>(()=>context.SaveChangesAsync());
         Assert.Equal("23503",Assert.IsType<PostgresException>(foreign.InnerException).SqlState);
+    }
+
+    [Fact]
+    public async Task ConflitoRealNoWorker_DlqPrimeiraTentativa_PreservaPrimeiroJournal()
+    {
+        await Terminal();
+        var original=EventoViagemValidator.Parse((await Redis.StreamRangeAsync(_stream))[1]
+            .Values.ToDictionary(v=>v.Name.ToString(),v=>v.Value.ToString()));
+        var repository=new HistoricoEventoRepository(db.Source);
+        await repository.PersistirAsync(original,default);
+        var conflicting=original with {
+            TimestampGps=original.TimestampGps!.Value.AddSeconds(1),
+            VelocidadeInstantanea=original.VelocidadeInstantanea!.Value+1
+        };
+        var expected=await Assert.ThrowsAsync<EventoViagemPayloadConflictException>(
+            ()=>repository.PersistirAsync(conflicting,default));
+        Assert.Equal(new[]{"timestamp_gps","velocidade_instantanea"},expected.CamposDivergentes);
+        var duplicateId=await Redis.StreamAddAsync(_stream,ViagemOperacionalRepository.Fields(conflicting)
+            .Select(p=>new NameValueEntry(p.Key,p.Value)).ToArray());
+        var worker=Worker();await worker.GarantirGrupoAsync();
+        var entries=await Redis.StreamReadGroupAsync(_stream,HistoricoPassagemWorker.Group,worker.Consumer,">",100);
+        foreach(var entry in entries.Where(x=>x.Id!=duplicateId)) await worker.ProcessarAsync(entry,default);
+        var duplicate=entries.Single(x=>x.Id==duplicateId);
+        await worker.ProcessarAsync(duplicate,default);
+        Assert.Equal(0,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
+        Assert.False(await Redis.KeyExistsAsync(HistoricoPassagemWorker.Tentativas(duplicate.Id)));
+        Assert.Equal("permanente",Assert.Single(await Redis.StreamRangeAsync(_stream+":dlq"))
+            .Values.Single(v=>v.Name=="classe").Value.ToString());
+        await using var journal=db.Source.CreateCommand("SELECT \"Payload\" = @payload::jsonb FROM \"EventosViagem\" WHERE \"EventId\"=@id");
+        journal.Parameters.AddWithValue("payload",JsonSerializer.Serialize(original));
+        journal.Parameters.AddWithValue("id",original.EventId);
+        Assert.Equal(true,await journal.ExecuteScalarAsync());
     }
 
     [Fact]

@@ -23,11 +23,36 @@ public class TransporteDbContext : DbContext
     public DbSet<HistoricoPassagem> HistoricoPassagens => Set<HistoricoPassagem>();
     public DbSet<EventoViagemPersistido> EventosViagem => Set<EventoViagemPersistido>();
     public DbSet<TelemetriaVeiculoMl> TelemetriasVeiculoMl => Set<TelemetriaVeiculoMl>();
+    public DbSet<PositionCorrectionShadowOrigin> PositionCorrectionShadowOrigins => Set<PositionCorrectionShadowOrigin>();
     public DbSet<PoiParada> PoiParadas => Set<PoiParada>();
     public DbSet<Tarifa> Tarifas => Set<Tarifa>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<PositionCorrectionShadowOrigin>(e =>
+        {
+            e.ToTable("PositionCorrectionShadowOrigins");
+            e.HasKey(x => x.ShadowOriginId);
+            e.Property(x => x.ShadowOriginId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.ObservacaoId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.ContractVersion).HasMaxLength(40).IsRequired();
+            e.Property(x => x.PolicyVersion).HasMaxLength(80).IsRequired();
+            e.Property(x => x.PolicyFingerprint).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Modal).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Provedor).HasMaxLength(40).IsRequired();
+            e.Property(x => x.OrdemVeiculo).HasMaxLength(80).IsRequired();
+            e.Property(x => x.CodigoLinha).HasMaxLength(40).IsRequired();
+            e.Property(x => x.EstadoMovimento).HasMaxLength(24).IsRequired();
+            e.Property(x => x.TimestampGpsOrigemUtc).HasColumnType("timestamp with time zone");
+            e.Property(x => x.RecebidoEmUtc).HasColumnType("timestamp with time zone");
+            e.Property(x => x.PersistidoEmUtc).HasColumnType("timestamp with time zone");
+            e.Property(x => x.AmostrasCausais).HasColumnType("jsonb").IsRequired();
+            e.Property(x => x.SinaisParada).HasColumnType("jsonb").IsRequired();
+            e.Property(x => x.CandidateResults).HasColumnType("jsonb").IsRequired();
+            e.HasIndex(x => x.TimestampGpsOrigemUtc);
+            e.HasIndex(x => x.ObservacaoId);
+            e.HasIndex(x => new { x.PolicyFingerprint, x.TimestampGpsOrigemUtc });
+        });
         modelBuilder.Entity<Itinerario>()
             .Property(x => x.Geometria)
             .HasColumnType("geometry(LineString,4326)");

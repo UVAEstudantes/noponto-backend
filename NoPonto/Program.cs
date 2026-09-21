@@ -332,6 +332,26 @@ builder.Services
         "GpsPolling:GrauParalelismoViagemObservada deve ser > 0")
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<CorrecaoTemporalPosicaoOptions>()
+    .Bind(builder.Configuration.GetSection(CorrecaoTemporalPosicaoOptions.Secao))
+    .Validate(o => o.Valida(),
+        "PositionCorrection contém valores inválidos")
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<PositionCorrectionShadowPipelineOptions>()
+    .Bind(builder.Configuration.GetSection(PositionCorrectionShadowPipelineOptions.Section))
+    .Validate(o => o.Valid(), "PositionCorrectionShadowPipeline contains invalid values")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp =>
+    sp.GetRequiredService<IOptions<PositionCorrectionShadowPipelineOptions>>().Value);
+builder.Services.AddPositionCorrectionShadowPipeline(
+    (builder.Configuration.GetSection(CorrecaoTemporalPosicaoOptions.Secao)
+        .Get<CorrecaoTemporalPosicaoOptions>() ?? new()).ShadowEnabled,
+    (builder.Configuration.GetSection(PositionCorrectionShadowPipelineOptions.Section)
+        .Get<PositionCorrectionShadowPipelineOptions>() ?? new()).RetentionEnabled);
+
 builder.Services.AddSingleton(Options.Create(
     GpsMatchingBatchOptions.FromConfiguration(
         builder.Configuration["GPS_MATCHING_BATCH_ENABLED"])));
@@ -379,6 +399,11 @@ builder.Services.AddSingleton<IOcorrenciaParadaRepository, OcorrenciaParadaRepos
 builder.Services.AddSingleton<ViagemObservadaService>();
 builder.Services.AddSingleton<IPosicaoVeiculoPayloadWriter, PosicaoVeiculoPayloadWriter>();
 builder.Services.AddSingleton<PosicaoVeiculoTsBootstrapper>();
+builder.Services.AddSingleton<EstadoCausalPosicaoCodec>();
+builder.Services.AddSingleton<EstadoCausalPosicaoMetrics>();
+builder.Services.AddSingleton<IEstadoCausalPosicaoRepository, EstadoCausalPosicaoRepository>();
+builder.Services.AddSingleton<CorrecaoTemporalPosicaoCoordinator>();
+builder.Services.AddHostedService<EstadoCausalPosicaoMetricsReporter>();
 
 // --------------------------------------------------------------------
 // SERVICES
