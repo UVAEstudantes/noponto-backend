@@ -110,8 +110,14 @@ public sealed class HistoricoPassagemWorker(IConnectionMultiplexer redis, IHisto
                 || ex is PostgresException { SqlState: "23503" or "23514" or "22P02" };
             await db.StringSetAsync(UltimoErro(entry.Id), ex.ToString());
             var attempts = await db.StringIncrementAsync(Tentativas(entry.Id));
-            logger.LogWarning(ex, "Evento {id}: tentativa {tentativa}/5, permanente={permanente}.", entry.Id, attempts, permanent);
-            if (attempts >= 5)
+            if (ex is EventoViagemPayloadConflictException conflict)
+                logger.LogWarning(ex,
+                    "Evento {id}: EventId={EventId}, payload_conflitante=true, campos_divergentes={CamposDivergentes}, campos_truncados={CamposTruncados}, tentativa={Tentativa}/5, permanente=true, destino=DLQ.",
+                    entry.Id, conflict.EventId, conflict.CamposDivergentes, conflict.CamposTruncados, attempts);
+            else
+                logger.LogWarning(ex, "Evento {id}: tentativa {tentativa}/5, permanente={permanente}, destino={destino}.",
+                    entry.Id, attempts, permanent, permanent || attempts >= 5 ? "DLQ" : "pending");
+            if (permanent || attempts >= 5)
             {
                 await EncaminharDeadLetterAsync(entry, ex.ToString(), permanent ? "permanente" : "transitorio");
             }

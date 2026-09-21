@@ -10,12 +10,22 @@ public interface IHistoricoEventoRepository
     Task PersistirAsync(EventoViagem evento, CancellationToken ct);
 }
 
+public sealed class EventoViagemPayloadConflictException(
+    string eventId, IReadOnlyList<string> camposDivergentes, bool camposTruncados)
+    : FormatException("EventId reutilizado com outro payload.")
+{
+    public string EventId { get; } = eventId;
+    public IReadOnlyList<string> CamposDivergentes { get; } = camposDivergentes;
+    public bool CamposTruncados { get; } = camposTruncados;
+}
+
 /// <summary>Journal e passagem na mesma transação; ACK só depois do commit.</summary>
 public sealed class HistoricoEventoRepository(NpgsqlDataSource source) : IHistoricoEventoRepository
 {
     public async Task PersistirAsync(EventoViagem e, CancellationToken ct)
     {
         EventoViagemValidator.Validar(e);
+        var payload = JsonSerializer.Serialize(e);
         await using var connection = await source.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using (var journal = new NpgsqlCommand("""
@@ -25,14 +35,32 @@ public sealed class HistoricoEventoRepository(NpgsqlDataSource source) : IHistor
         {
             journal.Parameters.AddWithValue("id", e.EventId);
             journal.Parameters.AddWithValue("tipo", e.Tipo);
-            journal.Parameters.AddWithValue("payload", JsonSerializer.Serialize(e));
+            journal.Parameters.AddWithValue("payload", payload);
             journal.Parameters.AddWithValue("ts", e.TimestampEvento.ToUniversalTime());
             if (await journal.ExecuteScalarAsync(ct) is null)
             {
                 await using var check = new NpgsqlCommand("SELECT \"Payload\" = @payload::jsonb FROM \"EventosViagem\" WHERE \"EventId\" = @id", connection, transaction);
-                check.Parameters.AddWithValue("payload", JsonSerializer.Serialize(e));
+                check.Parameters.AddWithValue("payload", payload);
                 check.Parameters.AddWithValue("id", e.EventId);
-                if (await check.ExecuteScalarAsync(ct) is not true) throw new FormatException("EventId reutilizado com outro payload.");
+                if (await check.ExecuteScalarAsync(ct) is not true)
+                {
+                    // jsonb compares values semantically; read names only, never the stored values.
+                    await using var differences = new NpgsqlCommand("""
+                        SELECT COALESCE(existing.key, incoming.key) AS field
+                        FROM jsonb_each((SELECT "Payload" FROM "EventosViagem" WHERE "EventId" = @id)) existing
+                        FULL JOIN jsonb_each(@payload::jsonb) incoming ON incoming.key = existing.key
+                        WHERE existing.value IS DISTINCT FROM incoming.value
+                        ORDER BY COALESCE(existing.key, incoming.key) COLLATE "C"
+                        LIMIT 17
+                        """, connection, transaction);
+                    differences.Parameters.AddWithValue("id", e.EventId);
+                    differences.Parameters.AddWithValue("payload", payload);
+                    var fields = new List<string>(17);
+                    await using (var reader = await differences.ExecuteReaderAsync(ct))
+                        while (await reader.ReadAsync(ct)) fields.Add(reader.GetString(0));
+                    throw new EventoViagemPayloadConflictException(e.EventId,
+                        fields.Take(16).ToArray(), fields.Count > 16);
+                }
                 await transaction.CommitAsync(ct);
                 return;
             }
