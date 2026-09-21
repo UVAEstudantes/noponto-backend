@@ -339,6 +339,17 @@ builder.Services
         "PositionCorrection contém valores inválidos")
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<PositionCorrectionShadowPipelineOptions>()
+    .Bind(builder.Configuration.GetSection(PositionCorrectionShadowPipelineOptions.Section))
+    .Validate(o => o.Valid(), "PositionCorrectionShadowPipeline contains invalid values")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp =>
+    sp.GetRequiredService<IOptions<PositionCorrectionShadowPipelineOptions>>().Value);
+builder.Services.AddSingleton<PositionCorrectionShadowMetrics>();
+builder.Services.AddSingleton<IPositionCorrectionShadowIngress, NoOpPositionCorrectionShadowIngress>();
+builder.Services.AddSingleton<IPositionCorrectionShadowRepository, PositionCorrectionShadowRepository>();
+
 builder.Services.AddSingleton(Options.Create(
     GpsMatchingBatchOptions.FromConfiguration(
         builder.Configuration["GPS_MATCHING_BATCH_ENABLED"])));
