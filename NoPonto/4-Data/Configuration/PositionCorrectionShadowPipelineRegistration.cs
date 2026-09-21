@@ -9,9 +9,11 @@ namespace NoPonto.Data.Configuration;
 public static class PositionCorrectionShadowPipelineRegistration
 {
     public static IServiceCollection AddPositionCorrectionShadowPipeline(
-        this IServiceCollection services, bool shadowEnabled)
+        this IServiceCollection services, bool shadowEnabled, bool retentionEnabled = true)
     {
         services.AddSingleton<PositionCorrectionShadowMetrics>();
+        services.AddSingleton<ShadowPosicaoRetentionMetrics>();
+        services.AddSingleton<ShadowPosicaoBacklogMetrics>();
         services.AddSingleton<IPositionCorrectionShadowRepository, PositionCorrectionShadowRepository>();
         if (!shadowEnabled)
         {
@@ -25,6 +27,8 @@ public static class PositionCorrectionShadowPipelineRegistration
         services.AddSingleton<ShadowPosicaoStreamPublisher>();
         services.AddHostedService(sp => sp.GetRequiredService<ShadowPosicaoStreamPublisher>());
         services.AddHostedService<ShadowPosicaoWorker>();
+        services.AddHostedService<ShadowPosicaoMetricsReporter>();
+        if (retentionEnabled) services.AddHostedService<ShadowPosicaoRetentionService>();
         return services;
     }
 }

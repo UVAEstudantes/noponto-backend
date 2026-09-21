@@ -12,6 +12,7 @@ public sealed class PositionCorrectionShadowPipelineOptions
     public int MaxPayloadBytes { get; set; } = 65_536;
     public bool RetentionEnabled { get; set; } = true;
     public int RetentionIntervalMinutes { get; set; } = 5;
+    public int MetricsReportIntervalMinutes { get; set; } = 5;
     public int MainStreamSafetyMarginMinutes { get; set; } = 60;
     public int DeadLetterRetentionDays { get; set; } = 7;
     public int TrimLimit { get; set; } = 100_000;
@@ -24,6 +25,7 @@ public sealed class PositionCorrectionShadowPipelineOptions
         && MaxAttempts is > 0 and <= 100
         && MaxPayloadBytes is > 0 and <= 1_048_576
         && RetentionIntervalMinutes is > 0 and <= 1_440
+        && MetricsReportIntervalMinutes is > 0 and <= 1_440
         && MainStreamSafetyMarginMinutes is > 0 and <= 10_080
         && DeadLetterRetentionDays is > 0 and <= 365
         && TrimLimit is > 0 and <= 10_000_000;

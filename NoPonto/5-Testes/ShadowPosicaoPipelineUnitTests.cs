@@ -32,6 +32,8 @@ public sealed class ShadowPosicaoPipelineUnitTests
             provider.GetRequiredService<IPositionCorrectionShadowIngress>());
         Assert.Null(provider.GetService<PositionCorrectionShadowChannel>());
         Assert.Null(provider.GetService<ShadowPosicaoStreamPublisher>());
+        Assert.Null(provider.GetService<ShadowPosicaoRetentionService>());
+        Assert.Null(provider.GetService<ShadowPosicaoMetricsReporter>());
         Assert.Empty(provider.GetServices<IHostedService>());
         Assert.False(provider.GetRequiredService<IPositionCorrectionShadowIngress>()
             .TryOffer(PositionCorrectionShadowInfrastructureTests.Origin()));
