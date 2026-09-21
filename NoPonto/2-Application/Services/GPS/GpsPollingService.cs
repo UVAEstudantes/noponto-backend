@@ -33,6 +33,7 @@ public sealed class GpsPollingService : BackgroundService
     private readonly IPosicaoVeiculoCacheRepository _posicaoCache;
     private readonly ViagemObservadaService _viagemObservada;
     private readonly ITelemetriaMlIngress? _telemetriaMl;
+    private readonly CorrecaoTemporalPosicaoCoordinator? _correcaoTemporal;
 
     public GpsPollingService(
         GpsSppoSnapshotStore snapshotSppo,
@@ -46,7 +47,8 @@ public sealed class GpsPollingService : BackgroundService
         GpsBrtClient brtClient,
         IPosicaoVeiculoCacheRepository posicaoCache,
         ViagemObservadaService viagemObservada,
-        ITelemetriaMlIngress? telemetriaMl = null)
+        ITelemetriaMlIngress? telemetriaMl = null,
+        CorrecaoTemporalPosicaoCoordinator? correcaoTemporal = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -60,6 +62,7 @@ public sealed class GpsPollingService : BackgroundService
         _posicaoCache = posicaoCache;
         _viagemObservada = viagemObservada;
         _telemetriaMl = telemetriaMl;
+        _correcaoTemporal = correcaoTemporal;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -413,6 +416,12 @@ public sealed class GpsPollingService : BackgroundService
                 x, null, ResultadoProjecaoOperacional.NaoSolicitada())))
             .ToList();
 
+        // C é estritamente auxiliar: com a flag OFF não há leitura, serialização
+        // ou cálculo causal. O candidato é preparado antes do CAS B, mas só pode
+        // ser persistido depois que B confirmar o aceite da mesma observação.
+        var preparacaoCausal = await PrepararEstadoCausalSeHabilitadoAsync(
+            todosProcessados.Select(x => x.Posicao).ToArray(), ct);
+
         // ── 5. Escrita atômica no Redis (CAS por timestamp) ─────────────────────
         var ttlAtivo   = TimeSpan.FromSeconds(opcoes.TtlAtivoSegundos);
         var ttlRecente = TimeSpan.FromSeconds(opcoes.TtlRecenteSegundos);
@@ -446,6 +455,9 @@ public sealed class GpsPollingService : BackgroundService
                     break;
             }
         }
+
+        if (preparacaoCausal is not null && aceitos.Count > 0)
+            await _correcaoTemporal!.PersistirAceitosAsync(preparacaoCausal, aceitos, ct);
 
         if (rejeitadosPorTimestamp > 0)
             _logger.LogInformation(
@@ -928,6 +940,16 @@ public sealed class GpsPollingService : BackgroundService
     internal static LoteSppoSnapshot? LerSnapshotPendente(
         GpsSppoSnapshotStore snapshot) => snapshot.Ler();
 
+    internal Task<PreparacaoEstadoCausal?> PrepararEstadoCausalSeHabilitadoAsync(
+        IReadOnlyCollection<PosicaoVeiculoDto> posicoes,
+        CancellationToken ct) => _correcaoTemporal?.Enabled == true
+            ? PrepararEstadoCausalAsync(posicoes, ct)
+            : Task.FromResult<PreparacaoEstadoCausal?>(null);
+
+    private async Task<PreparacaoEstadoCausal?> PrepararEstadoCausalAsync(
+        IReadOnlyCollection<PosicaoVeiculoDto> posicoes,
+        CancellationToken ct) => await _correcaoTemporal!.PrepararAsync(posicoes, ct);
+
     private void ConfirmarSnapshotProcessado(LoteSppoSnapshot? lote)
     {
         if (lote is not null && !_snapshotSppo.Confirmar(lote.Geracao))
@@ -979,6 +1001,7 @@ public sealed class GpsPollingService : BackgroundService
                 }
             }
         }
+
         return resultado;
     }
 

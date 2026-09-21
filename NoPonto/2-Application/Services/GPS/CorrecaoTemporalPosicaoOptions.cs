@@ -14,6 +14,10 @@ public sealed class CorrecaoTemporalPosicaoOptions
     public double MaxProjectionAgeSeconds { get; set; } = 120;
     public double CausalWindowSeconds { get; set; } = 180;
     public int MaxCausalSamples { get; set; } = 32;
+    public int StateTtlSeconds { get; set; } = 300;
+    public int StateBatchSize { get; set; } = 100;
+    public int StateConflictRetryCount { get; set; } = 1;
+    public int StateMaxPayloadBytes { get; set; } = 65_536;
     public double AdaptiveB1LimitSeconds { get; set; } = 15;
     public double StopSpeedKmh { get; set; } = 3;
     public double StopDisplacementMeters { get; set; } = 10;
@@ -28,6 +32,10 @@ public sealed class CorrecaoTemporalPosicaoOptions
         && double.IsFinite(MaxProjectionAgeSeconds) && MaxProjectionAgeSeconds >= 0
         && double.IsFinite(CausalWindowSeconds) && CausalWindowSeconds > 0
         && MaxCausalSamples > 0
+        && StateTtlSeconds > CausalWindowSeconds && StateTtlSeconds <= 86_400
+        && StateBatchSize > 0 && StateBatchSize <= 1_000
+        && StateConflictRetryCount >= 0 && StateConflictRetryCount <= 3
+        && StateMaxPayloadBytes > 0 && StateMaxPayloadBytes <= 1_048_576
         && double.IsFinite(AdaptiveB1LimitSeconds) && AdaptiveB1LimitSeconds >= 0
         && AdaptiveB1LimitSeconds <= MaxProjectionAgeSeconds
         && double.IsFinite(StopSpeedKmh) && StopSpeedKmh >= 0

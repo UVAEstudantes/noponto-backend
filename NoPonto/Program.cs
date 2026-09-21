@@ -386,6 +386,11 @@ builder.Services.AddSingleton<IOcorrenciaParadaRepository, OcorrenciaParadaRepos
 builder.Services.AddSingleton<ViagemObservadaService>();
 builder.Services.AddSingleton<IPosicaoVeiculoPayloadWriter, PosicaoVeiculoPayloadWriter>();
 builder.Services.AddSingleton<PosicaoVeiculoTsBootstrapper>();
+builder.Services.AddSingleton<EstadoCausalPosicaoCodec>();
+builder.Services.AddSingleton<EstadoCausalPosicaoMetrics>();
+builder.Services.AddSingleton<IEstadoCausalPosicaoRepository, EstadoCausalPosicaoRepository>();
+builder.Services.AddSingleton<CorrecaoTemporalPosicaoCoordinator>();
+builder.Services.AddHostedService<EstadoCausalPosicaoMetricsReporter>();
 
 // --------------------------------------------------------------------
 // SERVICES
