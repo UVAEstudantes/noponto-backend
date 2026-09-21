@@ -10,6 +10,7 @@ using Xunit;
 
 namespace NoPonto.Tests;
 
+[Collection("Shadow canonical Redis keys")]
 public sealed class ShadowPosicaoRetentionDiTests
 {
     [Fact]

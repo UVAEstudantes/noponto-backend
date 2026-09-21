@@ -14,6 +14,7 @@ using Xunit;
 
 namespace NoPonto.Tests;
 
+[Collection("Shadow canonical Redis keys")]
 public sealed class ShadowPosicaoPipelineIntegrationTests
 {
     private const string Stream = PositionCorrectionShadowResources.Stream;
