@@ -10,6 +10,8 @@ public sealed class CorrecaoTemporalPosicaoOptions
     public const string PoliticaReferencia = "B3_ADAPTATIVO_v1";
 
     public bool Enabled { get; set; } = false;
+    public bool ShadowEnabled { get; set; } = false;
+    public int ShadowSamplingPercent { get; set; } = 10;
     public string PolicyVersion { get; set; } = PoliticaReferencia;
     public double MaxProjectionAgeSeconds { get; set; } = 120;
     public double CausalWindowSeconds { get; set; } = 180;
@@ -28,7 +30,9 @@ public sealed class CorrecaoTemporalPosicaoOptions
     public double RouteLengthAbsoluteTolerance { get; set; } = 0.01;
 
     public bool Valida() =>
-        string.Equals(PolicyVersion, PoliticaReferencia, StringComparison.Ordinal)
+        (!ShadowEnabled || Enabled)
+        && ShadowSamplingPercent is >= 0 and <= 100
+        && string.Equals(PolicyVersion, PoliticaReferencia, StringComparison.Ordinal)
         && double.IsFinite(MaxProjectionAgeSeconds) && MaxProjectionAgeSeconds >= 0
         && double.IsFinite(CausalWindowSeconds) && CausalWindowSeconds > 0
         && MaxCausalSamples > 0
