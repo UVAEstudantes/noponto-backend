@@ -346,9 +346,9 @@ builder.Services
     .ValidateOnStart();
 builder.Services.AddSingleton(sp =>
     sp.GetRequiredService<IOptions<PositionCorrectionShadowPipelineOptions>>().Value);
-builder.Services.AddSingleton<PositionCorrectionShadowMetrics>();
-builder.Services.AddSingleton<IPositionCorrectionShadowIngress, NoOpPositionCorrectionShadowIngress>();
-builder.Services.AddSingleton<IPositionCorrectionShadowRepository, PositionCorrectionShadowRepository>();
+builder.Services.AddPositionCorrectionShadowPipeline(
+    (builder.Configuration.GetSection(CorrecaoTemporalPosicaoOptions.Secao)
+        .Get<CorrecaoTemporalPosicaoOptions>() ?? new()).ShadowEnabled);
 
 builder.Services.AddSingleton(Options.Create(
     GpsMatchingBatchOptions.FromConfiguration(

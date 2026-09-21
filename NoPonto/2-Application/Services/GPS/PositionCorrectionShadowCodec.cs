@@ -33,6 +33,41 @@ public static class PositionCorrectionShadowCodec
         catch (JsonException ex) { throw new FormatException("Invalid shadow payload.", ex); }
     }
 
+    /// <summary>Transport envelope keeps the ingress receipt time outside the scientific origin.</summary>
+    public static byte[] SerializeEnvelope(ShadowPosicaoOrigem origin,
+        DateTimeOffset receivedAtUtc, int maxBytes = 65_536)
+    {
+        PositionCorrectionShadowValidator.Validate(origin);
+        ValidateReceipt(receivedAtUtc);
+        ValidateLimit(maxBytes);
+        var data = JsonSerializer.SerializeToUtf8Bytes(
+            new PositionCorrectionShadowEnvelope(origin, receivedAtUtc), JsonOptions);
+        if (data.Length > maxBytes) throw new FormatException("Shadow payload exceeds size limit.");
+        return data;
+    }
+
+    public static PositionCorrectionShadowEnvelope DeserializeEnvelope(ReadOnlySpan<byte> data,
+        int maxBytes = 65_536)
+    {
+        ValidateLimit(maxBytes);
+        if (data.Length > maxBytes) throw new FormatException("Shadow payload exceeds size limit.");
+        try
+        {
+            var envelope = JsonSerializer.Deserialize<PositionCorrectionShadowEnvelope>(data, JsonOptions)
+                ?? throw new FormatException("Empty shadow envelope.");
+            PositionCorrectionShadowValidator.Validate(envelope.Origin);
+            ValidateReceipt(envelope.ReceivedAtUtc);
+            return envelope;
+        }
+        catch (JsonException ex) { throw new FormatException("Invalid shadow envelope.", ex); }
+    }
+
+    private static void ValidateReceipt(DateTimeOffset timestamp)
+    {
+        if (timestamp <= DateTimeOffset.UnixEpoch)
+            throw new FormatException("Invalid shadow receipt timestamp.");
+    }
+
     private static void ValidateLimit(int maxBytes)
     {
         if (maxBytes is <= 0 or > 1_048_576) throw new ArgumentOutOfRangeException(nameof(maxBytes));
@@ -61,6 +96,9 @@ public static class PositionCorrectionShadowCodec
             JsonSerializerOptions options) => writer.WriteStringValue(value.ToUniversalTime());
     }
 }
+
+public sealed record PositionCorrectionShadowEnvelope(
+    ShadowPosicaoOrigem Origin, DateTimeOffset ReceivedAtUtc);
 
 public static class PositionCorrectionShadowValidator
 {
