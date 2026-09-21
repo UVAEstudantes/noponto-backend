@@ -6,7 +6,8 @@ namespace NoPonto.Application.GPS;
 internal sealed record CandidatoEstadoCausal(
     ObservacaoPosicaoTemporal Observacao,
     long? ExpectedTimestampMs,
-    EstadoCausalPosicao Estado);
+    EstadoCausalPosicao Estado,
+    CorrecaoTemporalPosicaoOptions? OpcoesEfetivas = null);
 
 internal sealed record PreparacaoEstadoCausal(
     IReadOnlyDictionary<string, CandidatoEstadoCausal> Candidatos)
@@ -61,7 +62,7 @@ public sealed class CorrecaoTemporalPosicaoCoordinator(
                 if (anterior is null || atualizado.Estado.Amostras.Count == 0)
                     metrics.RegistrarWarming();
                 candidatos[observacao.Ordem] = new(
-                    observacao, leitura.TimestampMs, atualizado.Estado);
+                    observacao, leitura.TimestampMs, atualizado.Estado, opcoes);
             }
             return new(candidatos);
         }
@@ -77,13 +78,14 @@ public sealed class CorrecaoTemporalPosicaoCoordinator(
         }
     }
 
-    internal async Task PersistirAceitosAsync(
+    internal async Task<IReadOnlyDictionary<string, CandidatoEstadoCausal>> PersistirAceitosAsync(
         PreparacaoEstadoCausal preparacao,
         IReadOnlyCollection<PosicaoVeiculoDto> aceitos,
         CancellationToken ct)
     {
         var opcoes = options.CurrentValue;
-        if (!opcoes.Enabled || preparacao.Candidatos.Count == 0 || aceitos.Count == 0) return;
+        var persistidos = new Dictionary<string, CandidatoEstadoCausal>(StringComparer.OrdinalIgnoreCase);
+        if (!opcoes.Enabled || preparacao.Candidatos.Count == 0 || aceitos.Count == 0) return persistidos;
 
         var timestampsAceitos = aceitos.ToDictionary(
             x => x.Ordem, x => x.TimestampGps.ToUnixTimeMilliseconds(),
@@ -92,7 +94,7 @@ public sealed class CorrecaoTemporalPosicaoCoordinator(
             .Where(x => timestampsAceitos.TryGetValue(x.Observacao.Ordem, out var ts)
                 && ts == x.Observacao.TimestampGps.ToUnixTimeMilliseconds())
             .ToArray();
-        if (pendentes.Length == 0) return;
+        if (pendentes.Length == 0) return persistidos;
 
         try
         {
@@ -103,6 +105,14 @@ public sealed class CorrecaoTemporalPosicaoCoordinator(
                     x.Observacao.TimestampGps.ToUnixTimeMilliseconds(), x.Estado)).ToArray();
                 var resultados = await repository.TentarAtualizarLoteAsync(
                     commits, opcoes.StateBatchSize, TimeSpan.FromSeconds(opcoes.StateTtlSeconds), ct);
+                if (opcoes.ShadowEnabled)
+                {
+                    var aceitosNestaTentativa = resultados
+                        .Where(x => x.Status == EstadoCausalCommitStatus.Accepted)
+                        .Select(x => x.Ordem).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    foreach (var candidato in pendentes.Where(x => aceitosNestaTentativa.Contains(x.Observacao.Ordem)))
+                        persistidos[candidato.Observacao.Ordem] = candidato;
+                }
                 if (tentativa >= opcoes.StateConflictRetryCount) break;
 
                 var conflitos = resultados
@@ -125,7 +135,7 @@ public sealed class CorrecaoTemporalPosicaoCoordinator(
                         continue;
                     var observacao = observacoes[ordem];
                     var atualizado = motor.AtualizarEstado(leitura.Estado, observacao);
-                    recalculados.Add(new(observacao, leitura.TimestampMs, atualizado.Estado));
+                    recalculados.Add(new(observacao, leitura.TimestampMs, atualizado.Estado, opcoes));
                 }
                 pendentes = recalculados.ToArray();
             }
@@ -139,6 +149,7 @@ public sealed class CorrecaoTemporalPosicaoCoordinator(
             metrics.RegistrarRedisFailure();
             logger.LogDebug(ex, "Falha fail-open na persistência do estado causal Redis.");
         }
+        return persistidos;
     }
 
     private static ObservacaoPosicaoTemporal? CriarObservacao(PosicaoVeiculoDto posicao)

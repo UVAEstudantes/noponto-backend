@@ -34,6 +34,8 @@ public sealed class GpsPollingService : BackgroundService
     private readonly ViagemObservadaService _viagemObservada;
     private readonly ITelemetriaMlIngress? _telemetriaMl;
     private readonly CorrecaoTemporalPosicaoCoordinator? _correcaoTemporal;
+    private readonly IPositionCorrectionShadowIngress? _shadowIngress;
+    private readonly IOptionsMonitor<CorrecaoTemporalPosicaoOptions>? _shadowOptions;
 
     public GpsPollingService(
         GpsSppoSnapshotStore snapshotSppo,
@@ -48,7 +50,9 @@ public sealed class GpsPollingService : BackgroundService
         IPosicaoVeiculoCacheRepository posicaoCache,
         ViagemObservadaService viagemObservada,
         ITelemetriaMlIngress? telemetriaMl = null,
-        CorrecaoTemporalPosicaoCoordinator? correcaoTemporal = null)
+        CorrecaoTemporalPosicaoCoordinator? correcaoTemporal = null,
+        IPositionCorrectionShadowIngress? shadowIngress = null,
+        IOptionsMonitor<CorrecaoTemporalPosicaoOptions>? shadowOptions = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -63,6 +67,8 @@ public sealed class GpsPollingService : BackgroundService
         _viagemObservada = viagemObservada;
         _telemetriaMl = telemetriaMl;
         _correcaoTemporal = correcaoTemporal;
+        _shadowIngress = shadowIngress;
+        _shadowOptions = shadowOptions;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -457,7 +463,10 @@ public sealed class GpsPollingService : BackgroundService
         }
 
         if (preparacaoCausal is not null && aceitos.Count > 0)
-            await _correcaoTemporal!.PersistirAceitosAsync(preparacaoCausal, aceitos, ct);
+        {
+            var estadosAceitos = await _correcaoTemporal!.PersistirAceitosAsync(preparacaoCausal, aceitos, ct);
+            ProduzirShadowSeHabilitado(aceitos, estadosAceitos);
+        }
 
         if (rejeitadosPorTimestamp > 0)
             _logger.LogInformation(
@@ -949,6 +958,57 @@ public sealed class GpsPollingService : BackgroundService
     private async Task<PreparacaoEstadoCausal?> PrepararEstadoCausalAsync(
         IReadOnlyCollection<PosicaoVeiculoDto> posicoes,
         CancellationToken ct) => await _correcaoTemporal!.PrepararAsync(posicoes, ct);
+
+    internal void ProduzirShadowSeHabilitado(IReadOnlyCollection<PosicaoVeiculoDto> aceitos,
+        IReadOnlyDictionary<string, CandidatoEstadoCausal> estadosAceitos)
+    {
+        if (_shadowIngress is null || _shadowOptions is null) return;
+        CorrecaoTemporalPosicaoOptions opcoes;
+        try { opcoes = _shadowOptions.CurrentValue; }
+        catch (Exception)
+        {
+            _logger.LogDebug("Shadow GPS: configuração indisponível; ciclo operacional preservado.");
+            return;
+        }
+        if (!opcoes.Enabled || !opcoes.ShadowEnabled) return;
+
+        var falhas = 0;
+        var descartados = 0;
+        foreach (var posicao in aceitos)
+        {
+            try
+            {
+                if (!estadosAceitos.TryGetValue(posicao.Ordem, out var candidato)
+                    || !ReferenceEquals(candidato.OpcoesEfetivas, opcoes)
+                    || !CorrespondeAoBAceito(candidato.Observacao, posicao))
+                    continue;
+                if (!ShadowPosicaoContrato.Selecionar(candidato.Observacao.ObservacaoId,
+                    opcoes.ShadowSamplingPercent)) continue;
+                var origem = ShadowPosicaoFactory.Criar(candidato.Observacao, candidato.Estado, opcoes);
+                if (!_shadowIngress.TryOffer(origem)) descartados++;
+            }
+            catch (Exception)
+            {
+                falhas++;
+            }
+        }
+        if (falhas > 0 || descartados > 0)
+            _logger.LogDebug("Shadow GPS: {Falhas} falhas isoladas e {Descartados} descartes no ciclo.",
+                falhas, descartados);
+    }
+
+    private static bool CorrespondeAoBAceito(ObservacaoPosicaoTemporal observacao,
+        PosicaoVeiculoDto posicao) =>
+        observacao.TimestampGps == posicao.TimestampGps
+        && observacao.Ordem == posicao.Ordem
+        && observacao.CodigoLinha == posicao.CodigoLinha
+        && observacao.Modal == (posicao.ModalFonte ?? string.Empty)
+        && observacao.Provedor == (posicao.ProvedorFonte ?? string.Empty)
+        && observacao.ItinerarioId == posicao.ItinerarioId
+        && observacao.PosicaoOriginal == posicao.PosicaoNaRota
+        && observacao.ComprimentoRotaMetros == posicao.ComprimentoRotaMetros
+        && observacao.VelocidadeInstantaneaKmh == posicao.Velocidade
+        && observacao.VelocidadeMediaLegacyKmh == posicao.VelocidadeMedia;
 
     private void ConfirmarSnapshotProcessado(LoteSppoSnapshot? lote)
     {
