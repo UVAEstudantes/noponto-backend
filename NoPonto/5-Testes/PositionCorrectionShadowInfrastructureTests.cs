@@ -58,6 +58,36 @@ public sealed class PositionCorrectionShadowInfrastructureTests
     }
 
     [Fact]
+    public void Codec_preserva_sinal_atual_sem_amostras_historicas()
+    {
+        var origin = Origin() with { SinaisParada = [true] };
+
+        PositionCorrectionShadowValidator.Validate(origin);
+        var bytes = PositionCorrectionShadowCodec.SerializeEnvelope(origin, origin.TimestampGpsOrigemUtc);
+        var restored = PositionCorrectionShadowCodec.DeserializeEnvelope(bytes).Origin;
+
+        Assert.Equal(0, restored.SamplesUsed);
+        Assert.Empty(restored.AmostrasCausais);
+        Assert.Equal(new[] { true }, restored.SinaisParada);
+    }
+
+    [Fact]
+    public void Validator_limita_sinais_pelo_maximo_configurado_sem_exigir_relacao_um_para_um()
+    {
+        var origin = Origin() with { MaxSamplesConfigured = 2, SinaisParada = [true, false] };
+        PositionCorrectionShadowValidator.Validate(origin);
+        Assert.Equal(origin.SinaisParada,
+            PositionCorrectionShadowCodec.Deserialize(PositionCorrectionShadowCodec.Serialize(origin)).SinaisParada);
+
+        Assert.Throws<FormatException>(() => PositionCorrectionShadowValidator.Validate(
+            origin with { SinaisParada = [true, false, true] }));
+        Assert.Throws<FormatException>(() => PositionCorrectionShadowValidator.Validate(
+            origin with { SamplesUsed = 1 }));
+        Assert.Throws<FormatException>(() => PositionCorrectionShadowValidator.Validate(
+            origin with { MaxSamplesConfigured = 0 }));
+    }
+
+    [Fact]
     public void Validator_noop_order_and_mapping()
     {
         var origin = Origin();
