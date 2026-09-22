@@ -126,7 +126,7 @@ public static class PositionCorrectionShadowValidator
             || (origin.SamplesBeforeCap is { } before && before < origin.SamplesUsed)
             || origin.AmostrasCausais is null || origin.SinaisParada is null
             || origin.CandidateResults is null || origin.AmostrasCausais.Count != origin.SamplesUsed
-            || origin.SinaisParada.Count > origin.SamplesUsed
+            || origin.SinaisParada.Count > origin.MaxSamplesConfigured
             || origin.AmostrasCausais.Any(a => a is null || a.TimestampGps <= DateTimeOffset.UnixEpoch
                 || a.TimestampGps > origin.TimestampGpsOrigemUtc || !Speed(a.VelocidadeKmh))
             || origin.CandidateResults.Any(r => r is null || r.HorizonSeconds <= 0
