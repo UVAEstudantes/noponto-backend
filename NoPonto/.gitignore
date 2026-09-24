@@ -3,6 +3,8 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
+*.zip
+
 BACKEND_CONTEXT.md
 context.md
 
