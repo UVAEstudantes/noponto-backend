@@ -93,13 +93,13 @@ public sealed class PoiRepository : IPoiRepository
             .AsNoTracking()
             .Where(pp =>
                 _contexto.ParadasItinerario
-                    .Any(pi => pi.ParadaId == pp.ParadaId && pi.ItinerarioId == itinerarioId))
+                    .Any(pi => pi.Ativo && pi.ParadaId == pp.ParadaId && pi.ItinerarioId == itinerarioId))
             .Select(pp => new PoiPorItinerarioDTO
             {
                 PoiId       = pp.PoiId,
                 ParadaId    = pp.ParadaId,
                 OrdemParada = _contexto.ParadasItinerario
-                    .Where(pi => pi.ParadaId == pp.ParadaId && pi.ItinerarioId == itinerarioId)
+                    .Where(pi => pi.Ativo && pi.ParadaId == pp.ParadaId && pi.ItinerarioId == itinerarioId)
                     .Select(pi => pi.Ordem)
                     .FirstOrDefault(),
                 NomeParada      = pp.Parada.Nome,
@@ -163,7 +163,7 @@ public sealed class PoiRepository : IPoiRepository
         // Buscar apenas paradas dos itinerários paginados
         var paradaPorItinerario = await _contexto.ParadasItinerario
             .AsNoTracking()
-            .Where(pi => itinerarioIds.Contains(pi.ItinerarioId))
+            .Where(pi => pi.Ativo && itinerarioIds.Contains(pi.ItinerarioId))
             .Select(pi => new { pi.ItinerarioId, pi.ParadaId })
             .ToListAsync(cancellationToken);
 

@@ -51,7 +51,7 @@ public sealed class LinhaRepository : ILinhaRepository
     {
         var itens = await _contexto.ParadasItinerario
             .AsNoTracking()
-            .Where(relacao => relacao.ParadaId == paradaId)
+            .Where(relacao => relacao.Ativo && relacao.ParadaId == paradaId)
             .Select(relacao => new
             {
                 LinhaId = relacao.Itinerario.Sentido.LinhaId,
@@ -103,7 +103,7 @@ public sealed class LinhaRepository : ILinhaRepository
             .AsNoTracking()
             .Where(itinerario => itinerario.Sentido.LinhaId == linhaId)
             .GroupJoin(
-                _contexto.ParadasItinerario.AsNoTracking(),
+                _contexto.ParadasItinerario.AsNoTracking().Where(x => x.Ativo),
                 itinerario => itinerario.Id,
                 paradaItinerario => paradaItinerario.ItinerarioId,
                 (itinerario, paradas) => new

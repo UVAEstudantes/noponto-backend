@@ -552,7 +552,7 @@ public sealed partial class GpsItinerarioRepository
                     JOIN "Paradas" p ON p."Id" = pi."ParadaId"
                     JOIN itinerario_escolhido ie ON ie."Id" = pi."ItinerarioId"
                     CROSS JOIN veiculo v
-                    WHERE pi."PosicaoLinha" > ie.posicao_na_rota
+                    WHERE pi."Ativo" = true AND pi."PosicaoLinha" > ie.posicao_na_rota
                     ORDER BY pi."PosicaoLinha" ASC LIMIT 1
                 )
                 SELECT ie."Id" AS itinerario_id, ie.posicao_na_rota, ie.comprimento_metros,
@@ -743,7 +743,7 @@ public sealed partial class GpsItinerarioRepository
                 SELECT p."Nome" AS parada_nome,ST_Distance(v.ponto,p."Localizacao"::geography) AS distancia_parada_metros
                 FROM "ParadasItinerario" pi JOIN "Paradas" p ON p."Id"=pi."ParadaId"
                 JOIN global_escolhido ge ON ge."Id"=pi."ItinerarioId" CROSS JOIN veiculo v
-                WHERE pi."PosicaoLinha">ge.posicao_na_rota ORDER BY pi."PosicaoLinha" ASC LIMIT 1
+                WHERE pi."Ativo" = true AND pi."PosicaoLinha">ge.posicao_na_rota ORDER BY pi."PosicaoLinha" ASC LIMIT 1
             ),
             rota_anterior AS (
                 SELECT i."Id",i."Geometria" FROM "Itinerarios" i
@@ -785,7 +785,7 @@ public sealed partial class GpsItinerarioRepository
                 SELECT p."Nome" AS parada_nome,ST_Distance(v.ponto,p."Localizacao"::geography) AS distancia_parada_metros
                 FROM "ParadasItinerario" pi JOIN "Paradas" p ON p."Id"=pi."ParadaId"
                 JOIN anterior_escolhido ae ON ae."Id"=pi."ItinerarioId" CROSS JOIN veiculo v
-                WHERE pi."PosicaoLinha">ae.posicao_na_rota ORDER BY pi."PosicaoLinha" ASC LIMIT 1
+                WHERE pi."Ativo" = true AND pi."PosicaoLinha">ae.posicao_na_rota ORDER BY pi."PosicaoLinha" ASC LIMIT 1
             ),
             rota_operacional AS (
                 SELECT i."Id",i."Geometria",ST_Length(i."Geometria"::geography) AS comprimento_metros

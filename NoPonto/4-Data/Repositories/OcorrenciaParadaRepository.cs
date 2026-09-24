@@ -13,7 +13,7 @@ public sealed class OcorrenciaParadaRepository(NpgsqlDataSource source) : IOcorr
             SELECT "Id", "ItinerarioId", "ParadaId", "Ordem", "PosicaoLinha",
                 lag("Ordem") OVER w AS ordem_anterior,
                 lag("PosicaoLinha") OVER w AS posicao_anterior
-            FROM "ParadasItinerario" WHERE "ItinerarioId" = @itinerario
+            FROM "ParadasItinerario" WHERE "ItinerarioId" = @itinerario AND "Ativo" = true
             WINDOW w AS (ORDER BY "Ordem", "Id")
         ), validacao AS (
             SELECT CASE

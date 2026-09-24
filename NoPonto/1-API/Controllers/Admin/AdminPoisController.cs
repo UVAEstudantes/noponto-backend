@@ -52,7 +52,7 @@ public sealed class AdminPoisController : ControllerBase
         {
             query = query.Where(p => _db.PoiParadas
                 .Any(pp => pp.PoiId == p.Id && _db.ParadasItinerario
-                    .Any(pi => pi.ItinerarioId == itinerarioId.Value && pi.ParadaId == pp.ParadaId)));
+                    .Any(pi => pi.Ativo && pi.ItinerarioId == itinerarioId.Value && pi.ParadaId == pp.ParadaId)));
         }
 
         var totalRegistros = await query.CountAsync(cancellationToken);
@@ -141,7 +141,7 @@ public sealed class AdminPoisController : ControllerBase
     {
         var paradaIds = await _db.ParadasItinerario
             .AsNoTracking()
-            .Where(pi => pi.ItinerarioId == itinerarioId)
+            .Where(pi => pi.Ativo && pi.ItinerarioId == itinerarioId)
             .Select(pi => pi.ParadaId)
             .Distinct()
             .ToListAsync(cancellationToken);

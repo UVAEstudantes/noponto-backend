@@ -51,7 +51,7 @@ public sealed class ItinerarioRepository : IItinerarioRepository
         var paradas = incluirParadas
             ? await _contexto.ParadasItinerario
                 .AsNoTracking()
-                .Where(relacao => relacao.ItinerarioId == itinerarioId)
+                .Where(relacao => relacao.Ativo && relacao.ItinerarioId == itinerarioId)
                 .OrderBy(relacao => relacao.Ordem)
                 .Select(relacao => new ItinerarioMapaParadaDTO
                 {

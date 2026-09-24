@@ -535,6 +535,7 @@ ORDER BY ""PosicaoLinha"" ASC;";
 
         var jaRelacionadas = await _contexto.ParadasItinerario
             .AsNoTracking()
+            .Where(x => x.Ativo)
             .Where(r => r.ItinerarioId == itinerarioId && paradaIds.Contains(r.ParadaId))
             .Select(r => r.ParadaId)
             .ToListAsync(cancellationToken);

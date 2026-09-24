@@ -258,7 +258,7 @@ public class PoisController : ControllerBase
 
         var paradaIds = await _contexto.ParadasItinerario
             .AsNoTracking()
-            .Where(r => r.ItinerarioId == itinerarioId)
+            .Where(r => r.Ativo && r.ItinerarioId == itinerarioId)
             .Select(r => r.ParadaId)
             .ToListAsync(cancellationToken);
 

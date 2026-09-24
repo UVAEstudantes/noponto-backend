@@ -46,7 +46,7 @@ public sealed class AdminParadasController : ControllerBase
         if (linhaId.HasValue)
         {
             query = query.Where(p => _db.ParadasItinerario
-                .Any(pi => pi.ParadaId == p.Id && pi.Itinerario.Sentido.LinhaId == linhaId.Value));
+                .Any(pi => pi.Ativo && pi.ParadaId == p.Id && pi.Itinerario.Sentido.LinhaId == linhaId.Value));
         }
 
         var totalRegistros = await query.CountAsync(cancellationToken);
@@ -62,7 +62,7 @@ public sealed class AdminParadasController : ControllerBase
                 Latitude = p.Localizacao.Y,
                 Longitude = p.Localizacao.X,
                 TotalLinhas = _db.ParadasItinerario
-                    .Where(pi => pi.ParadaId == p.Id)
+                    .Where(pi => pi.Ativo && pi.ParadaId == p.Id)
                     .Select(pi => pi.Itinerario.Sentido.LinhaId)
                     .Distinct()
                     .Count(),

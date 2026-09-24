@@ -178,7 +178,7 @@ public sealed class PopularPoisService
 
         var paradas = await _contexto.ParadasItinerario
             .AsNoTracking()
-            .Where(r => r.ItinerarioId == itinerarioId)
+            .Where(r => r.Ativo && r.ItinerarioId == itinerarioId)
             .OrderBy(r => r.Ordem)
             .Select(r => new
             {
@@ -367,7 +367,7 @@ public sealed class PopularPoisService
     {
         var itinerarioIds = await _contexto.ParadasItinerario
             .AsNoTracking()
-            .Where(r => r.ParadaId == paradaId)
+            .Where(r => r.Ativo && r.ParadaId == paradaId)
             .Select(r => r.ItinerarioId)
             .ToListAsync(cancellationToken);
 
@@ -381,7 +381,7 @@ public sealed class PopularPoisService
             .Where(r =>
                 poiIds.Contains(r.PoiId) &&
                 _contexto.ParadasItinerario
-                    .Where(pi => pi.ParadaId == r.ParadaId && itinerarioIds.Contains(pi.ItinerarioId))
+                    .Where(pi => pi.Ativo && pi.ParadaId == r.ParadaId && itinerarioIds.Contains(pi.ItinerarioId))
                     .Any())
             .Select(r => new { r.Id, r.PoiId, r.ParadaId, r.DistanciaMetros })
             .ToListAsync(cancellationToken);

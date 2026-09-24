@@ -26,9 +26,22 @@ public class TransporteDbContext : DbContext
     public DbSet<PositionCorrectionShadowOrigin> PositionCorrectionShadowOrigins => Set<PositionCorrectionShadowOrigin>();
     public DbSet<PoiParada> PoiParadas => Set<PoiParada>();
     public DbSet<Tarifa> Tarifas => Set<Tarifa>();
+    public DbSet<FonteEstrutural> FontesEstruturais => Set<FonteEstrutural>();
+    public DbSet<ImportacaoEstrutural> ImportacoesEstruturais => Set<ImportacaoEstrutural>();
+    public DbSet<LinhaIdentidadeExterna> LinhasIdentidadesExternas => Set<LinhaIdentidadeExterna>();
+    public DbSet<SentidoIdentidadeExterna> SentidosIdentidadesExternas => Set<SentidoIdentidadeExterna>();
+    public DbSet<ParadaIdentidadeExterna> ParadasIdentidadesExternas => Set<ParadaIdentidadeExterna>();
+    public DbSet<PadraoOperacional> PadroesOperacionais => Set<PadraoOperacional>();
+    public DbSet<PadraoIdentidadeExterna> PadroesIdentidadesExternas => Set<PadraoIdentidadeExterna>();
+    public DbSet<PadraoVersao> PadroesVersoes => Set<PadraoVersao>();
+    public DbSet<PadraoVersaoImportacao> PadroesVersoesImportacoes => Set<PadraoVersaoImportacao>();
+    public DbSet<OcorrenciaParadaPadrao> OcorrenciasParadasPadroes => Set<OcorrenciaParadaPadrao>();
+    public DbSet<OverrideOcorrenciaPadrao> OverridesOcorrenciasPadroes => Set<OverrideOcorrenciaPadrao>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ConfigurarEstruturaTransporteV21(modelBuilder);
+
         modelBuilder.Entity<PositionCorrectionShadowOrigin>(e =>
         {
             e.ToTable("PositionCorrectionShadowOrigins");
@@ -98,8 +111,13 @@ public class TransporteDbContext : DbContext
         modelBuilder.Entity<ParadaItinerario>()
             .HasIndex(x => x.ParadaId);
 
-        modelBuilder.Entity<ParadaItinerario>()
-            .HasIndex(x => new { x.ItinerarioId, x.Ordem });
+        modelBuilder.Entity<ParadaItinerario>(e =>
+        {
+            e.Property(x => x.Fonte).HasMaxLength(32).HasDefaultValue(FontesParadaItinerario.SpatialLegacy).IsRequired();
+            e.HasIndex(x => new { x.ItinerarioId, x.Ordem }).IsUnique().HasFilter("\"Ativo\" = true");
+            e.HasIndex(x => x.ImportacaoId);
+            e.HasIndex(x => x.SubstituidaPorImportacaoId);
+        });
 
         modelBuilder.Entity<Tarifa>()
             .Property(tarifa => tarifa.Valor)
@@ -153,5 +171,144 @@ public class TransporteDbContext : DbContext
         modelBuilder.Entity<TelemetriaVeiculoMl>().HasIndex(t => new { t.CodigoLinha, t.TimestampGps });
         modelBuilder.Entity<TelemetriaVeiculoMl>().HasIndex(t => new { t.ViagemId, t.TimestampGps })
             .HasFilter("\"ViagemId\" IS NOT NULL");
+    }
+
+    private static void ConfigurarEstruturaTransporteV21(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<FonteEstrutural>(e =>
+        {
+            e.ToTable("FontesEstruturais");
+            e.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
+            e.Property(x => x.Nome).HasMaxLength(160).IsRequired();
+            e.HasIndex(x => x.Codigo).IsUnique();
+        });
+
+        modelBuilder.Entity<ImportacaoEstrutural>(e =>
+        {
+            e.ToTable("ImportacoesEstruturais");
+            e.Property(x => x.Status).HasMaxLength(24).IsRequired();
+            e.Property(x => x.VersaoFonte).HasMaxLength(160);
+            e.Property(x => x.ConteudoHash).HasMaxLength(128).IsRequired();
+            e.Property(x => x.RawUri).HasMaxLength(2048);
+            e.Property(x => x.AlgoritmoVersao).HasMaxLength(80).IsRequired();
+            e.Property(x => x.Relatorio).HasColumnType("jsonb").IsRequired();
+            e.HasIndex(x => new { x.FonteEstruturalId, x.IniciadaEmUtc });
+            e.HasIndex(x => new { x.FonteEstruturalId, x.ConteudoHash, x.AlgoritmoVersao })
+                .IsUnique().HasFilter("\"Status\" = 'CONCLUIDA'");
+            e.ToTable(t => t.HasCheckConstraint("CK_ImportacoesEstruturais_Status",
+                "\"Status\" IN ('EM_PROCESSAMENTO','CONCLUIDA','FALHOU')"));
+            e.HasOne(x => x.FonteEstrutural).WithMany(x => x.Importacoes)
+                .HasForeignKey(x => x.FonteEstruturalId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        ConfigurarIdentidadeExterna(modelBuilder.Entity<LinhaIdentidadeExterna>(), "LinhasIdentidadesExternas");
+        ConfigurarIdentidadeExterna(modelBuilder.Entity<SentidoIdentidadeExterna>(), "SentidosIdentidadesExternas");
+        ConfigurarIdentidadeExterna(modelBuilder.Entity<ParadaIdentidadeExterna>(), "ParadasIdentidadesExternas");
+        ConfigurarIdentidadeExterna(modelBuilder.Entity<PadraoIdentidadeExterna>(), "PadroesIdentidadesExternas");
+
+        modelBuilder.Entity<LinhaIdentidadeExterna>().HasOne(x => x.Linha).WithMany()
+            .HasForeignKey(x => x.LinhaId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<SentidoIdentidadeExterna>().HasOne(x => x.Sentido).WithMany()
+            .HasForeignKey(x => x.SentidoId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ParadaIdentidadeExterna>().HasOne(x => x.Parada).WithMany()
+            .HasForeignKey(x => x.ParadaId).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PadraoOperacional>(e =>
+        {
+            e.ToTable("PadroesOperacionais");
+            e.Property(x => x.Chave).HasMaxLength(160).IsRequired();
+            e.Property(x => x.TipoServico).HasMaxLength(40).IsRequired();
+            e.Property(x => x.NomePublico).HasMaxLength(200);
+            e.HasIndex(x => new { x.SentidoId, x.Chave }).IsUnique();
+            e.HasOne(x => x.Sentido).WithMany().HasForeignKey(x => x.SentidoId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PadraoIdentidadeExterna>().HasOne(x => x.PadraoOperacional)
+            .WithMany(x => x.IdentidadesExternas).HasForeignKey(x => x.PadraoOperacionalId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PadraoVersao>(e =>
+        {
+            e.ToTable("PadroesVersoes", t =>
+            {
+                t.HasCheckConstraint("CK_PadroesVersoes_Numero", "\"Numero\" > 0");
+                t.HasCheckConstraint("CK_PadroesVersoes_Distancia", "\"DistanciaMetros\" >= 0");
+                t.HasCheckConstraint("CK_PadroesVersoes_Confianca", "\"Confianca\" >= 0 AND \"Confianca\" <= 1");
+            });
+            e.Property(x => x.Geometria).HasColumnType("geometry(LineString,4326)").IsRequired();
+            e.Property(x => x.MetodoConstrucao).HasMaxLength(40).IsRequired();
+            e.Property(x => x.AlgoritmoVersao).HasMaxLength(80).IsRequired();
+            e.Property(x => x.ResultadoValidacao).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Relatorio).HasColumnType("jsonb").IsRequired();
+            e.HasAlternateKey(x => new { x.PadraoOperacionalId, x.Id });
+            e.HasIndex(x => new { x.PadraoOperacionalId, x.Numero }).IsUnique();
+            e.HasIndex(x => x.Geometria).HasMethod("GIST");
+            e.HasOne(x => x.PadraoOperacional).WithMany(x => x.Versoes)
+                .HasForeignKey(x => x.PadraoOperacionalId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PadraoOperacional>().HasOne(x => x.VersaoAtual).WithMany()
+            .HasForeignKey(x => new { x.Id, x.VersaoAtualId })
+            .HasPrincipalKey(x => new { x.PadraoOperacionalId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<PadraoVersaoImportacao>(e =>
+        {
+            e.ToTable("PadroesVersoesImportacoes", t => t.HasCheckConstraint("CK_PadroesVersoesImportacoes_Papel",
+                "\"Papel\" IN ('MEMBERSHIP','GEOMETRIA','PARADAS','METADADOS')"));
+            e.HasKey(x => new { x.PadraoVersaoId, x.ImportacaoEstruturalId, x.Papel });
+            e.Property(x => x.Papel).HasMaxLength(24);
+            e.HasIndex(x => x.ImportacaoEstruturalId);
+            e.HasOne(x => x.PadraoVersao).WithMany(x => x.Importacoes)
+                .HasForeignKey(x => x.PadraoVersaoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.ImportacaoEstrutural).WithMany(x => x.PadroesVersoes)
+                .HasForeignKey(x => x.ImportacaoEstruturalId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OcorrenciaParadaPadrao>(e =>
+        {
+            e.ToTable("OcorrenciasParadasPadroes", t =>
+            {
+                t.HasCheckConstraint("CK_OcorrenciasPadroes_Ordem", "\"Ordem\" > 0");
+                t.HasCheckConstraint("CK_OcorrenciasPadroes_SourceSequence", "\"SourceSequence\" IS NULL OR \"SourceSequence\" >= 0");
+                t.HasCheckConstraint("CK_OcorrenciasPadroes_Posicao", "\"PosicaoTracado\" >= 0 AND \"PosicaoTracado\" <= 1");
+                t.HasCheckConstraint("CK_OcorrenciasPadroes_Distancia", "\"DistanciaAcumuladaMetros\" IS NULL OR \"DistanciaAcumuladaMetros\" >= 0");
+            });
+            e.HasIndex(x => new { x.PadraoVersaoId, x.Ordem }).IsUnique();
+            e.HasIndex(x => x.ParadaId);
+            e.HasOne(x => x.PadraoVersao).WithMany(x => x.Ocorrencias)
+                .HasForeignKey(x => x.PadraoVersaoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Parada).WithMany().HasForeignKey(x => x.ParadaId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OverrideOcorrenciaPadrao>(e =>
+        {
+            e.ToTable("OverridesOcorrenciasPadroes", t =>
+                t.HasCheckConstraint("CK_OverridesOcorrencias_AcaoOrdem",
+                    "(\"Acao\" = 'EXCLUIR' AND \"OrdemDesejada\" IS NULL) OR " +
+                    "(\"Acao\" IN ('INCLUIR','MOVER') AND \"OrdemDesejada\" > 0)"));
+            e.Property(x => x.Acao).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Justificativa).HasMaxLength(1000).IsRequired();
+            e.Property(x => x.CriadoPor).HasMaxLength(160).IsRequired();
+            e.HasIndex(x => new { x.PadraoOperacionalId, x.Ativo });
+            e.HasOne(x => x.PadraoOperacional).WithMany().HasForeignKey(x => x.PadraoOperacionalId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Parada).WithMany().HasForeignKey(x => x.ParadaId).OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+
+    private static void ConfigurarIdentidadeExterna<TEntity>(
+        Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<TEntity> e, string tabela)
+        where TEntity : BaseEntity
+    {
+        e.ToTable(tabela);
+        e.Property("Tipo").HasMaxLength(40).IsRequired();
+        e.Property("ExternalId").HasMaxLength(240).IsRequired();
+        e.Property("OrigemMapeamento").HasMaxLength(16).IsRequired();
+        e.ToTable(t => t.HasCheckConstraint($"CK_{tabela}_OrigemMapeamento",
+            "\"OrigemMapeamento\" IN ('FONTE','MANUAL')"));
+        e.HasIndex("FonteEstruturalId", "Tipo", "ExternalId").IsUnique();
+        e.HasOne(typeof(FonteEstrutural), "FonteEstrutural").WithMany()
+            .HasForeignKey("FonteEstruturalId").OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -17,6 +17,7 @@ using NoPonto.Data.Repositories;
 using StackExchange.Redis;
 using System.Net.Sockets;
 using NoPonto.Application.Trem;
+using NoPonto.Application.GTFS;
 using System.Reflection;
 
 Env.NoClobber().Load();
@@ -237,6 +238,12 @@ builder.Services.AddHttpClient<ArcGisClientService>();
 builder.Services.AddScoped<ImportacaoParadasService>();
 builder.Services.AddScoped<RelacionarParadasItinerariosService>();
 builder.Services.AddScoped<RelacionarParadasJob>();
+builder.Services.AddSingleton<GtfsFeedParser>();
+builder.Services.AddSingleton<GtfsProjecaoService>();
+builder.Services.AddHttpClient<ArcGisSppoSnapshotClient>();
+builder.Services.AddScoped<ArcGisEstruturalV23Service>();
+builder.Services.AddScoped<GtfsParadaItinerarioDryRunService>();
+builder.Services.AddScoped<GtfsParadaItinerarioRebuildService>();
 builder.Services.AddSingleton<ImportacaoItinerariosService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportacaoItinerariosService>());
 
