@@ -10,6 +10,7 @@ public sealed class TelemetriaMlMetrics
     private long _publisherSerializacaoTicks, _publisherRedisTicks, _publisherPublicados, _publisherFalhasRedis;
     private long _publisherFalhasPreparacao, _publisherFalhasInesperadas;
     private long _falhasChannel;
+    private long _dropsBackpressure;
     private long _channelOcupacao, _channelOcupacaoMaxima;
     private long _workerLeituraTicks, _workerDesserializacaoTicks, _workerPostgresTicks;
     private long _workerAckTicks, _workerCleanupTicks;
@@ -38,6 +39,7 @@ public sealed class TelemetriaMlMetrics
     public long PublisherFalhasPreparacao => Interlocked.Read(ref _publisherFalhasPreparacao);
     public long PublisherFalhasInesperadas => Interlocked.Read(ref _publisherFalhasInesperadas);
     public long FalhasChannel => Interlocked.Read(ref _falhasChannel);
+    public long DropsBackpressure => Interlocked.Read(ref _dropsBackpressure);
     public long ChannelOcupacao => Interlocked.Read(ref _channelOcupacao);
     public long ChannelOcupacaoMaxima => Interlocked.Read(ref _channelOcupacaoMaxima);
     public double WorkerLeituraMs => TicksEmMs(_workerLeituraTicks);
@@ -51,6 +53,11 @@ public sealed class TelemetriaMlMetrics
     public void RegistrarFalhaChannel()
     {
         Interlocked.Increment(ref _falhasChannel);
+        RegistrarFalhaPublicacao();
+    }
+    public void RegistrarDropBackpressure()
+    {
+        Interlocked.Increment(ref _dropsBackpressure);
         RegistrarFalhaPublicacao();
     }
     public void RegistrarConsumidos(int quantidade) => Interlocked.Add(ref _consumidos, quantidade);
@@ -123,7 +130,7 @@ public sealed class TelemetriaMlMetricsReporter(
                     "publisher_publicados={publisherPublicados}, publisher_falhas_redis={publisherFalhasRedis}, " +
                     "publisher_falhas_preparacao={publisherFalhasPreparacao}, " +
                     "publisher_falhas_inesperadas={publisherFalhasInesperadas}, " +
-                    "falhas_channel={falhasChannel}, " +
+                    "falhas_channel={falhasChannel}, drops_backpressure={dropsBackpressure}, " +
                     "channel_ocupacao={channelAtual}, channel_ocupacao_max={channelMax}, channel_capacidade={channelCapacidade}, " +
                     "worker_leitura_ms={workerLeitura:F1}, worker_desserializacao_ms={workerDesserializacao:F1}, " +
                     "worker_postgres_ms={workerPostgres:F1}, worker_ack_ms={workerAck:F1}, worker_cleanup_ms={workerCleanup:F1}",
@@ -136,7 +143,7 @@ public sealed class TelemetriaMlMetricsReporter(
                     metrics.PublisherSerializacaoMs, metrics.PublisherRedisMs,
                     metrics.PublisherPublicados, metrics.PublisherFalhasRedis,
                     metrics.PublisherFalhasPreparacao, metrics.PublisherFalhasInesperadas,
-                    metrics.FalhasChannel,
+                    metrics.FalhasChannel, metrics.DropsBackpressure,
                     metrics.ChannelOcupacao, metrics.ChannelOcupacaoMaxima,
                     TelemetriaMlStreamPublisher.Capacidade,
                     metrics.WorkerLeituraMs, metrics.WorkerDesserializacaoMs,

@@ -22,13 +22,25 @@ services:
 
   redis:
     image: redis:7
-    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-512mb}
+      - --maxmemory-policy
+      - noeviction
     container_name: transporte_redis
+    mem_limit: ${REDIS_CONTAINER_MEMORY_LIMIT:-640m}
+    mem_reservation: ${REDIS_CONTAINER_MEMORY_RESERVATION:-384m}
+    pids_limit: 128
     ports:
       - "${REDIS_PORT}:6379"
     volumes:
       - redis_data:/data
-    restart: unless-stopped
+    restart: "on-failure:3"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

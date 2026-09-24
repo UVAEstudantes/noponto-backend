@@ -22,6 +22,8 @@ public sealed class PositionCorrectionShadowInfrastructureTests
         Assert.True(options.Valid());
         Assert.Equal(10_000, options.ChannelCapacity);
         Assert.Equal(65_536, options.MaxPayloadBytes);
+        Assert.Equal(5_000, options.MaxStreamEntries);
+        Assert.Equal(1_000, options.MaxDeadLetterEntries);
         Assert.Equal("noponto:position-correction:shadow", PositionCorrectionShadowResources.Stream);
         Assert.Equal("position-correction-shadow-postgres", PositionCorrectionShadowResources.ConsumerGroup);
         Assert.Equal("noponto:position-correction:shadow:dead-letter", PositionCorrectionShadowResources.DeadLetter);
@@ -32,6 +34,8 @@ public sealed class PositionCorrectionShadowInfrastructureTests
         Assert.False(new PositionCorrectionShadowPipelineOptions { MaxAttempts = 0 }.Valid());
         Assert.False(new PositionCorrectionShadowPipelineOptions { MaxPayloadBytes = 1_048_577 }.Valid());
         Assert.False(new PositionCorrectionShadowPipelineOptions { TrimLimit = 0 }.Valid());
+        Assert.False(new PositionCorrectionShadowPipelineOptions { MaxStreamEntries = 0 }.Valid());
+        Assert.False(new PositionCorrectionShadowPipelineOptions { MaxDeadLetterEntries = 0 }.Valid());
         var expected = ShadowPosicaoContrato.PolicyFingerprint(new());
         options.ChannelCapacity++;
         Assert.Equal(expected, ShadowPosicaoContrato.PolicyFingerprint(new()));

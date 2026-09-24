@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
 using StackExchange.Redis;
 
@@ -32,18 +33,31 @@ public sealed class TelemetriaMlStreamPublisher : BackgroundService, ITelemetria
     private readonly IConnectionMultiplexer _redis;
     private readonly TelemetriaMlMetrics _metrics;
     private readonly ILogger<TelemetriaMlStreamPublisher> _logger;
+    private readonly TelemetriaMlRetentionOptions _retention;
+    private readonly TelemetriaMlBackpressureState? _backpressure;
 
     public TelemetriaMlStreamPublisher(IConnectionMultiplexer redis, TelemetriaMlMetrics metrics,
-        ILogger<TelemetriaMlStreamPublisher> logger)
+        ILogger<TelemetriaMlStreamPublisher> logger,
+        IOptions<TelemetriaMlRetentionOptions>? retention = null,
+        TelemetriaMlBackpressureState? backpressure = null)
     {
         _redis = redis;
         _metrics = metrics;
         _logger = logger;
+        _retention = retention?.Value ?? new TelemetriaMlRetentionOptions();
+        _backpressure = backpressure;
     }
 
     public bool TentarPublicar(EventoTelemetriaMl evento)
     {
         _metrics.RegistrarEntradaChannel();
+        if (_backpressure is not null
+            && !_backpressure.ShouldAccept(evento.ObservacaoId, _retention.MaxStreamEntries))
+        {
+            _metrics.DesfazerEntradaChannel();
+            _metrics.RegistrarDropBackpressure();
+            return false;
+        }
         if (_canal.Writer.TryWrite(evento))
         {
             _metrics.RegistrarProduzido();
@@ -156,7 +170,8 @@ public sealed class TelemetriaMlStreamPublisher : BackgroundService, ITelemetria
             {
                 try
                 {
-                    var task = PublicarOverride?.Invoke(value) ?? db!.StreamAddAsync(StreamKey, value);
+                    var task = PublicarOverride?.Invoke(value) ?? db!.StreamAddAsync(StreamKey, value,
+                        maxLength: _retention.MaxStreamEntries, useApproximateMaxLength: true);
                     tasks.Add(task ?? Task.FromException<RedisValue>(
                         new InvalidOperationException("Operação Redis retornou Task nula.")));
                 }

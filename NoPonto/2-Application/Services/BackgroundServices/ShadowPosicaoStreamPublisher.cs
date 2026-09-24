@@ -119,7 +119,7 @@ public sealed class ShadowPosicaoStreamPublisher(
                 [
                     new NameValueEntry("shadow_origin_id", item.Origin.ShadowOriginId),
                     new NameValueEntry("payload", payload),
-                ]));
+                ], maxLength: options.MaxStreamEntries, useApproximateMaxLength: true));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

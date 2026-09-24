@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
 using NoPonto.Data.Repositories;
 using Npgsql;
@@ -10,9 +11,19 @@ namespace NoPonto.Application.Services.BackgroundServices;
 
 public sealed record HistoricoStreamOptions(string Configuration);
 
-public sealed class HistoricoPassagemWorker(IConnectionMultiplexer redis, IHistoricoEventoRepository repository,
-    ILogger<HistoricoPassagemWorker> logger, HistoricoStreamOptions? leituraOptions = null) : BackgroundService
+public sealed class HistoricoStreamRetentionOptions
 {
+    public const string Section = "HistoricoStreamRetention";
+    public int MainStreamSafetyMarginMinutes { get; set; } = 60;
+    public int DeadLetterRetentionDays { get; set; } = 7;
+    public int TrimLimit { get; set; } = 100_000;
+}
+
+public sealed class HistoricoPassagemWorker(IConnectionMultiplexer redis, IHistoricoEventoRepository repository,
+    ILogger<HistoricoPassagemWorker> logger, HistoricoStreamOptions? leituraOptions = null,
+    IOptions<HistoricoStreamRetentionOptions>? retentionOptions = null) : BackgroundService
+{
+    internal static readonly TimeSpan RetryMetadataTtl = TimeSpan.FromDays(7);
     public const string Group = "historico-passagens";
     public const string DeadLetter = "noponto:viagem:eventos:dead-letter";
     public string Consumer { get; } = $"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}";
@@ -108,8 +119,9 @@ public sealed class HistoricoPassagemWorker(IConnectionMultiplexer redis, IHisto
         {
             var permanent = ex is FormatException or JsonException or ArgumentException or OverflowException
                 || ex is PostgresException { SqlState: "23503" or "23514" or "22P02" };
-            await db.StringSetAsync(UltimoErro(entry.Id), ex.ToString());
+            await db.StringSetAsync(UltimoErro(entry.Id), ex.ToString(), RetryMetadataTtl);
             var attempts = await db.StringIncrementAsync(Tentativas(entry.Id));
+            await db.KeyExpireAsync(Tentativas(entry.Id), RetryMetadataTtl);
             if (ex is EventoViagemPayloadConflictException conflict)
                 logger.LogWarning(ex,
                     "Evento {id}: EventId={EventId}, payload_conflitante=true, campos_divergentes={CamposDivergentes}, campos_truncados={CamposTruncados}, tentativa={Tentativa}/5, permanente=true, destino=DLQ.",
@@ -131,8 +143,13 @@ public sealed class HistoricoPassagemWorker(IConnectionMultiplexer redis, IHisto
             [StreamKey, DeadLetterKey, Tentativas(entry.Id), UltimoErro(entry.Id)], [Group, entry.Id, payload, error, classe]);
     }
 
-    internal Task<RedisResult> TrimSeguroAsync(DateTimeOffset agora) => redis.GetDatabase().ScriptEvaluateAsync(
-        TrimScript, [StreamKey], [$"{agora.AddDays(-7).ToUnixTimeMilliseconds()}-0"]);
+    internal Task<RedisResult> TrimSeguroAsync(DateTimeOffset agora)
+    {
+        var options = retentionOptions?.Value ?? new HistoricoStreamRetentionOptions();
+        return redis.GetDatabase().ScriptEvaluateAsync(TrimScript, [StreamKey, DeadLetterKey],
+        [Group, $"{agora.AddMinutes(-options.MainStreamSafetyMarginMinutes).ToUnixTimeMilliseconds()}-0",
+            $"{agora.AddDays(-options.DeadLetterRetentionDays).ToUnixTimeMilliseconds()}-0", options.TrimLimit]);
+    }
 
     private const string DeadLetterScript = """
         #!lua
@@ -148,7 +165,7 @@ public sealed class HistoricoPassagemWorker(IConnectionMultiplexer redis, IHisto
 
     private const string TrimScript = """
         local kind = redis.call('TYPE', KEYS[1]).ok
-        if kind ~= 'stream' then return 0 end
+        if kind ~= 'stream' then return {0,0} end
         local function less(a,b)
             local am,as = string.match(a, '^(%d+)%-(%d+)$')
             local bm,bs = string.match(b, '^(%d+)%-(%d+)$')
@@ -159,22 +176,46 @@ public sealed class HistoricoPassagemWorker(IConnectionMultiplexer redis, IHisto
             return as < bs
         end
         local groups = redis.call('XINFO','GROUPS',KEYS[1])
-        if #groups == 0 then return 0 end
-        local cutoff = ARGV[1]
+        if #groups == 0 then return {0,0} end
+        local expected = false
+        local cutoff = ARGV[2]
         for _,g in ipairs(groups) do
             local name, delivered
             for i = 1,#g,2 do
                 if g[i] == 'name' then name = g[i+1] end
                 if g[i] == 'last-delivered-id' then delivered = g[i+1] end
             end
-            if not name or not delivered or less(delivered,cutoff) == nil then return 0 end
+            if name == ARGV[1] then expected = true end
+            if not name or not delivered or less(delivered,cutoff) == nil then return {0,0} end
             if less(delivered,cutoff) then cutoff = delivered end
             local pending = redis.call('XPENDING',KEYS[1],name)
             if pending[1] > 0 then
-                if not pending[2] or less(pending[2],cutoff) == nil then return 0 end
+                if not pending[2] or less(pending[2],cutoff) == nil then return {0,0} end
                 if less(pending[2],cutoff) then cutoff = pending[2] end
             end
         end
-        return redis.call('XTRIM',KEYS[1],'MINID','=',cutoff)
+        if not expected then return {0,0} end
+        local limit=tonumber(ARGV[4])
+        if not limit or limit<=0 or limit>10000000 then return {0,0} end
+        local sampleCap=math.min(limit+1,101)
+        local sample=redis.call('XRANGE',KEYS[1],'-','('..cutoff,'COUNT',sampleCap)
+        local main=0
+        if #sample>0 then
+            if #sample<sampleCap then main=redis.call('XTRIM',KEYS[1],'MINID','=',cutoff)
+            else main=redis.call('XTRIM',KEYS[1],'MINID','~',cutoff,'LIMIT',limit) end
+        end
+        local dlq=0
+        local dlqkind=redis.call('TYPE',KEYS[2]).ok
+        if dlqkind=='stream' then
+            local dlqgroups=redis.call('XINFO','GROUPS',KEYS[2])
+            if #dlqgroups==0 then
+                local dlqsample=redis.call('XRANGE',KEYS[2],'-','('..ARGV[3],'COUNT',sampleCap)
+                if #dlqsample>0 then
+                    if #dlqsample<sampleCap then dlq=redis.call('XTRIM',KEYS[2],'MINID','=',ARGV[3])
+                    else dlq=redis.call('XTRIM',KEYS[2],'MINID','~',ARGV[3],'LIMIT',limit) end
+                end
+            end
+        end
+        return {main,dlq}
         """;
 }

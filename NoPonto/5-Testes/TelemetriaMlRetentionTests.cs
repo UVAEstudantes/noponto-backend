@@ -24,7 +24,8 @@ public sealed class TelemetriaMlRetentionTests : IAsyncLifetime
     }
 
     private (TelemetriaMlRetentionService Service, TelemetriaMlRetentionMetrics Metrics, string Stream, string Group, string Dlq)
-        Criar(int marginMinutes = 60, int dlqDays = 7, int limit = 100_000)
+        Criar(int marginMinutes = 60, int dlqDays = 7, int limit = 100_000,
+            int maxStream = 100_000, int maxDlq = 10_000)
     {
         var stream = "teste:retention:" + Guid.NewGuid().ToString("N");
         var group = "grupo:" + Guid.NewGuid().ToString("N");
@@ -36,6 +37,8 @@ public sealed class TelemetriaMlRetentionTests : IAsyncLifetime
             MainStreamSafetyMarginMinutes = marginMinutes,
             DeadLetterRetentionDays = dlqDays,
             TrimLimit = limit,
+            MaxStreamEntries = maxStream,
+            MaxDeadLetterEntries = maxDlq,
         });
         var service = new TelemetriaMlRetentionService(_redis, options, metrics,
             NullLogger<TelemetriaMlRetentionService>.Instance)
@@ -53,6 +56,32 @@ public sealed class TelemetriaMlRetentionTests : IAsyncLifetime
             ids.Add(id);
         }
         return ids;
+    }
+
+    [Fact]
+    public async Task BacklogBestEffortAcimaDoLimiteEhDescartadoEConverge()
+    {
+        var x = Criar(maxStream: 100); var agora = DateTimeOffset.UtcNow;
+        await AdicionarAsync(x.Stream, agora.AddHours(-2).ToUnixTimeMilliseconds(), 1000);
+        await Db.StreamCreateConsumerGroupAsync(x.Stream, x.Group, "0-0");
+        await Db.StreamReadGroupAsync(x.Stream, x.Group, "lento", ">", 10);
+
+        for (var i = 0; i < 5 && await Db.StreamLengthAsync(x.Stream) > 200; i++)
+            await x.Service.ExecutarCicloSeguroAsync(agora);
+
+        Assert.InRange(await Db.StreamLengthAsync(x.Stream), 1, 200);
+    }
+
+    [Fact]
+    public async Task DlqBestEffortPossuiLimiteMesmoSemIdadeSuficiente()
+    {
+        var x = Criar(maxDlq: 50); var agora = DateTimeOffset.UtcNow;
+        await AdicionarAsync(x.Dlq, agora.AddMinutes(-1).ToUnixTimeMilliseconds(), 500);
+
+        for (var i = 0; i < 5 && await Db.StreamLengthAsync(x.Dlq) > 100; i++)
+            await x.Service.ExecutarCicloSeguroAsync(agora);
+
+        Assert.InRange(await Db.StreamLengthAsync(x.Dlq), 1, 100);
     }
 
     [Fact]

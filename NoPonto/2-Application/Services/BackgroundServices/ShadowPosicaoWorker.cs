@@ -172,7 +172,7 @@ public sealed class ShadowPosicaoWorker(
             [PositionCorrectionShadowResources.ConsumerGroup, entry.Id,
                 fieldId.IsNull ? "" : fieldId, payload.IsNull ? "" : payload,
                 error.Length > 500 ? error[..500] : error, errorClass, attempts,
-                DateTimeOffset.UtcNow.ToString("O")]);
+                DateTimeOffset.UtcNow.ToString("O"), options.MaxDeadLetterEntries]);
         if ((long)result != 1) return false;
         metrics.RecordWorkerDlq();
         return true;
@@ -210,7 +210,9 @@ public sealed class ShadowPosicaoWorker(
         if kind ~= 'none' and kind ~= 'stream' then return redis.error_reply('INVALID_SHADOW_DLQ_TYPE') end
         local pending = redis.call('XPENDING', KEYS[1], ARGV[1], ARGV[2], ARGV[2], 1)
         if #pending == 0 then return 0 end
-        redis.call('XADD', KEYS[2], '*',
+        local maximum=tonumber(ARGV[9])
+        if not maximum or maximum<=0 then return redis.error_reply('INVALID_SHADOW_DLQ_MAXLEN') end
+        redis.call('XADD', KEYS[2], 'MAXLEN', '~', maximum, '*',
             'stream_id', ARGV[2], 'shadow_origin_id', ARGV[3], 'payload', ARGV[4],
             'error', ARGV[5], 'error_class', ARGV[6], 'attempts', ARGV[7],
             'failed_at_utc', ARGV[8])

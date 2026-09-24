@@ -127,20 +127,20 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     }
 
     [Fact]
-    public async Task WrongTypeStream_ZeroWritesNoHash()
+    public async Task WrongTypeStream_NaoImpedeEstadoDuravel()
     {
         await Redis.StringSetAsync(_stream,"INCOMPATIVEL");
-        Assert.Equal(ViagemObservadaStatus.InvalidState,(await Repository().TentarAtualizarAsync(G(0),default)).Status);
-        Assert.False(await Redis.KeyExistsAsync(Key));
+        Assert.Equal(ViagemObservadaStatus.Created,(await Repository().TentarAtualizarAsync(G(0),default)).Status);
+        Assert.True(await Redis.KeyExistsAsync(Key));
         await Redis.KeyDeleteAsync(_stream);
     }
 
     [Fact]
-    public async Task HashParcial_NaoSobrescreve()
+    public async Task HashParcial_EReidratadoDoEstadoDuravel()
     {
         await Redis.HashSetAsync(Key,"EstadoViagem","Ativa");
-        Assert.Equal(ViagemObservadaStatus.InvalidState,(await Repository().TentarAtualizarAsync(G(0),default)).Status);
-        Assert.Equal(1,await Redis.HashLengthAsync(Key));Assert.False(await Redis.KeyExistsAsync(_stream));
+        Assert.Equal(ViagemObservadaStatus.Created,(await Repository().TentarAtualizarAsync(G(0),default)).Status);
+        Assert.Equal(21,await Redis.HashLengthAsync(Key));Assert.True(await Redis.KeyExistsAsync(_stream));
     }
 
     [Fact]
@@ -172,6 +172,10 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         Assert.Equal(1,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
         Assert.Empty(await Redis.StreamRangeAsync(_stream+":dlq"));
         Assert.Equal("1",(await Redis.StringGetAsync(HistoricoPassagemWorker.Tentativas(entry.Id))).ToString());
+        var ttlTentativas=await Redis.KeyTimeToLiveAsync(HistoricoPassagemWorker.Tentativas(entry.Id));
+        var ttlErro=await Redis.KeyTimeToLiveAsync(HistoricoPassagemWorker.UltimoErro(entry.Id));
+        Assert.InRange(ttlTentativas!.Value,HistoricoPassagemWorker.RetryMetadataTtl-TimeSpan.FromMinutes(1),HistoricoPassagemWorker.RetryMetadataTtl);
+        Assert.InRange(ttlErro!.Value,HistoricoPassagemWorker.RetryMetadataTtl-TimeSpan.FromMinutes(1),HistoricoPassagemWorker.RetryMetadataTtl);
         await Worker().RecuperarPendentesAsync(default,0);
         Assert.Equal(0,(await Redis.StreamPendingAsync(_stream,HistoricoPassagemWorker.Group)).PendingMessageCount);
         Assert.False(await Redis.KeyExistsAsync(HistoricoPassagemWorker.Tentativas(entry.Id)));
@@ -256,6 +260,24 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     }
 
     [Fact]
+    public async Task Trim_RemoveDlqAntigaEPreservaDlqRecente()
+    {
+        var old=DateTimeOffset.UtcNow.AddDays(-8).ToUnixTimeMilliseconds();
+        var recent=DateTimeOffset.UtcNow.AddDays(-1).ToUnixTimeMilliseconds();
+        await Redis.StreamAddAsync(_stream,[new("tipo","evento")],$"{old}-0");
+        await Redis.StreamAddAsync(_stream+":dlq",[new("classe","old")],$"{old}-0");
+        await Redis.StreamAddAsync(_stream+":dlq",[new("classe","recent")],$"{recent}-0");
+        var worker=Worker();await worker.GarantirGrupoAsync();
+        var entry=Assert.Single(await Redis.StreamReadGroupAsync(_stream,HistoricoPassagemWorker.Group,worker.Consumer,">",1));
+        await Redis.StreamAcknowledgeAsync(_stream,HistoricoPassagemWorker.Group,entry.Id);
+
+        await worker.TrimSeguroAsync(DateTimeOffset.UtcNow);
+
+        Assert.Empty(await Redis.StreamRangeAsync(_stream+":dlq",$"{old}-0",$"{old}-0"));
+        Assert.Single(await Redis.StreamRangeAsync(_stream+":dlq",$"{recent}-0",$"{recent}-0"));
+    }
+
+    [Fact]
     public async Task Migration_LegadoNullable_ModeloSemDiferenca()
     {
         using var scope=db.Provider.CreateScope();var context=scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
@@ -296,7 +318,7 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     }
 
     [Fact]
-    public async Task TimeoutAposEval_OutboxECursorPersistem_RepeticaoNaoDuplica()
+    public async Task FalhaDoAntigoEval_NaoAfetaCommitPostgres_RepeticaoNaoDuplica()
     {
         await Repository().TentarAtualizarAsync(G(0),default);
         var database=DispatchProxy.Create<IDatabase,RespostaPerdidaProxy>();((RespostaPerdidaProxy)database).Target=Redis;
@@ -304,7 +326,7 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         ((RespostaPerdidaProxy)multiplexer).Target=db.Redis;((RespostaPerdidaProxy)multiplexer).Database=database;
         var lost=await new ViagemOperacionalRepository(multiplexer,db.Source,Options.Create(new GpsPollingOptions()),NullLogger<ViagemOperacionalRepository>.Instance){StreamKey=_stream}
             .TentarAtualizarAsync(G(100,.65),default);
-        Assert.Equal(ViagemObservadaStatus.InfrastructureFailure,lost.Status);
+        Assert.Equal(ViagemObservadaStatus.Updated,lost.Status);
         Assert.Equal(3,(await State()).Observada.UltimaParadaOrdem);Assert.Equal(4,await Redis.StreamLengthAsync(_stream));
         Assert.Equal(ViagemObservadaStatus.RejectedOlderOrEqual,(await Repository().TentarAtualizarAsync(G(100,.65),default)).Status);
         Assert.Equal(4,await Redis.StreamLengthAsync(_stream));
@@ -331,12 +353,11 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     [InlineData("CandidatoLatitudeInicial","invalid")]
     [InlineData("CandidatoLongitudeInicial","invalid")]
     [InlineData("SentidoId","invalid")]
-    public async Task MaquinaCorrompida_FailClosedSemWrite(string field,string value)
+    public async Task ProjecaoRedisCorrompida_EReconstruidaDoPostgres(string field,string value)
     {
         await Terminal();await Redis.HashSetAsync(Key,field,value);
-        var before=(await Redis.HashGetAllAsync(Key)).OrderBy(v=>v.Name.ToString()).ToArray();
-        Assert.Equal(ViagemObservadaStatus.InvalidState,(await Repository().TentarAtualizarAsync(G(110,.66),default)).Status);
-        Assert.Equal(before,(await Redis.HashGetAllAsync(Key)).OrderBy(v=>v.Name.ToString()).ToArray());
+        Assert.Equal(ViagemObservadaStatus.Updated,(await Repository().TentarAtualizarAsync(G(110,.66),default)).Status);
+        _=await State();
         Assert.Equal(4,await Redis.StreamLengthAsync(_stream));
     }
 
@@ -469,11 +490,11 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     }
 
     [Fact]
-    public async Task StreamSaturado_PreflightNaoCriaHash()
+    public async Task StreamDiagnosticoSaturado_NaoImpedeCommitDuravel()
     {
         await Redis.StreamAddAsync(_stream,[new("tipo","saturado")],"18446744073709551615-18446744073709551615");
-        Assert.Equal(ViagemObservadaStatus.InvalidState,(await Repository().TentarAtualizarAsync(G(0),default)).Status);
-        Assert.False(await Redis.KeyExistsAsync(Key));Assert.Single(await Redis.StreamRangeAsync(_stream));
+        Assert.Equal(ViagemObservadaStatus.Created,(await Repository().TentarAtualizarAsync(G(0),default)).Status);
+        Assert.True(await Redis.KeyExistsAsync(Key));Assert.Single(await Redis.StreamRangeAsync(_stream));
     }
 
     private sealed class MonitorPersistencia(IHistoricoEventoRepository inner) : IHistoricoEventoRepository
@@ -546,7 +567,7 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     }
 
     [Fact]
-    public async Task AclSemXadd_PreflightImpedeHset()
+    public async Task AclSemXadd_NaoImpedeCommitPostgres()
     {
         var config=ConfigurationOptions.Parse(db.Redis.Configuration);config.AllowAdmin=true;
         using var admin=await ConnectionMultiplexer.ConnectAsync(config);var user="teste-v3-"+Guid.NewGuid().ToString("N");
@@ -556,8 +577,8 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
             config.User=user;config.Password="senha-teste-v3";
             using var restricted=await ConnectionMultiplexer.ConnectAsync(config);
             var repository=new ViagemOperacionalRepository(restricted,db.Source,Options.Create(new GpsPollingOptions()),NullLogger<ViagemOperacionalRepository>.Instance){StreamKey=_stream};
-            Assert.Equal(ViagemObservadaStatus.InvalidState,(await repository.TentarAtualizarAsync(G(0),default)).Status);
-            Assert.False(await Redis.KeyExistsAsync(Key));Assert.False(await Redis.KeyExistsAsync(_stream));
+            Assert.Equal(ViagemObservadaStatus.Created,(await repository.TentarAtualizarAsync(G(0),default)).Status);
+            Assert.True(await Redis.KeyExistsAsync(Key));Assert.False(await Redis.KeyExistsAsync(_stream));
         }
         finally{await admin.GetDatabase().ExecuteAsync("ACL","DELUSER",user);}
     }
@@ -582,14 +603,14 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     }
 
     [Fact]
-    public async Task HashAnterior3_1_SemCursor_BaselinePreservadoSemRetroativos()
+    public async Task HashRedisParcial_NaoApagaCursorDuravel()
     {
         await Repository().TentarAtualizarAsync(G(0),default);var id=(await State()).Observada.ViagemId;
         await Redis.HashDeleteAsync(Key,ViagemOperacionalCodec.Names.Skip(6).Select(n=>(RedisValue)n).ToArray());
         var result=await Repository().TentarAtualizarAsync(G(100,.65),default);
         Assert.Equal(ViagemObservadaStatus.Updated,result.Status);Assert.Equal(id,(await State()).Observada.ViagemId);
-        Assert.Empty(result.OcorrenciasUltrapassadas);Assert.Single(await Redis.StreamRangeAsync(_stream));
-        Assert.Equal(0,(await State()).Observada.UltimaParadaOrdem);
+        Assert.Equal(3,result.OcorrenciasUltrapassadas.Count);Assert.Equal(4,await Redis.StreamLengthAsync(_stream));
+        Assert.Equal(3,(await State()).Observada.UltimaParadaOrdem);
     }
 
     [Fact]
