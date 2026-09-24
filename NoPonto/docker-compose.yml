@@ -154,4 +154,4 @@ volumes:
     name: noponto_postgres_data
   redis_data:
     external: true
-    name: noponto_redis_data
+    name: noponto_redis_data_v2
