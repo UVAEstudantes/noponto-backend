@@ -116,7 +116,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 JOIN "Paradas" p ON p."Id" = pi."ParadaId"
                 JOIN global_escolhido ge ON ge."Id" = pi."ItinerarioId"
                 CROSS JOIN veiculo v
-                WHERE pi."PosicaoLinha" > ge.posicao_na_rota
+                WHERE pi."Ativo" = true AND pi."PosicaoLinha" > ge.posicao_na_rota
                 ORDER BY pi."PosicaoLinha" ASC
                 LIMIT 1
             ),
@@ -181,7 +181,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 JOIN "Paradas" p ON p."Id" = pi."ParadaId"
                 JOIN anterior_escolhido ae ON ae."Id" = pi."ItinerarioId"
                 CROSS JOIN veiculo v
-                WHERE pi."PosicaoLinha" > ae.posicao_na_rota
+                WHERE pi."Ativo" = true AND pi."PosicaoLinha" > ae.posicao_na_rota
                 ORDER BY pi."PosicaoLinha" ASC
                 LIMIT 1
             ),
@@ -443,7 +443,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 JOIN "Paradas"           p  ON p."Id"  = pi."ParadaId"
                 JOIN itinerario_escolhido ie ON ie."Id" = pi."ItinerarioId"
                 CROSS JOIN veiculo v
-                WHERE pi."PosicaoLinha" > ie.posicao_na_rota
+                WHERE pi."Ativo" = true AND pi."PosicaoLinha" > ie.posicao_na_rota
                 ORDER BY pi."PosicaoLinha" ASC
                 LIMIT 1
             )

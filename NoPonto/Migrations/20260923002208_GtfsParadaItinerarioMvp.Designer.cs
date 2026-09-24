@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NoPonto.Migrations
 {
     [DbContext(typeof(TransporteDbContext))]
-    partial class TransporteDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260923002208_GtfsParadaItinerarioMvp")]
+    partial class GtfsParadaItinerarioMvp
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -44,39 +47,6 @@ namespace NoPonto.Migrations
                     b.HasIndex("TimestampEvento");
 
                     b.ToTable("EventosViagem");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.FonteEstrutural", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Codigo")
-                        .IsRequired()
-                        .HasMaxLength(60)
-                        .HasColumnType("character varying(60)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Nome")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Codigo")
-                        .IsUnique();
-
-                    b.ToTable("FontesEstruturais", (string)null);
                 });
 
             modelBuilder.Entity("NoPonto.Domain.Entities.HistoricoPassagem", b =>
@@ -179,62 +149,6 @@ namespace NoPonto.Migrations
                     b.ToTable("HistoricoPassagens");
                 });
 
-            modelBuilder.Entity("NoPonto.Domain.Entities.ImportacaoEstrutural", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AlgoritmoVersao")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<DateTimeOffset?>("ConcluidaEmUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ConteudoHash")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<Guid>("FonteEstruturalId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("IniciadaEmUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("RawUri")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<string>("Relatorio")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(24)
-                        .HasColumnType("character varying(24)");
-
-                    b.Property<string>("VersaoFonte")
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("FonteEstruturalId", "IniciadaEmUtc");
-
-                    b.HasIndex("FonteEstruturalId", "ConteudoHash", "AlgoritmoVersao")
-                        .IsUnique()
-                        .HasFilter("\"Status\" = 'CONCLUIDA'");
-
-                    b.ToTable("ImportacoesEstruturais", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_ImportacoesEstruturais_Status", "\"Status\" IN ('EM_PROCESSAMENTO','CONCLUIDA','FALHOU')");
-                        });
-                });
-
             modelBuilder.Entity("NoPonto.Domain.Entities.Itinerario", b =>
                 {
                     b.Property<Guid>("Id")
@@ -311,55 +225,6 @@ namespace NoPonto.Migrations
                     b.ToTable("Linhas");
                 });
 
-            modelBuilder.Entity("NoPonto.Domain.Entities.LinhaIdentidadeExterna", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ExternalId")
-                        .IsRequired()
-                        .HasMaxLength(240)
-                        .HasColumnType("character varying(240)");
-
-                    b.Property<Guid>("FonteEstruturalId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("LinhaId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("OrigemMapeamento")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<string>("Tipo")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LinhaId");
-
-                    b.HasIndex("FonteEstruturalId", "Tipo", "ExternalId")
-                        .IsUnique();
-
-                    b.ToTable("LinhasIdentidadesExternas", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_LinhasIdentidadesExternas_OrigemMapeamento", "\"OrigemMapeamento\" IN ('FONTE','MANUAL')");
-                        });
-                });
-
             modelBuilder.Entity("NoPonto.Domain.Entities.Modal", b =>
                 {
                     b.Property<Guid>("Id")
@@ -382,287 +247,6 @@ namespace NoPonto.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Modais");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.OcorrenciaParadaPadrao", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<double?>("DistanciaAcumuladaMetros")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("Ordem")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("PadraoVersaoId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ParadaId")
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("PosicaoTracado")
-                        .HasColumnType("double precision");
-
-                    b.Property<int?>("SourceSequence")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ParadaId");
-
-                    b.HasIndex("PadraoVersaoId", "Ordem")
-                        .IsUnique();
-
-                    b.ToTable("OcorrenciasParadasPadroes", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_OcorrenciasPadroes_Distancia", "\"DistanciaAcumuladaMetros\" IS NULL OR \"DistanciaAcumuladaMetros\" >= 0");
-
-                            t.HasCheckConstraint("CK_OcorrenciasPadroes_Ordem", "\"Ordem\" > 0");
-
-                            t.HasCheckConstraint("CK_OcorrenciasPadroes_Posicao", "\"PosicaoTracado\" >= 0 AND \"PosicaoTracado\" <= 1");
-
-                            t.HasCheckConstraint("CK_OcorrenciasPadroes_SourceSequence", "\"SourceSequence\" IS NULL OR \"SourceSequence\" >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.OverrideOcorrenciaPadrao", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Acao")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CriadoPor")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<string>("Justificativa")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTimeOffset?>("ObsoletoEmUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("OrdemDesejada")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("PadraoOperacionalId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ParadaId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("RevalidadoEmUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ParadaId");
-
-                    b.HasIndex("PadraoOperacionalId", "Ativo");
-
-                    b.ToTable("OverridesOcorrenciasPadroes", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_OverridesOcorrencias_AcaoOrdem", "(\"Acao\" = 'EXCLUIR' AND \"OrdemDesejada\" IS NULL) OR (\"Acao\" IN ('INCLUIR','MOVER') AND \"OrdemDesejada\" > 0)");
-                        });
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.PadraoIdentidadeExterna", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ExternalId")
-                        .IsRequired()
-                        .HasMaxLength(240)
-                        .HasColumnType("character varying(240)");
-
-                    b.Property<Guid>("FonteEstruturalId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("OrigemMapeamento")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<Guid>("PadraoOperacionalId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Tipo")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PadraoOperacionalId");
-
-                    b.HasIndex("FonteEstruturalId", "Tipo", "ExternalId")
-                        .IsUnique();
-
-                    b.ToTable("PadroesIdentidadesExternas", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_PadroesIdentidadesExternas_OrigemMapeamento", "\"OrigemMapeamento\" IN ('FONTE','MANUAL')");
-                        });
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.PadraoOperacional", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Chave")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("NomePublico")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid>("SentidoId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("TipoServico")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("VersaoAtualId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Id", "VersaoAtualId");
-
-                    b.HasIndex("SentidoId", "Chave")
-                        .IsUnique();
-
-                    b.ToTable("PadroesOperacionais", (string)null);
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.PadraoVersao", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AlgoritmoVersao")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<double>("Confianca")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTimeOffset>("CriadaEmUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<double>("DistanciaMetros")
-                        .HasColumnType("double precision");
-
-                    b.Property<LineString>("Geometria")
-                        .IsRequired()
-                        .HasColumnType("geometry(LineString,4326)");
-
-                    b.Property<string>("MetodoConstrucao")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<int>("Numero")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("PadraoOperacionalId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("PublicadaEmUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Relatorio")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("ResultadoValidacao")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Geometria");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geometria"), "GIST");
-
-                    b.HasIndex("PadraoOperacionalId", "Numero")
-                        .IsUnique();
-
-                    b.ToTable("PadroesVersoes", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_PadroesVersoes_Confianca", "\"Confianca\" >= 0 AND \"Confianca\" <= 1");
-
-                            t.HasCheckConstraint("CK_PadroesVersoes_Distancia", "\"DistanciaMetros\" >= 0");
-
-                            t.HasCheckConstraint("CK_PadroesVersoes_Numero", "\"Numero\" > 0");
-                        });
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.PadraoVersaoImportacao", b =>
-                {
-                    b.Property<Guid>("PadraoVersaoId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ImportacaoEstruturalId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Papel")
-                        .HasMaxLength(24)
-                        .HasColumnType("character varying(24)");
-
-                    b.HasKey("PadraoVersaoId", "ImportacaoEstruturalId", "Papel");
-
-                    b.HasIndex("ImportacaoEstruturalId");
-
-                    b.ToTable("PadroesVersoesImportacoes", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_PadroesVersoesImportacoes_Papel", "\"Papel\" IN ('MEMBERSHIP','GEOMETRIA','PARADAS','METADADOS')");
-                        });
                 });
 
             modelBuilder.Entity("NoPonto.Domain.Entities.Parada", b =>
@@ -699,55 +283,6 @@ namespace NoPonto.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Localizacao"), "GIST");
 
                     b.ToTable("Paradas");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.ParadaIdentidadeExterna", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ExternalId")
-                        .IsRequired()
-                        .HasMaxLength(240)
-                        .HasColumnType("character varying(240)");
-
-                    b.Property<Guid>("FonteEstruturalId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("OrigemMapeamento")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<Guid>("ParadaId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Tipo")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ParadaId");
-
-                    b.HasIndex("FonteEstruturalId", "Tipo", "ExternalId")
-                        .IsUnique();
-
-                    b.ToTable("ParadasIdentidadesExternas", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_ParadasIdentidadesExternas_OrigemMapeamento", "\"OrigemMapeamento\" IN ('FONTE','MANUAL')");
-                        });
                 });
 
             modelBuilder.Entity("NoPonto.Domain.Entities.ParadaItinerario", b =>
@@ -1077,55 +612,6 @@ namespace NoPonto.Migrations
                     b.ToTable("Sentidos");
                 });
 
-            modelBuilder.Entity("NoPonto.Domain.Entities.SentidoIdentidadeExterna", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("Ativo")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ExternalId")
-                        .IsRequired()
-                        .HasMaxLength(240)
-                        .HasColumnType("character varying(240)");
-
-                    b.Property<Guid>("FonteEstruturalId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("OrigemMapeamento")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<Guid>("SentidoId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Tipo")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SentidoId");
-
-                    b.HasIndex("FonteEstruturalId", "Tipo", "ExternalId")
-                        .IsUnique();
-
-                    b.ToTable("SentidosIdentidadesExternas", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_SentidosIdentidadesExternas_OrigemMapeamento", "\"OrigemMapeamento\" IN ('FONTE','MANUAL')");
-                        });
-                });
-
             modelBuilder.Entity("NoPonto.Domain.Entities.Tarifa", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1351,17 +837,6 @@ namespace NoPonto.Migrations
                     b.Navigation("Sentido");
                 });
 
-            modelBuilder.Entity("NoPonto.Domain.Entities.ImportacaoEstrutural", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.FonteEstrutural", "FonteEstrutural")
-                        .WithMany("Importacoes")
-                        .HasForeignKey("FonteEstruturalId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("FonteEstrutural");
-                });
-
             modelBuilder.Entity("NoPonto.Domain.Entities.Itinerario", b =>
                 {
                     b.HasOne("NoPonto.Domain.Entities.Sentido", "Sentido")
@@ -1382,150 +857,6 @@ namespace NoPonto.Migrations
                         .IsRequired();
 
                     b.Navigation("Modal");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.LinhaIdentidadeExterna", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.FonteEstrutural", "FonteEstrutural")
-                        .WithMany()
-                        .HasForeignKey("FonteEstruturalId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("NoPonto.Domain.Entities.Linha", "Linha")
-                        .WithMany()
-                        .HasForeignKey("LinhaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("FonteEstrutural");
-
-                    b.Navigation("Linha");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.OcorrenciaParadaPadrao", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.PadraoVersao", "PadraoVersao")
-                        .WithMany("Ocorrencias")
-                        .HasForeignKey("PadraoVersaoId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("NoPonto.Domain.Entities.Parada", "Parada")
-                        .WithMany()
-                        .HasForeignKey("ParadaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("PadraoVersao");
-
-                    b.Navigation("Parada");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.OverrideOcorrenciaPadrao", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.PadraoOperacional", "PadraoOperacional")
-                        .WithMany()
-                        .HasForeignKey("PadraoOperacionalId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("NoPonto.Domain.Entities.Parada", "Parada")
-                        .WithMany()
-                        .HasForeignKey("ParadaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("PadraoOperacional");
-
-                    b.Navigation("Parada");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.PadraoIdentidadeExterna", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.FonteEstrutural", "FonteEstrutural")
-                        .WithMany()
-                        .HasForeignKey("FonteEstruturalId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("NoPonto.Domain.Entities.PadraoOperacional", "PadraoOperacional")
-                        .WithMany("IdentidadesExternas")
-                        .HasForeignKey("PadraoOperacionalId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("FonteEstrutural");
-
-                    b.Navigation("PadraoOperacional");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.PadraoOperacional", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.Sentido", "Sentido")
-                        .WithMany()
-                        .HasForeignKey("SentidoId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("NoPonto.Domain.Entities.PadraoVersao", "VersaoAtual")
-                        .WithMany()
-                        .HasForeignKey("Id", "VersaoAtualId")
-                        .HasPrincipalKey("PadraoOperacionalId", "Id")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Sentido");
-
-                    b.Navigation("VersaoAtual");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.PadraoVersao", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.PadraoOperacional", "PadraoOperacional")
-                        .WithMany("Versoes")
-                        .HasForeignKey("PadraoOperacionalId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("PadraoOperacional");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.PadraoVersaoImportacao", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.ImportacaoEstrutural", "ImportacaoEstrutural")
-                        .WithMany("PadroesVersoes")
-                        .HasForeignKey("ImportacaoEstruturalId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("NoPonto.Domain.Entities.PadraoVersao", "PadraoVersao")
-                        .WithMany("Importacoes")
-                        .HasForeignKey("PadraoVersaoId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ImportacaoEstrutural");
-
-                    b.Navigation("PadraoVersao");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.ParadaIdentidadeExterna", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.FonteEstrutural", "FonteEstrutural")
-                        .WithMany()
-                        .HasForeignKey("FonteEstruturalId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("NoPonto.Domain.Entities.Parada", "Parada")
-                        .WithMany()
-                        .HasForeignKey("ParadaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("FonteEstrutural");
-
-                    b.Navigation("Parada");
                 });
 
             modelBuilder.Entity("NoPonto.Domain.Entities.ParadaItinerario", b =>
@@ -1588,25 +919,6 @@ namespace NoPonto.Migrations
                     b.Navigation("Linha");
                 });
 
-            modelBuilder.Entity("NoPonto.Domain.Entities.SentidoIdentidadeExterna", b =>
-                {
-                    b.HasOne("NoPonto.Domain.Entities.FonteEstrutural", "FonteEstrutural")
-                        .WithMany()
-                        .HasForeignKey("FonteEstruturalId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("NoPonto.Domain.Entities.Sentido", "Sentido")
-                        .WithMany()
-                        .HasForeignKey("SentidoId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("FonteEstrutural");
-
-                    b.Navigation("Sentido");
-                });
-
             modelBuilder.Entity("NoPonto.Domain.Entities.Tarifa", b =>
                 {
                     b.HasOne("NoPonto.Domain.Entities.Linha", "Linha")
@@ -1637,16 +949,6 @@ namespace NoPonto.Migrations
                     b.Navigation("Linha");
                 });
 
-            modelBuilder.Entity("NoPonto.Domain.Entities.FonteEstrutural", b =>
-                {
-                    b.Navigation("Importacoes");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.ImportacaoEstrutural", b =>
-                {
-                    b.Navigation("PadroesVersoes");
-                });
-
             modelBuilder.Entity("NoPonto.Domain.Entities.Linha", b =>
                 {
                     b.Navigation("Sentidos");
@@ -1661,20 +963,6 @@ namespace NoPonto.Migrations
                     b.Navigation("Linhas");
 
                     b.Navigation("Tarifas");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.PadraoOperacional", b =>
-                {
-                    b.Navigation("IdentidadesExternas");
-
-                    b.Navigation("Versoes");
-                });
-
-            modelBuilder.Entity("NoPonto.Domain.Entities.PadraoVersao", b =>
-                {
-                    b.Navigation("Importacoes");
-
-                    b.Navigation("Ocorrencias");
                 });
 
             modelBuilder.Entity("NoPonto.Domain.Entities.Parada", b =>

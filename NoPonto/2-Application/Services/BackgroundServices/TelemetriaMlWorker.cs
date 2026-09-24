@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
 using NoPonto.Data.Repositories;
 using StackExchange.Redis;
@@ -12,7 +13,8 @@ public sealed class TelemetriaMlWorker(
     IConnectionMultiplexer redis,
     ITelemetriaMlRepository repository,
     TelemetriaMlMetrics metrics,
-    ILogger<TelemetriaMlWorker> logger) : BackgroundService
+    ILogger<TelemetriaMlWorker> logger,
+    IOptions<TelemetriaMlRetentionOptions>? retentionOptions = null) : BackgroundService
 {
     public const int TamanhoMaximoLote = 100;
     public const int MaxTentativas = 5;
@@ -151,7 +153,8 @@ public sealed class TelemetriaMlWorker(
         var payload = entry.Values.FirstOrDefault(v => v.Name == "payload").Value;
         var result = await redis.GetDatabase().ScriptEvaluateAsync(DeadLetterScript,
             [StreamKey, DeadLetterKey, Tentativas(entry.Id), UltimoErro(entry.Id)],
-            [GroupKey, entry.Id, payload.IsNull ? "" : payload, erro, classe]);
+            [GroupKey, entry.Id, payload.IsNull ? "" : payload, erro, classe,
+                (retentionOptions?.Value ?? new TelemetriaMlRetentionOptions()).MaxDeadLetterEntries]);
         if ((long)result == 1) metrics.RegistrarDeadLetter();
     }
 
@@ -184,7 +187,9 @@ public sealed class TelemetriaMlWorker(
         if t ~= 'none' and t ~= 'stream' then return redis.error_reply('INVALID_DLQ_TYPE') end
         local pending = redis.call('XPENDING', KEYS[1], ARGV[1], ARGV[2], ARGV[2], 1)
         if #pending == 0 then redis.call('DEL', KEYS[3], KEYS[4]); return 0 end
-        redis.call('XADD', KEYS[2], '*', 'stream_id', ARGV[2], 'payload', ARGV[3], 'erro', ARGV[4], 'classe', ARGV[5])
+        local maximum=tonumber(ARGV[6])
+        if not maximum or maximum<=0 then return redis.error_reply('INVALID_DLQ_MAXLEN') end
+        redis.call('XADD', KEYS[2], 'MAXLEN', '~', maximum, '*', 'stream_id', ARGV[2], 'payload', ARGV[3], 'erro', ARGV[4], 'classe', ARGV[5])
         redis.call('XACK', KEYS[1], ARGV[1], ARGV[2])
         redis.call('DEL', KEYS[3], KEYS[4])
         return 1

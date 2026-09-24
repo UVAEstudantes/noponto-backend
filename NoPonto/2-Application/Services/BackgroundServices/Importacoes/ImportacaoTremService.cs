@@ -564,7 +564,7 @@ public sealed class ImportacaoTremService
     {
         // Remove vínculos antigos (idempotente)
         var existentes = await db.ParadasItinerario
-            .Where(pi => pi.ItinerarioId == itinerarioId)
+            .Where(pi => pi.Ativo && pi.ItinerarioId == itinerarioId)
             .ToListAsync(ct);
 
         if (existentes.Count > 0)

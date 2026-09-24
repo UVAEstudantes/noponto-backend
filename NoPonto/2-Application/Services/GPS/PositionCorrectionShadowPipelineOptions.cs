@@ -16,6 +16,8 @@ public sealed class PositionCorrectionShadowPipelineOptions
     public int MainStreamSafetyMarginMinutes { get; set; } = 60;
     public int DeadLetterRetentionDays { get; set; } = 7;
     public int TrimLimit { get; set; } = 100_000;
+    public int MaxStreamEntries { get; set; } = 5_000;
+    public int MaxDeadLetterEntries { get; set; } = 1_000;
 
     public bool Valid() => ChannelCapacity is > 0 and <= 1_000_000
         && PublisherBatchSize is > 0 and <= 10_000
@@ -28,7 +30,9 @@ public sealed class PositionCorrectionShadowPipelineOptions
         && MetricsReportIntervalMinutes is > 0 and <= 1_440
         && MainStreamSafetyMarginMinutes is > 0 and <= 10_080
         && DeadLetterRetentionDays is > 0 and <= 365
-        && TrimLimit is > 0 and <= 10_000_000;
+        && TrimLimit is > 0 and <= 10_000_000
+        && MaxStreamEntries is > 0 and <= 1_000_000
+        && MaxDeadLetterEntries is > 0 and <= 100_000;
 }
 
 public static class PositionCorrectionShadowResources

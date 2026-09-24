@@ -15,6 +15,27 @@ public sealed class TelemetriaMlRetentionOptions
     public int MainStreamSafetyMarginMinutes { get; set; } = 60;
     public int DeadLetterRetentionDays { get; set; } = 7;
     public int TrimLimit { get; set; } = 100_000;
+    public int MaxStreamEntries { get; set; } = 100_000;
+    public int MaxDeadLetterEntries { get; set; } = 10_000;
+}
+
+public sealed class TelemetriaMlBackpressureState
+{
+    private long _streamLength;
+    public long StreamLength => Interlocked.Read(ref _streamLength);
+    public void Observe(long streamLength) => Interlocked.Exchange(ref _streamLength, Math.Max(0, streamLength));
+
+    public bool ShouldAccept(string observationId, int maximum)
+    {
+        var length = StreamLength;
+        if (length < maximum / 2) return true;
+        if (length >= maximum) return false;
+        var divisor = length >= maximum * 9L / 10 ? 10
+            : length >= maximum * 3L / 4 ? 4 : 2;
+        var hash = 2166136261u;
+        foreach (var c in observationId) hash = (hash ^ c) * 16777619u;
+        return hash % divisor == 0;
+    }
 }
 
 public sealed class TelemetriaMlRetentionMetrics
@@ -76,7 +97,8 @@ public sealed class TelemetriaMlRetentionService(
     IConnectionMultiplexer redis,
     IOptions<TelemetriaMlRetentionOptions> options,
     TelemetriaMlRetentionMetrics metrics,
-    ILogger<TelemetriaMlRetentionService> logger) : BackgroundService
+    ILogger<TelemetriaMlRetentionService> logger,
+    TelemetriaMlBackpressureState? backpressure = null) : BackgroundService
 {
     internal string StreamKey { get; set; } = TelemetriaMlContrato.Stream;
     internal string ExpectedGroup { get; set; } = TelemetriaMlContrato.Group;
@@ -109,8 +131,9 @@ public sealed class TelemetriaMlRetentionService(
             var dlqMs = agora.Subtract(TimeSpan.FromDays(config.DeadLetterRetentionDays)).ToUnixTimeMilliseconds();
             var db = redis.GetDatabase();
             var principalRaw = await db.ScriptEvaluateAsync(MainRetentionScript, [StreamKey],
-                [ExpectedGroup, temporalMs, config.TrimLimit]).WaitAsync(ct);
+                [ExpectedGroup, temporalMs, config.TrimLimit, config.MaxStreamEntries]).WaitAsync(ct);
             var principal = ParsePrincipal(principalRaw, agora, temporalMs);
+            backpressure?.Observe(Math.Max(0, principal.Xlen - principal.RemovidosPrincipal));
             if (principal.FailClosed)
             {
                 metrics.Registrar(principal, Stopwatch.GetElapsedTime(inicio));
@@ -119,7 +142,7 @@ public sealed class TelemetriaMlRetentionService(
             }
 
             var dlqRaw = await db.ScriptEvaluateAsync(DeadLetterRetentionScript, [DeadLetterKey],
-                [dlqMs, config.TrimLimit]).WaitAsync(ct);
+                [dlqMs, config.TrimLimit, config.MaxDeadLetterEntries]).WaitAsync(ct);
             var (statusDlq, removidosDlq) = ParseDlq(dlqRaw);
             var resultado = statusDlq.StartsWith("FAIL_", StringComparison.Ordinal)
                 ? principal with { Status = statusDlq }
@@ -249,8 +272,9 @@ public sealed class TelemetriaMlRetentionService(
             if not safe then return fail('FAIL_INVALID_PROGRESS') end
         end
         if not expected then return fail('FAIL_EXPECTED_GROUP_MISSING') end
-        local temporal_ms = tonumber(ARGV[2]); local limit = tonumber(ARGV[3])
-        if not temporal_ms or temporal_ms <= 0 or not limit or limit <= 0 then return fail('FAIL_INVALID_ARGUMENT') end
+        local temporal_ms = tonumber(ARGV[2]); local limit = tonumber(ARGV[3]); local maximum=tonumber(ARGV[4])
+        if not temporal_ms or temporal_ms <= 0 or not limit or limit <= 0
+            or not maximum or maximum<=0 then return fail('FAIL_INVALID_ARGUMENT') end
         local temporal = tostring(temporal_ms) .. '-0'
         local cutoff = minimum(temporal, safe)
         if not cutoff then return fail('FAIL_INVALID_CUTOFF') end
@@ -264,6 +288,10 @@ public sealed class TelemetriaMlRetentionService(
             oldest = fm
         end
         local removed = redis.call('XTRIM', KEYS[1], 'MINID', '~', cutoff, 'LIMIT', limit)
+        local after=redis.call('XLEN',KEYS[1])
+        if after>maximum then
+            removed=removed+redis.call('XTRIM',KEYS[1],'MAXLEN','~',maximum,'LIMIT',limit)
+        end
         return {'OK', removed, parse_id(cutoff), total_pending, max_lag, tonumber(stream['length']), oldest}
         """;
 
@@ -274,9 +302,12 @@ public sealed class TelemetriaMlRetentionService(
         if kind ~= 'stream' then return {'FAIL_DLQ_INVALID_TYPE', 0} end
         local groups = redis.call('XINFO', 'GROUPS', KEYS[1])
         if type(groups) ~= 'table' or #groups > 0 then return {'FAIL_DLQ_HAS_GROUP', 0} end
-        local cutoff = tonumber(ARGV[1]); local limit = tonumber(ARGV[2])
-        if not cutoff or cutoff <= 0 or not limit or limit <= 0 then return {'FAIL_DLQ_INVALID_ARGUMENT', 0} end
+        local cutoff = tonumber(ARGV[1]); local limit = tonumber(ARGV[2]); local maximum=tonumber(ARGV[3])
+        if not cutoff or cutoff <= 0 or not limit or limit <= 0 or not maximum or maximum<=0 then return {'FAIL_DLQ_INVALID_ARGUMENT', 0} end
         local removed = redis.call('XTRIM', KEYS[1], 'MINID', '~', tostring(cutoff) .. '-0', 'LIMIT', limit)
+        if redis.call('XLEN',KEYS[1])>maximum then
+            removed=removed+redis.call('XTRIM',KEYS[1],'MAXLEN','~',maximum,'LIMIT',limit)
+        end
         return {'OK_DLQ', removed}
         """;
 }

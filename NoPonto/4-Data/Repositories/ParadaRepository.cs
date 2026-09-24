@@ -18,7 +18,7 @@ public sealed class ParadaRepository : IParadaRepository
     {
         var itens = await _contexto.ParadasItinerario
             .AsNoTracking()
-            .Where(relacao => relacao.ItinerarioId == itinerarioId)
+            .Where(relacao => relacao.Ativo && relacao.ItinerarioId == itinerarioId)
             .OrderBy(relacao => relacao.Ordem)
             .Select(relacao => new ParadaPorItinerarioConsultaDTO
             {
@@ -105,7 +105,7 @@ LIMIT {limite};";
     {
         var registros = await _contexto.ParadasItinerario
             .AsNoTracking()
-            .Where(relacao => relacao.ParadaId == paradaId)
+            .Where(relacao => relacao.Ativo && relacao.ParadaId == paradaId)
             .Select(relacao => new
             {
                 LinhaId = relacao.Itinerario.Sentido.LinhaId,
@@ -167,7 +167,7 @@ LIMIT {limite};";
 
         var itens = await _contexto.ParadasItinerario
             .AsNoTracking()
-            .Where(pi => pi.ParadaId == paradaId && itinerarioIds.Contains(pi.ItinerarioId))
+            .Where(pi => pi.Ativo && pi.ParadaId == paradaId && itinerarioIds.Contains(pi.ItinerarioId))
             .Select(pi => new ParadaItinerarioPosicaoDTO
             {
                 ItinerarioId = pi.ItinerarioId,

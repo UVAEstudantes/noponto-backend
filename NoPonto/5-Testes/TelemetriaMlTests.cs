@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
 using NoPonto.Application.Services.BackgroundServices;
 using NoPonto.Data.Repositories;
@@ -307,6 +308,42 @@ public sealed class TelemetriaMlTests
         Assert.Equal(TelemetriaMlStreamPublisher.Capacidade, metrics.ChannelOcupacao);
         Assert.Equal(1, metrics.FalhasPublicacao);
         Assert.Equal(1, metrics.FalhasChannel);
+    }
+
+    [Fact]
+    public void BackpressureProgressivoEhDeterministicoEBloqueiaNoLimite()
+    {
+        var state = new TelemetriaMlBackpressureState();
+        const int maximum = 100;
+        state.Observe(49);
+        Assert.True(state.ShouldAccept("observacao-a", maximum));
+
+        state.Observe(75);
+        var first = Enumerable.Range(0, 1000)
+            .Count(i => state.ShouldAccept($"observacao-{i}", maximum));
+        var second = Enumerable.Range(0, 1000)
+            .Count(i => state.ShouldAccept($"observacao-{i}", maximum));
+        Assert.Equal(first, second);
+        Assert.InRange(first, 180, 320);
+
+        state.Observe(maximum);
+        Assert.False(state.ShouldAccept("observacao-a", maximum));
+    }
+
+    [Fact]
+    public void PublisherBackpressureDescartaSemBloquearNemUsarRedis()
+    {
+        var metrics = new TelemetriaMlMetrics();
+        var state = new TelemetriaMlBackpressureState();
+        state.Observe(10);
+        var options = Options.Create(new TelemetriaMlRetentionOptions { MaxStreamEntries = 10 });
+        var publisher = new TelemetriaMlStreamPublisher(null!, metrics,
+            NullLogger<TelemetriaMlStreamPublisher>.Instance, options, state);
+
+        Assert.False(publisher.TentarPublicar(Evento("ML-LIMIT")));
+        Assert.Equal(1, metrics.DropsBackpressure);
+        Assert.Equal(1, metrics.FalhasPublicacao);
+        Assert.Equal(0, metrics.ChannelOcupacao);
     }
 
     private static EventoTelemetriaMl Evento(string ordem) =>

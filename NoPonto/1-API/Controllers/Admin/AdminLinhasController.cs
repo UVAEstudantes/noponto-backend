@@ -91,7 +91,7 @@ public sealed class AdminLinhasController : ControllerBase
                     .Count(i => i.Sentido.LinhaId == l.Id),
                 TotalParadas = _db.ParadasItinerario
                     .AsNoTracking()
-                    .Where(pi => pi.Itinerario.Sentido.LinhaId == l.Id)
+                    .Where(pi => pi.Ativo && pi.Itinerario.Sentido.LinhaId == l.Id)
                     .Select(pi => pi.ParadaId)
                     .Distinct()
                     .Count(),

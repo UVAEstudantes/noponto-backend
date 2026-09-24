@@ -57,7 +57,12 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
                     CREATE TABLE "{Schema}"."Sentidos" ("Id" uuid PRIMARY KEY, "LinhaId" uuid NOT NULL);
                     CREATE TABLE "{Schema}"."Itinerarios" ("Id" uuid PRIMARY KEY, "SentidoId" uuid NOT NULL, "Geometria" geometry(LineString,4326) NOT NULL);
                     CREATE TABLE "{Schema}"."Paradas" ("Id" uuid PRIMARY KEY, "Nome" text, "Localizacao" geometry(Point,4326));
-                    CREATE TABLE "{Schema}"."ParadasItinerario" ("ParadaId" uuid, "ItinerarioId" uuid, "PosicaoLinha" double precision);
+                    CREATE TABLE "{Schema}"."ParadasItinerario" (
+                        "ParadaId" uuid,
+                        "ItinerarioId" uuid,
+                        "PosicaoLinha" double precision,
+                        "Ativo" boolean NOT NULL DEFAULT true
+                    );
                     """;
                 await ddl.ExecuteNonQueryAsync();
             }

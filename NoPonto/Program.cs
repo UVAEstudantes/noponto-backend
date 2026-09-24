@@ -17,6 +17,7 @@ using NoPonto.Data.Repositories;
 using StackExchange.Redis;
 using System.Net.Sockets;
 using NoPonto.Application.Trem;
+using NoPonto.Application.GTFS;
 using System.Reflection;
 
 Env.NoClobber().Load();
@@ -237,6 +238,12 @@ builder.Services.AddHttpClient<ArcGisClientService>();
 builder.Services.AddScoped<ImportacaoParadasService>();
 builder.Services.AddScoped<RelacionarParadasItinerariosService>();
 builder.Services.AddScoped<RelacionarParadasJob>();
+builder.Services.AddSingleton<GtfsFeedParser>();
+builder.Services.AddSingleton<GtfsProjecaoService>();
+builder.Services.AddHttpClient<ArcGisSppoSnapshotClient>();
+builder.Services.AddScoped<ArcGisEstruturalV23Service>();
+builder.Services.AddScoped<GtfsParadaItinerarioDryRunService>();
+builder.Services.AddScoped<GtfsParadaItinerarioRebuildService>();
 builder.Services.AddSingleton<ImportacaoItinerariosService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportacaoItinerariosService>());
 
@@ -376,6 +383,21 @@ builder.Services
     .Validate(o => o.MainStreamSafetyMarginMinutes > 0, "TelemetriaMlRetention:MainStreamSafetyMarginMinutes deve ser > 0")
     .Validate(o => o.DeadLetterRetentionDays > 0, "TelemetriaMlRetention:DeadLetterRetentionDays deve ser > 0")
     .Validate(o => o.TrimLimit > 0, "TelemetriaMlRetention:TrimLimit deve ser > 0")
+    .Validate(o => o.MaxStreamEntries is > 0 and <= 10_000_000,
+        "TelemetriaMlRetention:MaxStreamEntries inválido")
+    .Validate(o => o.MaxDeadLetterEntries is > 0 and <= 1_000_000,
+        "TelemetriaMlRetention:MaxDeadLetterEntries inválido")
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<HistoricoStreamRetentionOptions>()
+    .Bind(builder.Configuration.GetSection(HistoricoStreamRetentionOptions.Section))
+    .Validate(o => o.MainStreamSafetyMarginMinutes is > 0 and <= 10_080,
+        "HistoricoStreamRetention:MainStreamSafetyMarginMinutes inválido")
+    .Validate(o => o.DeadLetterRetentionDays is > 0 and <= 365,
+        "HistoricoStreamRetention:DeadLetterRetentionDays inválido")
+    .Validate(o => o.TrimLimit is > 0 and <= 10_000_000,
+        "HistoricoStreamRetention:TrimLimit inválido")
     .ValidateOnStart();
 
 // --------------------------------------------------------------------
@@ -418,9 +440,10 @@ builder.Services.AddSingleton<GpsEnriquecimentoService>();
 
 builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();
 builder.Services.AddSingleton(new HistoricoStreamOptions(redisConnection));
-builder.Services.AddHostedService<HistoricoPassagemWorker>();
+builder.Services.AddHostedService<ViagemOutboxWorker>();
 
 builder.Services.AddSingleton<TelemetriaMlMetrics>();
+builder.Services.AddSingleton<TelemetriaMlBackpressureState>();
 builder.Services.AddHostedService<TelemetriaMlMetricsReporter>();
 builder.Services.AddSingleton<TelemetriaMlStreamPublisher>();
 builder.Services.AddSingleton<ITelemetriaMlIngress>(sp =>

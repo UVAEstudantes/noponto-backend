@@ -34,7 +34,7 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
             CREATE SCHEMA "{_schema}";
             CREATE TABLE "{_schema}"."ParadasItinerario" (
                 "Id" uuid PRIMARY KEY, "ItinerarioId" uuid NOT NULL, "ParadaId" uuid NOT NULL,
-                "Ordem" integer NOT NULL, "PosicaoLinha" double precision NOT NULL);
+                "Ordem" integer NOT NULL, "PosicaoLinha" double precision NOT NULL, "Ativo" boolean NOT NULL DEFAULT true);
             CREATE INDEX ON "{_schema}"."ParadasItinerario" ("ItinerarioId", "Ordem");
             """);
         await create.ExecuteNonQueryAsync();
@@ -63,16 +63,25 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
         _repo.TentarAtualizarAsync(_ordem, itinerary ?? _itinerary, _t0.AddSeconds(seconds), p, default);
     private async Task<string[]> Snapshot() => (await Db.HashGetAllAsync(Key))
         .Select(e => $"{e.Name}={e.Value}").OrderBy(e => e).ToArray();
-    private async Task<OcorrenciaParada> Add(int order, double p, Guid? stop = null, Guid? itinerary = null)
+    private async Task<OcorrenciaParada> Add(int order, double p, Guid? stop = null, Guid? itinerary = null, bool active = true)
     {
         var occurrence = new OcorrenciaParada(Guid.NewGuid(), itinerary ?? _itinerary,
             stop ?? Guid.NewGuid(), order, p);
         await using var insert = _source.CreateCommand("""
-            INSERT INTO "ParadasItinerario" VALUES (@id, @itinerary, @stop, @order, @p)
+            INSERT INTO "ParadasItinerario" ("Id","ItinerarioId","ParadaId","Ordem","PosicaoLinha","Ativo")
+            VALUES (@id, @itinerary, @stop, @order, @p, @active)
             """);
         insert.Parameters.AddWithValue("id", occurrence.Id); insert.Parameters.AddWithValue("itinerary", occurrence.ItinerarioId);
         insert.Parameters.AddWithValue("stop", occurrence.ParadaId); insert.Parameters.AddWithValue("order", order);
-        insert.Parameters.AddWithValue("p", p); await insert.ExecuteNonQueryAsync(); return occurrence;
+        insert.Parameters.AddWithValue("p", p); insert.Parameters.AddWithValue("active", active); await insert.ExecuteNonQueryAsync(); return occurrence;
+    }
+
+    [Fact]
+    public async Task SequenciaOperacional_IgnoraRelacaoInativa()
+    {
+        await Add(1,.2,active:false); var active=await Add(1,.4);
+        var result=await _sequence.BuscarTransicaoAsync(_itinerary,.1,.5,Guid.Empty,0,true,default);
+        Assert.Equal(active.Id,result.Proxima!.Id); Assert.Equal(1,result.Proxima.Ordem);
     }
 
     [Theory]

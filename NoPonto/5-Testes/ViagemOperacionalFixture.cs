@@ -40,7 +40,7 @@ public sealed class ViagemOperacionalFixture : IAsyncLifetime
         using var scope = Provider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
         var migrator = context.GetService<IMigrator>();
-        await migrator.MigrateAsync("20260510023924_AddConsorcioLinha");
+        await migrator.MigrateAsync();
         var modal=Guid.NewGuid();
         context.Modais.Add(new(){Id=modal,Nome="Teste"});
         context.Linhas.Add(new(){Id=Linha,ModalId=modal,Codigo="VIAGEM3",Nome="Teste"});
@@ -56,7 +56,6 @@ public sealed class ViagemOperacionalFixture : IAsyncLifetime
                 "PosicaoNaRota","DistanciaParadaMetros","TimestampGps","TimestampRegistro","VelocidadeInstantanea","HoraDia","DiaSemana")
             VALUES ({Legacy},true,now(),'LEGADO','VIAGEM3',{R1},{Stop},0.2,50,now(),now(),20,12,1)
             """);
-        await migrator.MigrateAsync();
         Redis = await ConnectionMultiplexer.ConnectAsync(Environment.GetEnvironmentVariable("REDIS_TEST_CONNECTION") ?? "localhost:6380");
     }
 
