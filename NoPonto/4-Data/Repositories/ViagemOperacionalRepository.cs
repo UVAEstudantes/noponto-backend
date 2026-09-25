@@ -147,6 +147,10 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             if (transition.Status != ViagemObservadaStatus.Updated) return new(transition.Status);
             var decision = ViagemOperacionalRegra.Decidir(previous, structure, gpsOperacional,
                 transition, Guid.NewGuid());
+            if (previous is not null && transition.Ultrapassadas.Count > 0)
+                GpsCommitPerformanceContext.Current?.RegistrarCatchupPassagens(
+                    transition.Ultrapassadas.Count,
+                    gpsOperacional.TimestampGps - previous.Observada.TimestampUltimaAtualizacao);
             foreach (var evento in decision.Eventos) EventoViagemValidator.Validar(evento);
             var checkpointSeconds = options.Value.CheckpointViagemSegundos;
             var checkpointInterval = checkpointSeconds <= 0
@@ -209,8 +213,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             await GravarEstadoAsync(connection, transaction, gps.Ordem, encoded, nextVersion, ct);
             if (AfterDurableStateWriteAsync is not null)
                 await AfterDurableStateWriteAsync();
-            foreach (var evento in decision.Eventos)
-                await InserirOutboxAsync(connection, transaction, evento, ct);
+            await InserirOutboxAsync(connection, transaction, decision.Eventos, ct);
             if (AfterDurableOutboxWriteAsync is not null)
                 await AfterDurableOutboxWriteAsync();
             await transaction.CommitAsync(ct);
@@ -284,20 +287,32 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
     }
 
     private static async Task InserirOutboxAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
-        EventoViagem evento, CancellationToken ct)
+        IReadOnlyList<EventoViagem> eventos, CancellationToken ct)
     {
-        var payload = JsonSerializer.Serialize(evento);
-        await using var command = new NpgsqlCommand("""
-            INSERT INTO "OutboxViagens" ("EventId","Tipo","Payload","CriadoEmUtc","Tentativas")
-            VALUES (@id,@tipo,@payload::jsonb,now(),0)
-            ON CONFLICT ("EventId") DO UPDATE SET "EventId"=EXCLUDED."EventId"
-            RETURNING "Payload" = @payload::jsonb
-            """, connection, transaction);
-        command.Parameters.AddWithValue("id", evento.EventId);
-        command.Parameters.AddWithValue("tipo", evento.Tipo);
-        command.Parameters.AddWithValue("payload", payload);
-        if (await command.ExecuteScalarAsync(ct) is not true)
-            throw new EventoViagemPayloadConflictException(evento.EventId, ["payload"], false);
+        if (eventos.Count == 0) return;
+        await using var batch = new NpgsqlBatch(connection, transaction);
+        foreach (var evento in eventos)
+        {
+            var payload = JsonSerializer.Serialize(evento);
+            var command = new NpgsqlBatchCommand("""
+                INSERT INTO "OutboxViagens" ("EventId","Tipo","Payload","CriadoEmUtc","Tentativas")
+                VALUES (@id,@tipo,@payload::jsonb,now(),0)
+                ON CONFLICT ("EventId") DO UPDATE SET "EventId"=EXCLUDED."EventId"
+                RETURNING "Payload" = @payload::jsonb
+                """);
+            command.Parameters.AddWithValue("id", evento.EventId);
+            command.Parameters.AddWithValue("tipo", evento.Tipo);
+            command.Parameters.AddWithValue("payload", payload);
+            batch.BatchCommands.Add(command);
+        }
+        await using var reader = await batch.ExecuteReaderAsync(ct);
+        for (var i = 0; i < eventos.Count; i++)
+        {
+            if (!await reader.ReadAsync(ct) || !reader.GetBoolean(0))
+                throw new EventoViagemPayloadConflictException(eventos[i].EventId, ["payload"], false);
+            if (i + 1 < eventos.Count && !await reader.NextResultAsync(ct))
+                throw new InvalidOperationException("Resultado incompleto do batch de Outbox.");
+        }
     }
 
     private async Task ProjetarRedisAsync(string ordem, ViagemOperacionalState state,

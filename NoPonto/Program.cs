@@ -438,6 +438,7 @@ builder.Services.AddSingleton<
 
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 
+builder.Services.Configure<ViagemOutboxOptions>(builder.Configuration.GetSection("ViagemOutbox"));
 builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();
 builder.Services.AddSingleton(new HistoricoStreamOptions(redisConnection));
 builder.Services.AddHostedService<ViagemOutboxWorker>();

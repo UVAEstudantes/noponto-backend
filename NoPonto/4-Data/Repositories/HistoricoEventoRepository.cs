@@ -8,7 +8,15 @@ namespace NoPonto.Data.Repositories;
 public interface IHistoricoEventoRepository
 {
     Task PersistirAsync(EventoViagem evento, CancellationToken ct);
+    async Task<HistoricoBatchResult> PersistirLoteAsync(IReadOnlyList<EventoViagem> eventos,
+        NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+    {
+        foreach (var evento in eventos) await PersistirAsync(evento, ct);
+        return new(eventos.Count, eventos.Count(e => e.Tipo == "PassagemParada"));
+    }
 }
+
+public sealed record HistoricoBatchResult(int EventosInseridos, int PassagensInseridas);
 
 public sealed class EventoViagemPayloadConflictException(
     string eventId, IReadOnlyList<string> camposDivergentes, bool camposTruncados)
@@ -24,84 +32,138 @@ public sealed class HistoricoEventoRepository(NpgsqlDataSource source) : IHistor
 {
     public async Task PersistirAsync(EventoViagem e, CancellationToken ct)
     {
-        EventoViagemValidator.Validar(e);
-        var payload = JsonSerializer.Serialize(e);
         await using var connection = await source.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        await using (var journal = new NpgsqlCommand("""
-            INSERT INTO "EventosViagem" ("EventId","Tipo","Payload","TimestampEvento")
-            VALUES (@id,@tipo,@payload::jsonb,@ts) ON CONFLICT ("EventId") DO NOTHING RETURNING "EventId"
-            """, connection, transaction))
+        await PersistirLoteAsync([e], connection, transaction, ct);
+        await transaction.CommitAsync(ct);
+    }
+
+    public async Task<HistoricoBatchResult> PersistirLoteAsync(IReadOnlyList<EventoViagem> eventos,
+        NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+    {
+        if (eventos.Count == 0) return new(0, 0);
+        foreach (var evento in eventos) EventoViagemValidator.Validar(evento);
+        await using var batch = new NpgsqlBatch(connection, transaction);
+        foreach (var e in eventos)
         {
-            journal.Parameters.AddWithValue("id", e.EventId);
-            journal.Parameters.AddWithValue("tipo", e.Tipo);
-            journal.Parameters.AddWithValue("payload", payload);
-            journal.Parameters.AddWithValue("ts", e.TimestampEvento.ToUniversalTime());
-            if (await journal.ExecuteScalarAsync(ct) is null)
+            var command = new NpgsqlBatchCommand("""
+                WITH journal AS (
+                    INSERT INTO "EventosViagem" ("EventId","Tipo","Payload","TimestampEvento")
+                    VALUES (@id,@tipo,@payload::jsonb,@ts)
+                    ON CONFLICT ("EventId") DO NOTHING RETURNING 1
+                ), payload_ok AS (
+                    SELECT EXISTS(SELECT 1 FROM journal)
+                        OR EXISTS(SELECT 1 FROM "EventosViagem"
+                            WHERE "EventId"=@id AND "Payload"=@payload::jsonb) AS ok
+                ), estrutura AS (
+                    SELECT pi."Id"
+                    FROM "ParadasItinerario" pi
+                    JOIN "Itinerarios" i ON i."Id"=pi."ItinerarioId"
+                    JOIN "Sentidos" s ON s."Id"=i."SentidoId"
+                    JOIN "Linhas" l ON l."Id"=s."LinhaId"
+                    WHERE @tipo='PassagemParada' AND pi."Id"=@ocorrencia
+                      AND pi."ItinerarioId"=@itinerario AND pi."ParadaId"=@parada
+                      AND pi."Ordem"=@ordem_parada AND pi."PosicaoLinha"=@posicao
+                      AND s."Id"=@sentido AND l."Codigo"=@codigo
+                ), historico AS (
+                    INSERT INTO "HistoricoPassagens"
+                        ("Id","Ativo","CreatedAt","Ordem","CodigoLinha","ItinerarioId","ParadaId",
+                         "ViagemId","ParadaItinerarioId","SentidoId","TimestampPassagem","PosicaoNaRota",
+                         "DistanciaParadaMetros","TimestampGps","TimestampRegistro","VelocidadeInstantanea",
+                         "VelocidadeMedia","HoraDia","DiaSemana")
+                    SELECT gen_random_uuid(),true,now(),@ordem_veiculo,@codigo,@itinerario,@parada,
+                        @viagem,@ocorrencia,@sentido,@passagem,@posicao,NULL,@gps,now(),@velocidade,
+                        @media,@hora,@dia
+                    FROM estrutura, payload_ok WHERE payload_ok.ok
+                    ON CONFLICT ("ViagemId","ParadaItinerarioId")
+                        WHERE "ViagemId" IS NOT NULL AND "ParadaItinerarioId" IS NOT NULL DO NOTHING
+                    RETURNING 1
+                )
+                SELECT (SELECT ok FROM payload_ok),
+                    @tipo<>'PassagemParada' OR EXISTS(SELECT 1 FROM estrutura),
+                    EXISTS(SELECT 1 FROM journal), (SELECT count(*)::int FROM historico)
+                """);
+            AddParameters(command, e, JsonSerializer.Serialize(e));
+            batch.BatchCommands.Add(command);
+        }
+
+        var insertedEvents = 0;
+        var insertedPassages = 0;
+        var conflictIndex = -1;
+        var invalidStructure = false;
+        await using (var reader = await batch.ExecuteReaderAsync(ct))
+        {
+            for (var i = 0; i < eventos.Count; i++)
             {
-                await using var check = new NpgsqlCommand("SELECT \"Payload\" = @payload::jsonb FROM \"EventosViagem\" WHERE \"EventId\" = @id", connection, transaction);
-                check.Parameters.AddWithValue("payload", payload);
-                check.Parameters.AddWithValue("id", e.EventId);
-                if (await check.ExecuteScalarAsync(ct) is not true)
-                {
-                    // jsonb compares values semantically; read names only, never the stored values.
-                    await using var differences = new NpgsqlCommand("""
-                        SELECT COALESCE(existing.key, incoming.key) AS field
-                        FROM jsonb_each((SELECT "Payload" FROM "EventosViagem" WHERE "EventId" = @id)) existing
-                        FULL JOIN jsonb_each(@payload::jsonb) incoming ON incoming.key = existing.key
-                        WHERE existing.value IS DISTINCT FROM incoming.value
-                        ORDER BY COALESCE(existing.key, incoming.key) COLLATE "C"
-                        LIMIT 17
-                        """, connection, transaction);
-                    differences.Parameters.AddWithValue("id", e.EventId);
-                    differences.Parameters.AddWithValue("payload", payload);
-                    var fields = new List<string>(17);
-                    await using (var reader = await differences.ExecuteReaderAsync(ct))
-                        while (await reader.ReadAsync(ct)) fields.Add(reader.GetString(0));
-                    throw new EventoViagemPayloadConflictException(e.EventId,
-                        fields.Take(16).ToArray(), fields.Count > 16);
-                }
-                await transaction.CommitAsync(ct);
-                return;
+                if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("Resultado incompleto do batch histórico.");
+                if (!reader.GetBoolean(0) && conflictIndex < 0) conflictIndex = i;
+                if (!reader.GetBoolean(1)) invalidStructure = true;
+                if (reader.GetBoolean(2)) insertedEvents++;
+                insertedPassages += reader.GetInt32(3);
+                if (i + 1 < eventos.Count && !await reader.NextResultAsync(ct))
+                    throw new InvalidOperationException("Resultado incompleto do batch histórico.");
             }
         }
-        if (e.Tipo == "PassagemParada")
+        if (conflictIndex >= 0)
         {
-            await using var command = new NpgsqlCommand("""
-                INSERT INTO "HistoricoPassagens"
-                    ("Id","Ativo","CreatedAt","Ordem","CodigoLinha","ItinerarioId","ParadaId",
-                     "ViagemId","ParadaItinerarioId","SentidoId","TimestampPassagem","PosicaoNaRota",
-                     "DistanciaParadaMetros","TimestampGps","TimestampRegistro","VelocidadeInstantanea","VelocidadeMedia","HoraDia","DiaSemana")
-                SELECT @id,true,now(),@ordem,@codigo,@itinerario,@parada,@viagem,@ocorrencia,@sentido,@passagem,
-                    @posicao,NULL,@gps,now(),@velocidade,@media,@hora,@dia
-                FROM "ParadasItinerario" pi JOIN "Itinerarios" i ON i."Id" = pi."ItinerarioId"
-                JOIN "Sentidos" s ON s."Id" = i."SentidoId" JOIN "Linhas" l ON l."Id" = s."LinhaId"
-                WHERE pi."Id" = @ocorrencia AND pi."ItinerarioId" = @itinerario AND pi."ParadaId" = @parada
-                    AND pi."Ordem" = @ordem_parada AND pi."PosicaoLinha" = @posicao
-                    AND s."Id" = @sentido AND l."Codigo" = @codigo
-                ON CONFLICT ("ViagemId","ParadaItinerarioId")
-                    WHERE "ViagemId" IS NOT NULL AND "ParadaItinerarioId" IS NOT NULL DO NOTHING
-                """, connection, transaction);
-            command.Parameters.AddWithValue("id", Guid.NewGuid());
-            command.Parameters.AddWithValue("ordem", e.OrdemVeiculo);
-            command.Parameters.AddWithValue("codigo", e.CodigoLinha);
-            command.Parameters.AddWithValue("itinerario", e.ItinerarioId);
-            command.Parameters.AddWithValue("parada", e.ParadaId!.Value);
-            command.Parameters.AddWithValue("viagem", e.ViagemId);
-            command.Parameters.AddWithValue("ocorrencia", e.ParadaItinerarioId!.Value);
-            command.Parameters.AddWithValue("sentido", e.SentidoId);
-            command.Parameters.AddWithValue("passagem", e.TimestampPassagem!.Value.ToUniversalTime());
-            command.Parameters.AddWithValue("gps", e.TimestampGps!.Value.ToUniversalTime());
-            command.Parameters.AddWithValue("posicao", e.PosicaoLinha!.Value);
-            command.Parameters.AddWithValue("ordem_parada", e.Ordem!.Value);
-            command.Parameters.AddWithValue("velocidade", e.VelocidadeInstantanea!.Value);
-            command.Parameters.Add(new NpgsqlParameter("media", NpgsqlTypes.NpgsqlDbType.Double) { Value = (object?)e.VelocidadeMedia ?? DBNull.Value });
-            command.Parameters.AddWithValue("hora", e.TimestampPassagem.Value.ToUniversalTime().Hour);
-            command.Parameters.AddWithValue("dia", (int)e.TimestampPassagem.Value.ToUniversalTime().DayOfWeek);
-            if (await command.ExecuteNonQueryAsync(ct) == 0)
-                throw new FormatException("Ocorrência incompatível com a estrutura relacional.");
+            var conflict = eventos[conflictIndex];
+            var differences = await DiferencasPayloadAsync(connection, transaction,
+                conflict.EventId, JsonSerializer.Serialize(conflict), ct);
+            throw new EventoViagemPayloadConflictException(conflict.EventId,
+                differences.Take(16).ToArray(), differences.Count > 16);
         }
-        await transaction.CommitAsync(ct);
+        if (invalidStructure) throw new FormatException("Ocorrência incompatível com a estrutura relacional.");
+        return new(insertedEvents, insertedPassages);
+    }
+
+    private static async Task<List<string>> DiferencasPayloadAsync(NpgsqlConnection connection,
+        NpgsqlTransaction transaction, string eventId, string payload, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("""
+            SELECT COALESCE(existing.key, incoming.key) AS field
+            FROM jsonb_each((SELECT "Payload" FROM "EventosViagem" WHERE "EventId"=@id)) existing
+            FULL JOIN jsonb_each(@payload::jsonb) incoming ON incoming.key=existing.key
+            WHERE existing.value IS DISTINCT FROM incoming.value
+            ORDER BY COALESCE(existing.key, incoming.key) COLLATE "C"
+            LIMIT 17
+            """, connection, transaction);
+        command.Parameters.AddWithValue("id", eventId);
+        command.Parameters.AddWithValue("payload", payload);
+        var fields = new List<string>(17);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) fields.Add(reader.GetString(0));
+        return fields;
+    }
+
+    private static void AddParameters(NpgsqlBatchCommand command, EventoViagem e, string payload)
+    {
+        command.Parameters.AddWithValue("id", e.EventId);
+        command.Parameters.AddWithValue("tipo", e.Tipo);
+        command.Parameters.AddWithValue("payload", payload);
+        command.Parameters.AddWithValue("ts", e.TimestampEvento.ToUniversalTime());
+        command.Parameters.AddWithValue("ordem_veiculo", e.OrdemVeiculo);
+        command.Parameters.AddWithValue("codigo", e.CodigoLinha);
+        command.Parameters.AddWithValue("itinerario", e.ItinerarioId);
+        command.Parameters.Add(new NpgsqlParameter("parada", NpgsqlTypes.NpgsqlDbType.Uuid)
+            { Value = (object?)e.ParadaId ?? DBNull.Value });
+        command.Parameters.AddWithValue("viagem", e.ViagemId);
+        command.Parameters.Add(new NpgsqlParameter("ocorrencia", NpgsqlTypes.NpgsqlDbType.Uuid)
+            { Value = (object?)e.ParadaItinerarioId ?? DBNull.Value });
+        command.Parameters.AddWithValue("sentido", e.SentidoId);
+        command.Parameters.Add(new NpgsqlParameter("passagem", NpgsqlTypes.NpgsqlDbType.TimestampTz)
+            { Value = (object?)e.TimestampPassagem?.ToUniversalTime() ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("gps", NpgsqlTypes.NpgsqlDbType.TimestampTz)
+            { Value = (object?)e.TimestampGps?.ToUniversalTime() ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("posicao", NpgsqlTypes.NpgsqlDbType.Double)
+            { Value = (object?)e.PosicaoLinha ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("ordem_parada", NpgsqlTypes.NpgsqlDbType.Integer)
+            { Value = (object?)e.Ordem ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("velocidade", NpgsqlTypes.NpgsqlDbType.Double)
+            { Value = (object?)e.VelocidadeInstantanea ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("media", NpgsqlTypes.NpgsqlDbType.Double)
+            { Value = (object?)e.VelocidadeMedia ?? DBNull.Value });
+        command.Parameters.AddWithValue("hora", e.TimestampPassagem?.ToUniversalTime().Hour ?? 0);
+        command.Parameters.AddWithValue("dia", (int)(e.TimestampPassagem?.ToUniversalTime().DayOfWeek ?? 0));
     }
 }
 
