@@ -135,6 +135,17 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     private int _viagemConflitos;
     private int _viagemInfra;
     private int _itineraryChangedOcorrencias;
+    private int _viagemPgReads;
+    private int _viagemPgFallbackReads;
+    private int _viagemRedisContextHits;
+    private int _viagemDurableWrites;
+    private int _viagemCheckpointWrites;
+    private int _viagemSemanticWrites;
+    private int _viagemSkippedDurableWrites;
+    private int _viagemOutboxEvents;
+    private int _viagemTransacoes;
+    private int _viagemAdvisoryLocks;
+    private int _viagemRedisProjectionPreservedNewer;
 
     public DateTimeOffset Inicio { get; } = inicio;
     public long IntervaloConfiguradoMs { get; } = intervaloConfiguradoMs;
@@ -337,6 +348,18 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     public double ViagemProcessadaMediaMs => ViagemProcessadas == 0
         ? 0 : ViagemProcessadaSomaMs / ViagemProcessadas;
     public int ItineraryChangedOcorrencias => Volatile.Read(ref _itineraryChangedOcorrencias);
+    public int ViagemPgReads => Volatile.Read(ref _viagemPgReads);
+    public int ViagemPgFallbackReads => Volatile.Read(ref _viagemPgFallbackReads);
+    public int ViagemRedisContextHits => Volatile.Read(ref _viagemRedisContextHits);
+    public int ViagemDurableWrites => Volatile.Read(ref _viagemDurableWrites);
+    public int ViagemCheckpointWrites => Volatile.Read(ref _viagemCheckpointWrites);
+    public int ViagemSemanticWrites => Volatile.Read(ref _viagemSemanticWrites);
+    public int ViagemSkippedDurableWrites => Volatile.Read(ref _viagemSkippedDurableWrites);
+    public int ViagemOutboxEvents => Volatile.Read(ref _viagemOutboxEvents);
+    public int ViagemTransacoes => Volatile.Read(ref _viagemTransacoes);
+    public int ViagemAdvisoryLocks => Volatile.Read(ref _viagemAdvisoryLocks);
+    public int ViagemRedisProjectionPreservedNewer =>
+        Volatile.Read(ref _viagemRedisProjectionPreservedNewer);
 
     public void RegistrarMatchingGlobal(TimeSpan duracao)
     {
@@ -667,6 +690,21 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
 
     public void RegistrarDivergenciaItinerario() =>
         Interlocked.Increment(ref _itineraryChangedOcorrencias);
+
+    public void RegistrarViagemPgRead() => Interlocked.Increment(ref _viagemPgReads);
+    public void RegistrarViagemPgFallbackRead() => Interlocked.Increment(ref _viagemPgFallbackReads);
+    public void RegistrarViagemRedisContextHit() => Interlocked.Increment(ref _viagemRedisContextHits);
+    public void RegistrarViagemDurableWriteSkipped() => Interlocked.Increment(ref _viagemSkippedDurableWrites);
+    public void RegistrarViagemTransacao() => Interlocked.Increment(ref _viagemTransacoes);
+    public void RegistrarViagemAdvisoryLock() => Interlocked.Increment(ref _viagemAdvisoryLocks);
+    public void RegistrarViagemRedisProjectionPreservedNewer() =>
+        Interlocked.Increment(ref _viagemRedisProjectionPreservedNewer);
+    public void RegistrarViagemDurableWrite(bool checkpoint, int eventos)
+    {
+        Interlocked.Increment(ref _viagemDurableWrites);
+        Interlocked.Increment(ref checkpoint ? ref _viagemCheckpointWrites : ref _viagemSemanticWrites);
+        Interlocked.Add(ref _viagemOutboxEvents, eventos);
+    }
 
     private static void RegistrarDuracao(ref long acumulado, ref long maximo, TimeSpan duracao)
     {

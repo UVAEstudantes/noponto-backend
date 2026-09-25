@@ -140,7 +140,7 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     {
         await Redis.HashSetAsync(Key,"EstadoViagem","Ativa");
         Assert.Equal(ViagemObservadaStatus.Created,(await Repository().TentarAtualizarAsync(G(0),default)).Status);
-        Assert.Equal(21,await Redis.HashLengthAsync(Key));Assert.True(await Redis.KeyExistsAsync(_stream));
+        Assert.Equal(23,await Redis.HashLengthAsync(Key));Assert.True(await Redis.KeyExistsAsync(_stream));
     }
 
     [Fact]

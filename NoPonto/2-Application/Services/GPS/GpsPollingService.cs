@@ -788,6 +788,15 @@ public sealed class GpsPollingService : BackgroundService
                 "viagem_processada_soma_ms={viagem_processada_soma_ms:F1} " +
                 "viagem_processada_media_ms={viagem_processada_media_ms:F1} " +
                 "viagem_processada_max_ms={viagem_processada_max_ms:F1} " +
+                "viagem_pg_reads={viagem_pg_reads} viagem_pg_fallback_reads={viagem_pg_fallback_reads} " +
+                "viagem_redis_context_hits={viagem_redis_context_hits} " +
+                "viagem_redis_projection_preserved_newer={viagem_redis_projection_preserved_newer} " +
+                "viagem_durable_writes={viagem_durable_writes} " +
+                "viagem_checkpoint_writes={viagem_checkpoint_writes} " +
+                "viagem_semantic_writes={viagem_semantic_writes} " +
+                "viagem_skipped_durable_writes={viagem_skipped_durable_writes} " +
+                "viagem_outbox_events={viagem_outbox_events} viagem_transacoes={viagem_transacoes} " +
+                "viagem_advisory_locks={viagem_advisory_locks} " +
                 "itinerary_changed_ocorrencias={itinerary_changed_ocorrencias} " +
                 "linhas_publicadas={linhas_publicadas} " +
                 "veiculos_enviados={veiculos_enviados}",
@@ -905,6 +914,12 @@ public sealed class GpsPollingService : BackgroundService
                 performance.ViagemMediaMs, performance.ViagemMaxMs,
                 performance.ViagemProcessadaSomaMs, performance.ViagemProcessadaMediaMs,
                 performance.ViagemProcessadaMaxMs,
+                performance.ViagemPgReads, performance.ViagemPgFallbackReads,
+                performance.ViagemRedisContextHits, performance.ViagemRedisProjectionPreservedNewer,
+                performance.ViagemDurableWrites,
+                performance.ViagemCheckpointWrites, performance.ViagemSemanticWrites,
+                performance.ViagemSkippedDurableWrites, performance.ViagemOutboxEvents,
+                performance.ViagemTransacoes, performance.ViagemAdvisoryLocks,
                 performance.ItineraryChangedOcorrencias,
                 performance.LinhasPublicadas, performance.VeiculosEnviados);
         }

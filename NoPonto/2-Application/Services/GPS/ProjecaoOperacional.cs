@@ -4,7 +4,9 @@ namespace NoPonto.Application.GPS;
 public sealed record ContextoOperacional(
     IReadOnlyList<string> SnapshotCas,
     ViagemObservadaState? Observada,
-    ViagemOperacionalState? Estado)
+    ViagemOperacionalState? Estado,
+    long VersaoDuravel = 0,
+    DateTimeOffset? UltimoCheckpointUtc = null)
 {
     public bool PodeProjetar => Estado?.Estado is EstadoViagem.Ativa or EstadoViagem.PossivelFim;
 }

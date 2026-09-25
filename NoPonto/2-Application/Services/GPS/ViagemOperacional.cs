@@ -37,6 +37,40 @@ public sealed record EventoViagem(
 
 public sealed record DecisaoViagem(ViagemOperacionalState Estado, IReadOnlyList<EventoViagem> Eventos);
 
+internal enum MotivoPersistenciaViagem { Nenhum, Semantica, Checkpoint }
+
+internal static class PersistenciaViagemOperacional
+{
+    internal static MotivoPersistenciaViagem DevePersistirDuravelmente(
+        ViagemOperacionalState? anterior, ViagemOperacionalState atual,
+        IReadOnlyList<EventoViagem> eventos, DateTimeOffset? ultimoCheckpointUtc,
+        DateTimeOffset agoraUtc, TimeSpan intervaloCheckpoint)
+    {
+        if (anterior is null || eventos.Count != 0 || MudouSemanticamente(anterior, atual))
+            return MotivoPersistenciaViagem.Semantica;
+        var decorrido = ultimoCheckpointUtc is null
+            ? TimeSpan.Zero
+            : agoraUtc.ToUniversalTime() - ultimoCheckpointUtc.Value.ToUniversalTime();
+        if (intervaloCheckpoint <= TimeSpan.Zero || ultimoCheckpointUtc is null
+            || decorrido < TimeSpan.Zero || decorrido >= intervaloCheckpoint)
+            return MotivoPersistenciaViagem.Checkpoint;
+        return MotivoPersistenciaViagem.Nenhum;
+    }
+
+    private static bool MudouSemanticamente(ViagemOperacionalState anterior, ViagemOperacionalState atual) =>
+        anterior.Observada.ViagemId != atual.Observada.ViagemId
+        || anterior.Observada.ItinerarioId != atual.Observada.ItinerarioId
+        || anterior.Observada.UltimaParadaItinerarioId != atual.Observada.UltimaParadaItinerarioId
+        || anterior.Observada.UltimaParadaOrdem != atual.Observada.UltimaParadaOrdem
+        || anterior.CodigoLinha != atual.CodigoLinha
+        || anterior.LinhaId != atual.LinhaId
+        || anterior.SentidoId != atual.SentidoId
+        || anterior.Estado != atual.Estado
+        || anterior.ConfirmacoesPosTerminal != atual.ConfirmacoesPosTerminal
+        || anterior.TimestampFim != atual.TimestampFim
+        || anterior.Candidato != atual.Candidato;
+}
+
 /// <summary>Decisão pura para itinerários não circulares; nunca reinicia cursor por regressão.</summary>
 public static class ViagemOperacionalRegra
 {
