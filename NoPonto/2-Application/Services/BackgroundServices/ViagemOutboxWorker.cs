@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
 using NoPonto.Data.Repositories;
 using Npgsql;
@@ -9,13 +10,25 @@ namespace NoPonto.Application.Services.BackgroundServices;
 
 /// <summary>Consome o outbox PostgreSQL; Redis nao participa de claim, retry ou confirmacao.</summary>
 public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEventoRepository historico,
-    ILogger<ViagemOutboxWorker> logger) : BackgroundService
+    ILogger<ViagemOutboxWorker> logger, IOptions<ViagemOutboxOptions>? configured = null) : BackgroundService
 {
     internal const int BatchSize = 100;
     internal static readonly TimeSpan Lease = TimeSpan.FromMinutes(2);
     internal static readonly TimeSpan ProcessedRetention = TimeSpan.FromDays(7);
     internal string Consumer { get; } = $"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}";
     private DateTimeOffset _nextCleanupUtc = DateTimeOffset.MinValue;
+    private DateTimeOffset _nextMetricsUtc = DateTimeOffset.MinValue;
+    private readonly ViagemOutboxOptions _options = configured?.Value ?? new();
+    private long _claimed, _processed, _batches, _batchFailures, _batchSizeTotal,
+        _batchSizeMax, _eventInserts, _historyInserts, _completed;
+
+    internal long BatchClaimed => Interlocked.Read(ref _claimed);
+    internal long BatchProcessed => Interlocked.Read(ref _processed);
+    internal long Batches => Interlocked.Read(ref _batches);
+    internal long BatchFailures => Interlocked.Read(ref _batchFailures);
+    internal long EventosBatchInserts => Interlocked.Read(ref _eventInserts);
+    internal long HistoricoBatchInserts => Interlocked.Read(ref _historyInserts);
+    internal long BatchCompleted => Interlocked.Read(ref _completed);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -24,13 +37,19 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
             try
             {
                 var items = await ClaimAsync(stoppingToken);
-                foreach (var item in items) await ProcessarAsync(item, stoppingToken);
+                if (items.Count > 0)
+                {
+                    await ProcessarLoteAsync(items, stoppingToken);
+                    if (_options.DelayEntreBatchesMs > 0)
+                        await Task.Delay(_options.DelayEntreBatchesMs, stoppingToken);
+                }
                 if (DateTimeOffset.UtcNow >= _nextCleanupUtc)
                 {
                     await LimparProcessadosAsync(stoppingToken);
                     _nextCleanupUtc = DateTimeOffset.UtcNow.AddHours(1);
                 }
                 if (items.Count == 0) await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
+                LogMetricsIfDue();
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex)
@@ -63,7 +82,7 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
             WHERE o."EventId"=c."EventId"
             RETURNING o."EventId", o."Payload"::text, o."Tentativas"
             """, connection, transaction);
-        command.Parameters.AddWithValue("limite", BatchSize);
+        command.Parameters.AddWithValue("limite", Math.Clamp(_options.BatchSize, 1, BatchSize));
         command.Parameters.AddWithValue("lease", Lease);
         command.Parameters.AddWithValue("consumer", Consumer);
         var result = new List<OutboxItem>();
@@ -72,6 +91,53 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
                 result.Add(new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
         await transaction.CommitAsync(ct);
         return result;
+    }
+
+    internal async Task ProcessarLoteAsync(IReadOnlyList<OutboxItem> items, CancellationToken ct)
+    {
+        if (items.Count == 0) return;
+        Interlocked.Add(ref _claimed, items.Count);
+        Interlocked.Increment(ref _batches);
+        Interlocked.Add(ref _batchSizeTotal, items.Count);
+        UpdateMax(ref _batchSizeMax, items.Count);
+        try
+        {
+            var events = items.Select(item => JsonSerializer.Deserialize<EventoViagem>(item.Payload)
+                ?? throw new FormatException("Payload de outbox vazio.")).ToArray();
+            foreach (var evento in events) EventoViagemValidator.Validar(evento);
+            await using var connection = await source.OpenConnectionAsync(ct);
+            await using var transaction = await connection.BeginTransactionAsync(ct);
+            var result = await historico.PersistirLoteAsync(events, connection, transaction, ct);
+            await using var completed = new NpgsqlCommand("""
+                UPDATE "OutboxViagens" SET "ProcessadoEmUtc"=now(),
+                    "BloqueadoAteUtc"=NULL, "BloqueadoPor"=NULL, "UltimoErro"=NULL
+                WHERE "EventId"=ANY(@ids) AND "BloqueadoPor"=@consumer
+                  AND "ProcessadoEmUtc" IS NULL
+                """, connection, transaction);
+            completed.Parameters.AddWithValue("ids", items.Select(x => x.EventId).ToArray());
+            completed.Parameters.AddWithValue("consumer", Consumer);
+            if (await completed.ExecuteNonQueryAsync(ct) != items.Count)
+                throw new OutboxLeaseLostException();
+            await transaction.CommitAsync(ct);
+            Interlocked.Add(ref _processed, items.Count);
+            Interlocked.Add(ref _eventInserts, result.EventosInseridos);
+            Interlocked.Add(ref _historyInserts, result.PassagensInseridas);
+            Interlocked.Add(ref _completed, items.Count);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (OutboxLeaseLostException ex)
+        {
+            Interlocked.Increment(ref _batchFailures);
+            logger.LogWarning(ex,
+                "Lease do batch Outbox foi perdido; materializacao revertida e itens deixados para o proprietario atual.");
+        }
+        catch (Exception ex)
+        {
+            Interlocked.Increment(ref _batchFailures);
+            logger.LogWarning(ex,
+                "Batch Outbox com {Quantidade} eventos falhou; isolando itens para retry seguro.", items.Count);
+            foreach (var item in items) await ProcessarAsync(item, ct);
+        }
     }
 
     internal async Task ProcessarAsync(OutboxItem item, CancellationToken ct)
@@ -137,5 +203,40 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
         return await command.ExecuteNonQueryAsync(ct);
     }
 
+    private void LogMetricsIfDue()
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (now < _nextMetricsUtc) return;
+        _nextMetricsUtc = now.AddMinutes(1);
+        var batches = Interlocked.Read(ref _batches);
+        var total = Interlocked.Read(ref _batchSizeTotal);
+        logger.LogInformation(
+            "Outbox batch: outbox_batch_claimed={Claimed} outbox_batch_processed={Processed} " +
+            "outbox_batches={Batches} outbox_batch_size_avg={Average:F1} outbox_batch_size_max={Max} " +
+            "outbox_batch_failures={Failures} eventos_viagem_batch_inserts={Events} " +
+            "historico_passagens_batch_inserts={History} outbox_batch_completed={Completed}",
+            BatchClaimed, BatchProcessed, batches, batches == 0 ? 0 : (double)total / batches,
+            Interlocked.Read(ref _batchSizeMax), BatchFailures, EventosBatchInserts,
+            HistoricoBatchInserts, BatchCompleted);
+    }
+
+    private static void UpdateMax(ref long target, long value)
+    {
+        var current = Volatile.Read(ref target);
+        while (value > current)
+        {
+            var observed = Interlocked.CompareExchange(ref target, value, current);
+            if (observed == current) return;
+            current = observed;
+        }
+    }
+
     internal sealed record OutboxItem(string EventId, string Payload, int Tentativas);
+    private sealed class OutboxLeaseLostException : Exception;
+}
+
+public sealed class ViagemOutboxOptions
+{
+    public int BatchSize { get; set; } = 100;
+    public int DelayEntreBatchesMs { get; set; } = 250;
 }

@@ -146,6 +146,10 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     private int _viagemTransacoes;
     private int _viagemAdvisoryLocks;
     private int _viagemRedisProjectionPreservedNewer;
+    private int _catchupPassagensTotal;
+    private int _catchupPassagensMaxPorObservacao;
+    private long _catchupGapMsMax;
+    private int _catchupGapGt180s;
 
     public DateTimeOffset Inicio { get; } = inicio;
     public long IntervaloConfiguradoMs { get; } = intervaloConfiguradoMs;
@@ -360,6 +364,10 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     public int ViagemAdvisoryLocks => Volatile.Read(ref _viagemAdvisoryLocks);
     public int ViagemRedisProjectionPreservedNewer =>
         Volatile.Read(ref _viagemRedisProjectionPreservedNewer);
+    public int CatchupPassagensTotal => Volatile.Read(ref _catchupPassagensTotal);
+    public int CatchupPassagensMaxPorObservacao => Volatile.Read(ref _catchupPassagensMaxPorObservacao);
+    public long CatchupGapMsMax => Volatile.Read(ref _catchupGapMsMax);
+    public int CatchupGapGt180s => Volatile.Read(ref _catchupGapGt180s);
 
     public void RegistrarMatchingGlobal(TimeSpan duracao)
     {
@@ -699,6 +707,14 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     public void RegistrarViagemAdvisoryLock() => Interlocked.Increment(ref _viagemAdvisoryLocks);
     public void RegistrarViagemRedisProjectionPreservedNewer() =>
         Interlocked.Increment(ref _viagemRedisProjectionPreservedNewer);
+    public void RegistrarCatchupPassagens(int quantidade, TimeSpan gap)
+    {
+        if (quantidade <= 0) return;
+        Interlocked.Add(ref _catchupPassagensTotal, quantidade);
+        RegistrarMaximo(ref _catchupPassagensMaxPorObservacao, quantidade);
+        RegistrarMaximo(ref _catchupGapMsMax, Math.Max(0, (long)gap.TotalMilliseconds));
+        if (gap > TimeSpan.FromSeconds(180)) Interlocked.Increment(ref _catchupGapGt180s);
+    }
     public void RegistrarViagemDurableWrite(bool checkpoint, int eventos)
     {
         Interlocked.Increment(ref _viagemDurableWrites);
@@ -720,6 +736,17 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     }
 
     private static void RegistrarMaximo(ref int maximo, int valor)
+    {
+        var atual = Volatile.Read(ref maximo);
+        while (valor > atual)
+        {
+            var observado = Interlocked.CompareExchange(ref maximo, valor, atual);
+            if (observado == atual) break;
+            atual = observado;
+        }
+    }
+
+    private static void RegistrarMaximo(ref long maximo, long valor)
     {
         var atual = Volatile.Read(ref maximo);
         while (valor > atual)

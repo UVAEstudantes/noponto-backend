@@ -797,6 +797,9 @@ public sealed class GpsPollingService : BackgroundService
                 "viagem_skipped_durable_writes={viagem_skipped_durable_writes} " +
                 "viagem_outbox_events={viagem_outbox_events} viagem_transacoes={viagem_transacoes} " +
                 "viagem_advisory_locks={viagem_advisory_locks} " +
+                "catchup_passagens_total={catchup_passagens_total} " +
+                "catchup_passagens_max_por_observacao={catchup_passagens_max_por_observacao} " +
+                "catchup_gap_ms_max={catchup_gap_ms_max} catchup_gap_gt_180s={catchup_gap_gt_180s} " +
                 "itinerary_changed_ocorrencias={itinerary_changed_ocorrencias} " +
                 "linhas_publicadas={linhas_publicadas} " +
                 "veiculos_enviados={veiculos_enviados}",
@@ -920,6 +923,8 @@ public sealed class GpsPollingService : BackgroundService
                 performance.ViagemCheckpointWrites, performance.ViagemSemanticWrites,
                 performance.ViagemSkippedDurableWrites, performance.ViagemOutboxEvents,
                 performance.ViagemTransacoes, performance.ViagemAdvisoryLocks,
+                performance.CatchupPassagensTotal, performance.CatchupPassagensMaxPorObservacao,
+                performance.CatchupGapMsMax, performance.CatchupGapGt180s,
                 performance.ItineraryChangedOcorrencias,
                 performance.LinhasPublicadas, performance.VeiculosEnviados);
         }
