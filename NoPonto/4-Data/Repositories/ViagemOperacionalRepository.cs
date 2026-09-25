@@ -17,6 +17,13 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
     public const string Stream = "noponto:viagem:eventos";
     internal static readonly TimeSpan ProjectionTtl = TimeSpan.FromHours(24);
     internal string StreamKey { get; init; } = Stream;
+    internal Func<Task>? BeforeDurableProjectionAsync { get; init; }
+    internal Func<Task>? AfterDurableStateWriteAsync { get; init; }
+    internal Func<Task>? AfterDurableOutboxWriteAsync { get; init; }
+    internal Func<DateTimeOffset> UtcNow { get; init; } = () => DateTimeOffset.UtcNow;
+    private long _nextRedisWarningAt;
+    private int _suppressedRedisWarnings;
+    private const long RedisWarningWindowMs = 60_000;
 
     public Task<ViagemObservadaResultado> TentarAtualizarAsync(string ordem, Guid itinerarioId,
         DateTimeOffset timestampGps, double posicaoNaRota, CancellationToken ct) =>
@@ -25,10 +32,42 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
     public async Task<ContextoOperacional?> LerContextoAsync(string ordem, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(ordem)) return null;
+        var performance = GpsCommitPerformanceContext.Current;
+        try
+        {
+            var values = (RedisResult[]?)await redis.GetDatabase().ScriptEvaluateAsync(
+                ViagemOperacionalRedisScript.Read, [ViagemObservadaRepository.ChaveVeiculoViagem(ordem)]);
+            if (values is { Length: > 0 })
+            {
+                var map = new Dictionary<string, string>(StringComparer.Ordinal);
+                for (var i = 0; i < values.Length; i += 2)
+                    map[(string)values[i]!] = (string)values[i + 1]!;
+                if (long.TryParse(map.GetValueOrDefault(ViagemOperacionalRedisScript.DurableVersion),
+                        NumberStyles.None, CultureInfo.InvariantCulture, out var version)
+                    && version > 0
+                    && long.TryParse(map.GetValueOrDefault(ViagemOperacionalRedisScript.DurableCheckpoint),
+                        NumberStyles.None, CultureInfo.InvariantCulture, out var checkpointTicks))
+                {
+                    var state = ViagemOperacionalCodec.Decode(ViagemOperacionalCodec.Names
+                        .ToDictionary(n => n, n => map[n]), ordem);
+                    performance?.RegistrarViagemRedisContextHit();
+                    return new(["postgres", version.ToString(CultureInfo.InvariantCulture)],
+                        state.Observada, state, version,
+                        new DateTimeOffset(checkpointTicks, TimeSpan.Zero));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            logger.LogDebug(ex, "Contexto Redis de {ordem} inválido ou indisponível; usando PostgreSQL.", ordem);
+        }
+
+        performance?.RegistrarViagemPgFallbackRead();
         await using var connection = await source.OpenConnectionAsync(ct);
+        performance?.RegistrarViagemPgRead();
         var durable = await LerDuravelAsync(connection, null, ordem, false, ct);
         if (durable is null) return new([], null, null);
-        await ProjetarRedisAsync(ordem, durable.Estado, [], ct);
+        await ProjetarRedisAsync(ordem, durable.Estado, [], durable.Versao, durable.AtualizadoEmUtc, ct);
         return Contexto(durable);
     }
 
@@ -52,22 +91,15 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
 
         try
         {
-            await using var connection = await source.OpenConnectionAsync(ct);
-            await using var transaction = await connection.BeginTransactionAsync(
-                System.Data.IsolationLevel.ReadCommitted, ct);
-            // Lock por veiculo cobre inclusive a primeira insercao, sem lock global.
-            await using (var advisory = new NpgsqlCommand(
-                "SELECT pg_advisory_xact_lock(hashtextextended(@ordem, 0))", connection, transaction))
+            if (!snapshotFornecido)
             {
-                advisory.Parameters.AddWithValue("ordem", gps.Ordem);
-                await advisory.ExecuteNonQueryAsync(ct);
+                contexto = await LerContextoAsync(gps.Ordem, ct);
+                snapshotFornecido = true;
             }
-
-            var durable = await LerDuravelAsync(connection, transaction, gps.Ordem, true, ct);
-            var previous = durable?.Estado;
+            if (snapshotFornecido && contexto is null)
+                return new(ViagemObservadaStatus.Conflict);
+            var previous = contexto?.Estado;
             var observed = previous?.Observada;
-            if (snapshotFornecido && VersaoContexto(contexto) != (durable?.Versao ?? 0))
-                return new(ViagemObservadaStatus.Conflict, contexto?.Observada);
             if (observed is not null && gps.TimestampGps <= observed.TimestampUltimaAtualizacao)
                 return new(ViagemObservadaStatus.RejectedOlderOrEqual, observed);
 
@@ -85,48 +117,111 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                     || op.PosicaoNaRota < observed.PosicaoNaRotaConfirmada
                     || !double.IsFinite(op.ComprimentoRotaMetros) || op.ComprimentoRotaMetros <= 0)
                     return Divergencia(observed!);
-                gpsOperacional = gps with
-                {
-                    CodigoLinha = previous!.CodigoLinha,
-                    ItinerarioId = previous.Observada.ItinerarioId,
-                    PosicaoNaRota = op.PosicaoNaRota,
-                    ComprimentoRotaMetros = op.ComprimentoRotaMetros,
-                };
-                itinerary = op.ItinerarioId;
-                p = op.PosicaoNaRota;
-                usandoProjecao = true;
+                gpsOperacional = gps with { CodigoLinha = previous!.CodigoLinha,
+                    ItinerarioId = previous.Observada.ItinerarioId, PosicaoNaRota = op.PosicaoNaRota,
+                    ComprimentoRotaMetros = op.ComprimentoRotaMetros };
+                itinerary = op.ItinerarioId; p = op.PosicaoNaRota; usandoProjecao = true;
             }
             if (previous?.Estado == EstadoViagem.Ativa && observed!.ItinerarioId != itinerary)
                 return Divergencia(observed);
 
-            var structure = usandoProjecao && previous is not null
-                ? new EstruturaViagem(previous.Observada.ItinerarioId, previous.LinhaId,
-                    previous.SentidoId, previous.CodigoLinha, true)
-                : await EstruturaAsync(connection, transaction, gpsOperacional, ct);
+            await using var connection = await source.OpenConnectionAsync(ct);
+            EstruturaViagem? structure;
+            if (usandoProjecao && previous is not null)
+                structure = new(previous.Observada.ItinerarioId, previous.LinhaId,
+                    previous.SentidoId, previous.CodigoLinha, true);
+            else
+            {
+                GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
+                structure = await EstruturaAsync(connection, null, gpsOperacional, ct);
+            }
             if (structure is null) return new(ViagemObservadaStatus.InvalidSequence);
             var baseline = previous is null || previous.Estado == EstadoViagem.Finalizada
                 || previous.Observada.ItinerarioId != itinerary;
-            var transition = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(connection, transaction,
+            GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
+            var transition = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(connection, null,
                 itinerary, previous is null || previous.Observada.ItinerarioId != itinerary
                     ? p : previous.Observada.PosicaoNaRotaConfirmada, p,
                 baseline ? Guid.Empty : previous!.Observada.UltimaParadaItinerarioId,
                 baseline ? 0 : previous!.Observada.UltimaParadaOrdem, baseline, ct);
             if (transition.Status != ViagemObservadaStatus.Updated) return new(transition.Status);
-
             var decision = ViagemOperacionalRegra.Decidir(previous, structure, gpsOperacional,
                 transition, Guid.NewGuid());
+            foreach (var evento in decision.Eventos) EventoViagemValidator.Validar(evento);
+            var checkpointSeconds = options.Value.CheckpointViagemSegundos;
+            var checkpointInterval = checkpointSeconds <= 0
+                ? TimeSpan.Zero : TimeSpan.FromSeconds(checkpointSeconds);
+            var motivo = PersistenciaViagemOperacional.DevePersistirDuravelmente(previous,
+                decision.Estado, decision.Eventos, contexto?.UltimoCheckpointUtc,
+                UtcNow(), checkpointInterval);
+            if (motivo == MotivoPersistenciaViagem.Nenhum)
+            {
+                try
+                {
+                    var hot = await TentarProjetarQuenteAsync(gps.Ordem, previous!, decision.Estado,
+                        VersaoContexto(contexto), ct);
+                    if (!hot)
+                    {
+                        var atual = await LerContextoAsync(gps.Ordem, ct);
+                        return atual?.Observada is { } observadaAtual
+                            && gps.TimestampGps <= observadaAtual.TimestampUltimaAtualizacao
+                            ? new(ViagemObservadaStatus.RejectedOlderOrEqual, observadaAtual)
+                            : new(ViagemObservadaStatus.Conflict, atual?.Observada ?? previous!.Observada);
+                    }
+                    GpsCommitPerformanceContext.Current?.RegistrarViagemDurableWriteSkipped();
+                    return new(ViagemObservadaStatus.Updated, decision.Estado.Observada)
+                    {
+                        OcorrenciasUltrapassadas = [], ProximaOcorrenciaOperacional = transition.Proxima
+                    };
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+                {
+                    LogRedisUnavailable(ex,
+                        "Redis quente indisponível; persistindo checkpoints conservadores.");
+                    motivo = MotivoPersistenciaViagem.Checkpoint;
+                }
+            }
+
+            await using var transaction = await connection.BeginTransactionAsync(
+                System.Data.IsolationLevel.ReadCommitted, ct);
+            GpsCommitPerformanceContext.Current?.RegistrarViagemTransacao();
+            // Lock por veiculo cobre inclusive a primeira insercao, sem lock global.
+            await using (var advisory = new NpgsqlCommand(
+                "SELECT pg_advisory_xact_lock(hashtextextended(@ordem, 0))", connection, transaction))
+            {
+                advisory.Parameters.AddWithValue("ordem", gps.Ordem);
+                await advisory.ExecuteNonQueryAsync(ct);
+                GpsCommitPerformanceContext.Current?.RegistrarViagemAdvisoryLock();
+            }
+
+            var durable = await LerDuravelAsync(connection, transaction, gps.Ordem, true, ct);
+            GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
+            if (snapshotFornecido && VersaoContexto(contexto) != (durable?.Versao ?? 0))
+                return durable?.Estado.Observada is { } atualDuravel
+                    && gps.TimestampGps <= atualDuravel.TimestampUltimaAtualizacao
+                    ? new(ViagemObservadaStatus.RejectedOlderOrEqual, atualDuravel)
+                    : new(ViagemObservadaStatus.Conflict, durable?.Estado.Observada ?? contexto?.Observada);
             var encoded = ViagemOperacionalCodec.Encode(decision.Estado);
             _ = ViagemOperacionalCodec.Decode(ViagemOperacionalCodec.Names.Zip(encoded)
                 .ToDictionary(x => x.First, x => x.Second), gps.Ordem);
             foreach (var evento in decision.Eventos) EventoViagemValidator.Validar(evento);
             var nextVersion = (durable?.Versao ?? 0) + 1;
             await GravarEstadoAsync(connection, transaction, gps.Ordem, encoded, nextVersion, ct);
+            if (AfterDurableStateWriteAsync is not null)
+                await AfterDurableStateWriteAsync();
             foreach (var evento in decision.Eventos)
                 await InserirOutboxAsync(connection, transaction, evento, ct);
+            if (AfterDurableOutboxWriteAsync is not null)
+                await AfterDurableOutboxWriteAsync();
             await transaction.CommitAsync(ct);
-
-            await ProjetarRedisAsync(gps.Ordem, decision.Estado, decision.Eventos, ct);
-            var status = previous is null ? ViagemObservadaStatus.Created : ViagemObservadaStatus.Updated;
+            var checkpointUtc = UtcNow();
+            GpsCommitPerformanceContext.Current?.RegistrarViagemDurableWrite(
+                motivo == MotivoPersistenciaViagem.Checkpoint, decision.Eventos.Count);
+            if (BeforeDurableProjectionAsync is not null)
+                await BeforeDurableProjectionAsync();
+            await ProjetarRedisAsync(gps.Ordem, decision.Estado, decision.Eventos,
+                nextVersion, checkpointUtc, ct);
+            var status = durable is null ? ViagemObservadaStatus.Created : ViagemObservadaStatus.Updated;
             return new(status, decision.Estado.Observada)
             {
                 OcorrenciasUltrapassadas = status == ViagemObservadaStatus.Updated && !baseline
@@ -148,7 +243,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
 
     private static ContextoOperacional Contexto(EstadoDuravel durable) => new(
         ["postgres", durable.Versao.ToString(CultureInfo.InvariantCulture)],
-        durable.Estado.Observada, durable.Estado);
+        durable.Estado.Observada, durable.Estado, durable.Versao, durable.AtualizadoEmUtc);
 
     private static long VersaoContexto(ContextoOperacional? contexto) =>
         contexto?.SnapshotCas.Count == 2 && contexto.SnapshotCas[0] == "postgres"
@@ -158,7 +253,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
     private static async Task<EstadoDuravel?> LerDuravelAsync(NpgsqlConnection connection,
         NpgsqlTransaction? transaction, string ordem, bool forUpdate, CancellationToken ct)
     {
-        var sql = "SELECT \"Estado\"::text, \"Versao\" FROM \"ViagensOperacionais\" WHERE \"OrdemVeiculo\"=@ordem"
+        var sql = "SELECT \"Estado\"::text, \"Versao\", \"AtualizadoEmUtc\" FROM \"ViagensOperacionais\" WHERE \"OrdemVeiculo\"=@ordem"
             + (forUpdate ? " FOR UPDATE" : "");
         await using var command = new NpgsqlCommand(sql, connection, transaction);
         command.Parameters.AddWithValue("ordem", ordem);
@@ -170,7 +265,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             throw new FormatException("Versao desconhecida do estado duravel.");
         var state = ViagemOperacionalCodec.Decode(ViagemOperacionalCodec.Names.Zip(values)
             .ToDictionary(x => x.First, x => x.Second), ordem);
-        return new(state, reader.GetInt64(1));
+        return new(state, reader.GetInt64(1), reader.GetFieldValue<DateTimeOffset>(2));
     }
 
     private static async Task GravarEstadoAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
@@ -206,7 +301,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
     }
 
     private async Task ProjetarRedisAsync(string ordem, ViagemOperacionalState state,
-        IReadOnlyList<EventoViagem> events, CancellationToken ct)
+        IReadOnlyList<EventoViagem> events, long version, DateTimeOffset checkpointUtc, CancellationToken ct)
     {
         try
         {
@@ -214,18 +309,20 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             var db = redis.GetDatabase();
             RedisKey key = ViagemObservadaRepository.ChaveVeiculoViagem(ordem);
             var encoded = ViagemOperacionalCodec.Encode(state);
-            var entries = ViagemOperacionalCodec.Names.Zip(encoded)
-                .Select(x => new HashEntry(x.First, x.Second)).ToArray();
-            var batch = db.CreateBatch();
-            var hash = batch.HashSetAsync(key, entries);
-            var ttl = batch.KeyExpireAsync(key, ProjectionTtl);
+            var args = encoded.Select(x => (RedisValue)x).Append(version).Append(
+                ViagemOperacionalCodec.Tick(checkpointUtc)).Append((long)ProjectionTtl.TotalSeconds).ToArray();
+            var projection = (long)await db.ScriptEvaluateAsync(
+                ViagemOperacionalRedisScript.ProjectDurable, [key], args);
+            if (projection is 3 or 4)
+                GpsCommitPerformanceContext.Current?.RegistrarViagemRedisProjectionPreservedNewer();
+            if (projection is not (2 or 3 or 4))
+                throw new InvalidOperationException($"Projeção Redis rejeitada ({projection}).");
             // Espelho temporario e bounded para diagnostico/compatibilidade; nenhum consumidor
             // funcional depende dele e a fonte duravel e sempre o outbox PostgreSQL.
-            var streamWrites = events.Select(e => batch.StreamAddAsync(StreamKey,
+            var streamWrites = events.Select(e => db.StreamAddAsync(StreamKey,
                 Fields(e).Select(x => new NameValueEntry(x.Key, x.Value)).ToArray(),
                 maxLength: 10_000, useApproximateMaxLength: true)).ToArray();
-            batch.Execute();
-            await Task.WhenAll(streamWrites.Cast<Task>().Append(hash).Append(ttl)).WaitAsync(ct);
+            await Task.WhenAll(streamWrites).WaitAsync(ct);
         }
         catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
         {
@@ -234,9 +331,24 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex,
-                "Projecao Redis da viagem de {ordem} indisponivel; PostgreSQL permanece autoritativo.", ordem);
+            LogRedisUnavailable(ex,
+                "Projecao Redis indisponivel; PostgreSQL permanece autoritativo.");
         }
+    }
+
+    private void LogRedisUnavailable(Exception exception, string message)
+    {
+        var now = Environment.TickCount64;
+        var next = Volatile.Read(ref _nextRedisWarningAt);
+        if (now < next || Interlocked.CompareExchange(ref _nextRedisWarningAt,
+                now + RedisWarningWindowMs, next) != next)
+        {
+            Interlocked.Increment(ref _suppressedRedisWarnings);
+            return;
+        }
+        var suppressed = Interlocked.Exchange(ref _suppressedRedisWarnings, 0);
+        logger.LogWarning(exception,
+            "{message} Ocorrencias suprimidas desde o ultimo aviso: {suppressed}.", message, suppressed);
     }
 
     private static ViagemObservadaResultado Divergencia(ViagemObservadaState observed) =>
@@ -250,7 +362,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                 ? p.Value.GetString()! : p.Value.GetRawText());
     }
 
-    private async Task<EstruturaViagem?> EstruturaAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+    private async Task<EstruturaViagem?> EstruturaAsync(NpgsqlConnection connection, NpgsqlTransaction? transaction,
         PosicaoVeiculoDto gps, CancellationToken ct)
     {
         const string sql = """
@@ -287,5 +399,19 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                 reader.GetString(3), reader.GetBoolean(4)) : null;
     }
 
-    private sealed record EstadoDuravel(ViagemOperacionalState Estado, long Versao);
+    private async Task<bool> TentarProjetarQuenteAsync(string ordem, ViagemOperacionalState previous,
+        ViagemOperacionalState next, long version, CancellationToken ct)
+    {
+        var result = (int)await redis.GetDatabase().ScriptEvaluateAsync(
+            ViagemOperacionalRedisScript.CommitHot,
+            [ViagemObservadaRepository.ChaveVeiculoViagem(ordem)],
+            [JsonSerializer.Serialize(ViagemOperacionalCodec.Encode(previous)),
+                JsonSerializer.Serialize(ViagemOperacionalCodec.Encode(next)),
+                version.ToString(CultureInfo.InvariantCulture),
+                ((long)ProjectionTtl.TotalSeconds).ToString(CultureInfo.InvariantCulture)]);
+        return result == (int)ViagemObservadaStatus.Updated;
+    }
+
+    private sealed record EstadoDuravel(ViagemOperacionalState Estado, long Versao,
+        DateTimeOffset AtualizadoEmUtc);
 }

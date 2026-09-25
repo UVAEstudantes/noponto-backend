@@ -42,6 +42,9 @@ internal static class ViagemOperacionalCodec
     }
     internal static ViagemOperacionalState Decode(IReadOnlyDictionary<string, string> values, string ordem)
     {
+        if (values.Count == 23 && values.ContainsKey(ViagemOperacionalRedisScript.DurableVersion)
+            && values.ContainsKey(ViagemOperacionalRedisScript.DurableCheckpoint))
+            values = Names.ToDictionary(n => n, n => values[n]);
         if (values.Count is not (19 or 21)) throw new FormatException("Hash operacional parcial.");
         var obs = Observada(values, ordem);
         string V(int i) => values[Names[i]];

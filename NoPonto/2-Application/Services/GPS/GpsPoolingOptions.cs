@@ -17,6 +17,11 @@ public sealed class GpsPollingOptions
     public int    GrauParalelismoEnriquecimento   { get; set; } = 20;
     public int    GrauParalelismoViagemObservada  { get; set; } = 20;
     public int    MaxIdadeGpsSegundos             { get; set; } = 300;
+    /// <summary>
+    /// Intervalo máximo entre snapshots duráveis da viagem. Valor menor ou igual a zero
+    /// ativa o modo conservador (persiste toda posição elegível).
+    /// </summary>
+    public int    CheckpointViagemSegundos        { get; set; } = 60;
 
     /// <summary>
     /// Velocidade mínima em km/h para considerar o bearing do veículo confiável.

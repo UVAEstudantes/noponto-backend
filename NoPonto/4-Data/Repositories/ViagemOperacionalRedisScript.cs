@@ -2,6 +2,49 @@ namespace NoPonto.Data.Repositories;
 
 internal static class ViagemOperacionalRedisScript
 {
+    internal const string DurableVersion = "VersaoDuravel";
+    internal const string DurableCheckpoint = "UltimoCheckpointDuravelUtc";
+
+    // Aplica a versao duravel sem regredir o progresso quente da mesma viagem.
+    // Retornos: 2=projetado, 3=Redis ja possui versao duravel superior, 4=merge quente.
+    internal const string ProjectDurable = """
+        #!lua
+        if #KEYS ~= 1 or #ARGV ~= 24 then return 5 end
+        local names = {'ViagemId','OrdemVeiculo','ItinerarioId','TimestampObservacaoInicial',
+            'TimestampUltimaAtualizacao','PosicaoNaRotaConfirmada','UltimaParadaItinerarioId','UltimaParadaOrdem',
+            'CodigoLinha','LinhaId','SentidoId','EstadoViagem','ConfirmacoesPosTerminal','TimestampFim',
+            'CandidatoItinerarioId','CandidatoSentidoId','CandidatoTimestamp','CandidatoPosicao','CandidatoLinhaId',
+            'CandidatoLatitudeInicial','CandidatoLongitudeInicial'}
+        local kind = redis.call('TYPE', KEYS[1]).ok
+        if kind ~= 'none' and kind ~= 'hash' then return 5 end
+        local currentVersion = kind == 'hash' and tonumber(redis.call('HGET', KEYS[1], 'VersaoDuravel')) or nil
+        local incomingVersion = tonumber(ARGV[22])
+        if not incomingVersion or incomingVersion < 1 then return 5 end
+        if currentVersion and currentVersion > incomingVersion then return 3 end
+        local merged = false
+        local state = {}
+        for i=1,21 do state[i]=ARGV[i] end
+        if kind == 'hash' and currentVersion and currentVersion <= incomingVersion then
+            local current = redis.call('HMGET', KEYS[1], unpack(names))
+            if current[1] == state[1] and current[2] == state[2]
+                and current[3] == state[3] and current[4] == state[4]
+                and current[5] and #current[5] == 19 and string.match(current[5], '^%d+$')
+                and tonumber(current[6]) and tonumber(current[6]) >= 0 and tonumber(current[6]) <= 1
+                and current[5] > state[5] then
+                state[5] = current[5]
+                state[6] = current[6]
+                merged = true
+            end
+        end
+        local args={}
+        for i=1,21 do args[#args+1]=names[i]; args[#args+1]=state[i] end
+        args[#args+1]='VersaoDuravel'; args[#args+1]=ARGV[22]
+        args[#args+1]='UltimoCheckpointDuravelUtc'; args[#args+1]=ARGV[23]
+        redis.call('HSET', KEYS[1], unpack(args))
+        redis.call('EXPIRE', KEYS[1], ARGV[24])
+        return merged and 4 or 2
+        """;
+
     internal const string Read = """
         local t = redis.call('TYPE', KEYS[1]).ok
         if t == 'none' then return {} end
@@ -179,5 +222,29 @@ internal static class ViagemOperacionalRedisScript
         redis.call('HSET', KEYS[1], unpack(hashargs))
         for _,args in ipairs(eventargs) do redis.call('XADD', KEYS[2], '*', unpack(args)) end
         return #current == 0 and 1 or 2
+        """;
+
+    internal const string CommitHot = """
+        #!lua
+        if #KEYS ~= 1 or #ARGV ~= 4 then return 5 end
+        local ok1, expected = pcall(cjson.decode, ARGV[1])
+        local ok2, next = pcall(cjson.decode, ARGV[2])
+        if not ok1 or not ok2 or type(expected) ~= 'table' or type(next) ~= 'table'
+            or #expected ~= 21 or #next ~= 21 then return 5 end
+        local names = {'ViagemId','OrdemVeiculo','ItinerarioId','TimestampObservacaoInicial',
+            'TimestampUltimaAtualizacao','PosicaoNaRotaConfirmada','UltimaParadaItinerarioId','UltimaParadaOrdem',
+            'CodigoLinha','LinhaId','SentidoId','EstadoViagem','ConfirmacoesPosTerminal','TimestampFim',
+            'CandidatoItinerarioId','CandidatoSentidoId','CandidatoTimestamp','CandidatoPosicao','CandidatoLinhaId',
+            'CandidatoLatitudeInicial','CandidatoLongitudeInicial'}
+        if redis.call('TYPE',KEYS[1]).ok ~= 'hash' then return 7 end
+        local current = redis.call('HMGET',KEYS[1],unpack(names))
+        for i=1,21 do if current[i] ~= expected[i] then return 7 end end
+        if redis.call('HGET',KEYS[1],'VersaoDuravel') ~= ARGV[3] then return 7 end
+        if next[5] <= current[5] then return 3 end
+        local args={}
+        for i=1,21 do args[#args+1]=names[i]; args[#args+1]=next[i] end
+        redis.call('HSET',KEYS[1],unpack(args))
+        redis.call('EXPIRE',KEYS[1],ARGV[4])
+        return 2
         """;
 }
