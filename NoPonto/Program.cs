@@ -240,6 +240,7 @@ builder.Services.AddScoped<RelacionarParadasItinerariosService>();
 builder.Services.AddScoped<RelacionarParadasJob>();
 builder.Services.AddSingleton<GtfsFeedParser>();
 builder.Services.AddSingleton<GtfsProjecaoService>();
+builder.Services.AddScoped<LegacyEstruturalV24Service>();
 builder.Services.AddHttpClient<ArcGisSppoSnapshotClient>();
 builder.Services.AddScoped<ArcGisEstruturalV23Service>();
 builder.Services.AddScoped<GtfsParadaItinerarioDryRunService>();
