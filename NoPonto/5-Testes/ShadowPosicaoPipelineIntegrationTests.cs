@@ -49,6 +49,13 @@ public sealed class ShadowPosicaoPipelineIntegrationTests
             var script = context.GetService<IMigrator>().GenerateScript(
                 "20260916002042_TelemetriaMlContinua", "20260921144201_PositionCorrectionShadowOrigins");
             await using (var migration = source.CreateCommand(script)) await migration.ExecuteNonQueryAsync();
+            await using (var v2 = source.CreateCommand("""
+                ALTER TABLE "PositionCorrectionShadowOrigins"
+                    ADD COLUMN "PadraoVersaoId" uuid NULL,
+                    ADD COLUMN "OcorrenciaParadaPadraoId" uuid NULL,
+                    ADD COLUMN "Volta" integer NULL
+                """))
+                await v2.ExecuteNonQueryAsync();
 
             var options = new PositionCorrectionShadowPipelineOptions
             {

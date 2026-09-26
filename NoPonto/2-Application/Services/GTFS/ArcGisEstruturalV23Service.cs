@@ -255,6 +255,11 @@ public sealed class ArcGisEstruturalV23Service(
                 var version = new PadraoVersao { Id = Guid.NewGuid(), PadraoOperacionalId = pattern.Id,
                     Numero = number, Geometria = selected.Feature.Geometria,
                     DistanciaMetros = selected.Feature.ShapeLength, MetodoConstrucao = "GTFS_ARCGIS_MULTIFONTE",
+                    Topologia = selected.Feature.Geometria.IsClosed ? TopologiasPadrao.Circular : TopologiasPadrao.Linear,
+                    HashEstrutural = EstruturaHash.Calcular(selected.Feature.Geometria,
+                        selected.Feature.Geometria.IsClosed ? TopologiasPadrao.Circular : TopologiasPadrao.Linear,
+                        selected.Occurrences.Select(x => new EstruturaHashOccurrence(x.ParadaCodigo,
+                            x.Ordem, x.PosicaoLinha, x.PosicaoLinha * selected.Feature.ShapeLength, x.DistanciaMetros))),
                     Confianca = 1, AlgoritmoVersao = AlgoritmoVersao,
                     ResultadoValidacao = ResultadosValidacaoPadrao.Valida, CriadaEmUtc = DateTimeOffset.UtcNow,
                     Relatorio = JsonSerializer.Serialize(new { source.RouteId, source.DirectionId,
@@ -268,7 +273,9 @@ public sealed class ArcGisEstruturalV23Service(
                     db.OcorrenciasParadasPadroes.Add(new() { Id = Guid.NewGuid(), PadraoVersaoId = version.Id,
                         ParadaId = occurrence.ParadaId, Ordem = occurrence.Ordem,
                         SourceSequence = occurrence.SourceStopSequence, PosicaoTracado = occurrence.PosicaoLinha,
-                        DistanciaAcumuladaMetros = occurrence.SourceShapeDistTraveledMetros });
+                        DistanciaAcumuladaMetros = occurrence.PosicaoLinha * version.ComprimentoMetros,
+                        DistanciaDaLinhaMetros = occurrence.DistanciaMetros,
+                        SourceShapeDistTraveledMetros = occurrence.SourceShapeDistTraveledMetros });
                 db.PadroesVersoesImportacoes.AddRange(
                     new() { PadraoVersaoId = version.Id, ImportacaoEstruturalId = gtfsImport.Id, Papel = PapeisImportacaoPadrao.Membership },
                     new() { PadraoVersaoId = version.Id, ImportacaoEstruturalId = gtfsImport.Id, Papel = PapeisImportacaoPadrao.Paradas },

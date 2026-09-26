@@ -204,6 +204,13 @@ public sealed record PosicaoVeiculoDto
     /// </summary>
     public Guid? ItinerarioId { get; init; }
 
+    public Guid? PadraoOperacionalId { get; init; }
+    public Guid? PadraoVersaoId { get; init; }
+    public Guid? SentidoId { get; init; }
+    public Guid? LinhaId { get; init; }
+    public string? TopologiaPadrao { get; init; }
+    public Guid? ProximaOcorrenciaParadaPadraoId { get; init; }
+
     /// <summary>
     /// Velocidade média das últimas N leituras (configurável via GPS__JANELA_VELOCIDADE_LEITURAS).
     /// Filtrada por GPS__VELOCIDADE_MAXIMA_KMH para descartar leituras espúrias.
@@ -260,5 +267,5 @@ public sealed record PosicaoVeiculoDto
         PosicaoNaRota.HasValue &&
         ComprimentoRotaMetros.HasValue &&
         VelocidadeMedia.HasValue &&
-        ItinerarioId.HasValue;
+        PadraoVersaoId.HasValue || ItinerarioId.HasValue;
 }

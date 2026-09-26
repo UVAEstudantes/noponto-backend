@@ -111,6 +111,13 @@ public sealed class PositionCorrectionShadowInfrastructureTests
         var entity = db.Model.FindEntityType(typeof(NoPonto.Domain.Entities.PositionCorrectionShadowOrigin))!;
         Assert.Equal("PositionCorrectionShadowOrigins", entity.GetTableName());
         Assert.Equal("jsonb", entity.FindProperty("CandidateResults")!.GetColumnType());
-        Assert.Equal(3, entity.GetIndexes().Count());
+        var indexProperties = entity.GetIndexes()
+            .Select(index => string.Join(",", index.Properties.Select(property => property.Name)))
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("TimestampGpsOrigemUtc", indexProperties);
+        Assert.Contains("ObservacaoId", indexProperties);
+        Assert.Contains("PolicyFingerprint,TimestampGpsOrigemUtc", indexProperties);
+        Assert.Contains("PadraoVersaoId", indexProperties);
+        Assert.Contains("OcorrenciaParadaPadraoId", indexProperties);
     }
 }

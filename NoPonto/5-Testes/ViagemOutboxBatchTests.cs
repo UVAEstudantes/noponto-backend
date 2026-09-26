@@ -139,6 +139,7 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         Assert.Equal(1, await CountAttempts(conflitante.EventId));
         Assert.Equal(1, worker.BatchFailures);
         Assert.Equal(1, await Count("EventosViagem", [valido]));
+        await DeleteOutbox([valido, conflitante]);
     }
 
     [Fact]

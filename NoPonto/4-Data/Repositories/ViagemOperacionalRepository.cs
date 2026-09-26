@@ -82,7 +82,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
         PosicaoVeiculoDto gps, ContextoOperacional? contexto,
         ResultadoProjecaoOperacional projecao, bool snapshotFornecido, CancellationToken ct)
     {
-        if (gps.ItinerarioId is not { } itinerary || itinerary == Guid.Empty || gps.PosicaoNaRota is not { } p
+        if ((gps.PadraoVersaoId ?? gps.ItinerarioId) is not { } itinerary || itinerary == Guid.Empty || gps.PosicaoNaRota is not { } p
             || !double.IsFinite(p) || p is < 0 or > 1 || string.IsNullOrWhiteSpace(gps.Ordem)
             || string.IsNullOrWhiteSpace(gps.CodigoLinha)
             || !GpsLeituraValidator.CoordenadaValida(gps.Latitude, gps.Longitude)
@@ -119,6 +119,8 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                     return Divergencia(observed!);
                 gpsOperacional = gps with { CodigoLinha = previous!.CodigoLinha,
                     ItinerarioId = previous.Observada.ItinerarioId, PosicaoNaRota = op.PosicaoNaRota,
+                    PadraoVersaoId = previous.Observada.VersaoEstruturalId,
+                    PadraoOperacionalId = previous.Observada.PadraoOperacionalId,
                     ComprimentoRotaMetros = op.ComprimentoRotaMetros };
                 itinerary = op.ItinerarioId; p = op.PosicaoNaRota; usandoProjecao = true;
             }
@@ -129,7 +131,8 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             EstruturaViagem? structure;
             if (usandoProjecao && previous is not null)
                 structure = new(previous.Observada.ItinerarioId, previous.LinhaId,
-                    previous.SentidoId, previous.CodigoLinha, true);
+                    previous.SentidoId, previous.CodigoLinha, true,
+                    previous.Observada.PadraoOperacionalId, previous.Observada.Topologia);
             else
             {
                 GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
@@ -143,7 +146,8 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                 itinerary, previous is null || previous.Observada.ItinerarioId != itinerary
                     ? p : previous.Observada.PosicaoNaRotaConfirmada, p,
                 baseline ? Guid.Empty : previous!.Observada.UltimaParadaItinerarioId,
-                baseline ? 0 : previous!.Observada.UltimaParadaOrdem, baseline, ct);
+                baseline ? 0 : previous!.Observada.UltimaParadaOrdem, baseline, ct,
+                structure.Topologia, baseline ? 0 : previous!.Observada.Volta);
             if (transition.Status != ViagemObservadaStatus.Updated) return new(transition.Status);
             var decision = ViagemOperacionalRegra.Decidir(previous, structure, gpsOperacional,
                 transition, Guid.NewGuid());
@@ -264,9 +268,9 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
         if (!await reader.ReadAsync(ct)) return null;
         var values = JsonSerializer.Deserialize<string[]>(reader.GetString(0))
             ?? throw new FormatException("Estado duravel vazio.");
-        if (values.Length != ViagemOperacionalCodec.Names.Length)
+        if (values.Length is not (19 or 21 or 28))
             throw new FormatException("Versao desconhecida do estado duravel.");
-        var state = ViagemOperacionalCodec.Decode(ViagemOperacionalCodec.Names.Zip(values)
+        var state = ViagemOperacionalCodec.Decode(ViagemOperacionalCodec.Names.Take(values.Length).Zip(values)
             .ToDictionary(x => x.First, x => x.Second), ordem);
         return new(state, reader.GetInt64(1), reader.GetFieldValue<DateTimeOffset>(2));
     }
@@ -382,25 +386,29 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
     {
         const string sql = """
             WITH escolhida AS (
-                SELECT i."Id", s."LinhaId", s."Id" AS sentido, l."Codigo"
-                FROM "Itinerarios" i JOIN "Sentidos" s ON s."Id" = i."SentidoId"
+                SELECT v."Id", s."LinhaId", s."Id" AS sentido, l."Codigo",
+                    p."Id" AS padrao, v."Topologia"
+                FROM "PadroesVersoes" v
+                JOIN "PadroesOperacionais" p ON p."VersaoAtualId" = v."Id"
+                JOIN "Sentidos" s ON s."Id" = p."SentidoId"
                 JOIN "Linhas" l ON l."Id" = s."LinhaId"
-                WHERE i."Id" = @id AND l."Codigo" = @codigo
+                WHERE v."Id" = @id AND l."Codigo" = @codigo
             ), candidatos AS (
-                SELECT DISTINCT s."Id" FROM "Itinerarios" i
-                JOIN "Sentidos" s ON s."Id" = i."SentidoId" JOIN escolhida e ON e."LinhaId" = s."LinhaId"
-                CROSS JOIN LATERAL (SELECT ST_LineLocatePoint(i."Geometria", ST_SetSRID(ST_MakePoint(@lon,@lat),4326)) AS p) local
-                WHERE ST_DWithin(i."Geometria"::geography, ST_SetSRID(ST_MakePoint(@lon,@lat),4326)::geography,@dist)
+                SELECT DISTINCT s."Id" FROM "PadroesVersoes" v
+                JOIN "PadroesOperacionais" p ON p."VersaoAtualId" = v."Id"
+                JOIN "Sentidos" s ON s."Id" = p."SentidoId" JOIN escolhida e ON e."LinhaId" = s."LinhaId"
+                CROSS JOIN LATERAL (SELECT ST_LineLocatePoint(v."Geometria", ST_SetSRID(ST_MakePoint(@lon,@lat),4326)) AS p) local
+                WHERE ST_DWithin(v."Geometria"::geography, ST_SetSRID(ST_MakePoint(@lon,@lat),4326)::geography,@dist)
                 AND abs(mod((degrees(ST_Azimuth(
-                    ST_LineInterpolatePoint(i."Geometria",greatest(0,local.p-0.025))::geography,
-                    ST_LineInterpolatePoint(i."Geometria",least(1,local.p+0.025))::geography)) - @bearing + 540)::numeric,360)-180) < 80
-            ) SELECT e."Id", e."LinhaId", e.sentido, e."Codigo",
+                    ST_LineInterpolatePoint(v."Geometria",greatest(0,local.p-0.025))::geography,
+                    ST_LineInterpolatePoint(v."Geometria",least(1,local.p+0.025))::geography)) - @bearing + 540)::numeric,360)-180) < 80
+            ) SELECT e."Id", e."LinhaId", e.sentido, e."Codigo", e.padrao, e."Topologia",
                 @tem_bearing AND (SELECT count(*) FROM candidatos) = 1
                 AND EXISTS (SELECT 1 FROM candidatos WHERE "Id" = e.sentido)
             FROM escolhida e
             """;
         await using var command = new NpgsqlCommand(sql, connection, transaction);
-        command.Parameters.AddWithValue("id", gps.ItinerarioId!.Value);
+        command.Parameters.AddWithValue("id", gps.PadraoVersaoId ?? gps.ItinerarioId!.Value);
         command.Parameters.AddWithValue("codigo", gps.CodigoLinha);
         command.Parameters.AddWithValue("lat", gps.Latitude);
         command.Parameters.AddWithValue("lon", gps.Longitude);
@@ -411,7 +419,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
         await using var reader = await command.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct)
             ? new(reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2),
-                reader.GetString(3), reader.GetBoolean(4)) : null;
+                reader.GetString(3), reader.GetBoolean(6), reader.GetGuid(4), reader.GetString(5)) : null;
     }
 
     private async Task<bool> TentarProjetarQuenteAsync(string ordem, ViagemOperacionalState previous,

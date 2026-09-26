@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
+using NoPonto.Domain.Entities;
 
 namespace NoPonto.Application.GPS;
 
@@ -15,7 +16,11 @@ public sealed record ViagemOperacionalState(ViagemObservadaState Observada, stri
     CandidatoViagem? Candidato = null);
 
 public sealed record EstruturaViagem(Guid ItinerarioId, Guid LinhaId, Guid SentidoId,
-    string CodigoLinha, bool SentidoInequivoco);
+    string CodigoLinha, bool SentidoInequivoco, Guid PadraoOperacionalId = default,
+    string Topologia = TopologiasPadrao.Linear)
+{
+    public Guid PadraoVersaoId => ItinerarioId;
+}
 
 public sealed record EventoViagem(
     [property: JsonPropertyName("event_id")] string EventId,
@@ -33,7 +38,13 @@ public sealed record EventoViagem(
     [property: JsonPropertyName("timestamp_passagem")] DateTimeOffset? TimestampPassagem = null,
     [property: JsonPropertyName("timestamp_gps")] DateTimeOffset? TimestampGps = null,
     [property: JsonPropertyName("velocidade_instantanea")] double? VelocidadeInstantanea = null,
-    [property: JsonPropertyName("velocidade_media")] double? VelocidadeMedia = null);
+    [property: JsonPropertyName("velocidade_media")] double? VelocidadeMedia = null,
+    [property: JsonPropertyName("schema_version")] int SchemaVersion = 1,
+    [property: JsonPropertyName("padrao_operacional_id")] Guid? PadraoOperacionalId = null,
+    [property: JsonPropertyName("padrao_versao_id")] Guid? PadraoVersaoId = null,
+    [property: JsonPropertyName("ocorrencia_parada_padrao_id")] Guid? OcorrenciaParadaPadraoId = null,
+    [property: JsonPropertyName("volta")] int? Volta = null,
+    [property: JsonPropertyName("linha_id")] Guid? LinhaId = null);
 
 public sealed record DecisaoViagem(ViagemOperacionalState Estado, IReadOnlyList<EventoViagem> Eventos);
 
@@ -62,6 +73,12 @@ internal static class PersistenciaViagemOperacional
         || anterior.Observada.ItinerarioId != atual.Observada.ItinerarioId
         || anterior.Observada.UltimaParadaItinerarioId != atual.Observada.UltimaParadaItinerarioId
         || anterior.Observada.UltimaParadaOrdem != atual.Observada.UltimaParadaOrdem
+        || anterior.Observada.PadraoOperacionalId != atual.Observada.PadraoOperacionalId
+        || anterior.Observada.PadraoVersaoId != atual.Observada.PadraoVersaoId
+        || anterior.Observada.OcorrenciaCursorId != atual.Observada.OcorrenciaCursorId
+        || anterior.Observada.OrdemCursor != atual.Observada.OrdemCursor
+        || anterior.Observada.Volta != atual.Observada.Volta
+        || anterior.Observada.Topologia != atual.Observada.Topologia
         || anterior.CodigoLinha != atual.CodigoLinha
         || anterior.LinhaId != atual.LinhaId
         || anterior.SentidoId != atual.SentidoId
@@ -89,7 +106,10 @@ public static class ViagemOperacionalRegra
         if (anterior is null)
         {
             var inicial = new ViagemOperacionalState(new(novaId, gps.Ordem, estrutura.ItinerarioId,
-                gps.TimestampGps, gps.TimestampGps, p, transicao.UltimaId, transicao.UltimaOrdem),
+                gps.TimestampGps, gps.TimestampGps, p, transicao.UltimaId, transicao.UltimaOrdem,
+                estrutura.PadraoOperacionalId, estrutura.PadraoVersaoId, transicao.UltimaId,
+                transicao.UltimaOrdem == 0 ? null : transicao.UltimaOrdem, transicao.Volta,
+                p * (gps.ComprimentoRotaMetros ?? 0), estrutura.Topologia),
                 estrutura.CodigoLinha, estrutura.LinhaId, estrutura.SentidoId);
             eventos.Add(Evento(inicial, "ViagemIniciada", gps.TimestampGps));
             return new(inicial, eventos);
@@ -115,20 +135,28 @@ public static class ViagemOperacionalRegra
         }
         var atual = anterior with { Observada = obs with { TimestampUltimaAtualizacao = gps.TimestampGps,
             PosicaoNaRotaConfirmada = p, UltimaParadaItinerarioId = transicao.UltimaId,
-            UltimaParadaOrdem = transicao.UltimaOrdem }, Candidato = null };
+            UltimaParadaOrdem = transicao.UltimaOrdem, OcorrenciaCursorId = transicao.UltimaId,
+            OrdemCursor = transicao.UltimaOrdem == 0 ? null : transicao.UltimaOrdem,
+            Volta = transicao.Volta,
+            ProgressoAbsolutoMetros = transicao.Volta * (gps.ComprimentoRotaMetros ?? 0)
+                + p * (gps.ComprimentoRotaMetros ?? 0) }, Candidato = null };
         if (!adocaoLegado)
-            foreach (var parada in transicao.Ultrapassadas.OrderBy(o => o.Ordem).ThenBy(o => o.Id))
+            foreach (var parada in transicao.HouveWrap
+                ? transicao.Ultrapassadas.AsEnumerable()
+                : transicao.Ultrapassadas.OrderBy(o => o.Ordem).ThenBy(o => o.Id))
             {
                 var passagem = TimestampPassagem(obs, gps, parada.PosicaoLinha);
                 eventos.Add(Evento(atual, "PassagemParada", passagem) with {
-                    EventId = $"passagem:{obs.ViagemId:D}:{parada.Id:D}", ParadaItinerarioId = parada.Id,
+                    EventId = $"passagem:{obs.ViagemId:D}:{parada.Id:D}:{parada.Volta}",
+                    ParadaItinerarioId = null, OcorrenciaParadaPadraoId = parada.Id, Volta = parada.Volta,
                     ParadaId = parada.ParadaId, Ordem = parada.Ordem, PosicaoLinha = parada.PosicaoLinha,
                     TimestampPassagem = passagem, TimestampGps = gps.TimestampGps.ToUniversalTime(),
                     VelocidadeInstantanea = gps.Velocidade, VelocidadeMedia = gps.VelocidadeMedia });
             }
         var permaneceTerminal = transicao.Terminal is { } ultima
             && transicao.UltimaId == ultima.Id && transicao.Proxima is null && transicao.Ultrapassadas.Count == 0;
-        if (anterior.Estado == EstadoViagem.Ativa && !adocaoLegado && transicao.Terminal is { } terminal
+        if (estrutura.Topologia != TopologiasPadrao.Circular
+            && anterior.Estado == EstadoViagem.Ativa && !adocaoLegado && transicao.Terminal is { } terminal
             && (transicao.Ultrapassadas.Any(o => o.Id == terminal.Id) || permaneceTerminal))
             atual = atual with { Estado = EstadoViagem.PossivelFim, ConfirmacoesPosTerminal = 0 };
         else if (anterior.Estado == EstadoViagem.PossivelFim && permaneceTerminal)
@@ -170,7 +198,10 @@ public static class ViagemOperacionalRegra
         {
             var inicio = new ViagemOperacionalState(new(novaId, gps.Ordem, estrutura.ItinerarioId,
                 gps.TimestampGps, gps.TimestampGps, gps.PosicaoNaRota!.Value,
-                transicao.UltimaId, transicao.UltimaOrdem),
+                transicao.UltimaId, transicao.UltimaOrdem, estrutura.PadraoOperacionalId,
+                estrutura.PadraoVersaoId, transicao.UltimaId,
+                transicao.UltimaOrdem == 0 ? null : transicao.UltimaOrdem, transicao.Volta,
+                gps.PosicaoNaRota.Value * (gps.ComprimentoRotaMetros ?? 0), estrutura.Topologia),
                 estrutura.CodigoLinha, estrutura.LinhaId, estrutura.SentidoId);
             return new(inicio, [Evento(inicio, "ViagemIniciada", gps.TimestampGps)]);
         }
@@ -233,5 +264,10 @@ public static class ViagemOperacionalRegra
     private static EventoViagem Evento(ViagemOperacionalState state, string tipo, DateTimeOffset ts) => new(
         $"{(tipo == "ViagemIniciada" ? "inicio" : tipo == "ViagemFinalizada" ? "fim" : "passagem")}:{state.Observada.ViagemId:D}",
         tipo, state.Observada.ViagemId, state.Observada.OrdemVeiculo, state.CodigoLinha,
-        state.SentidoId, state.Observada.ItinerarioId, ts.ToUniversalTime());
+        state.SentidoId, state.Observada.ItinerarioId, ts.ToUniversalTime(),
+        SchemaVersion: 2, PadraoOperacionalId: state.Observada.PadraoOperacionalId,
+        PadraoVersaoId: state.Observada.VersaoEstruturalId,
+        OcorrenciaParadaPadraoId: state.Observada.CursorEstruturalId == Guid.Empty
+            ? null : state.Observada.CursorEstruturalId,
+        Volta: state.Observada.Volta, LinhaId: state.LinhaId);
 }

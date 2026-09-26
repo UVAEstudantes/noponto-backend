@@ -26,6 +26,10 @@ public sealed class TelemetriaVeiculoMl : BaseEntity
     public double? PosicaoNaRota { get; set; }
     public double? ComprimentoRotaMetros { get; set; }
     public Guid? ProximaParadaItinerarioId { get; set; }
+    public Guid? PadraoVersaoId { get; set; }
+    public Guid? OcorrenciaParadaPadraoId { get; set; }
+    public int? Volta { get; set; }
+    public Guid? LinhaId { get; set; }
     public double? DistanciaProximaParadaMetros { get; set; }
     public double? VelocidadeMediaCausal { get; set; }
 }

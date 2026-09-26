@@ -63,15 +63,18 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                     ST_SetSRID(ST_MakePoint(@lon, @lat), 4326)            AS ponto_geom
             ),
             rotas_global AS (
-                SELECT i."Id", i."Geometria"
-                FROM "Itinerarios" i
-                JOIN "Sentidos" s ON s."Id" = i."SentidoId"
+                SELECT i."Id", po."Id" AS padrao_operacional_id,
+                    po."SentidoId" AS sentido_id, s."LinhaId" AS linha_id,
+                    i."Topologia" AS topologia, i."Geometria"
+                FROM "PadroesVersoes" i
+                JOIN "PadroesOperacionais" po ON po."VersaoAtualId" = i."Id"
+                JOIN "Sentidos" s ON s."Id" = po."SentidoId"
                 JOIN "Linhas"   l ON l."Id" = s."LinhaId"
                 CROSS JOIN veiculo v
                 WHERE l."Codigo" = @codigo
             ),
             candidatos_global AS (
-                SELECT r."Id", r."Geometria",
+                SELECT r."Id", r.padrao_operacional_id, r.sentido_id, r.linha_id, r.topologia, r."Geometria",
                     ST_Length(r."Geometria"::geography) AS comprimento_metros,
                     ST_Distance(v.ponto, r."Geometria"::geography) AS distancia_rota_metros,
                     ST_LineLocatePoint(r."Geometria", v.ponto_geom) AS posicao_na_rota
@@ -110,20 +113,26 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 LIMIT 1
             ),
             proxima_parada_global AS (
-                SELECT p."Nome" AS parada_nome,
+                SELECT p."Nome" AS parada_nome, pi."Id" AS ocorrencia_id,
+                    pi."ParadaId" AS parada_id, pi."Ordem" AS parada_ordem,
+                    pi."DistanciaAcumuladaMetros" AS parada_distancia_acumulada,
+                    pi."DistanciaDaLinhaMetros" AS parada_distancia_linha,
                     ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros
-                FROM "ParadasItinerario" pi
+                FROM "OcorrenciasParadasPadroes" pi
                 JOIN "Paradas" p ON p."Id" = pi."ParadaId"
-                JOIN global_escolhido ge ON ge."Id" = pi."ItinerarioId"
+                JOIN global_escolhido ge ON ge."Id" = pi."PadraoVersaoId"
                 CROSS JOIN veiculo v
-                WHERE pi."Ativo" = true AND pi."PosicaoLinha" > ge.posicao_na_rota
-                ORDER BY pi."PosicaoLinha" ASC
+                WHERE pi."PosicaoTracado" > ge.posicao_na_rota
+                ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC
                 LIMIT 1
             ),
             rota_anterior AS (
-                SELECT i."Id", i."Geometria"
-                FROM "Itinerarios" i
-                JOIN "Sentidos" s ON s."Id" = i."SentidoId"
+                SELECT i."Id", po."Id" AS padrao_operacional_id,
+                    po."SentidoId" AS sentido_id, s."LinhaId" AS linha_id,
+                    i."Topologia" AS topologia, i."Geometria"
+                FROM "PadroesVersoes" i
+                JOIN "PadroesOperacionais" po ON po."VersaoAtualId" = i."Id"
+                JOIN "Sentidos" s ON s."Id" = po."SentidoId"
                 JOIN "Linhas"   l ON l."Id" = s."LinhaId"
                 CROSS JOIN veiculo v
                 WHERE @usar_anterior AND l."Codigo" = @codigo
@@ -135,7 +144,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 FROM rota_anterior r
             ),
             candidatos_anterior AS (
-                SELECT r."Id", r."Geometria",
+                SELECT r."Id", r.padrao_operacional_id, r.sentido_id, r.linha_id, r.topologia, r."Geometria",
                     ST_Length(r."Geometria"::geography) AS comprimento_metros,
                     ST_Distance(v.ponto, r.geometria_projecao::geography) AS distancia_rota_metros,
                     @fracao_min + ST_LineLocatePoint(r.geometria_projecao, v.ponto_geom)
@@ -175,20 +184,24 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 LIMIT 1
             ),
             proxima_parada_anterior AS (
-                SELECT p."Nome" AS parada_nome,
+                SELECT p."Nome" AS parada_nome, pi."Id" AS ocorrencia_id,
+                    pi."ParadaId" AS parada_id, pi."Ordem" AS parada_ordem,
+                    pi."DistanciaAcumuladaMetros" AS parada_distancia_acumulada,
+                    pi."DistanciaDaLinhaMetros" AS parada_distancia_linha,
                     ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros
-                FROM "ParadasItinerario" pi
+                FROM "OcorrenciasParadasPadroes" pi
                 JOIN "Paradas" p ON p."Id" = pi."ParadaId"
-                JOIN anterior_escolhido ae ON ae."Id" = pi."ItinerarioId"
+                JOIN anterior_escolhido ae ON ae."Id" = pi."PadraoVersaoId"
                 CROSS JOIN veiculo v
-                WHERE pi."Ativo" = true AND pi."PosicaoLinha" > ae.posicao_na_rota
-                ORDER BY pi."PosicaoLinha" ASC
+                WHERE pi."PosicaoTracado" > ae.posicao_na_rota
+                ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC
                 LIMIT 1
             ),
             rota_operacional AS (
                 SELECT i."Id", i."Geometria",
                     ST_Length(i."Geometria"::geography) AS comprimento_metros
-                FROM "Itinerarios" i
+                FROM "PadroesVersoes" i
+                JOIN "PadroesOperacionais" po ON po."VersaoAtualId" = i."Id"
                 WHERE @usar_operacional
                   AND i."Id" = @itinerario_operacional
                   AND EXISTS (SELECT 1 FROM global_escolhido ge
@@ -225,13 +238,15 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             SELECT
                 'GLOBAL'::text AS ramo,
                 ge."Id" AS itinerario_id,
+                ge.padrao_operacional_id, ge.sentido_id, ge.linha_id, ge.topologia,
                 ge.posicao_na_rota,
                 ge.comprimento_metros,
                 ge.distancia_rota_metros,
                 ge.bearing_local,
                 ST_Y(ge.ponto_rota) AS lat_rota,
                 ST_X(ge.ponto_rota) AS lon_rota,
-                ppg.parada_nome,
+                ppg.parada_nome, ppg.ocorrencia_id, ppg.parada_id, ppg.parada_ordem,
+                ppg.parada_distancia_acumulada, ppg.parada_distancia_linha,
                 ppg.distancia_parada_metros
             FROM global_escolhido ge
             LEFT JOIN proxima_parada_global ppg ON true
@@ -239,13 +254,15 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             SELECT
                 'ANTERIOR'::text AS ramo,
                 ae."Id" AS itinerario_id,
+                ae.padrao_operacional_id, ae.sentido_id, ae.linha_id, ae.topologia,
                 ae.posicao_na_rota,
                 ae.comprimento_metros,
                 ae.distancia_rota_metros,
                 ae.bearing_local,
                 ST_Y(ae.ponto_rota) AS lat_rota,
                 ST_X(ae.ponto_rota) AS lon_rota,
-                ppa.parada_nome,
+                ppa.parada_nome, ppa.ocorrencia_id, ppa.parada_id, ppa.parada_ordem,
+                ppa.parada_distancia_acumulada, ppa.parada_distancia_linha,
                 ppa.distancia_parada_metros
             FROM anterior_escolhido ae
             LEFT JOIN proxima_parada_anterior ppa ON true
@@ -253,13 +270,18 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             SELECT
                 'OPERACIONAL'::text AS ramo,
                 oe."Id" AS itinerario_id,
+                NULL::uuid AS padrao_operacional_id, NULL::uuid AS sentido_id,
+                NULL::uuid AS linha_id, NULL::text AS topologia,
                 oe.posicao_na_rota,
                 oe.comprimento_metros,
                 oe.distancia_rota_metros,
                 NULL::double precision AS bearing_local,
                 NULL::double precision AS lat_rota,
                 NULL::double precision AS lon_rota,
-                NULL::text AS parada_nome,
+                NULL::text AS parada_nome, NULL::uuid AS ocorrencia_id,
+                NULL::uuid AS parada_id, NULL::integer AS parada_ordem,
+                NULL::double precision AS parada_distancia_acumulada,
+                NULL::double precision AS parada_distancia_linha,
                 NULL::double precision AS distancia_parada_metros
             FROM operacional_elegivel oe
             """;
@@ -328,7 +350,11 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
 
     private static EnriquecimentoRotaDto LerRota(NpgsqlDataReader reader) => new()
     {
-        ItinerarioId = reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+        PadraoVersaoId = reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+        PadraoOperacionalId = reader.GetGuid(reader.GetOrdinal("padrao_operacional_id")),
+        SentidoId = reader.GetGuid(reader.GetOrdinal("sentido_id")),
+        LinhaId = reader.GetGuid(reader.GetOrdinal("linha_id")),
+        Topologia = reader.GetString(reader.GetOrdinal("topologia")),
         PosicaoNaRota = reader.GetDouble(reader.GetOrdinal("posicao_na_rota")),
         ComprimentoRotaMetros = reader.GetDouble(reader.GetOrdinal("comprimento_metros")),
         DistanciaARotaMetros = reader.GetDouble(reader.GetOrdinal("distancia_rota_metros")),
@@ -340,6 +366,16 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             ? null : reader.GetDouble(reader.GetOrdinal("bearing_local")),
         ProximaParadaNome = reader.IsDBNull(reader.GetOrdinal("parada_nome"))
             ? null : reader.GetString(reader.GetOrdinal("parada_nome")),
+        ProximaOcorrenciaParadaPadraoId = reader.IsDBNull(reader.GetOrdinal("ocorrencia_id"))
+            ? null : reader.GetGuid(reader.GetOrdinal("ocorrencia_id")),
+        ProximaParadaId = reader.IsDBNull(reader.GetOrdinal("parada_id"))
+            ? null : reader.GetGuid(reader.GetOrdinal("parada_id")),
+        ProximaParadaOrdem = reader.IsDBNull(reader.GetOrdinal("parada_ordem"))
+            ? null : reader.GetInt32(reader.GetOrdinal("parada_ordem")),
+        ProximaParadaDistanciaAcumuladaMetros = reader.IsDBNull(reader.GetOrdinal("parada_distancia_acumulada"))
+            ? null : reader.GetDouble(reader.GetOrdinal("parada_distancia_acumulada")),
+        ProximaParadaDistanciaDaLinhaMetros = reader.IsDBNull(reader.GetOrdinal("parada_distancia_linha"))
+            ? null : reader.GetDouble(reader.GetOrdinal("parada_distancia_linha")),
         DistanciaProximaParadaMetros = reader.IsDBNull(reader.GetOrdinal("distancia_parada_metros"))
             ? null : reader.GetDouble(reader.GetOrdinal("distancia_parada_metros")),
     };
@@ -364,10 +400,12 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             ),
             rotas AS (
                 SELECT
-                    i."Id",
-                    i."Geometria"
-                FROM "Itinerarios" i
-                JOIN "Sentidos" s ON s."Id" = i."SentidoId"
+                    i."Id", po."Id" AS padrao_operacional_id,
+                    po."SentidoId" AS sentido_id, s."LinhaId" AS linha_id,
+                    i."Topologia" AS topologia, i."Geometria"
+                FROM "PadroesVersoes" i
+                JOIN "PadroesOperacionais" po ON po."VersaoAtualId" = i."Id"
+                JOIN "Sentidos" s ON s."Id" = po."SentidoId"
                 JOIN "Linhas"   l ON l."Id" = s."LinhaId"
                 CROSS JOIN veiculo v
                 WHERE l."Codigo" = @codigo
@@ -382,7 +420,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 FROM rotas r
             ),
             candidatos AS (
-                SELECT r."Id", r."Geometria",
+                SELECT r."Id", r.padrao_operacional_id, r.sentido_id, r.linha_id, r.topologia, r."Geometria",
                     ST_Length(r."Geometria"::geography) AS comprimento_metros,
                     ST_Distance(v.ponto, r.geometria_projecao::geography) AS distancia_rota_metros,
                     CASE WHEN @usar_faixa THEN
@@ -438,24 +476,34 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             proxima_parada AS (
                 SELECT
                     p."Nome"                                                         AS parada_nome,
+                    pi."Id"                                                          AS ocorrencia_id,
+                    pi."ParadaId"                                                    AS parada_id,
+                    pi."Ordem"                                                       AS parada_ordem,
+                    pi."DistanciaAcumuladaMetros"                                   AS parada_distancia_acumulada,
+                    pi."DistanciaDaLinhaMetros"                                     AS parada_distancia_linha,
                     ST_Distance(v.ponto, p."Localizacao"::geography)                AS distancia_parada_metros
-                FROM "ParadasItinerario" pi
+                FROM "OcorrenciasParadasPadroes" pi
                 JOIN "Paradas"           p  ON p."Id"  = pi."ParadaId"
-                JOIN itinerario_escolhido ie ON ie."Id" = pi."ItinerarioId"
+                JOIN itinerario_escolhido ie ON ie."Id" = pi."PadraoVersaoId"
                 CROSS JOIN veiculo v
-                WHERE pi."Ativo" = true AND pi."PosicaoLinha" > ie.posicao_na_rota
-                ORDER BY pi."PosicaoLinha" ASC
+                WHERE pi."PosicaoTracado" > ie.posicao_na_rota
+                ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC
                 LIMIT 1
             )
             SELECT
                 ie."Id"                   AS itinerario_id,
+                ie.padrao_operacional_id,
+                ie.sentido_id,
+                ie.linha_id,
+                ie.topologia,
                 ie.posicao_na_rota,
                 ie.comprimento_metros,
                 ie.distancia_rota_metros,
                 ie.bearing_local,
                 ST_Y(ie.ponto_rota)        AS lat_rota,
                 ST_X(ie.ponto_rota)        AS lon_rota,
-                pp.parada_nome,
+                pp.parada_nome, pp.ocorrencia_id, pp.parada_id, pp.parada_ordem,
+                pp.parada_distancia_acumulada, pp.parada_distancia_linha,
                 pp.distancia_parada_metros
             FROM itinerario_escolhido ie
             LEFT JOIN proxima_parada pp ON true
@@ -492,6 +540,11 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             return new EnriquecimentoRotaDto
             {
                 ItinerarioId = reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+                PadraoOperacionalId = reader.GetGuid(reader.GetOrdinal("padrao_operacional_id")),
+                PadraoVersaoId = reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+                SentidoId = reader.GetGuid(reader.GetOrdinal("sentido_id")),
+                LinhaId = reader.GetGuid(reader.GetOrdinal("linha_id")),
+                Topologia = reader.GetString(reader.GetOrdinal("topologia")),
                 PosicaoNaRota = reader.GetDouble(reader.GetOrdinal("posicao_na_rota")),
                 ComprimentoRotaMetros = reader.GetDouble(reader.GetOrdinal("comprimento_metros")),
                 DistanciaARotaMetros = reader.GetDouble(reader.GetOrdinal("distancia_rota_metros")),
@@ -507,6 +560,16 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 ProximaParadaNome = reader.IsDBNull(reader.GetOrdinal("parada_nome"))
                                                     ? null
                                                     : reader.GetString(reader.GetOrdinal("parada_nome")),
+                ProximaOcorrenciaParadaPadraoId = reader.IsDBNull(reader.GetOrdinal("ocorrencia_id"))
+                                                    ? null : reader.GetGuid(reader.GetOrdinal("ocorrencia_id")),
+                ProximaParadaId = reader.IsDBNull(reader.GetOrdinal("parada_id"))
+                                                    ? null : reader.GetGuid(reader.GetOrdinal("parada_id")),
+                ProximaParadaOrdem = reader.IsDBNull(reader.GetOrdinal("parada_ordem"))
+                                                    ? null : reader.GetInt32(reader.GetOrdinal("parada_ordem")),
+                ProximaParadaDistanciaAcumuladaMetros = reader.IsDBNull(reader.GetOrdinal("parada_distancia_acumulada"))
+                                                    ? null : reader.GetDouble(reader.GetOrdinal("parada_distancia_acumulada")),
+                ProximaParadaDistanciaDaLinhaMetros = reader.IsDBNull(reader.GetOrdinal("parada_distancia_linha"))
+                                                    ? null : reader.GetDouble(reader.GetOrdinal("parada_distancia_linha")),
                 DistanciaProximaParadaMetros = reader.IsDBNull(reader.GetOrdinal("distancia_parada_metros"))
                                                     ? null
                                                     : reader.GetDouble(reader.GetOrdinal("distancia_parada_metros")),
@@ -530,8 +593,10 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
     {
         const string sql = """
             SELECT ST_AsGeoJSON("Geometria") AS geojson
-            FROM "Itinerarios"
-            WHERE "Id" = @id
+            FROM "PadroesVersoes" v
+            WHERE v."Id" = @id
+              AND EXISTS (SELECT 1 FROM "PadroesOperacionais" p
+                  WHERE p."VersaoAtualId" = v."Id")
             LIMIT 1
             """;
 

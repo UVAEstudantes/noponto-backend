@@ -9,21 +9,22 @@ internal static class ViagemOperacionalRedisScript
     // Retornos: 2=projetado, 3=Redis ja possui versao duravel superior, 4=merge quente.
     internal const string ProjectDurable = """
         #!lua
-        if #KEYS ~= 1 or #ARGV ~= 24 then return 5 end
+        if #KEYS ~= 1 or #ARGV ~= 31 then return 5 end
         local names = {'ViagemId','OrdemVeiculo','ItinerarioId','TimestampObservacaoInicial',
             'TimestampUltimaAtualizacao','PosicaoNaRotaConfirmada','UltimaParadaItinerarioId','UltimaParadaOrdem',
             'CodigoLinha','LinhaId','SentidoId','EstadoViagem','ConfirmacoesPosTerminal','TimestampFim',
             'CandidatoItinerarioId','CandidatoSentidoId','CandidatoTimestamp','CandidatoPosicao','CandidatoLinhaId',
-            'CandidatoLatitudeInicial','CandidatoLongitudeInicial'}
+            'CandidatoLatitudeInicial','CandidatoLongitudeInicial','PadraoOperacionalId','PadraoVersaoId',
+            'OcorrenciaCursorId','OrdemCursor','Volta','ProgressoAbsolutoMetros','Topologia'}
         local kind = redis.call('TYPE', KEYS[1]).ok
         if kind ~= 'none' and kind ~= 'hash' then return 5 end
         local currentVersion = kind == 'hash' and tonumber(redis.call('HGET', KEYS[1], 'VersaoDuravel')) or nil
-        local incomingVersion = tonumber(ARGV[22])
+        local incomingVersion = tonumber(ARGV[29])
         if not incomingVersion or incomingVersion < 1 then return 5 end
         if currentVersion and currentVersion > incomingVersion then return 3 end
         local merged = false
         local state = {}
-        for i=1,21 do state[i]=ARGV[i] end
+        for i=1,28 do state[i]=ARGV[i] end
         if kind == 'hash' and currentVersion and currentVersion <= incomingVersion then
             local current = redis.call('HMGET', KEYS[1], unpack(names))
             if current[1] == state[1] and current[2] == state[2]
@@ -33,15 +34,16 @@ internal static class ViagemOperacionalRedisScript
                 and current[5] > state[5] then
                 state[5] = current[5]
                 state[6] = current[6]
+                if current[27] then state[27] = current[27] end
                 merged = true
             end
         end
         local args={}
-        for i=1,21 do args[#args+1]=names[i]; args[#args+1]=state[i] end
-        args[#args+1]='VersaoDuravel'; args[#args+1]=ARGV[22]
-        args[#args+1]='UltimoCheckpointDuravelUtc'; args[#args+1]=ARGV[23]
+        for i=1,28 do args[#args+1]=names[i]; args[#args+1]=state[i] end
+        args[#args+1]='VersaoDuravel'; args[#args+1]=ARGV[29]
+        args[#args+1]='UltimoCheckpointDuravelUtc'; args[#args+1]=ARGV[30]
         redis.call('HSET', KEYS[1], unpack(args))
-        redis.call('EXPIRE', KEYS[1], ARGV[24])
+        redis.call('EXPIRE', KEYS[1], ARGV[31])
         return merged and 4 or 2
         """;
 
@@ -59,12 +61,13 @@ internal static class ViagemOperacionalRedisScript
         local ok2, n = pcall(cjson.decode, ARGV[2])
         local ok3, events = pcall(cjson.decode, ARGV[3])
         if not ok1 or not ok2 or not ok3 or type(snapshot) ~= 'table'
-            or type(n) ~= 'table' or type(events) ~= 'table' or #n ~= 21 then return 5 end
+            or type(n) ~= 'table' or type(events) ~= 'table' or (#n ~= 21 and #n ~= 28) then return 5 end
         local names = {'ViagemId','OrdemVeiculo','ItinerarioId','TimestampObservacaoInicial',
             'TimestampUltimaAtualizacao','PosicaoNaRotaConfirmada','UltimaParadaItinerarioId','UltimaParadaOrdem',
             'CodigoLinha','LinhaId','SentidoId','EstadoViagem','ConfirmacoesPosTerminal','TimestampFim',
             'CandidatoItinerarioId','CandidatoSentidoId','CandidatoTimestamp','CandidatoPosicao','CandidatoLinhaId',
-            'CandidatoLatitudeInicial','CandidatoLongitudeInicial'}
+            'CandidatoLatitudeInicial','CandidatoLongitudeInicial','PadraoOperacionalId','PadraoVersaoId',
+            'OcorrenciaCursorId','OrdemCursor','Volta','ProgressoAbsolutoMetros','Topologia'}
         local empty = '00000000000000000000000000000000'
         local function guid(v) return type(v) == 'string' and #v == 32 and v ~= empty and string.match(v, '^[0-9a-f]+$') end
         local function tick(v) return type(v) == 'string' and #v == 19 and string.match(v, '^%d+$')
@@ -103,13 +106,23 @@ internal static class ViagemOperacionalRedisScript
             for i = 15,19 do if s[i] ~= '' then candidate = true end end
             if candidate and (s[12] ~= 'Finalizada' or not guid(s[15]) or not guid(s[16])
                 or not tick(s[17]) or s[17] > s[5] or not progress(s[18]) or not guid(s[19])) then return false end
-            if fields == 21 then
+            if fields >= 21 then
                 if candidate and (not coordinate(s[20],-90,90) or not coordinate(s[21],-180,180)) then return false end
                 if not candidate and (s[20] ~= '' or s[21] ~= '') then return false end
             end
+            if fields == 28 then
+                local v2 = s[22] ~= '' or s[23] ~= '' or s[24] ~= '' or s[25] ~= ''
+                if v2 then
+                    if not guid(s[22]) or not guid(s[23]) or not integer(s[26])
+                        or not tonumber(s[27]) or tonumber(s[27]) < 0
+                        or (s[28] ~= 'LINEAR' and s[28] ~= 'CIRCULAR') then return false end
+                    local cursor = s[24] ~= '' or s[25] ~= ''
+                    if cursor and (not guid(s[24]) or not integer(s[25])) then return false end
+                elseif s[24] ~= '' or s[25] ~= '' or s[22] ~= '' or s[23] ~= '' then return false end
+            end
             return true
         end
-        if not tick(ARGV[4]) or not valid(n, 21) then return 5 end
+        if not tick(ARGV[4]) or not valid(n, #n) then return 5 end
         local kind = redis.call('TYPE', KEYS[1]).ok
         local streamkind = redis.call('TYPE', KEYS[2]).ok
         if (kind ~= 'none' and kind ~= 'hash') or (streamkind ~= 'none' and streamkind ~= 'stream') then return 5 end
@@ -129,8 +142,8 @@ internal static class ViagemOperacionalRedisScript
         end
         local legacy = #current == 12 or #current == 16
         if #current > 0 then
-            if not legacy and #current ~= 38 and #current ~= 42 then return 5 end
-            local oldfields = #current / 2
+            if not legacy and #current ~= 38 and #current ~= 42 and #current ~= 56 and #current ~= 60 then return 5 end
+            local oldfields = #current == 60 and 28 or (#current / 2)
             for i = 1,oldfields do old[i] = oldmap[names[i]] end
             if not valid(old, oldfields) then return 5 end
             if n[5] <= old[5] then return 3 end
@@ -140,7 +153,7 @@ internal static class ViagemOperacionalRedisScript
             if replacement then
                 if legacy or old[12] ~= 'Finalizada' or n[12] ~= 'Ativa' or old[15] ~= n[3]
                     or old[16] ~= n[11] or old[19] ~= n[10] or old[17] >= n[5]
-                    or oldfields ~= 21 or old[20] == '' or old[21] == ''
+                    or oldfields < 21 or old[20] == '' or old[21] == ''
                     or not within180(n[5],old[17]) or n[4] ~= n[5]
                     or tonumber(n[6]) <= tonumber(old[18]) then return 5 end
             else
@@ -170,7 +183,7 @@ internal static class ViagemOperacionalRedisScript
             end
         elseif n[4] ~= n[5] or n[12] ~= 'Ativa' then return 5 end
         local hashargs = {}
-        for i = 1,21 do hashargs[#hashargs+1] = names[i]; hashargs[#hashargs+1] = n[i] end
+        for i = 1,#n do hashargs[#hashargs+1] = names[i]; hashargs[#hashargs+1] = n[i] end
         local eventargs, seen = {}, {}
         local starts, finishes, lastorder = 0, 0, 0
         local function compact(v) return type(v) == 'string' and string.gsub(v, '%-', '') or '' end
@@ -230,19 +243,20 @@ internal static class ViagemOperacionalRedisScript
         local ok1, expected = pcall(cjson.decode, ARGV[1])
         local ok2, next = pcall(cjson.decode, ARGV[2])
         if not ok1 or not ok2 or type(expected) ~= 'table' or type(next) ~= 'table'
-            or #expected ~= 21 or #next ~= 21 then return 5 end
+            or #expected ~= 28 or #next ~= 28 then return 5 end
         local names = {'ViagemId','OrdemVeiculo','ItinerarioId','TimestampObservacaoInicial',
             'TimestampUltimaAtualizacao','PosicaoNaRotaConfirmada','UltimaParadaItinerarioId','UltimaParadaOrdem',
             'CodigoLinha','LinhaId','SentidoId','EstadoViagem','ConfirmacoesPosTerminal','TimestampFim',
             'CandidatoItinerarioId','CandidatoSentidoId','CandidatoTimestamp','CandidatoPosicao','CandidatoLinhaId',
-            'CandidatoLatitudeInicial','CandidatoLongitudeInicial'}
+            'CandidatoLatitudeInicial','CandidatoLongitudeInicial','PadraoOperacionalId','PadraoVersaoId',
+            'OcorrenciaCursorId','OrdemCursor','Volta','ProgressoAbsolutoMetros','Topologia'}
         if redis.call('TYPE',KEYS[1]).ok ~= 'hash' then return 7 end
         local current = redis.call('HMGET',KEYS[1],unpack(names))
-        for i=1,21 do if current[i] ~= expected[i] then return 7 end end
+        for i=1,28 do if current[i] ~= expected[i] then return 7 end end
         if redis.call('HGET',KEYS[1],'VersaoDuravel') ~= ARGV[3] then return 7 end
         if next[5] <= current[5] then return 3 end
         local args={}
-        for i=1,21 do args[#args+1]=names[i]; args[#args+1]=next[i] end
+        for i=1,28 do args[#args+1]=names[i]; args[#args+1]=next[i] end
         redis.call('HSET',KEYS[1],unpack(args))
         redis.call('EXPIRE',KEYS[1],ARGV[4])
         return 2

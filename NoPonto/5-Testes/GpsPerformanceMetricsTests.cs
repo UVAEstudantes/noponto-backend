@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
@@ -433,6 +434,43 @@ public sealed class GpsPerformanceMetricsTests
         Assert.Equal(1, metrics.EtaSucessos);
         Assert.Equal(0, metrics.EtaFalhas);
         Assert.Equal(0, metrics.EtaTimeouts);
+    }
+
+    [Fact]
+    public async Task Eta_Envia_contexto_estrutural_v2()
+    {
+        string? json = null;
+        var handler = new Handler(async (request, ct) =>
+        {
+            json = await request.Content!.ReadAsStringAsync(ct);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "[{\"eta_segundos\":60,\"eta_minutos\":1,\"confianca\":\"alta\",\"linha_conhecida\":true}]",
+                    Encoding.UTF8, "application/json"),
+            };
+        });
+        var client = new GpsEtaClient(new HttpClient(handler) { BaseAddress = new Uri("http://eta") },
+            NullLogger<GpsEtaClient>.Instance);
+        var versao = Guid.NewGuid();
+        var ocorrencia = Guid.NewGuid();
+        var sentido = Guid.NewGuid();
+        var linha = Guid.NewGuid();
+
+        await client.PredizirLoteAsync([PosicaoElegivel() with
+        {
+            PadraoVersaoId = versao,
+            ProximaOcorrenciaParadaPadraoId = ocorrencia,
+            SentidoId = sentido,
+            LinhaId = linha,
+        }], default);
+
+        using var documento = JsonDocument.Parse(json!);
+        var item = documento.RootElement[0];
+        Assert.Equal(versao, item.GetProperty("padrao_versao_id").GetGuid());
+        Assert.Equal(ocorrencia, item.GetProperty("ocorrencia_parada_padrao_id").GetGuid());
+        Assert.Equal(sentido, item.GetProperty("sentido_id").GetGuid());
+        Assert.Equal(linha, item.GetProperty("linha_id").GetGuid());
     }
 
     [Fact]

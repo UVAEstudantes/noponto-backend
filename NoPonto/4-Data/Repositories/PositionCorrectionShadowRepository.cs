@@ -26,10 +26,12 @@ public sealed class PositionCorrectionShadowRepository(
             "CodigoLinha","ItinerarioId","SentidoId","ViagemId","PosicaoB","ComprimentoRotaMetros",
             "VelocidadeInstantaneaKmh","VelocidadeMediaLegacyKmh","EstadoMovimento","SamplesBeforeCap",
             "SamplesUsed","MaxSamplesConfigured","MaxSamplesReached","RecebidoEmUtc","PersistidoEmUtc",
-            "AmostrasCausais","SinaisParada","CandidateResults")
+            "AmostrasCausais","SinaisParada","CandidateResults","PadraoVersaoId",
+            "OcorrenciaParadaPadraoId","Volta")
         VALUES (@id,@obs,@contract,@policy,@fingerprint,@state,@gps,@modal,@provider,@vehicle,
             @line,@itinerary,@direction,@trip,@position,@length,@instant,@legacy,@movement,@before,
-            @used,@max,@reached,@received,@persisted,@samples,@stops,@candidates)
+            @used,@max,@reached,@received,@persisted,@samples,@stops,@candidates,
+            @padrao_versao,@ocorrencia,@volta)
         ON CONFLICT ("ShadowOriginId") DO NOTHING
         """;
 
@@ -90,6 +92,9 @@ public sealed class PositionCorrectionShadowRepository(
         cmd.Parameters.AddWithValue("itinerary", c.ItinerarioId);
         Nullable(cmd, "direction", NpgsqlDbType.Uuid, c.SentidoId);
         Nullable(cmd, "trip", NpgsqlDbType.Uuid, c.ViagemId);
+        Nullable(cmd, "padrao_versao", NpgsqlDbType.Uuid, c.PadraoVersaoId);
+        Nullable(cmd, "ocorrencia", NpgsqlDbType.Uuid, c.OcorrenciaParadaPadraoId);
+        Nullable(cmd, "volta", NpgsqlDbType.Integer, c.Volta);
         cmd.Parameters.AddWithValue("position", o.PosicaoB);
         cmd.Parameters.AddWithValue("length", o.ComprimentoRotaMetros);
         Nullable(cmd, "instant", NpgsqlDbType.Double, o.VelocidadeInstantaneaKmh);

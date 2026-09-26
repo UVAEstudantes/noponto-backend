@@ -324,7 +324,8 @@ public sealed class LegacyEstruturalV24Fixture : IAsyncLifetime
         string validation = ResultadosValidacaoPadrao.Valida) => new() {
         Id=Guid.NewGuid(), PadraoOperacionalId=pattern, Numero=1,
         Geometria=new LineString([new(-43,-22.9),new(-42.99,-22.9)]) { SRID=4326 },
-        DistanciaMetros=1000, MetodoConstrucao="TESTE", Confianca=1,
+        DistanciaMetros=1000, Topologia=TopologiasPadrao.Linear,
+        HashEstrutural=Guid.NewGuid().ToString("N").PadRight(64, '0'), MetodoConstrucao="TESTE", Confianca=1,
         AlgoritmoVersao=algorithm, ResultadoValidacao=validation,
         Relatorio="{}", CriadaEmUtc=DateTimeOffset.UtcNow };
 

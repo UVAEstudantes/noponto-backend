@@ -293,7 +293,9 @@ public sealed class MotorCorrecaoTemporalPosicao
 
     private static ContextoCausalPosicao Contexto(ObservacaoPosicaoTemporal observacao) => new(
         observacao.Ordem, observacao.Modal, observacao.Provedor, observacao.CodigoLinha,
-        observacao.ItinerarioId, observacao.SentidoId, observacao.ViagemId);
+        observacao.ItinerarioId, observacao.SentidoId, observacao.ViagemId,
+        observacao.PadraoVersaoId, observacao.OcorrenciaParadaPadraoId,
+        observacao.LinhaId, observacao.Volta);
 
     private bool EstadoCompativelComObservacao(
         EstadoCausalPosicao? estado, ObservacaoPosicaoTemporal observacao)

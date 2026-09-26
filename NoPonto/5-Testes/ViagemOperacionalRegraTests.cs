@@ -22,11 +22,12 @@ public sealed class ViagemOperacionalRegraTests
     }
     private readonly Guid _r1 = Guid.NewGuid(), _r2 = Guid.NewGuid(), _r3 = Guid.NewGuid(),
         _rMesmoSentido = Guid.NewGuid(), _linha = Guid.NewGuid(), _linha2 = Guid.NewGuid(),
-        _s1 = Guid.NewGuid(), _s2 = Guid.NewGuid(), _s3 = Guid.NewGuid();
+        _s1 = Guid.NewGuid(), _s2 = Guid.NewGuid(), _s3 = Guid.NewGuid(),
+        _po1 = Guid.NewGuid(), _po2 = Guid.NewGuid();
     private readonly DateTimeOffset _t = DateTimeOffset.UtcNow.AddMinutes(-5);
-    private EstruturaViagem E(bool novo = false, bool ambiguo = false) => new(novo ? _r2 : _r1, _linha, novo ? _s2 : _s1, "L3", !ambiguo);
-    private EstruturaViagem EMesmoSentido() => new(_rMesmoSentido, _linha, _s1, "L3", true);
-    private EstruturaViagem EOutraLinha() => new(_r3, _linha2, _s3, "414", true);
+    private EstruturaViagem E(bool novo = false, bool ambiguo = false) => new(novo ? _r2 : _r1, _linha, novo ? _s2 : _s1, "L3", !ambiguo, novo ? _po2 : _po1);
+    private EstruturaViagem EMesmoSentido() => new(_rMesmoSentido, _linha, _s1, "L3", true, _po1);
+    private EstruturaViagem EOutraLinha() => new(_r3, _linha2, _s3, "414", true, _po2);
     private PosicaoVeiculoDto G(int segundos, double p = .8, bool novo = false) => new() {
         Ordem = "REGRA3", CodigoLinha = "L3", ItinerarioId = novo ? _r2 : _r1,
         TimestampGps = _t.AddSeconds(segundos), PosicaoNaRota = p, ComprimentoRotaMetros = 10_000,

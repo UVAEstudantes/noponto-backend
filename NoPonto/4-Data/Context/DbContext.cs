@@ -65,6 +65,8 @@ public class TransporteDbContext : DbContext
             e.HasIndex(x => x.TimestampGpsOrigemUtc);
             e.HasIndex(x => x.ObservacaoId);
             e.HasIndex(x => new { x.PolicyFingerprint, x.TimestampGpsOrigemUtc });
+            e.HasOne<PadraoVersao>().WithMany().HasForeignKey(x => x.PadraoVersaoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<OcorrenciaParadaPadrao>().WithMany().HasForeignKey(x => x.OcorrenciaParadaPadraoId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<Itinerario>()
             .Property(x => x.Geometria)
@@ -89,6 +91,18 @@ public class TransporteDbContext : DbContext
         modelBuilder.Entity<Parada>()
             .HasIndex(x => x.Localizacao)
             .HasMethod("GIST");
+
+        modelBuilder.Entity<Parada>(e =>
+        {
+            e.Property(x => x.ChaveCanonica).HasMaxLength(240);
+            e.Property(x => x.TipoLocal).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Plataforma).HasMaxLength(80);
+            e.HasIndex(x => x.ChaveCanonica).IsUnique().HasFilter("\"ChaveCanonica\" IS NOT NULL");
+            e.ToTable(t => t.HasCheckConstraint("CK_Paradas_TipoLocal",
+                "\"TipoLocal\" IN ('PARADA','PLATAFORMA','ESTACAO')"));
+            e.HasOne(x => x.Modal).WithMany().HasForeignKey(x => x.ModalId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ParadaPai).WithMany().HasForeignKey(x => x.ParadaPaiId).OnDelete(DeleteBehavior.Restrict);
+        });
 
         modelBuilder.Entity<Poi>()
             .HasIndex(x => x.Localizacao)
@@ -147,6 +161,9 @@ public class TransporteDbContext : DbContext
             .HasIndex(h => h.TimestampGps);
         modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ViagemId, h.ParadaItinerarioId })
             .IsUnique().HasFilter("\"ViagemId\" IS NOT NULL AND \"ParadaItinerarioId\" IS NOT NULL");
+        modelBuilder.Entity<HistoricoPassagem>()
+            .HasIndex(h => new { h.ViagemId, h.OcorrenciaParadaPadraoId, h.Volta })
+            .IsUnique().HasFilter("\"ViagemId\" IS NOT NULL AND \"OcorrenciaParadaPadraoId\" IS NOT NULL AND \"Volta\" IS NOT NULL");
         modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ViagemId, h.TimestampPassagem });
         modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ParadaItinerarioId, h.TimestampPassagem });
         modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.SentidoId, h.TimestampPassagem });
@@ -157,6 +174,10 @@ public class TransporteDbContext : DbContext
             .HasForeignKey(h => h.ParadaItinerarioId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<HistoricoPassagem>().HasOne(h => h.Sentido).WithMany()
             .HasForeignKey(h => h.SentidoId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<HistoricoPassagem>().HasOne<PadraoVersao>().WithMany()
+            .HasForeignKey(h => h.PadraoVersaoId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<HistoricoPassagem>().HasOne<OcorrenciaParadaPadrao>().WithMany()
+            .HasForeignKey(h => h.OcorrenciaParadaPadraoId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<EventoViagemPersistido>().HasKey(e => e.EventId);
         modelBuilder.Entity<EventoViagemPersistido>().Property(e => e.Payload).HasColumnType("jsonb");
         modelBuilder.Entity<EventoViagemPersistido>().HasIndex(e => e.TimestampEvento);
@@ -171,6 +192,10 @@ public class TransporteDbContext : DbContext
         modelBuilder.Entity<TelemetriaVeiculoMl>().HasIndex(t => new { t.CodigoLinha, t.TimestampGps });
         modelBuilder.Entity<TelemetriaVeiculoMl>().HasIndex(t => new { t.ViagemId, t.TimestampGps })
             .HasFilter("\"ViagemId\" IS NOT NULL");
+        modelBuilder.Entity<TelemetriaVeiculoMl>().HasOne<PadraoVersao>().WithMany()
+            .HasForeignKey(t => t.PadraoVersaoId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<TelemetriaVeiculoMl>().HasOne<OcorrenciaParadaPadrao>().WithMany()
+            .HasForeignKey(t => t.OcorrenciaParadaPadraoId).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigurarEstruturaTransporteV21(ModelBuilder modelBuilder)
@@ -232,16 +257,20 @@ public class TransporteDbContext : DbContext
             e.ToTable("PadroesVersoes", t =>
             {
                 t.HasCheckConstraint("CK_PadroesVersoes_Numero", "\"Numero\" > 0");
-                t.HasCheckConstraint("CK_PadroesVersoes_Distancia", "\"DistanciaMetros\" >= 0");
+                t.HasCheckConstraint("CK_PadroesVersoes_Comprimento", "\"ComprimentoMetros\" >= 0");
                 t.HasCheckConstraint("CK_PadroesVersoes_Confianca", "\"Confianca\" >= 0 AND \"Confianca\" <= 1");
+                t.HasCheckConstraint("CK_PadroesVersoes_Topologia", "\"Topologia\" IN ('LINEAR','CIRCULAR')");
             });
             e.Property(x => x.Geometria).HasColumnType("geometry(LineString,4326)").IsRequired();
+            e.Property(x => x.Topologia).HasMaxLength(16).IsRequired();
+            e.Property(x => x.HashEstrutural).HasMaxLength(64).IsRequired();
             e.Property(x => x.MetodoConstrucao).HasMaxLength(40).IsRequired();
             e.Property(x => x.AlgoritmoVersao).HasMaxLength(80).IsRequired();
             e.Property(x => x.ResultadoValidacao).HasMaxLength(20).IsRequired();
             e.Property(x => x.Relatorio).HasColumnType("jsonb").IsRequired();
             e.HasAlternateKey(x => new { x.PadraoOperacionalId, x.Id });
             e.HasIndex(x => new { x.PadraoOperacionalId, x.Numero }).IsUnique();
+            e.HasIndex(x => new { x.PadraoOperacionalId, x.HashEstrutural }).IsUnique();
             e.HasIndex(x => x.Geometria).HasMethod("GIST");
             e.HasOne(x => x.PadraoOperacional).WithMany(x => x.Versoes)
                 .HasForeignKey(x => x.PadraoOperacionalId).OnDelete(DeleteBehavior.Restrict);
@@ -272,9 +301,10 @@ public class TransporteDbContext : DbContext
                 t.HasCheckConstraint("CK_OcorrenciasPadroes_Ordem", "\"Ordem\" > 0");
                 t.HasCheckConstraint("CK_OcorrenciasPadroes_SourceSequence", "\"SourceSequence\" IS NULL OR \"SourceSequence\" >= 0");
                 t.HasCheckConstraint("CK_OcorrenciasPadroes_Posicao", "\"PosicaoTracado\" >= 0 AND \"PosicaoTracado\" <= 1");
-                t.HasCheckConstraint("CK_OcorrenciasPadroes_Distancia", "\"DistanciaAcumuladaMetros\" IS NULL OR \"DistanciaAcumuladaMetros\" >= 0");
+                t.HasCheckConstraint("CK_OcorrenciasPadroes_Distancias", "\"DistanciaAcumuladaMetros\" >= 0 AND \"DistanciaDaLinhaMetros\" >= 0");
             });
             e.HasIndex(x => new { x.PadraoVersaoId, x.Ordem }).IsUnique();
+            e.HasIndex(x => new { x.PadraoVersaoId, x.PosicaoTracado });
             e.HasIndex(x => x.ParadaId);
             e.HasOne(x => x.PadraoVersao).WithMany(x => x.Ocorrencias)
                 .HasForeignKey(x => x.PadraoVersaoId).OnDelete(DeleteBehavior.Cascade);
@@ -305,6 +335,9 @@ public class TransporteDbContext : DbContext
         e.Property("Tipo").HasMaxLength(40).IsRequired();
         e.Property("ExternalId").HasMaxLength(240).IsRequired();
         e.Property("OrigemMapeamento").HasMaxLength(16).IsRequired();
+        e.Property("Justificativa").HasMaxLength(1000);
+        e.ToTable(t => t.HasCheckConstraint($"CK_{tabela}_Confianca",
+            "\"Confianca\" IS NULL OR (\"Confianca\" >= 0 AND \"Confianca\" <= 1)"));
         e.ToTable(t => t.HasCheckConstraint($"CK_{tabela}_OrigemMapeamento",
             "\"OrigemMapeamento\" IN ('FONTE','MANUAL')"));
         e.HasIndex("FonteEstruturalId", "Tipo", "ExternalId").IsUnique();

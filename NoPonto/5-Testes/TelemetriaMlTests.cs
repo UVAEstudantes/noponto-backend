@@ -20,6 +20,10 @@ public sealed class TelemetriaMlTests
         TimestampGps = T, TimestampEnvioFonte = T.AddSeconds(1),
         TimestampServidorFonte = T.AddSeconds(2), RecebidoEmUtc = T.AddSeconds(3),
         ItinerarioId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+        PadraoVersaoId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+        ProximaOcorrenciaParadaPadraoId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+        LinhaId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+        SentidoId = Guid.Parse("55555555-5555-5555-5555-555555555555"),
         PosicaoNaRota = .25, ComprimentoRotaMetros = 10_000,
         DistanciaProximaParadaMetros = 300, VelocidadeMedia = 18,
     };
@@ -45,6 +49,10 @@ public sealed class TelemetriaMlTests
         Assert.Null(evento.LongitudeProjetada);
         Assert.Equal(.25, evento.PosicaoNaRota);
         Assert.Equal(Posicao().ItinerarioId, evento.ItinerarioId);
+        Assert.Equal(Posicao().PadraoVersaoId, evento.PadraoVersaoId);
+        Assert.Equal(proxima, evento.OcorrenciaParadaPadraoId);
+        Assert.Equal(Posicao().LinhaId, evento.LinhaId);
+        Assert.Equal(Posicao().SentidoId, evento.SentidoId);
         Assert.Equal(viagem, evento.ViagemId);
         Assert.Equal(proxima, evento.ProximaParadaItinerarioId);
         Assert.Equal("REAL", evento.OrigemPosicao);

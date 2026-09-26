@@ -39,6 +39,13 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
     }
 
     [Fact]
+    public async Task VersaoNaoPublicada_NaoParticipaDoMatchingOperacional()
+    {
+        var resultado = await Direcionada(_db.Unpublished);
+        Assert.Equal(StatusBuscaItinerario.NotEligible, resultado.Status);
+    }
+
+    [Fact]
     public async Task DistanciaAcimaDoLimite_NaoElegivel()
     {
         var resultado = await Direcionada(_db.R1, lat: -22.91);

@@ -10,7 +10,9 @@ internal static class ViagemOperacionalCodec
         "UltimaParadaItinerarioId", "UltimaParadaOrdem", "CodigoLinha", "LinhaId", "SentidoId",
         "EstadoViagem", "ConfirmacoesPosTerminal", "TimestampFim", "CandidatoItinerarioId",
         "CandidatoSentidoId", "CandidatoTimestamp", "CandidatoPosicao", "CandidatoLinhaId",
-        "CandidatoLatitudeInicial", "CandidatoLongitudeInicial"];
+        "CandidatoLatitudeInicial", "CandidatoLongitudeInicial", "PadraoOperacionalId",
+        "PadraoVersaoId", "OcorrenciaCursorId", "OrdemCursor", "Volta",
+        "ProgressoAbsolutoMetros", "Topologia"];
     private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
     internal static string Tick(DateTimeOffset t) => t.UtcTicks.ToString("D19", Culture);
     internal static string[] Encode(ViagemOperacionalState state)
@@ -25,11 +27,16 @@ internal static class ViagemOperacionalCodec
             c?.ItinerarioId.ToString("N") ?? "", c?.SentidoId.ToString("N") ?? "",
             c is null ? "" : Tick(c.Timestamp), c?.Posicao.ToString("R", Culture) ?? "", c?.LinhaId.ToString("N") ?? "",
             c?.LatitudeInicial?.ToString("R", Culture) ?? "",
-            c?.LongitudeInicial?.ToString("R", Culture) ?? ""];
+            c?.LongitudeInicial?.ToString("R", Culture) ?? "",
+            s.PadraoOperacionalId == Guid.Empty ? "" : s.PadraoOperacionalId.ToString("N"),
+            s.PadraoVersaoId == Guid.Empty ? "" : s.PadraoVersaoId.ToString("N"),
+            s.OcorrenciaCursorId == Guid.Empty ? "" : s.OcorrenciaCursorId.ToString("N"),
+            s.OrdemCursor?.ToString(Culture) ?? "", s.Volta.ToString(Culture),
+            s.ProgressoAbsolutoMetros.ToString("R", Culture), s.Topologia];
     }
     internal static ViagemObservadaState Observada(IReadOnlyDictionary<string, string> values, string ordem)
     {
-        if (values.Count is not (6 or 8 or 19 or 21) || values.Keys.Any(k => !Names.Contains(k)))
+        if (values.Count is not (6 or 8 or 19 or 21 or 28) || values.Keys.Any(k => !Names.Contains(k)))
             throw new FormatException("Hash parcial ou versão desconhecida.");
         string V(int i) => values[Names[i]];
         var initial = Time(V(3));
@@ -38,14 +45,27 @@ internal static class ViagemOperacionalCodec
         var id = values.Count == 6 || V(6) == "" ? Guid.Empty : Guid.ParseExact(V(6), "N");
         var order = values.Count == 6 || V(7) == "" ? 0 : Int(V(7));
         if ((order == 0) != (id == Guid.Empty)) throw new FormatException("Cursor inválido.");
-        return new(Id(V(0)), ordem, Id(V(2)), initial, last, Progress(V(5)), id, order);
+        if (values.Count != 28)
+            return new(Id(V(0)), ordem, Id(V(2)), initial, last, Progress(V(5)), id, order);
+        var hasV2 = V(21) != "" || V(22) != "" || V(23) != "" || V(24) != "";
+        if (!hasV2)
+            return new(Id(V(0)), ordem, Id(V(2)), initial, last, Progress(V(5)), id, order);
+        var occurrence = V(23) == "" ? Guid.Empty : Id(V(23));
+        int? occurrenceOrder = V(24) == "" ? null : Int(V(24));
+        if ((occurrence == Guid.Empty) != (occurrenceOrder is null))
+            throw new FormatException("Cursor estrutural inválido.");
+        var topology = V(27);
+        if (topology is not ("LINEAR" or "CIRCULAR")) throw new FormatException("Topologia inválida.");
+        return new(Id(V(0)), ordem, Id(V(2)), initial, last, Progress(V(5)), id, order,
+            OptionalId(V(21)), Id(V(22)), occurrence, occurrenceOrder, Int(V(25)),
+            NonNegative(V(26)), topology);
     }
     internal static ViagemOperacionalState Decode(IReadOnlyDictionary<string, string> values, string ordem)
     {
-        if (values.Count == 23 && values.ContainsKey(ViagemOperacionalRedisScript.DurableVersion)
+        if (values.Count == Names.Length + 2 && values.ContainsKey(ViagemOperacionalRedisScript.DurableVersion)
             && values.ContainsKey(ViagemOperacionalRedisScript.DurableCheckpoint))
             values = Names.ToDictionary(n => n, n => values[n]);
-        if (values.Count is not (19 or 21)) throw new FormatException("Hash operacional parcial.");
+        if (values.Count is not (19 or 21 or 28)) throw new FormatException("Hash operacional parcial.");
         var obs = Observada(values, ordem);
         string V(int i) => values[Names[i]];
         if (string.IsNullOrWhiteSpace(V(8)) || !Enum.TryParse<EstadoViagem>(V(11), out var phase)
@@ -61,23 +81,26 @@ internal static class ViagemOperacionalCodec
         CandidatoViagem? candidate = null;
         if (Enumerable.Range(14, 5).Any(i => V(i) != ""))
         {
-            double? latitude = values.Count == 21 ? Coordinate(V(19), -90, 90) : null;
-            double? longitude = values.Count == 21 ? Coordinate(V(20), -180, 180) : null;
+            double? latitude = values.Count >= 21 ? Coordinate(V(19), -90, 90) : null;
+            double? longitude = values.Count >= 21 ? Coordinate(V(20), -180, 180) : null;
             candidate = new(Id(V(14)), Id(V(15)), Id(V(18)), Time(V(16)), Progress(V(17)),
                 latitude, longitude);
             if (phase != EstadoViagem.Finalizada || candidate.Timestamp > obs.TimestampUltimaAtualizacao)
                 throw new FormatException("Candidato inconsistente.");
         }
-        else if (values.Count == 21 && (V(19) != "" || V(20) != ""))
+        else if (values.Count >= 21 && (V(19) != "" || V(20) != ""))
             throw new FormatException("Coordenada de candidato órfã.");
         return new(obs, V(8), Id(V(9)), Id(V(10)), phase, count, end, candidate);
     }
     private static Guid Id(string v) => Guid.TryParseExact(v, "N", out var id) && id != Guid.Empty
         ? id : throw new FormatException("GUID inválido.");
+    private static Guid OptionalId(string v) => v == "" ? Guid.Empty : Id(v);
     private static int Int(string v) => int.TryParse(v, NumberStyles.None, Culture, out var n) && n >= 0
         ? n : throw new FormatException("Inteiro inválido.");
     private static double Progress(string v) => double.TryParse(v, NumberStyles.Float, Culture, out var p)
         && double.IsFinite(p) && p is >= 0 and <= 1 ? p : throw new FormatException("Progresso inválido.");
+    private static double NonNegative(string v) => double.TryParse(v, NumberStyles.Float, Culture, out var p)
+        && double.IsFinite(p) && p >= 0 ? p : throw new FormatException("Distância inválida.");
     private static double Coordinate(string v, double min, double max) =>
         double.TryParse(v, NumberStyles.Float, Culture, out var coordinate)
         && double.IsFinite(coordinate) && coordinate >= min && coordinate <= max

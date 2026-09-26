@@ -16,11 +16,14 @@ public class HistoricoPassagem : BaseEntity
     /// <summary>Código da linha operada no momento da passagem.</summary>
     public string CodigoLinha { get; set; } = null!;
 
-    public Guid ItinerarioId { get; set; }
+    public Guid? ItinerarioId { get; set; }
     public Guid ParadaId     { get; set; }
     public Guid? ViagemId { get; set; }
     public Guid? ParadaItinerarioId { get; set; }
     public Guid? SentidoId { get; set; }
+    public Guid? PadraoVersaoId { get; set; }
+    public Guid? OcorrenciaParadaPadraoId { get; set; }
+    public int? Volta { get; set; }
     public DateTimeOffset? TimestampPassagem { get; set; }
 
     // ── Posição e tempo ───────────────────────────────────────────────────────
@@ -71,7 +74,7 @@ public class HistoricoPassagem : BaseEntity
 
     // ── Navegação ─────────────────────────────────────────────────────────────
 
-    public Itinerario Itinerario { get; set; } = null!;
+    public Itinerario? Itinerario { get; set; }
     public Parada     Parada     { get; set; } = null!;
     public ParadaItinerario? ParadaItinerario { get; set; }
     public Sentido? Sentido { get; set; }

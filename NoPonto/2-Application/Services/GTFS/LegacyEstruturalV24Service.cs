@@ -123,6 +123,12 @@ public sealed class LegacyEstruturalV24Service(TransporteDbContext db, GtfsProje
                 var version = new PadraoVersao { Id = Guid.NewGuid(), PadraoOperacionalId = pattern.Id,
                     Numero = number, Geometria = (LineString)analysis.Itinerario.Geometria.Copy(),
                     DistanciaMetros = ComprimentoMetros(analysis.Itinerario.Geometria),
+                    Topologia = analysis.Itinerario.Geometria.IsClosed ? TopologiasPadrao.Circular : TopologiasPadrao.Linear,
+                    HashEstrutural = EstruturaHash.Calcular(analysis.Itinerario.Geometria,
+                        analysis.Itinerario.Geometria.IsClosed ? TopologiasPadrao.Circular : TopologiasPadrao.Linear,
+                        analysis.Relacoes.Select(x => new EstruturaHashOccurrence(x.ParadaId.ToString("N"),
+                            x.Ordem, x.PosicaoLinha, x.PosicaoLinha * ComprimentoMetros(analysis.Itinerario.Geometria),
+                            x.DistanciaMetros))),
                     MetodoConstrucao = "LEGADO_INTERNO_VALIDADO", Confianca = Confianca,
                     AlgoritmoVersao = AlgoritmoVersao,
                     ResultadoValidacao = ResultadosValidacaoPadrao.Valida,
@@ -136,7 +142,8 @@ public sealed class LegacyEstruturalV24Service(TransporteDbContext db, GtfsProje
                         PadraoVersaoId = version.Id, ParadaId = relation.ParadaId,
                         Ordem = relation.Ordem, SourceSequence = relation.SourceStopSequence,
                         PosicaoTracado = relation.PosicaoLinha,
-                        DistanciaAcumuladaMetros = relation.DistanciaMetros });
+                        DistanciaAcumuladaMetros = relation.PosicaoLinha * version.ComprimentoMetros,
+                        DistanciaDaLinhaMetros = relation.DistanciaMetros });
                 foreach (var role in new[] { PapeisImportacaoPadrao.Membership,
                     PapeisImportacaoPadrao.Geometria, PapeisImportacaoPadrao.Paradas,
                     PapeisImportacaoPadrao.Metadados })

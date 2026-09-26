@@ -243,6 +243,7 @@ builder.Services.AddSingleton<GtfsProjecaoService>();
 builder.Services.AddScoped<LegacyEstruturalV24Service>();
 builder.Services.AddHttpClient<ArcGisSppoSnapshotClient>();
 builder.Services.AddScoped<ArcGisEstruturalV23Service>();
+builder.Services.AddScoped<EstruturaFinalRebuildService>();
 builder.Services.AddScoped<GtfsParadaItinerarioDryRunService>();
 builder.Services.AddScoped<GtfsParadaItinerarioRebuildService>();
 builder.Services.AddSingleton<ImportacaoItinerariosService>();

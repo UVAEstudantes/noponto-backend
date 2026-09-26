@@ -154,7 +154,7 @@ public sealed class CorrecaoTemporalPosicaoCoordinator(
 
     private static ObservacaoPosicaoTemporal? CriarObservacao(PosicaoVeiculoDto posicao)
     {
-        if (posicao.ItinerarioId is not { } itinerario || itinerario == Guid.Empty
+        if ((posicao.PadraoVersaoId ?? posicao.ItinerarioId) is not { } itinerario || itinerario == Guid.Empty
             || posicao.PosicaoNaRota is not { } posicaoNaRota
             || posicao.ComprimentoRotaMetros is not { } comprimento
             || !double.IsFinite(posicaoNaRota) || !double.IsFinite(comprimento)
@@ -167,6 +167,8 @@ public sealed class CorrecaoTemporalPosicaoCoordinator(
             TelemetriaMlContrato.ObservacaoId(modal, provedor, posicao.Ordem, posicao.TimestampGps),
             posicao.Ordem, modal, provedor, posicao.CodigoLinha, itinerario,
             null, null, posicao.TimestampGps, posicaoNaRota, comprimento,
-            posicao.Velocidade, posicao.VelocidadeMedia, TelemetriaMlContrato.OrigemReal);
+            posicao.Velocidade, posicao.VelocidadeMedia, TelemetriaMlContrato.OrigemReal,
+            posicao.PadraoVersaoId, posicao.ProximaOcorrenciaParadaPadraoId,
+            posicao.LinhaId, null);
     }
 }

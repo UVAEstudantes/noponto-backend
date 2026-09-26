@@ -42,6 +42,10 @@ public sealed record EventoTelemetriaMl
     [JsonPropertyName("evento_criado_em_utc")] public DateTimeOffset EventoCriadoEmUtc { get; init; }
 
     [JsonPropertyName("itinerario_id")] public Guid? ItinerarioId { get; init; }
+    [JsonPropertyName("padrao_versao_id")] public Guid? PadraoVersaoId { get; init; }
+    [JsonPropertyName("ocorrencia_parada_padrao_id")] public Guid? OcorrenciaParadaPadraoId { get; init; }
+    [JsonPropertyName("volta")] public int? Volta { get; init; }
+    [JsonPropertyName("linha_id")] public Guid? LinhaId { get; init; }
     [JsonPropertyName("sentido_id")] public Guid? SentidoId { get; init; }
     [JsonPropertyName("viagem_id")] public Guid? ViagemId { get; init; }
     [JsonPropertyName("posicao_na_rota")] public double? PosicaoNaRota { get; init; }
@@ -85,7 +89,12 @@ public static class EventoTelemetriaMlFactory
             RecebidoEmUtc = posicao.RecebidoEmUtc.ToUniversalTime(),
             EventoCriadoEmUtc = criadoEmUtc.ToUniversalTime(),
             ItinerarioId = posicao.ItinerarioId,
-            SentidoId = null,
+            PadraoVersaoId = posicao.PadraoVersaoId,
+            OcorrenciaParadaPadraoId = viagem?.ProximaOcorrenciaOperacional?.Id
+                ?? posicao.ProximaOcorrenciaParadaPadraoId,
+            Volta = viagem?.Estado?.Volta,
+            LinhaId = posicao.LinhaId,
+            SentidoId = posicao.SentidoId,
             ViagemId = viagem?.Estado?.ViagemId,
             PosicaoNaRota = posicao.PosicaoNaRota,
             ComprimentoRotaMetros = posicao.ComprimentoRotaMetros,

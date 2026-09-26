@@ -32,10 +32,12 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
         _admin = NpgsqlDataSource.Create(connection);
         await using var create = _admin.CreateCommand($"""
             CREATE SCHEMA "{_schema}";
-            CREATE TABLE "{_schema}"."ParadasItinerario" (
-                "Id" uuid PRIMARY KEY, "ItinerarioId" uuid NOT NULL, "ParadaId" uuid NOT NULL,
-                "Ordem" integer NOT NULL, "PosicaoLinha" double precision NOT NULL, "Ativo" boolean NOT NULL DEFAULT true);
-            CREATE INDEX ON "{_schema}"."ParadasItinerario" ("ItinerarioId", "Ordem");
+            CREATE TABLE "{_schema}"."OcorrenciasParadasPadroes" (
+                "Id" uuid PRIMARY KEY, "PadraoVersaoId" uuid NOT NULL, "ParadaId" uuid NOT NULL,
+                "Ordem" integer NOT NULL, "PosicaoTracado" double precision NOT NULL,
+                "DistanciaAcumuladaMetros" double precision NOT NULL DEFAULT 0,
+                "DistanciaDaLinhaMetros" double precision NOT NULL DEFAULT 0);
+            CREATE INDEX ON "{_schema}"."OcorrenciasParadasPadroes" ("PadraoVersaoId", "Ordem");
             """);
         await create.ExecuteNonQueryAsync();
         _source = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(connection)
@@ -65,15 +67,16 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
         .Select(e => $"{e.Name}={e.Value}").OrderBy(e => e).ToArray();
     private async Task<OcorrenciaParada> Add(int order, double p, Guid? stop = null, Guid? itinerary = null, bool active = true)
     {
-        var occurrence = new OcorrenciaParada(Guid.NewGuid(), itinerary ?? _itinerary,
+        var version = active ? itinerary ?? _itinerary : Guid.NewGuid();
+        var occurrence = new OcorrenciaParada(Guid.NewGuid(), version,
             stop ?? Guid.NewGuid(), order, p);
         await using var insert = _source.CreateCommand("""
-            INSERT INTO "ParadasItinerario" ("Id","ItinerarioId","ParadaId","Ordem","PosicaoLinha","Ativo")
-            VALUES (@id, @itinerary, @stop, @order, @p, @active)
+            INSERT INTO "OcorrenciasParadasPadroes" ("Id","PadraoVersaoId","ParadaId","Ordem","PosicaoTracado")
+            VALUES (@id, @itinerary, @stop, @order, @p)
             """);
         insert.Parameters.AddWithValue("id", occurrence.Id); insert.Parameters.AddWithValue("itinerary", occurrence.ItinerarioId);
         insert.Parameters.AddWithValue("stop", occurrence.ParadaId); insert.Parameters.AddWithValue("order", order);
-        insert.Parameters.AddWithValue("p", p); insert.Parameters.AddWithValue("active", active); await insert.ExecuteNonQueryAsync(); return occurrence;
+        insert.Parameters.AddWithValue("p", p); await insert.ExecuteNonQueryAsync(); return occurrence;
     }
 
     [Fact]
@@ -333,25 +336,26 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
     public async Task PlanoSql_FiltraItinerarioAntesDeValidarSequencia()
     {
         await using (var seed = _source.CreateCommand("""
-            INSERT INTO "ParadasItinerario"
+            INSERT INTO "OcorrenciasParadasPadroes" ("Id","PadraoVersaoId","ParadaId","Ordem","PosicaoTracado")
             SELECT gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 1, .5 FROM generate_series(1,5000);
-            INSERT INTO "ParadasItinerario"
+            INSERT INTO "OcorrenciasParadasPadroes" ("Id","PadraoVersaoId","ParadaId","Ordem","PosicaoTracado")
             SELECT gen_random_uuid(), @itinerary, gen_random_uuid(), n, n/100.0 FROM generate_series(1,50) n;
-            ANALYZE "ParadasItinerario";
+            ANALYZE "OcorrenciasParadasPadroes";
             """))
         {
             seed.Parameters.AddWithValue("itinerary", _itinerary); await seed.ExecuteNonQueryAsync();
         }
         await using var explain = _source.CreateCommand("EXPLAIN (ANALYZE, BUFFERS) " + OcorrenciaParadaRepository.Sql);
-        explain.Parameters.AddWithValue("itinerario", _itinerary);
+        explain.Parameters.AddWithValue("versao", _itinerary);
         explain.Parameters.AddWithValue("anterior", .3); explain.Parameters.AddWithValue("atual", .36);
         explain.Parameters.AddWithValue("ultima_id", Guid.Empty); explain.Parameters.AddWithValue("ultima_ordem", 0);
         explain.Parameters.AddWithValue("baseline", true);
+        explain.Parameters.AddWithValue("circular", false);
         await using var reader = await explain.ExecuteReaderAsync();
         var lines = new List<string>();
         while (await reader.ReadAsync()) lines.Add(reader.GetString(0));
         output.WriteLine(string.Join(Environment.NewLine, lines));
-        Assert.Contains(lines, line => line.Contains("Index Cond:") && line.Contains("ItinerarioId"));
+        Assert.Contains(lines, line => line.Contains("Index Cond:") && line.Contains("PadraoVersaoId"));
     }
 
     private sealed class Decorator(IOcorrenciaParadaRepository inner,
@@ -363,5 +367,25 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
             var result = await inner.BuscarTransicaoAsync(id, anterior, atual, ultimaId, ultimaOrdem, baseline, ct);
             await after(atual, result); return result;
         }
+    }
+
+    [Fact]
+    public async Task Circular_WrapIncrementaVoltaEOrdenaFimAntesDoInicio()
+    {
+        var versao = Guid.NewGuid();
+        var fim = await Add(3, .9, itinerary: versao);
+        var inicio = await Add(1, .1, itinerary: versao);
+        var meio = await Add(2, .5, itinerary: versao);
+
+        var result = await _sequence.BuscarTransicaoV2Async(versao, .8, .2,
+            meio.Id, meio.Ordem, false, "CIRCULAR", 4, default);
+
+        Assert.True(result.HouveWrap);
+        Assert.Equal(5, result.Volta);
+        Assert.Equal(inicio.Id, result.UltimaId);
+        Assert.Equal(1, result.UltimaOrdem);
+        Assert.Equal(new[] { fim.Id, inicio.Id }, result.Ultrapassadas.Select(x => x.Id));
+        Assert.Equal(new[] { 4, 5 }, result.Ultrapassadas.Select(x => x.Volta));
+        Assert.Equal(meio.Id, result.Proxima!.Id);
     }
 }

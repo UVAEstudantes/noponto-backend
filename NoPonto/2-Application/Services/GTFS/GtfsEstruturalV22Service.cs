@@ -146,6 +146,11 @@ public sealed class GtfsEstruturalV22Service(
                     Id = Guid.NewGuid(), PadraoOperacionalId = pattern.Id, Numero = number,
                     Geometria = geometry,
                     DistanciaMetros = ComprimentoMetros(source.Shape),
+                    Topologia = EhLoop(source) ? TopologiasPadrao.Circular : TopologiasPadrao.Linear,
+                    HashEstrutural = EstruturaHash.Calcular(geometry,
+                        EhLoop(source) ? TopologiasPadrao.Circular : TopologiasPadrao.Linear,
+                        projection.Ocorrencias.Select(x => new EstruturaHashOccurrence(x.ParadaCodigo,
+                            x.Ordem, x.PosicaoLinha, x.PosicaoLinha * ComprimentoMetros(source.Shape), x.DistanciaMetros))),
                     MetodoConstrucao = "GTFS_AUTORITATIVO", Confianca = 1,
                     AlgoritmoVersao = AlgoritmoVersao,
                     ResultadoValidacao = ResultadosValidacaoPadrao.Valida,
@@ -160,7 +165,9 @@ public sealed class GtfsEstruturalV22Service(
                         Id = Guid.NewGuid(), PadraoVersaoId = version.Id, ParadaId = occurrence.ParadaId,
                         Ordem = occurrence.Ordem, SourceSequence = occurrence.SourceStopSequence,
                         PosicaoTracado = occurrence.PosicaoLinha,
-                        DistanciaAcumuladaMetros = occurrence.SourceShapeDistTraveledMetros
+                        DistanciaAcumuladaMetros = occurrence.PosicaoLinha * version.ComprimentoMetros,
+                        DistanciaDaLinhaMetros = occurrence.DistanciaMetros,
+                        SourceShapeDistTraveledMetros = occurrence.SourceShapeDistTraveledMetros
                     });
                 foreach (var role in new[] { PapeisImportacaoPadrao.Membership, PapeisImportacaoPadrao.Geometria,
                     PapeisImportacaoPadrao.Paradas, PapeisImportacaoPadrao.Metadados })

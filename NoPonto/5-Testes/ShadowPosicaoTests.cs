@@ -231,6 +231,36 @@ public sealed class ShadowPosicaoTests
         });
     }
 
+    [Fact]
+    public void Snapshot_preserva_identidade_estrutural_v2()
+    {
+        var versao = Guid.NewGuid();
+        var ocorrencia = Guid.NewGuid();
+        var linha = Guid.NewGuid();
+        var sentido = Guid.NewGuid();
+        var obs = Observacao() with
+        {
+            PadraoVersaoId = versao,
+            OcorrenciaParadaPadraoId = ocorrencia,
+            LinhaId = linha,
+            SentidoId = sentido,
+            Volta = 3,
+        };
+        var contexto = new ContextoCausalPosicao(obs.Ordem, obs.Modal, obs.Provedor,
+            obs.CodigoLinha, obs.ItinerarioId, obs.SentidoId, obs.ViagemId,
+            versao, ocorrencia, linha, 3);
+        var estado = new EstadoCausalPosicao(contexto, obs.TimestampGps, obs.PosicaoOriginal,
+            obs.ComprimentoRotaMetros, [], [], EstadoMovimentoPosicao.Movimento);
+
+        var origem = ShadowPosicaoFactory.Criar(obs, estado, new());
+
+        Assert.Equal(versao, origem.CausalContext.PadraoVersaoId);
+        Assert.Equal(ocorrencia, origem.CausalContext.OcorrenciaParadaPadraoId);
+        Assert.Equal(linha, origem.CausalContext.LinhaId);
+        Assert.Equal(sentido, origem.CausalContext.SentidoId);
+        Assert.Equal(3, origem.CausalContext.Volta);
+    }
+
     private static ObservacaoPosicaoTemporal Observacao() => new(
         TelemetriaMlContrato.ObservacaoId("ONIBUS", "SPPO", "A1", T0),
         "A1", "ONIBUS", "SPPO", "10", Itinerario, null, null, T0,

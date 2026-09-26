@@ -34,11 +34,12 @@ public sealed class TelemetriaMlRepository(NpgsqlDataSource source) : ITelemetri
                      "TimestampGps","TimestampEnvioFonte","TimestampServidorFonte","RecebidoEmUtc",
                      "EventoCriadoEmUtc","ItinerarioId","SentidoId","ViagemId","PosicaoNaRota",
                      "ComprimentoRotaMetros","ProximaParadaItinerarioId","DistanciaProximaParadaMetros",
-                     "VelocidadeMediaCausal")
+                     "VelocidadeMediaCausal","PadraoVersaoId","OcorrenciaParadaPadraoId","Volta","LinhaId")
                 VALUES
                     (@id,true,now(),@observacao,@modal,@provedor,@ordem,@linha,@origem,@lat,@lon,
                      @latproj,@lonproj,@velocidade,@bearing,@gps,@envio,@servidor,@recebido,@criado,
-                     @itinerario,@sentido,@viagem,@posicao,@comprimento,@proxima,@distancia,@media)
+                     @itinerario,@sentido,@viagem,@posicao,@comprimento,@proxima,@distancia,@media,
+                     @padrao_versao,@ocorrencia,@volta,@linha_id)
                 ON CONFLICT ("ObservacaoId") DO NOTHING
                 """);
             command.Parameters.AddWithValue("id", Guid.NewGuid());
@@ -67,6 +68,10 @@ public sealed class TelemetriaMlRepository(NpgsqlDataSource source) : ITelemetri
             AddNullable(command, "proxima", e.ProximaParadaItinerarioId);
             AddNullable(command, "distancia", e.DistanciaProximaParadaMetros);
             AddNullable(command, "media", e.VelocidadeMediaCausal);
+            AddNullable(command, "padrao_versao", e.PadraoVersaoId);
+            AddNullable(command, "ocorrencia", e.OcorrenciaParadaPadraoId);
+            AddNullable(command, "volta", e.Volta);
+            AddNullable(command, "linha_id", e.LinhaId);
             batch.BatchCommands.Add(command);
         }
         var persistidos = await batch.ExecuteNonQueryAsync(ct);
@@ -83,6 +88,7 @@ public sealed class TelemetriaMlRepository(NpgsqlDataSource source) : ITelemetri
         var tipo = typeof(T) == typeof(double) ? NpgsqlDbType.Double
             : typeof(T) == typeof(Guid) ? NpgsqlDbType.Uuid
             : typeof(T) == typeof(DateTimeOffset) ? NpgsqlDbType.TimestampTz
+            : typeof(T) == typeof(int) ? NpgsqlDbType.Integer
             : throw new NotSupportedException($"Tipo nullable não suportado: {typeof(T).Name}.");
         command.Parameters.Add(new NpgsqlParameter(name, tipo)
         {

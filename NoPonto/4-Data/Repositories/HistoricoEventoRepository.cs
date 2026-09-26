@@ -61,22 +61,37 @@ public sealed class HistoricoEventoRepository(NpgsqlDataSource source) : IHistor
                     JOIN "Itinerarios" i ON i."Id"=pi."ItinerarioId"
                     JOIN "Sentidos" s ON s."Id"=i."SentidoId"
                     JOIN "Linhas" l ON l."Id"=s."LinhaId"
-                    WHERE @tipo='PassagemParada' AND pi."Id"=@ocorrencia
+                    WHERE NOT @v2 AND @tipo='PassagemParada' AND pi."Id"=@ocorrencia
                       AND pi."ItinerarioId"=@itinerario AND pi."ParadaId"=@parada
                       AND pi."Ordem"=@ordem_parada AND pi."PosicaoLinha"=@posicao
                       AND s."Id"=@sentido AND l."Codigo"=@codigo
+                    UNION ALL
+                    SELECT o."Id"
+                    FROM "OcorrenciasParadasPadroes" o
+                    JOIN "PadroesVersoes" v ON v."Id"=o."PadraoVersaoId"
+                    JOIN "PadroesOperacionais" p ON p."Id"=v."PadraoOperacionalId"
+                    JOIN "Sentidos" s ON s."Id"=p."SentidoId"
+                    JOIN "Linhas" l ON l."Id"=s."LinhaId"
+                    WHERE @v2 AND @tipo='PassagemParada' AND o."Id"=@ocorrencia
+                      AND v."Id"=@versao AND p."Id"=@padrao AND o."ParadaId"=@parada
+                      AND o."Ordem"=@ordem_parada AND o."PosicaoTracado"=@posicao
+                      AND s."Id"=@sentido AND s."LinhaId"=@linha AND l."Codigo"=@codigo
                 ), historico AS (
                     INSERT INTO "HistoricoPassagens"
                         ("Id","Ativo","CreatedAt","Ordem","CodigoLinha","ItinerarioId","ParadaId",
                          "ViagemId","ParadaItinerarioId","SentidoId","TimestampPassagem","PosicaoNaRota",
                          "DistanciaParadaMetros","TimestampGps","TimestampRegistro","VelocidadeInstantanea",
-                         "VelocidadeMedia","HoraDia","DiaSemana")
-                    SELECT gen_random_uuid(),true,now(),@ordem_veiculo,@codigo,@itinerario,@parada,
-                        @viagem,@ocorrencia,@sentido,@passagem,@posicao,NULL,@gps,now(),@velocidade,
-                        @media,@hora,@dia
+                         "VelocidadeMedia","HoraDia","DiaSemana","PadraoVersaoId",
+                         "OcorrenciaParadaPadraoId","Volta")
+                    SELECT gen_random_uuid(),true,now(),@ordem_veiculo,@codigo,
+                        CASE WHEN @v2 THEN NULL ELSE @itinerario END,@parada,
+                        @viagem,CASE WHEN @v2 THEN NULL ELSE @ocorrencia END,@sentido,
+                        @passagem,@posicao,NULL,@gps,now(),@velocidade,@media,@hora,@dia,
+                        CASE WHEN @v2 THEN @versao ELSE NULL END,
+                        CASE WHEN @v2 THEN @ocorrencia ELSE NULL END,
+                        CASE WHEN @v2 THEN @volta ELSE NULL END
                     FROM estrutura, payload_ok WHERE payload_ok.ok
-                    ON CONFLICT ("ViagemId","ParadaItinerarioId")
-                        WHERE "ViagemId" IS NOT NULL AND "ParadaItinerarioId" IS NOT NULL DO NOTHING
+                    ON CONFLICT DO NOTHING
                     RETURNING 1
                 )
                 SELECT (SELECT ok FROM payload_ok),
@@ -144,11 +159,21 @@ public sealed class HistoricoEventoRepository(NpgsqlDataSource source) : IHistor
         command.Parameters.AddWithValue("ordem_veiculo", e.OrdemVeiculo);
         command.Parameters.AddWithValue("codigo", e.CodigoLinha);
         command.Parameters.AddWithValue("itinerario", e.ItinerarioId);
+        command.Parameters.AddWithValue("v2", e.SchemaVersion >= 2);
+        command.Parameters.Add(new NpgsqlParameter("padrao", NpgsqlTypes.NpgsqlDbType.Uuid)
+            { Value = (object?)e.PadraoOperacionalId ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("versao", NpgsqlTypes.NpgsqlDbType.Uuid)
+            { Value = (object?)e.PadraoVersaoId ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("linha", NpgsqlTypes.NpgsqlDbType.Uuid)
+            { Value = (object?)e.LinhaId ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("volta", NpgsqlTypes.NpgsqlDbType.Integer)
+            { Value = (object?)e.Volta ?? DBNull.Value });
         command.Parameters.Add(new NpgsqlParameter("parada", NpgsqlTypes.NpgsqlDbType.Uuid)
             { Value = (object?)e.ParadaId ?? DBNull.Value });
         command.Parameters.AddWithValue("viagem", e.ViagemId);
         command.Parameters.Add(new NpgsqlParameter("ocorrencia", NpgsqlTypes.NpgsqlDbType.Uuid)
-            { Value = (object?)e.ParadaItinerarioId ?? DBNull.Value });
+            { Value = (object?)(e.SchemaVersion >= 2
+                ? e.OcorrenciaParadaPadraoId : e.ParadaItinerarioId) ?? DBNull.Value });
         command.Parameters.AddWithValue("sentido", e.SentidoId);
         command.Parameters.Add(new NpgsqlParameter("passagem", NpgsqlTypes.NpgsqlDbType.TimestampTz)
             { Value = (object?)e.TimestampPassagem?.ToUniversalTime() ?? DBNull.Value });
@@ -171,18 +196,28 @@ public static class EventoViagemValidator
 {
     public static void Validar(EventoViagem e)
     {
-        if (e.ViagemId == Guid.Empty || e.SentidoId == Guid.Empty || e.ItinerarioId == Guid.Empty
+        var v2 = e.SchemaVersion >= 2;
+        if (e.ViagemId == Guid.Empty || e.SentidoId == Guid.Empty || (!v2 && e.ItinerarioId == Guid.Empty)
             || string.IsNullOrWhiteSpace(e.OrdemVeiculo) || string.IsNullOrWhiteSpace(e.CodigoLinha)
             || e.TimestampEvento <= DateTimeOffset.UnixEpoch || e.TimestampEvento.Offset != TimeSpan.Zero)
             throw new FormatException("Evento incompleto.");
+        if (v2 && (e.SchemaVersion != 2
+            || e.PadraoOperacionalId is null || e.PadraoOperacionalId == Guid.Empty
+            || e.PadraoVersaoId is null || e.PadraoVersaoId == Guid.Empty
+            || e.LinhaId is null || e.LinhaId == Guid.Empty || e.Volta is null or < 0))
+            throw new FormatException("Evento v2 incompleto.");
         var expected = e.Tipo switch {
             "ViagemIniciada" => $"inicio:{e.ViagemId:D}",
             "ViagemFinalizada" => $"fim:{e.ViagemId:D}",
+            "PassagemParada" when v2 => $"passagem:{e.ViagemId:D}:{e.OcorrenciaParadaPadraoId:D}:{e.Volta}",
             "PassagemParada" => $"passagem:{e.ViagemId:D}:{e.ParadaItinerarioId:D}",
             _ => throw new FormatException("Tipo desconhecido.")
         };
         if (e.EventId != expected) throw new FormatException("Identidade inválida.");
-        if (e.Tipo == "PassagemParada" && (e.ParadaItinerarioId is null || e.ParadaItinerarioId == Guid.Empty
+        var ocorrenciaInvalida = v2
+            ? e.OcorrenciaParadaPadraoId is null || e.OcorrenciaParadaPadraoId == Guid.Empty
+            : e.ParadaItinerarioId is null || e.ParadaItinerarioId == Guid.Empty;
+        if (e.Tipo == "PassagemParada" && (ocorrenciaInvalida
             || e.ParadaId is null || e.ParadaId == Guid.Empty || e.Ordem is null or <= 0
             || e.PosicaoLinha is not { } p || !double.IsFinite(p) || p is < 0 or > 1
             || e.TimestampPassagem is null || e.TimestampGps is null
@@ -198,9 +233,19 @@ public static class EventoViagemValidator
         string V(string k) => fields.TryGetValue(k, out var v) ? v : throw new FormatException($"Campo ausente: {k}.");
         Guid G(string k) => Guid.Parse(V(k));
         DateTimeOffset T(string k) => DateTimeOffset.Parse(V(k), CultureInfo.InvariantCulture).ToUniversalTime();
+        var schema = fields.TryGetValue("schema_version", out var schemaText)
+            ? int.Parse(schemaText, CultureInfo.InvariantCulture) : 1;
+        var versao = fields.TryGetValue("padrao_versao_id", out var pv) ? Guid.Parse(pv) : (Guid?)null;
         var e = new EventoViagem(V("event_id"), V("tipo"), G("viagem_id"), V("ordem_veiculo"), V("codigo_linha"),
-            G("sentido_id"), G("itinerario_id"), T("timestamp_evento"));
-        if (e.Tipo == "PassagemParada") e = e with { ParadaItinerarioId = G("parada_itinerario_id"),
+            G("sentido_id"), fields.TryGetValue("itinerario_id", out var legacy) ? Guid.Parse(legacy) : versao ?? Guid.Empty,
+            T("timestamp_evento"), SchemaVersion: schema,
+            PadraoOperacionalId: fields.TryGetValue("padrao_operacional_id", out var po) ? Guid.Parse(po) : null,
+            PadraoVersaoId: versao,
+            OcorrenciaParadaPadraoId: fields.TryGetValue("ocorrencia_parada_padrao_id", out var op) ? Guid.Parse(op) : null,
+            Volta: fields.TryGetValue("volta", out var volta) ? int.Parse(volta, CultureInfo.InvariantCulture) : null,
+            LinhaId: fields.TryGetValue("linha_id", out var linha) ? Guid.Parse(linha) : null);
+        if (e.Tipo == "PassagemParada") e = e with {
+            ParadaItinerarioId = schema == 1 ? G("parada_itinerario_id") : null,
             ParadaId = G("parada_id"), Ordem = int.Parse(V("ordem"), CultureInfo.InvariantCulture),
             PosicaoLinha = double.Parse(V("posicao_linha"), CultureInfo.InvariantCulture),
             TimestampPassagem = T("timestamp_passagem"), TimestampGps = T("timestamp_gps"),

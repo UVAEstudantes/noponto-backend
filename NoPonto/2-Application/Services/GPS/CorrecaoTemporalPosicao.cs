@@ -70,7 +70,11 @@ public sealed record ObservacaoPosicaoTemporal(
     double ComprimentoRotaMetros,
     double? VelocidadeInstantaneaKmh,
     double? VelocidadeMediaLegacyKmh,
-    string OrigemPosicao = TelemetriaMlContrato.OrigemReal);
+    string OrigemPosicao = TelemetriaMlContrato.OrigemReal,
+    Guid? PadraoVersaoId = null,
+    Guid? OcorrenciaParadaPadraoId = null,
+    Guid? LinhaId = null,
+    int? Volta = null);
 
 public sealed record ContextoCausalPosicao(
     string Ordem,
@@ -79,7 +83,11 @@ public sealed record ContextoCausalPosicao(
     string CodigoLinha,
     Guid ItinerarioId,
     Guid? SentidoId,
-    Guid? ViagemId);
+    Guid? ViagemId,
+    Guid? PadraoVersaoId = null,
+    Guid? OcorrenciaParadaPadraoId = null,
+    Guid? LinhaId = null,
+    int? Volta = null);
 
 public sealed record AmostraCausalPosicao(DateTimeOffset TimestampGps, double VelocidadeKmh);
 

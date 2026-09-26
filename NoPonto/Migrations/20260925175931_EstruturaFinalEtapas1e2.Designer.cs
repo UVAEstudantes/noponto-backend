@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NoPonto.Migrations
 {
     [DbContext(typeof(TransporteDbContext))]
-    partial class TransporteDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260925175931_EstruturaFinalEtapas1e2")]
+    partial class EstruturaFinalEtapas1e2
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -107,7 +110,7 @@ namespace NoPonto.Migrations
                     b.Property<int>("HoraDia")
                         .HasColumnType("integer");
 
-                    b.Property<Guid?>("ItinerarioId")
+                    b.Property<Guid>("ItinerarioId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("OcorrenciaParadaPadraoId")
@@ -188,10 +191,6 @@ namespace NoPonto.Migrations
                     b.HasIndex("ViagemId", "TimestampPassagem");
 
                     b.HasIndex("CodigoLinha", "ItinerarioId", "TimestampGps");
-
-                    b.HasIndex("ViagemId", "OcorrenciaParadaPadraoId", "Volta")
-                        .IsUnique()
-                        .HasFilter("\"ViagemId\" IS NOT NULL AND \"OcorrenciaParadaPadraoId\" IS NOT NULL AND \"Volta\" IS NOT NULL");
 
                     b.ToTable("HistoricoPassagens");
                 });
@@ -1329,9 +1328,6 @@ namespace NoPonto.Migrations
                     b.Property<double>("LatitudeRecebida")
                         .HasColumnType("double precision");
 
-                    b.Property<Guid?>("LinhaId")
-                        .HasColumnType("uuid");
-
                     b.Property<double?>("LongitudeProjetada")
                         .HasColumnType("double precision");
 
@@ -1457,7 +1453,9 @@ namespace NoPonto.Migrations
                 {
                     b.HasOne("NoPonto.Domain.Entities.Itinerario", "Itinerario")
                         .WithMany()
-                        .HasForeignKey("ItinerarioId");
+                        .HasForeignKey("ItinerarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("NoPonto.Domain.Entities.OcorrenciaParadaPadrao", null)
                         .WithMany()

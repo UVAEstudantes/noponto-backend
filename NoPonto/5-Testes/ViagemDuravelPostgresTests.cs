@@ -283,7 +283,7 @@ public sealed class ViagemDuravelPostgresTests(ViagemOperacionalFixture db)
         var context = Assert.IsType<ContextoOperacional>(await repository.LerContextoAsync(_ordem, default));
         Assert.Equal(created.Estado!.ViagemId, context.Estado!.Observada.ViagemId);
         Assert.Equal(G(0).TimestampGps, context.Estado.Observada.TimestampUltimaAtualizacao);
-        Assert.Equal(23, (await Redis.HashGetAllAsync(Key)).Length);
+        Assert.Equal(30, (await Redis.HashGetAllAsync(Key)).Length);
     }
 
     [Fact]
