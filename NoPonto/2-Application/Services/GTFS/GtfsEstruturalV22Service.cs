@@ -130,8 +130,7 @@ public sealed class GtfsEstruturalV22Service(
                 }
 
                 var geometry = new LineString(source.Shape.ToArray()) { SRID = 4326 };
-                var transient = new Itinerario { Id = Guid.Empty, SentidoId = direction.Id, Geometria = geometry };
-                var projection = projector.Projetar(source, transient, stops);
+                var projection = projector.Projetar(source, geometry, stops);
                 if (projection.Motivos.Count > 0)
                 {
                     counters.Ambiguos++;

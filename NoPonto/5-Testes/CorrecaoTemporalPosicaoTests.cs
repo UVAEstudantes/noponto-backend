@@ -213,7 +213,7 @@ public sealed class CorrecaoTemporalPosicaoTests
         var atual = alteracao switch
         {
             "linha" => Obs(20, .12) with { CodigoLinha = "20" },
-            "itinerario" => Obs(20, .12) with { ItinerarioId = Guid.NewGuid() },
+            "itinerario" => Obs(20, .12) with { PadraoVersaoId = Guid.NewGuid() },
             "sentido" => Obs(20, .12) with { SentidoId = Guid.NewGuid() },
             "viagem" => Obs(20, .12) with { ViagemId = Guid.NewGuid() },
             "identidade" => Obs(20, .12) with { Ordem = "OUTRO" },

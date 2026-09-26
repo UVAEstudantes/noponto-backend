@@ -20,7 +20,7 @@ public enum StatusProjecaoOperacional
 }
 
 public sealed record ProjecaoOperacional(
-    Guid ItinerarioId,
+    Guid PadraoVersaoId,
     double PosicaoNaRota,
     double DistanciaRotaMetros,
     double ComprimentoRotaMetros);
@@ -37,9 +37,9 @@ public sealed record ResultadoProjecaoOperacional(
 }
 
 public readonly record struct SolicitacaoProjecaoOperacional(
-    Guid ItinerarioId, double PosicaoAnterior, double OrcamentoMetros)
+    Guid PadraoVersaoId, double PosicaoAnterior, double OrcamentoMetros)
 {
-    public bool Valida => ItinerarioId != Guid.Empty
+    public bool Valida => PadraoVersaoId != Guid.Empty
         && double.IsFinite(PosicaoAnterior) && PosicaoAnterior is >= 0 and <= 1
         && double.IsFinite(OrcamentoMetros) && OrcamentoMetros > 0;
 }

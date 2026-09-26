@@ -11,20 +11,20 @@ internal sealed record EntradaEnriquecimentoGps(
 /// </summary>
 internal interface IExecutorMatchingGps
 {
-    Task<ResultadoBuscaItinerario> BuscarGlobalAsync(
+    Task<ResultadoBuscaPadrao> BuscarGlobalAsync(
         string inputId, string codigoLinha, double latitude, double longitude,
         double bearing, double distanciaMaximaMetros, CancellationToken ct);
 
     Task<ResultadoMatchingCombinado> BuscarCombinadoAsync(
-        string inputId, string codigoLinha, Guid? itinerarioAnteriorId,
+        string inputId, string codigoLinha, Guid? padraoVersaoAnteriorId,
         double latitude, double longitude, double bearing, double distanciaMaximaMetros,
         FaixaProjecao? faixa, SolicitacaoProjecaoOperacional? projecaoOperacional,
         CancellationToken ct);
 
     Task SemConsultaInicialAsync(string inputId, CancellationToken ct);
 
-    Task<ResultadoBuscaItinerario> BuscarDirecionadoAsync(
-        string inputId, string codigoLinha, Guid itinerarioId,
+    Task<ResultadoBuscaPadrao> BuscarDirecionadoAsync(
+        string inputId, string codigoLinha, Guid padraoVersaoId,
         double latitude, double longitude, double bearing, double distanciaMaximaMetros,
         CancellationToken ct, FaixaProjecao? faixa);
 
@@ -75,7 +75,7 @@ public sealed partial class GpsEnriquecimentoService
 
     private sealed class ExecutorMatchingGpsLote : IExecutorMatchingGps
     {
-        private readonly IGpsItinerarioRepository _repositorio;
+        private readonly IGpsPadraoRepository _repositorio;
         private readonly GpsCicloPerformance? _performance;
         private readonly object _sync = new();
         private readonly int _quantidade;
@@ -94,12 +94,12 @@ public sealed partial class GpsEnriquecimentoService
             new(StringComparer.Ordinal);
         private readonly Dictionary<string, EntradaMatchingDirecionadoLote> _direcionados =
             new(StringComparer.Ordinal);
-        private readonly Dictionary<string, TaskCompletionSource<ResultadoBuscaItinerario>> _resultadosGlobais;
+        private readonly Dictionary<string, TaskCompletionSource<ResultadoBuscaPadrao>> _resultadosGlobais;
         private readonly Dictionary<string, TaskCompletionSource<ResultadoMatchingCombinado>> _resultadosCombinados;
-        private readonly Dictionary<string, TaskCompletionSource<ResultadoBuscaItinerario>> _resultadosDirecionados;
+        private readonly Dictionary<string, TaskCompletionSource<ResultadoBuscaPadrao>> _resultadosDirecionados;
 
         internal ExecutorMatchingGpsLote(
-            IGpsItinerarioRepository repositorio,
+            IGpsPadraoRepository repositorio,
             IReadOnlyList<string> ids,
             GpsCicloPerformance? performance,
             int tamanhoChunk,
@@ -112,14 +112,14 @@ public sealed partial class GpsEnriquecimentoService
             _tamanhoChunk = tamanhoChunk;
             _ct = ct;
             _resultadosGlobais = ids.ToDictionary(x => x,
-                _ => NovaFonte<ResultadoBuscaItinerario>(), StringComparer.Ordinal);
+                _ => NovaFonte<ResultadoBuscaPadrao>(), StringComparer.Ordinal);
             _resultadosCombinados = ids.ToDictionary(x => x,
                 _ => NovaFonte<ResultadoMatchingCombinado>(), StringComparer.Ordinal);
             _resultadosDirecionados = ids.ToDictionary(x => x,
-                _ => NovaFonte<ResultadoBuscaItinerario>(), StringComparer.Ordinal);
+                _ => NovaFonte<ResultadoBuscaPadrao>(), StringComparer.Ordinal);
         }
 
-        public async Task<ResultadoBuscaItinerario> BuscarGlobalAsync(
+        public async Task<ResultadoBuscaPadrao> BuscarGlobalAsync(
             string inputId, string codigoLinha, double latitude, double longitude,
             double bearing, double distanciaMaximaMetros, CancellationToken ct)
         {
@@ -129,13 +129,13 @@ public sealed partial class GpsEnriquecimentoService
         }
 
         public async Task<ResultadoMatchingCombinado> BuscarCombinadoAsync(
-            string inputId, string codigoLinha, Guid? itinerarioAnteriorId,
+            string inputId, string codigoLinha, Guid? padraoVersaoAnteriorId,
             double latitude, double longitude, double bearing, double distanciaMaximaMetros,
             FaixaProjecao? faixa, SolicitacaoProjecaoOperacional? projecaoOperacional,
             CancellationToken ct)
         {
             RegistrarInicial(inputId, null, new EntradaMatchingCombinadoLote(inputId,
-                codigoLinha, itinerarioAnteriorId, latitude, longitude, bearing,
+                codigoLinha, padraoVersaoAnteriorId, latitude, longitude, bearing,
                 distanciaMaximaMetros, faixa, projecaoOperacional));
             return await _resultadosCombinados[inputId].Task.WaitAsync(ct);
         }
@@ -147,13 +147,13 @@ public sealed partial class GpsEnriquecimentoService
             return Task.CompletedTask;
         }
 
-        public async Task<ResultadoBuscaItinerario> BuscarDirecionadoAsync(
-            string inputId, string codigoLinha, Guid itinerarioId,
+        public async Task<ResultadoBuscaPadrao> BuscarDirecionadoAsync(
+            string inputId, string codigoLinha, Guid padraoVersaoId,
             double latitude, double longitude, double bearing, double distanciaMaximaMetros,
             CancellationToken ct, FaixaProjecao? faixa)
         {
             RegistrarDirecionado(inputId, new EntradaMatchingDirecionadoLote(inputId,
-                codigoLinha, itinerarioId, latitude, longitude, bearing,
+                codigoLinha, padraoVersaoId, latitude, longitude, bearing,
                 distanciaMaximaMetros, faixa));
             return await _resultadosDirecionados[inputId].Task.WaitAsync(ct);
         }

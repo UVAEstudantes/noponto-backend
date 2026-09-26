@@ -7,28 +7,28 @@ using Xunit.Abstractions;
 
 namespace NoPonto.Tests;
 
-public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisGpsFixture>
+public sealed class GpsPadraoRepositoryPostgisTests : IClassFixture<PostgisGpsFixture>
 {
     private readonly PostgisGpsFixture _db;
-    private readonly GpsItinerarioRepository _repo;
-    public GpsItinerarioRepositoryPostgisTests(PostgisGpsFixture db, ITestOutputHelper output)
+    private readonly GpsPadraoRepository _repo;
+    public GpsPadraoRepositoryPostgisTests(PostgisGpsFixture db, ITestOutputHelper output)
     {
         _db = db;
-        _repo = new(db.DataSource, NullLogger<GpsItinerarioRepository>.Instance);
+        _repo = new(db.DataSource, NullLogger<GpsPadraoRepository>.Instance);
         output.WriteLine($"PostGIS {db.Version}; schema exclusivo {db.Schema}");
     }
 
-    private Task<ResultadoBuscaItinerario> Direcionada(Guid id, double lat = -22.9,
+    private Task<ResultadoBuscaPadrao> Direcionada(Guid id, double lat = -22.9,
         double bearing = 90, string linha = "GPS23")
-        => _repo.BuscarEnriquecimentoDoItinerarioAsync(linha, id, lat, -43.2, bearing, 250);
+        => _repo.BuscarEnriquecimentoDoPadraoAsync(linha, id, lat, -43.2, bearing, 250);
 
     [Fact]
     public async Task DirecionadaElegivel_RetornaMatchingAtualCompleto()
     {
         var resultado = await Direcionada(_db.R1);
-        Assert.Equal(StatusBuscaItinerario.Found, resultado.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, resultado.Status);
         var rota = resultado.Rota!;
-        Assert.Equal(_db.R1, rota.ItinerarioId);
+        Assert.Equal(_db.R1, rota.PadraoVersaoId);
         Assert.InRange(rota.DistanciaARotaMetros, 0, 0.1);
         Assert.Equal(0.5, rota.PosicaoNaRota, 6);
         Assert.InRange(rota.ComprimentoRotaMetros, 2000, 2100);
@@ -42,35 +42,35 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
     public async Task VersaoNaoPublicada_NaoParticipaDoMatchingOperacional()
     {
         var resultado = await Direcionada(_db.Unpublished);
-        Assert.Equal(StatusBuscaItinerario.NotEligible, resultado.Status);
+        Assert.Equal(StatusBuscaPadrao.NotEligible, resultado.Status);
     }
 
     [Fact]
     public async Task DistanciaAcimaDoLimite_NaoElegivel()
     {
         var resultado = await Direcionada(_db.R1, lat: -22.91);
-        Assert.Equal(StatusBuscaItinerario.NotEligible, resultado.Status);
+        Assert.Equal(StatusBuscaPadrao.NotEligible, resultado.Status);
         Assert.Null(resultado.Rota);
     }
 
     [Fact]
     public async Task BearingIncompativel_NaoElegivel()
-        => Assert.Equal(StatusBuscaItinerario.NotEligible, (await Direcionada(_db.R1, bearing: 270)).Status);
+        => Assert.Equal(StatusBuscaPadrao.NotEligible, (await Direcionada(_db.R1, bearing: 270)).Status);
 
     [Fact]
     public async Task ItinerarioDeOutraLinha_NaoElegivel()
     {
-        Assert.Equal(StatusBuscaItinerario.NotEligible, (await Direcionada(_db.OutraLinha)).Status);
-        Assert.Equal(StatusBuscaItinerario.Found, (await Direcionada(_db.OutraLinha, linha: "OUTRA23")).Status);
+        Assert.Equal(StatusBuscaPadrao.NotEligible, (await Direcionada(_db.OutraLinha)).Status);
+        Assert.Equal(StatusBuscaPadrao.Found, (await Direcionada(_db.OutraLinha, linha: "OUTRA23")).Status);
     }
 
     [Fact]
     public async Task IdaVoltaProximas_BearingDistingueNaBuscaGlobalEDirecionada()
     {
-        Assert.Equal(_db.R1, (await _repo.BuscarEnriquecimentoAsync("GPS23", -22.9, -43.2, 90, 250))!.ItinerarioId);
-        Assert.Equal(_db.Volta, (await _repo.BuscarEnriquecimentoAsync("GPS23", -22.9, -43.2, 270, 250))!.ItinerarioId);
-        Assert.Equal(StatusBuscaItinerario.NotEligible, (await Direcionada(_db.Volta)).Status);
-        Assert.Equal(StatusBuscaItinerario.Found, (await Direcionada(_db.Volta, bearing: 270)).Status);
+        Assert.Equal(_db.R1, (await _repo.BuscarEnriquecimentoAsync("GPS23", -22.9, -43.2, 90, 250))!.PadraoVersaoId);
+        Assert.Equal(_db.Volta, (await _repo.BuscarEnriquecimentoAsync("GPS23", -22.9, -43.2, 270, 250))!.PadraoVersaoId);
+        Assert.Equal(StatusBuscaPadrao.NotEligible, (await Direcionada(_db.Volta)).Status);
+        Assert.Equal(StatusBuscaPadrao.Found, (await Direcionada(_db.Volta, bearing: 270)).Status);
     }
 
     [Fact]
@@ -78,10 +78,10 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
     {
         var r1 = await Direcionada(_db.R1);
         var r2 = await Direcionada(_db.R2);
-        Assert.Equal(StatusBuscaItinerario.Found, r1.Status);
-        Assert.Equal(StatusBuscaItinerario.Found, r2.Status);
-        Assert.Equal(_db.R1, r1.Rota!.ItinerarioId);
-        Assert.Equal(_db.R2, r2.Rota!.ItinerarioId);
+        Assert.Equal(StatusBuscaPadrao.Found, r1.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, r2.Status);
+        Assert.Equal(_db.R1, r1.Rota!.PadraoVersaoId);
+        Assert.Equal(_db.R2, r2.Rota!.PadraoVersaoId);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
         var r2Atual = (await Direcionada(_db.R2, lat: -22.8998)).Rota!;
         Assert.InRange(r1Atual.DistanciaARotaMetros, 21, 23);
         Assert.InRange(r2Atual.DistanciaARotaMetros, 0, 0.1);
-        Assert.Equal(_db.R2, (await _repo.BuscarEnriquecimentoAsync("GPS23", -22.8998, -43.2, 90, 250))!.ItinerarioId);
+        Assert.Equal(_db.R2, (await _repo.BuscarEnriquecimentoAsync("GPS23", -22.8998, -43.2, 90, 250))!.PadraoVersaoId);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
         var diagonal = (await Direcionada(_db.Diagonal, lat: lat)).Rota!;
         var r1 = (await Direcionada(_db.R1, lat: lat)).Rota!;
         Assert.True(diagonal.DistanciaARotaMetros < r1.DistanciaARotaMetros);
-        Assert.Equal(_db.R1, (await _repo.BuscarEnriquecimentoAsync("GPS23", lat, -43.2, 90, 250))!.ItinerarioId);
+        Assert.Equal(_db.R1, (await _repo.BuscarEnriquecimentoAsync("GPS23", lat, -43.2, 90, 250))!.PadraoVersaoId);
     }
 
     [Fact]
@@ -113,24 +113,24 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
         var builder = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("POSTGIS_TEST_CONNECTION"))
             { SearchPath = "pg_catalog" };
         await using var fonte = NpgsqlDataSource.Create(builder.ConnectionString);
-        var repo = new GpsItinerarioRepository(fonte, NullLogger<GpsItinerarioRepository>.Instance);
-        var resultado = await repo.BuscarEnriquecimentoDoItinerarioAsync("GPS23", _db.R1, -22.9, -43.2, 90, 250);
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure, resultado.Status);
+        var repo = new GpsPadraoRepository(fonte, NullLogger<GpsPadraoRepository>.Instance);
+        var resultado = await repo.BuscarEnriquecimentoDoPadraoAsync("GPS23", _db.R1, -22.9, -43.2, 90, 250);
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure, resultado.Status);
         Assert.Null(resultado.Rota);
     }
 
     [Fact]
     public async Task X25_IrrestritoReproduzSalto_JanelaPreservaRamoEFracaoGlobal()
     {
-        var centro = (await _repo.BuscarEnriquecimentoDoItinerarioAsync("X25", _db.X, 0, 0, 90, 250)).Rota!;
+        var centro = (await _repo.BuscarEnriquecimentoDoPadraoAsync("X25", _db.X, 0, 0, 90, 250)).Rota!;
         var nordeste = (await _repo.BuscarEnriquecimentoAsync("X25", 0.00001, 0.00001, 90, 250))!;
         var noroeste = (await _repo.BuscarEnriquecimentoAsync("X25", 0.00001, -0.00001, 90, 250))!;
         Assert.InRange(centro.PosicaoNaRota, 0.18, 0.19);
         Assert.InRange(nordeste.PosicaoNaRota, 0.18, 0.19);
         Assert.InRange(noroeste.PosicaoNaRota, 0.81, 0.82);
-        var resultado = await _repo.BuscarEnriquecimentoDoItinerarioAsync(
+        var resultado = await _repo.BuscarEnriquecimentoDoPadraoAsync(
             "X25", _db.X, 0.00001, -0.00001, 90, 250, faixa: new(0.15, 0.22));
-        Assert.Equal(StatusBuscaItinerario.Found, resultado.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, resultado.Status);
         var restrito = resultado.Rota!;
         Assert.Equal(centro.PosicaoNaRota, restrito.PosicaoNaRota, 6);
         Assert.Equal(centro.ComprimentoRotaMetros, restrito.ComprimentoRotaMetros, 6);
@@ -143,12 +143,12 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
     [Fact]
     public async Task X25_RamoForaDaFaixaNaoUsaDistanciaDaGeometriaCompleta()
     {
-        var irrestrito = await _repo.BuscarEnriquecimentoDoItinerarioAsync("X25", _db.X, 0.005, -0.005, 90, 250);
-        Assert.Equal(StatusBuscaItinerario.Found, irrestrito.Status);
+        var irrestrito = await _repo.BuscarEnriquecimentoDoPadraoAsync("X25", _db.X, 0.005, -0.005, 90, 250);
+        Assert.Equal(StatusBuscaPadrao.Found, irrestrito.Status);
         Assert.InRange(irrestrito.Rota!.DistanciaARotaMetros, 0, 0.1);
-        var restrito = await _repo.BuscarEnriquecimentoDoItinerarioAsync(
+        var restrito = await _repo.BuscarEnriquecimentoDoPadraoAsync(
             "X25", _db.X, 0.005, -0.005, 90, 250, faixa: new(0.15, 0.22));
-        Assert.Equal(StatusBuscaItinerario.NotEligible, restrito.Status);
+        Assert.Equal(StatusBuscaPadrao.NotEligible, restrito.Status);
         Assert.Null(restrito.Rota);
     }
 
@@ -159,9 +159,9 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
     public async Task Faixa25_ExtremosERegressaoPublicamFracaoGlobal(
         double min, double max, double lon, double esperado)
     {
-        var resultado = await _repo.BuscarEnriquecimentoDoItinerarioAsync(
+        var resultado = await _repo.BuscarEnriquecimentoDoPadraoAsync(
             "GPS23", _db.R1, -22.9, lon, 90, 250, faixa: new(min, max));
-        Assert.Equal(StatusBuscaItinerario.Found, resultado.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, resultado.Status);
         Assert.Equal(esperado, resultado.Rota!.PosicaoNaRota, 6);
         Assert.Equal(lon, resultado.Rota.LongitudeProjetada!.Value, 6);
         Assert.InRange(resultado.Rota.BearingLocal!.Value, 89, 91);
@@ -171,9 +171,9 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
     public async Task Faixa25_RotaTodaEquivaleAoMatchingIrrestritoCompleto()
     {
         var global = (await Direcionada(_db.R1)).Rota!;
-        var restrito = (await _repo.BuscarEnriquecimentoDoItinerarioAsync(
+        var restrito = (await _repo.BuscarEnriquecimentoDoPadraoAsync(
             "GPS23", _db.R1, -22.9, -43.2, 90, 250, faixa: new(0, 1))).Rota!;
-        Assert.Equal(global.ItinerarioId, restrito.ItinerarioId);
+        Assert.Equal(global.PadraoVersaoId, restrito.PadraoVersaoId);
         Assert.Equal(global.PosicaoNaRota, restrito.PosicaoNaRota, 12);
         Assert.Equal(global.ComprimentoRotaMetros, restrito.ComprimentoRotaMetros, 6);
         Assert.Equal(global.DistanciaARotaMetros, restrito.DistanciaARotaMetros, 6);
@@ -189,9 +189,9 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
     {
         var global = (await _repo.BuscarEnriquecimentoAsync("P25", 0.00002, 0, 90, 250))!;
         Assert.InRange(global.PosicaoNaRota, 0.85, 0.86);
-        var resultado = await _repo.BuscarEnriquecimentoDoItinerarioAsync(
+        var resultado = await _repo.BuscarEnriquecimentoDoPadraoAsync(
             "P25", _db.ParalelasMesmaLinha, 0.00002, 0, 90, 250, faixa: new(0.10, 0.18));
-        Assert.Equal(StatusBuscaItinerario.Found, resultado.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, resultado.Status);
         var restrito = resultado.Rota!;
         Assert.InRange(restrito.PosicaoNaRota, 0.14, 0.15);
         Assert.InRange(restrito.DistanciaARotaMetros, 2, 3);
@@ -209,9 +209,9 @@ public sealed class GpsItinerarioRepositoryPostgisTests : IClassFixture<PostgisG
     [InlineData(0.5, double.PositiveInfinity)]
     public async Task Faixa25_InvalidaOuDegeneradaFalhaSemFallback(double min, double max)
     {
-        var resultado = await _repo.BuscarEnriquecimentoDoItinerarioAsync(
+        var resultado = await _repo.BuscarEnriquecimentoDoPadraoAsync(
             "GPS23", _db.R1, -22.9, -43.2, 90, 250, faixa: new(min, max));
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure, resultado.Status);
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure, resultado.Status);
         Assert.Null(resultado.Rota);
     }
 }

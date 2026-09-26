@@ -74,7 +74,7 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
             INSERT INTO "OcorrenciasParadasPadroes" ("Id","PadraoVersaoId","ParadaId","Ordem","PosicaoTracado")
             VALUES (@id, @itinerary, @stop, @order, @p)
             """);
-        insert.Parameters.AddWithValue("id", occurrence.Id); insert.Parameters.AddWithValue("itinerary", occurrence.ItinerarioId);
+        insert.Parameters.AddWithValue("id", occurrence.Id); insert.Parameters.AddWithValue("itinerary", occurrence.PadraoVersaoId);
         insert.Parameters.AddWithValue("stop", occurrence.ParadaId); insert.Parameters.AddWithValue("order", order);
         insert.Parameters.AddWithValue("p", p); await insert.ExecuteNonQueryAsync(); return occurrence;
     }
@@ -97,7 +97,7 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
         Assert.Equal(ViagemObservadaStatus.Created, result.Status);
         Assert.Empty(result.OcorrenciasUltrapassadas);
         Assert.Equal(expectedOrder, result.Estado!.UltimaParadaOrdem);
-        Assert.Equal(expectedOrder == 0 ? Guid.Empty : stops[expectedOrder - 1].Id, result.Estado.UltimaParadaItinerarioId);
+        Assert.Equal(expectedOrder == 0 ? Guid.Empty : stops[expectedOrder - 1].Id, result.Estado.UltimaOcorrenciaParadaPadraoId);
         Assert.Null(await Db.KeyTimeToLiveAsync(Key));
         var next = await Write(.95, 1);
         Assert.Equal(stops.Skip(expectedOrder), next.OcorrenciasUltrapassadas);
@@ -112,7 +112,7 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
         await Write(.3);
         var result = await Write(p, 1);
         Assert.Equal(stops.Take(count), result.OcorrenciasUltrapassadas);
-        Assert.Equal(stops[count - 1].Id, result.Estado!.UltimaParadaItinerarioId);
+        Assert.Equal(stops[count - 1].Id, result.Estado!.UltimaOcorrenciaParadaPadraoId);
         Assert.Equal(p, result.Estado.PosicaoNaRotaConfirmada);
         Assert.Empty((await Write(p, 2)).OcorrenciasUltrapassadas);
     }
@@ -127,7 +127,7 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
         var regression = await Write(c, 2);
         Assert.Empty(regression.OcorrenciasUltrapassadas);
         Assert.Equal(c, regression.Estado!.PosicaoNaRotaConfirmada);
-        Assert.Equal(stop.Id, regression.Estado.UltimaParadaItinerarioId);
+        Assert.Equal(stop.Id, regression.Estado.UltimaOcorrenciaParadaPadraoId);
         Assert.Empty((await Write(d, 3)).OcorrenciasUltrapassadas);
     }
 
@@ -166,7 +166,7 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
     {
         var stop = await Add(1, .2); await Write(.3);
         if (foreign) stop = await Add(1, .2, itinerary: Guid.NewGuid());
-        await Db.HashSetAsync(Key, "UltimaParadaItinerarioId", stop.Id.ToString("N"));
+        await Db.HashSetAsync(Key, "UltimaOcorrenciaParadaPadraoId", stop.Id.ToString("N"));
         await Db.HashSetAsync(Key, "UltimaParadaOrdem", foreign ? "1" : "2");
         var before = await Snapshot(); var result = await Write(.4, 1);
         Assert.Equal(foreign ? ViagemObservadaStatus.OccurrenceNotFromItinerary
@@ -179,17 +179,17 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
     {
         var a = await Add(1, .2); var b = await Add(2, .5); await Add(3, .7);
         var initial = (await Write(.6)).Estado!;
-        await Db.HashDeleteAsync(Key, ["UltimaParadaItinerarioId", "UltimaParadaOrdem"]);
+        await Db.HashDeleteAsync(Key, ["UltimaOcorrenciaParadaPadraoId", "UltimaParadaOrdem"]);
         var migrated = await Write(.72, 1);
         Assert.Empty(migrated.OcorrenciasUltrapassadas);
-        Assert.Equal(b.Id, migrated.Estado!.UltimaParadaItinerarioId);
+        Assert.Equal(b.Id, migrated.Estado!.UltimaOcorrenciaParadaPadraoId);
         Assert.Equal(initial.ViagemId, migrated.Estado.ViagemId);
         Assert.Equal(initial.TimestampObservacaoInicial, migrated.Estado.TimestampObservacaoInicial);
         Assert.Equal(8, await Db.HashLengthAsync(Key));
     }
 
     [Theory]
-    [InlineData("UltimaParadaItinerarioId")] [InlineData("UltimaParadaOrdem")]
+    [InlineData("UltimaOcorrenciaParadaPadraoId")] [InlineData("UltimaParadaOrdem")]
     public async Task EstadoParcial_NaoMigraSilenciosamente(string missing)
     {
         await Write(.2); await Db.HashDeleteAsync(Key, missing); var before = await Snapshot();
@@ -222,7 +222,7 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
         Assert.Equal(new[] { a, b }, t11.OcorrenciasUltrapassadas);
         Assert.Equal(ViagemObservadaStatus.RejectedOlderOrEqual, stale.Status); Assert.Empty(stale.OcorrenciasUltrapassadas);
         var state = (await Write(.44, 11)).Estado!;
-        Assert.Equal(.44, state.PosicaoNaRotaConfirmada); Assert.Equal(b.Id, state.UltimaParadaItinerarioId);
+        Assert.Equal(.44, state.PosicaoNaRotaConfirmada); Assert.Equal(b.Id, state.UltimaOcorrenciaParadaPadraoId);
     }
 
     [Fact]
@@ -240,7 +240,7 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
         }));
         var result = await Write(.44, 2);
         Assert.Equal(2, calls); Assert.Equal(b, Assert.Single(result.OcorrenciasUltrapassadas));
-        Assert.Equal(b.Id, result.Estado!.UltimaParadaItinerarioId);
+        Assert.Equal(b.Id, result.Estado!.UltimaOcorrenciaParadaPadraoId);
     }
 
     [Fact]
@@ -294,7 +294,7 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
         Assert.Single(results, r => r.Status == ViagemObservadaStatus.Updated);
         Assert.Single(results, r => r.Status == ViagemObservadaStatus.RejectedOlderOrEqual);
         Assert.Equal(stop, Assert.Single(results.SelectMany(r => r.OcorrenciasUltrapassadas)));
-        Assert.Equal(stop.Id.ToString("N"), (string)(await Db.HashGetAsync(Key, "UltimaParadaItinerarioId"))!);
+        Assert.Equal(stop.Id.ToString("N"), (string)(await Db.HashGetAsync(Key, "UltimaOcorrenciaParadaPadraoId"))!);
     }
 
     [Theory]
@@ -302,8 +302,8 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
     [InlineData("UltimaParadaOrdem", "2147483648")]
     [InlineData("UltimaParadaOrdem", "1.5")]
     [InlineData("UltimaParadaOrdem", "bad")]
-    [InlineData("UltimaParadaItinerarioId", "bad")]
-    [InlineData("UltimaParadaItinerarioId", "00000000000000000000000000000000")]
+    [InlineData("UltimaOcorrenciaParadaPadraoId", "bad")]
+    [InlineData("UltimaOcorrenciaParadaPadraoId", "00000000000000000000000000000000")]
     public async Task CursorRedisCorrompido_ZeroWrites(string field, string value)
     {
         await Add(1, .2); await Write(.3); await Db.HashSetAsync(Key, field, value);
@@ -327,7 +327,7 @@ public sealed class OcorrenciaParadaTests(ITestOutputHelper output) : IAsyncLife
         Assert.Empty(lost.OcorrenciasUltrapassadas);
         var retry = await Write(.36, 1);
         Assert.Equal(ViagemObservadaStatus.RejectedOlderOrEqual, retry.Status);
-        Assert.Equal(stop.Id, retry.Estado!.UltimaParadaItinerarioId);
+        Assert.Equal(stop.Id, retry.Estado!.UltimaOcorrenciaParadaPadraoId);
         Assert.Equal(.36, retry.Estado.PosicaoNaRotaConfirmada);
         Assert.Empty((await Write(.37, 2)).OcorrenciasUltrapassadas);
     }

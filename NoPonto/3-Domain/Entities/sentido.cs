@@ -6,6 +6,5 @@ namespace NoPonto.Domain.Entities
         public Guid LinhaId { get; set; }
 
         public Linha Linha { get; set; } = null!;
-        public ICollection<Itinerario> Itinerarios { get; set; } = new List<Itinerario>();
     }
 }

@@ -168,10 +168,10 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
             foreach (var occurrence in occurrences)
             {
                 var timestamp = DateTimeOffset.UtcNow.ToUniversalTime();
-                events.Add(new($"passagem:{viagem:D}:{occurrence.Id:D}", "PassagemParada",
+                events.Add(new($"passagem:{viagem:D}:{occurrence.Id:D}:0", "PassagemParada",
                     viagem, ordemVeiculo, "VIAGEM3", db.S1, db.R1, timestamp,
                     occurrence.Id, db.Stop, occurrence.Order, occurrence.Position,
-                    timestamp, timestamp, 20, 18));
+                    timestamp, timestamp, 20, 18, PadraoOperacionalId: db.P1, Volta: 0, LinhaId: db.Linha));
             }
         }
         await Enqueue(events);
@@ -213,7 +213,8 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
     {
         var viagem = Guid.NewGuid();
         return new($"inicio:{viagem:D}", "ViagemIniciada", viagem, $"BATCH-{Guid.NewGuid():N}",
-            "VIAGEM3", db.S1, db.R1, DateTimeOffset.UtcNow.AddSeconds(index).ToUniversalTime());
+            "VIAGEM3", db.S1, db.R1, DateTimeOffset.UtcNow.AddSeconds(index).ToUniversalTime(),
+            PadraoOperacionalId: db.P1, Volta: 0, LinhaId: db.Linha);
     }
 
     private async Task<EventoViagem[]> PassageEvents(int count)
@@ -226,10 +227,10 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         {
             var occurrence = occurrences[i];
             var timestamp = DateTimeOffset.UtcNow.AddMilliseconds(i).ToUniversalTime();
-            result[i] = new($"passagem:{viagem:D}:{occurrence.Id:D}", "PassagemParada",
+            result[i] = new($"passagem:{viagem:D}:{occurrence.Id:D}:0", "PassagemParada",
                 viagem, ordemVeiculo, "VIAGEM3", db.S1, db.R1, timestamp,
                 occurrence.Id, db.Stop, occurrence.Order, occurrence.Position,
-                timestamp, timestamp, 20, 18);
+                timestamp, timestamp, 20, 18, PadraoOperacionalId: db.P1, Volta: 0, LinhaId: db.Linha);
         }
         return result;
     }
@@ -245,12 +246,13 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
             var order = startOrder + i;
             var position = .7 + i / 1000d;
             await using var insert = db.Source.CreateCommand("""
-                INSERT INTO "ParadasItinerario"
-                    ("Id","ItinerarioId","ParadaId","Ordem","PosicaoLinha","DistanciaMetros","Fonte","Ativo","CreatedAt")
-                VALUES (@id,@itinerario,@parada,@ordem,@posicao,@distancia,'SPATIAL_LEGACY',true,now())
+                INSERT INTO "OcorrenciasParadasPadroes"
+                    ("Id","PadraoVersaoId","ParadaId","Ordem","PosicaoTracado",
+                     "DistanciaAcumuladaMetros","DistanciaDaLinhaMetros")
+                VALUES (@id,@padrao,@parada,@ordem,@posicao,@distancia,0)
                 """);
             insert.Parameters.AddWithValue("id", occurrence);
-            insert.Parameters.AddWithValue("itinerario", db.R1);
+            insert.Parameters.AddWithValue("padrao", db.R1);
             insert.Parameters.AddWithValue("parada", db.Stop);
             insert.Parameters.AddWithValue("ordem", order);
             insert.Parameters.AddWithValue("posicao", position);

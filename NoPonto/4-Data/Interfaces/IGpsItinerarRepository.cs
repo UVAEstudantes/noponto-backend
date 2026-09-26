@@ -4,7 +4,7 @@ namespace NoPonto.Application.GPS;
 /// Repositório especializado em queries PostGIS para o subsistema de GPS em tempo real.
 /// Separado dos repositórios de domínio para isolar as queries geoespaciais de alto desempenho.
 /// </summary>
-public interface IGpsItinerarioRepository
+public interface IGpsPadraoRepository
 {
     /// <summary>
     /// Primeira versao experimental do matching set-based. Nao e usada pelo fluxo
@@ -41,30 +41,30 @@ public interface IGpsItinerarioRepository
 
     /// <summary>
     /// Executa em um comando o matching global e o matching de continuidade do
-    /// itinerario anterior dentro de uma faixa valida.
+    /// padrao anterior dentro de uma faixa valida.
     /// </summary>
     Task<ResultadoMatchingCombinado> BuscarMatchingCombinadoAsync(
-        string codigoLinha, Guid? itinerarioAnteriorId, double latitude, double longitude,
+        string codigoLinha, Guid? padraoVersaoAnteriorId, double latitude, double longitude,
         double bearing, double distanciaMaximaMetros, FaixaProjecao? faixa,
         SolicitacaoProjecaoOperacional? projecaoOperacional = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Reavalia um itinerário na linha/GPS/bearing atuais, distinguindo inelegibilidade de falha.</summary>
-    Task<ResultadoBuscaItinerario> BuscarEnriquecimentoDoItinerarioAsync(
-        string codigoLinha, Guid itinerarioId, double latitude, double longitude,
+    /// <summary>Reavalia um padrão na linha/GPS/bearing atuais, distinguindo inelegibilidade de falha.</summary>
+    Task<ResultadoBuscaPadrao> BuscarEnriquecimentoDoPadraoAsync(
+        string codigoLinha, Guid padraoVersaoId, double latitude, double longitude,
         double bearing, double distanciaMaximaMetros, CancellationToken cancellationToken = default,
         FaixaProjecao? faixa = null);
 
     /// <summary>
     /// Para um veículo em (latitude, longitude) numa determinada linha, retorna:
-    /// - O itinerário (ida ou volta) mais próximo ao veículo;
+    /// - O padrão (ida ou volta) mais próximo ao veículo;
     /// - A posição na rota (0.0 → 1.0) via ST_LineLocatePoint;
     /// - O comprimento total da rota em metros;
     /// - A próxima parada à frente do veículo;
     /// - A distância até essa parada.
     ///
     /// Retorna null quando:
-    ///   - A linha não tem itinerários cadastrados;
+    ///   - A linha não tem padrãos cadastrados;
     ///   - O veículo está a mais de <paramref name="distanciaMaximaMetros"/> da rota;
     ///   - A query falha por qualquer motivo.
     /// </summary>
@@ -77,16 +77,16 @@ public interface IGpsItinerarioRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Retorna a geometria GeoJSON de um itinerário para o frontend usar
+    /// Retorna a geometria GeoJSON de um padrão para o frontend usar
     /// em interpolação local (dead-reckoning com Turf.js).
     /// </summary>
     Task<string?> BuscarGeometriaGeoJsonAsync(
-        Guid itinerarioId,
+        Guid padraoVersaoId,
         CancellationToken cancellationToken = default);
 }
 
 // Contrato do pipeline GPS; não faz parte dos DTOs HTTP.
-public enum StatusBuscaItinerario { Found, NotEligible, InfrastructureFailure }
+public enum StatusBuscaPadrao { Found, NotEligible, InfrastructureFailure }
 
 // Frações globais da mesma LineString; o orçamento temporal pertence ao service.
 public readonly record struct FaixaProjecao(double Min, double Max)
@@ -95,22 +95,22 @@ public readonly record struct FaixaProjecao(double Min, double Max)
         && Min >= 0 && Max <= 1 && Min < Max;
 }
 
-public sealed class ResultadoBuscaItinerario
+public sealed class ResultadoBuscaPadrao
 {
-    public StatusBuscaItinerario Status { get; }
+    public StatusBuscaPadrao Status { get; }
     public EnriquecimentoRotaDto? Rota { get; }
-    private ResultadoBuscaItinerario(StatusBuscaItinerario status, EnriquecimentoRotaDto? rota = null)
+    private ResultadoBuscaPadrao(StatusBuscaPadrao status, EnriquecimentoRotaDto? rota = null)
         => (Status, Rota) = (status, rota);
-    public static ResultadoBuscaItinerario Found(EnriquecimentoRotaDto rota)
-        => new(StatusBuscaItinerario.Found, rota ?? throw new ArgumentNullException(nameof(rota)));
-    public static ResultadoBuscaItinerario NotEligible() => new(StatusBuscaItinerario.NotEligible);
-    public static ResultadoBuscaItinerario InfrastructureFailure() => new(StatusBuscaItinerario.InfrastructureFailure);
+    public static ResultadoBuscaPadrao Found(EnriquecimentoRotaDto rota)
+        => new(StatusBuscaPadrao.Found, rota ?? throw new ArgumentNullException(nameof(rota)));
+    public static ResultadoBuscaPadrao NotEligible() => new(StatusBuscaPadrao.NotEligible);
+    public static ResultadoBuscaPadrao InfrastructureFailure() => new(StatusBuscaPadrao.InfrastructureFailure);
 }
 
 // Contrato interno do pipeline de matching; nao faz parte dos contratos HTTP.
 public sealed record ResultadoMatchingCombinado(
-    ResultadoBuscaItinerario Global,
-    ResultadoBuscaItinerario Anterior,
+    ResultadoBuscaPadrao Global,
+    ResultadoBuscaPadrao Anterior,
     ResultadoProjecaoOperacional? Operacional = null);
 
 // Contratos experimentais exclusivos do pipeline interno. InputId e a unica
@@ -122,18 +122,18 @@ public sealed record EntradaMatchingGlobalLote(
     double? Bearing, double DistanciaMaximaMetros);
 
 public sealed record EntradaMatchingCombinadoLote(
-    string InputId, string CodigoLinha, Guid? ItinerarioAnteriorId,
+    string InputId, string CodigoLinha, Guid? PadraoVersaoAnteriorId,
     double Latitude, double Longitude, double? Bearing, double DistanciaMaximaMetros,
     FaixaProjecao? Faixa, SolicitacaoProjecaoOperacional? ProjecaoOperacional = null);
 
 public sealed record EntradaMatchingDirecionadoLote(
-    string InputId, string CodigoLinha, Guid ItinerarioId,
+    string InputId, string CodigoLinha, Guid PadraoVersaoId,
     double Latitude, double Longitude, double? Bearing, double DistanciaMaximaMetros,
     FaixaProjecao? Faixa = null);
 
-public sealed record ResultadoMatchingGlobalLote(string InputId, ResultadoBuscaItinerario Global);
+public sealed record ResultadoMatchingGlobalLote(string InputId, ResultadoBuscaPadrao Global);
 public sealed record ResultadoMatchingCombinadoLote(string InputId, ResultadoMatchingCombinado Resultado);
-public sealed record ResultadoMatchingDirecionadoLote(string InputId, ResultadoBuscaItinerario Direcionado);
+public sealed record ResultadoMatchingDirecionadoLote(string InputId, ResultadoBuscaPadrao Direcionado);
 
 public enum TipoBatchMatching { GlobalSimples, Combinado, Direcionado }
 public enum OrigemComandoMatchingLote { Batch, FallbackIndividual }

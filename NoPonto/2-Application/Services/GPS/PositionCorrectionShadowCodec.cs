@@ -117,7 +117,7 @@ public static class PositionCorrectionShadowValidator
             || string.IsNullOrWhiteSpace(c.Modal) || c.Modal.Length > 20
             || string.IsNullOrWhiteSpace(c.Provedor) || c.Provedor.Length > 40
             || string.IsNullOrWhiteSpace(c.CodigoLinha) || c.CodigoLinha.Length > 40
-            || c.ItinerarioId == Guid.Empty
+            || c.PadraoVersaoId == Guid.Empty
             || !Position(origin.PosicaoB) || !double.IsFinite(origin.ComprimentoRotaMetros)
             || origin.ComprimentoRotaMetros <= 0
             || !Speed(origin.VelocidadeInstantaneaKmh) || !Speed(origin.VelocidadeMediaLegacyKmh)

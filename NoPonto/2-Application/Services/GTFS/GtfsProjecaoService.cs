@@ -8,7 +8,7 @@ public sealed class GtfsProjecaoService
     private const double EarthRadius = 6_371_008.8;
 
     public (IReadOnlyList<GtfsProjecaoOcorrencia> Ocorrencias, IReadOnlyList<string> Motivos) Projetar(
-        GtfsPadrao padrao, Itinerario itinerario, IReadOnlyDictionary<string, Parada> paradas, double limiteMetros = 50)
+        GtfsPadrao padrao, LineString geometria, IReadOnlyDictionary<string, Parada> paradas, double limiteMetros = 50)
     {
         var reasons = new List<string>();
         if (padrao.Ocorrencias.Count < 3) reasons.Add("PADRAO_COM_MENOS_DE_3_OCORRENCIAS");
@@ -20,7 +20,7 @@ public sealed class GtfsProjecaoService
             if (!paradas.ContainsKey(code)) reasons.Add($"STOP_INEXISTENTE:{code}");
         if (reasons.Count > 0) return ([], reasons);
 
-        var line = itinerario.Geometria.Coordinates;
+        var line = geometria.Coordinates;
         if (line.Length < 2) return ([], ["GEOMETRIA_LOCAL_INVALIDA"]);
         var segmentLengths = Enumerable.Range(0, line.Length - 1).Select(i => Distance(line[i], line[i + 1])).ToArray();
         var total = segmentLengths.Sum();

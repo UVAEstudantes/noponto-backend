@@ -13,10 +13,9 @@ public sealed class PositionCorrectionShadowOrigin
     public string Provedor { get; set; } = "";
     public string OrdemVeiculo { get; set; } = "";
     public string CodigoLinha { get; set; } = "";
-    public Guid ItinerarioId { get; set; }
     public Guid? SentidoId { get; set; }
     public Guid? ViagemId { get; set; }
-    public Guid? PadraoVersaoId { get; set; }
+    public Guid PadraoVersaoId { get; set; }
     public Guid? OcorrenciaParadaPadraoId { get; set; }
     public int? Volta { get; set; }
     public double PosicaoB { get; set; }

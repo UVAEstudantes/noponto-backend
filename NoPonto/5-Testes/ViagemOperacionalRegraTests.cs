@@ -29,13 +29,13 @@ public sealed class ViagemOperacionalRegraTests
     private EstruturaViagem EMesmoSentido() => new(_rMesmoSentido, _linha, _s1, "L3", true, _po1);
     private EstruturaViagem EOutraLinha() => new(_r3, _linha2, _s3, "414", true, _po2);
     private PosicaoVeiculoDto G(int segundos, double p = .8, bool novo = false) => new() {
-        Ordem = "REGRA3", CodigoLinha = "L3", ItinerarioId = novo ? _r2 : _r1,
+        Ordem = "REGRA3", CodigoLinha = "L3", PadraoVersaoId = novo ? _r2 : _r1,
         TimestampGps = _t.AddSeconds(segundos), PosicaoNaRota = p, ComprimentoRotaMetros = 10_000,
         Latitude = -22.9, Longitude = -43.2 + p * .01, Velocidade = 20 };
     private PosicaoVeiculoDto GMesmoSentido(int segundos, double p) => G(segundos, p) with
-        { ItinerarioId = _rMesmoSentido };
+        { PadraoVersaoId = _rMesmoSentido };
     private PosicaoVeiculoDto GOutraLinha(int segundos, double p) => G(segundos, p) with
-        { Ordem = "D12345", CodigoLinha = "414", ItinerarioId = _r3 };
+        { Ordem = "D12345", CodigoLinha = "414", PadraoVersaoId = _r3 };
     private OcorrenciaParada P(int ordem = 10, double p = .8) => new(Guid.NewGuid(), _r1, Guid.NewGuid(), ordem, p);
     private static TransicaoParadas T(OcorrenciaParada? cursor = null, IReadOnlyList<OcorrenciaParada>? passagens = null, OcorrenciaParada? terminal = null) =>
         new(ViagemObservadaStatus.Updated, cursor?.Id ?? Guid.Empty, cursor?.Ordem ?? 0, passagens ?? [], null, terminal);
@@ -48,7 +48,7 @@ public sealed class ViagemOperacionalRegraTests
     private ViagemOperacionalState Finalizada()
     {
         var s = Possivel();
-        var p = new OcorrenciaParada(s.Observada.UltimaParadaItinerarioId, _r1, Guid.NewGuid(), 10, .8);
+        var p = new OcorrenciaParada(s.Observada.UltimaOcorrenciaParadaPadraoId, _r1, Guid.NewGuid(), 10, .8);
         s = ViagemOperacionalRegra.Decidir(s, E(), G(20), T(p, terminal:p), Guid.NewGuid()).Estado;
         return ViagemOperacionalRegra.Decidir(s, E(), G(30), T(p, terminal:p), Guid.NewGuid()).Estado;
     }
@@ -59,7 +59,7 @@ public sealed class ViagemOperacionalRegraTests
         var terminal = P();
         var d = ViagemOperacionalRegra.Decidir(null, E(), G(0), T(terminal, terminal:terminal), Guid.NewGuid());
         Assert.Equal(EstadoViagem.Ativa, d.Estado.Estado);
-        Assert.Equal(terminal.Id, d.Estado.Observada.UltimaParadaItinerarioId);
+        Assert.Equal(terminal.Id, d.Estado.Observada.UltimaOcorrenciaParadaPadraoId);
         Assert.Equal("ViagemIniciada", Assert.Single(d.Eventos).Tipo);
     }
 
@@ -92,13 +92,13 @@ public sealed class ViagemOperacionalRegraTests
         Assert.Equal(v1.Observada.ViagemId,primeiro.Estado.Observada.ViagemId);
         Assert.Equal(EstadoViagem.PossivelFim,primeiro.Estado.Estado);
         Assert.Equal(v1.ConfirmacoesPosTerminal,primeiro.Estado.ConfirmacoesPosTerminal);
-        Assert.Equal(v1.Observada.ItinerarioId,primeiro.Estado.Observada.ItinerarioId);
+        Assert.Equal(v1.Observada.PadraoVersaoId,primeiro.Estado.Observada.PadraoVersaoId);
         Assert.Null(primeiro.Estado.Candidato);
         Assert.Empty(primeiro.Eventos);
     }
 
     [Fact]
-    public void Ativa_ItinerarioDiferente_PreservaTodaIdentidadeENaoAtribuiPassagemDeB()
+    public void Ativa_PadraoVersaoDiferente_PreservaTodaIdentidadeENaoAtribuiPassagemDeB()
     {
         var a = Inicial();
         var passagemDeB = new OcorrenciaParada(Guid.NewGuid(), _r2, Guid.NewGuid(), 1, .25);
@@ -107,11 +107,11 @@ public sealed class ViagemOperacionalRegraTests
             T(passagemDeB, [passagemDeB]), Guid.NewGuid());
 
         Assert.Equal(a.Observada.ViagemId, decisao.Estado.Observada.ViagemId);
-        Assert.Equal(a.Observada.ItinerarioId, decisao.Estado.Observada.ItinerarioId);
+        Assert.Equal(a.Observada.PadraoVersaoId, decisao.Estado.Observada.PadraoVersaoId);
         Assert.Equal(a.LinhaId, decisao.Estado.LinhaId);
         Assert.Equal(a.SentidoId, decisao.Estado.SentidoId);
-        Assert.Equal(a.Observada.UltimaParadaItinerarioId,
-            decisao.Estado.Observada.UltimaParadaItinerarioId);
+        Assert.Equal(a.Observada.UltimaOcorrenciaParadaPadraoId,
+            decisao.Estado.Observada.UltimaOcorrenciaParadaPadraoId);
         Assert.Equal(a.Observada.UltimaParadaOrdem, decisao.Estado.Observada.UltimaParadaOrdem);
         Assert.Empty(decisao.Eventos);
     }
@@ -125,7 +125,7 @@ public sealed class ViagemOperacionalRegraTests
             GMesmoSentido(10, .3), T(), Guid.NewGuid());
 
         Assert.Equal(a.Observada.ViagemId, decisao.Estado.Observada.ViagemId);
-        Assert.Equal(a.Observada.ItinerarioId, decisao.Estado.Observada.ItinerarioId);
+        Assert.Equal(a.Observada.PadraoVersaoId, decisao.Estado.Observada.PadraoVersaoId);
         Assert.Equal(a.LinhaId, decisao.Estado.LinhaId);
         Assert.Equal(a.SentidoId, decisao.Estado.SentidoId);
         Assert.Equal(EstadoViagem.Ativa, decisao.Estado.Estado);
@@ -141,7 +141,7 @@ public sealed class ViagemOperacionalRegraTests
             T(), Guid.NewGuid());
 
         Assert.Equal(a.Observada.ViagemId, decisao.Estado.Observada.ViagemId);
-        Assert.Equal(a.Observada.ItinerarioId, decisao.Estado.Observada.ItinerarioId);
+        Assert.Equal(a.Observada.PadraoVersaoId, decisao.Estado.Observada.PadraoVersaoId);
         Assert.Equal(EstadoViagem.Ativa, decisao.Estado.Estado);
         Assert.Empty(decisao.Eventos);
     }
@@ -156,7 +156,7 @@ public sealed class ViagemOperacionalRegraTests
             GOutraLinha(10, .3), T(passagemDeC, [passagemDeC]), Guid.NewGuid());
 
         Assert.Equal(a.Observada.ViagemId, decisao.Estado.Observada.ViagemId);
-        Assert.Equal(a.Observada.ItinerarioId, decisao.Estado.Observada.ItinerarioId);
+        Assert.Equal(a.Observada.PadraoVersaoId, decisao.Estado.Observada.PadraoVersaoId);
         Assert.Equal("313", decisao.Estado.CodigoLinha);
         Assert.Equal(a.LinhaId, decisao.Estado.LinhaId);
         Assert.Equal(a.SentidoId, decisao.Estado.SentidoId);
@@ -168,7 +168,7 @@ public sealed class ViagemOperacionalRegraTests
     public void PossivelFim_DivergenciaNaoCancelaEvidenciaTerminalDeA()
     {
         var a = Possivel();
-        var terminal = new OcorrenciaParada(a.Observada.UltimaParadaItinerarioId,
+        var terminal = new OcorrenciaParada(a.Observada.UltimaOcorrenciaParadaPadraoId,
             _r1, Guid.NewGuid(), 10, .8);
         a = ViagemOperacionalRegra.Decidir(a, E(), G(20, .81),
             T(terminal, terminal: terminal), Guid.NewGuid()).Estado;
@@ -180,7 +180,7 @@ public sealed class ViagemOperacionalRegraTests
         Assert.Equal(EstadoViagem.PossivelFim, decisao.Estado.Estado);
         Assert.Equal(1, decisao.Estado.ConfirmacoesPosTerminal);
         Assert.Equal(a.Observada.ViagemId, decisao.Estado.Observada.ViagemId);
-        Assert.Equal(a.Observada.ItinerarioId, decisao.Estado.Observada.ItinerarioId);
+        Assert.Equal(a.Observada.PadraoVersaoId, decisao.Estado.Observada.PadraoVersaoId);
         Assert.Empty(decisao.Eventos);
     }
 
@@ -188,7 +188,7 @@ public sealed class ViagemOperacionalRegraTests
     public void PossivelFim_NovaLinhaDeclaradaNoTerminal_NaoDestroiA()
     {
         var a = Possivel() with { CodigoLinha = "313" };
-        var terminal = new OcorrenciaParada(a.Observada.UltimaParadaItinerarioId,
+        var terminal = new OcorrenciaParada(a.Observada.UltimaOcorrenciaParadaPadraoId,
             _r1, Guid.NewGuid(), 10, .8);
         a = ViagemOperacionalRegra.Decidir(a, E(), G(20, .81),
             T(terminal, terminal: terminal), Guid.NewGuid()).Estado with { CodigoLinha = "313" };
@@ -199,7 +199,7 @@ public sealed class ViagemOperacionalRegraTests
         Assert.Equal(EstadoViagem.PossivelFim, decisao.Estado.Estado);
         Assert.Equal(a.ConfirmacoesPosTerminal, decisao.Estado.ConfirmacoesPosTerminal);
         Assert.Equal(a.Observada.ViagemId, decisao.Estado.Observada.ViagemId);
-        Assert.Equal(a.Observada.ItinerarioId, decisao.Estado.Observada.ItinerarioId);
+        Assert.Equal(a.Observada.PadraoVersaoId, decisao.Estado.Observada.PadraoVersaoId);
         Assert.Equal("313", decisao.Estado.CodigoLinha);
         Assert.Empty(decisao.Eventos);
     }
@@ -216,7 +216,7 @@ public sealed class ViagemOperacionalRegraTests
 
         Assert.Equal(EstadoViagem.Finalizada, segunda.Estado.Estado);
         Assert.Equal(a.Observada.ViagemId, segunda.Estado.Observada.ViagemId);
-        Assert.Equal(a.Observada.ItinerarioId, segunda.Estado.Observada.ItinerarioId);
+        Assert.Equal(a.Observada.PadraoVersaoId, segunda.Estado.Observada.PadraoVersaoId);
         Assert.Empty(primeira.Eventos);
         Assert.Empty(segunda.Eventos);
     }
@@ -239,8 +239,8 @@ public sealed class ViagemOperacionalRegraTests
         Assert.Equal(EstadoViagem.Ativa, segunda.Estado.Estado);
         Assert.Equal(novaId, segunda.Estado.Observada.ViagemId);
         Assert.NotEqual(a.Observada.ViagemId, segunda.Estado.Observada.ViagemId);
-        Assert.Equal(_rMesmoSentido, segunda.Estado.Observada.ItinerarioId);
-        Assert.Equal(cursor.Id, segunda.Estado.Observada.UltimaParadaItinerarioId);
+        Assert.Equal(_rMesmoSentido, segunda.Estado.Observada.PadraoVersaoId);
+        Assert.Equal(cursor.Id, segunda.Estado.Observada.UltimaOcorrenciaParadaPadraoId);
         Assert.Equal(cursor.Ordem, segunda.Estado.Observada.UltimaParadaOrdem);
         var inicio = Assert.Single(segunda.Eventos);
         Assert.Equal("ViagemIniciada", inicio.Tipo);
@@ -265,10 +265,10 @@ public sealed class ViagemOperacionalRegraTests
         Assert.Equal(novaId, segunda.Estado.Observada.ViagemId);
         Assert.NotEqual(a.Observada.ViagemId, segunda.Estado.Observada.ViagemId);
         Assert.Equal(_linha2, segunda.Estado.LinhaId);
-        Assert.Equal(_r3, segunda.Estado.Observada.ItinerarioId);
+        Assert.Equal(_r3, segunda.Estado.Observada.PadraoVersaoId);
         Assert.Equal(_s3, segunda.Estado.SentidoId);
         Assert.Equal("414", segunda.Estado.CodigoLinha);
-        Assert.Equal(cursor.Id, segunda.Estado.Observada.UltimaParadaItinerarioId);
+        Assert.Equal(cursor.Id, segunda.Estado.Observada.UltimaOcorrenciaParadaPadraoId);
         Assert.Equal(cursor.Ordem, segunda.Estado.Observada.UltimaParadaOrdem);
         var inicio = Assert.Single(segunda.Eventos);
         Assert.Equal("ViagemIniciada", inicio.Tipo);
@@ -289,7 +289,7 @@ public sealed class ViagemOperacionalRegraTests
 
         Assert.Equal(EstadoViagem.Finalizada, segunda.Estado.Estado);
         Assert.Equal(a.Observada.ViagemId, segunda.Estado.Observada.ViagemId);
-        Assert.Equal(a.Observada.ItinerarioId, segunda.Estado.Observada.ItinerarioId);
+        Assert.Equal(a.Observada.PadraoVersaoId, segunda.Estado.Observada.PadraoVersaoId);
         Assert.Empty(primeira.Eventos);
         Assert.Empty(segunda.Eventos);
     }
@@ -353,7 +353,7 @@ public sealed class ViagemOperacionalRegraTests
         Assert.Equal(EstadoViagem.Ativa, segunda.Estado.Estado);
         Assert.Equal(novaId, segunda.Estado.Observada.ViagemId);
         Assert.NotEqual(a.Observada.ViagemId, segunda.Estado.Observada.ViagemId);
-        Assert.Equal(a.Observada.ItinerarioId, segunda.Estado.Observada.ItinerarioId);
+        Assert.Equal(a.Observada.PadraoVersaoId, segunda.Estado.Observada.PadraoVersaoId);
         Assert.Equal(a.LinhaId, segunda.Estado.LinhaId);
         Assert.Equal(a.SentidoId, segunda.Estado.SentidoId);
         Assert.Equal("ViagemIniciada", Assert.Single(segunda.Eventos).Tipo);
@@ -375,7 +375,7 @@ public sealed class ViagemOperacionalRegraTests
         Assert.Equal(EstadoViagem.Finalizada, c2.Estado.Estado);
         Assert.Empty(c2.Eventos);
         var candidato = Assert.IsType<CandidatoViagem>(c2.Estado.Candidato);
-        Assert.Equal(_r2, candidato.ItinerarioId);
+        Assert.Equal(_r2, candidato.PadraoVersaoId);
         Assert.Equal(c2Gps.TimestampGps, candidato.Timestamp);
         Assert.Equal(c2Gps.PosicaoNaRota, candidato.Posicao);
         Assert.Equal(c2Gps.Latitude, candidato.LatitudeInicial);
@@ -401,27 +401,15 @@ public sealed class ViagemOperacionalRegraTests
     }
 
     [Fact]
-    public void CandidatoCodecV19_SemCoordenada_ReiniciaEvidenciaSemCriarViagem()
+    public void CodecV1_Truncado_EhRejeitado()
     {
         var primeira = ViagemOperacionalRegra.Decidir(Finalizada(), E(true),
             G(40, .1, true), T(), Guid.NewGuid()).Estado;
         var encoded = ViagemOperacionalCodec.Encode(primeira);
         var legado19 = ViagemOperacionalCodec.Names.Take(19).Zip(encoded.Take(19))
             .ToDictionary(x => x.First, x => x.Second);
-        var recarregada = ViagemOperacionalCodec.Decode(legado19,
-            primeira.Observada.OrdemVeiculo);
-        Assert.Null(recarregada.Candidato!.LatitudeInicial);
-        Assert.Null(recarregada.Candidato.LongitudeInicial);
-
-        var gps = G(50, .2, true);
-        var decisao = ViagemOperacionalRegra.Decidir(recarregada, E(true), gps,
-            T(), Guid.NewGuid());
-
-        Assert.Equal(EstadoViagem.Finalizada, decisao.Estado.Estado);
-        Assert.Empty(decisao.Eventos);
-        Assert.Equal(gps.TimestampGps, decisao.Estado.Candidato!.Timestamp);
-        Assert.Equal(gps.Latitude, decisao.Estado.Candidato.LatitudeInicial);
-        Assert.Equal(gps.Longitude, decisao.Estado.Candidato.LongitudeInicial);
+        Assert.Throws<FormatException>(() => ViagemOperacionalCodec.Decode(
+            legado19, primeira.Observada.OrdemVeiculo));
     }
 
     [Fact]
@@ -464,7 +452,7 @@ public sealed class ViagemOperacionalRegraTests
         var nova = Guid.NewGuid();
         var segundo = ViagemOperacionalRegra.Decidir(primeiro.Estado,E(true),G(50,.15,true),T(),nova);
         Assert.Equal(nova,segundo.Estado.Observada.ViagemId);
-        Assert.Equal(_r2,segundo.Estado.Observada.ItinerarioId);
+        Assert.Equal(_r2,segundo.Estado.Observada.PadraoVersaoId);
         Assert.Equal(EstadoViagem.Ativa,segundo.Estado.Estado);
         Assert.Null(segundo.Estado.Candidato);
         Assert.Equal("ViagemIniciada",Assert.Single(segundo.Eventos).Tipo);
@@ -504,7 +492,7 @@ public sealed class ViagemOperacionalRegraTests
         else
         {
             var candidato = Assert.IsType<CandidatoViagem>(d.Estado.Candidato);
-            Assert.Equal(estrutura.ItinerarioId, candidato.ItinerarioId);
+            Assert.Equal(estrutura.PadraoVersaoId, candidato.PadraoVersaoId);
             Assert.Equal(estrutura.LinhaId, candidato.LinhaId);
             Assert.Equal(estrutura.SentidoId, candidato.SentidoId);
             Assert.Equal(gps.PosicaoNaRota, candidato.Posicao);
@@ -540,7 +528,7 @@ public sealed class ViagemOperacionalRegraTests
     public void Wrap_NaoCriaViagem_NaoZeraCursor()
     {
         var s=Possivel();
-        var d=ViagemOperacionalRegra.Decidir(s,E(),G(20,.05),T(new(s.Observada.UltimaParadaItinerarioId,_r1,Guid.NewGuid(),10,.8)),Guid.NewGuid());
+        var d=ViagemOperacionalRegra.Decidir(s,E(),G(20,.05),T(new(s.Observada.UltimaOcorrenciaParadaPadraoId,_r1,Guid.NewGuid(),10,.8)),Guid.NewGuid());
         Assert.Equal(s.Observada.ViagemId,d.Estado.Observada.ViagemId);
         Assert.Equal(10,d.Estado.Observada.UltimaParadaOrdem);
         Assert.Equal(EstadoViagem.Ativa,d.Estado.Estado);
@@ -551,7 +539,7 @@ public sealed class ViagemOperacionalRegraTests
     public void SaidaTerminal_Reseta_RetornoExigeNovoCiclo_EventoFinalUnico()
     {
         var s = Possivel();
-        var terminal = new OcorrenciaParada(s.Observada.UltimaParadaItinerarioId,_r1,Guid.NewGuid(),10,.8);
+        var terminal = new OcorrenciaParada(s.Observada.UltimaOcorrenciaParadaPadraoId,_r1,Guid.NewGuid(),10,.8);
         s = ViagemOperacionalRegra.Decidir(s,E(),G(20),T(terminal,terminal:terminal),Guid.NewGuid()).Estado;
         Assert.Equal(1,s.ConfirmacoesPosTerminal);
         var fora = T(terminal,terminal:terminal) with { Proxima = P(11,.9) };

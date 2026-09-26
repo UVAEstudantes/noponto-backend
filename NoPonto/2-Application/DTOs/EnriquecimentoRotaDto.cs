@@ -4,16 +4,12 @@ namespace NoPonto.Application.GPS;
 
 public sealed class EnriquecimentoRotaDto
 {
-    private Guid _padraoVersaoId;
-
     public Guid PadraoOperacionalId { get; init; }
-    public Guid PadraoVersaoId { get => _padraoVersaoId; init => _padraoVersaoId = value; }
+    public Guid PadraoVersaoId { get; init; }
     public Guid SentidoId { get; init; }
     public Guid LinhaId { get; init; }
     public string Topologia { get; init; } = TopologiasPadrao.Linear;
 
-    /// <summary>Alias legado de leitura/escrita; novos fluxos usam PadraoVersaoId.</summary>
-    public Guid ItinerarioId { get => _padraoVersaoId; init => _padraoVersaoId = value; }
     public double PosicaoNaRota { get; init; }
     public double ComprimentoRotaMetros { get; init; }
     public double DistanciaARotaMetros { get; init; }

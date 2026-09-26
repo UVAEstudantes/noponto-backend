@@ -31,6 +31,53 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="lab-output/**/*.cs" />
+    <!-- Etapa 4: superfícies adiadas, dependentes do modelo Itinerario/ParadaItinerario. -->
+    <Compile Remove="1-API/Controllers/Admin/**/*.cs" />
+    <Compile Remove="1-API/Controllers/ItinerariosController.cs" />
+    <Compile Remove="1-API/Controllers/LinhasController.cs" />
+    <Compile Remove="1-API/Controllers/ParadasController.cs" />
+    <Compile Remove="1-API/Controllers/PoisController.cs" />
+    <Compile Remove="1-API/Controllers/RelacionamentoController.cs" />
+    <Compile Remove="2-Application/DTOs/Admin/**/*.cs" />
+    <Compile Remove="2-Application/DTOs/Itinerarios/**/*.cs" />
+    <Compile Remove="2-Application/DTOs/Linhas/**/*.cs" />
+    <Compile Remove="2-Application/DTOs/Paradas/**/*.cs" />
+    <Compile Remove="2-Application/DTOs/Pois/**/*.cs" />
+    <Compile Remove="2-Application/Interfaces/IItinerarioService.cs" />
+    <Compile Remove="2-Application/Interfaces/ILinhaService.cs" />
+    <Compile Remove="2-Application/Interfaces/IParadaService.cs" />
+    <Compile Remove="2-Application/Interfaces/IPoiService.cs" />
+    <Compile Remove="2-Application/Services/ItinerarioService.cs" />
+    <Compile Remove="2-Application/Services/LinhaService.cs" />
+    <Compile Remove="2-Application/Services/ParadaService.cs" />
+    <Compile Remove="2-Application/Services/PoiService.cs" />
+    <Compile Remove="2-Application/Services/Trem/**/*.cs" />
+    <Compile Remove="2-Application/Services/BackgroundServices/Importacoes/ImportacaoItinerariosService.cs" />
+    <Compile Remove="2-Application/Services/BackgroundServices/ArcGisClientService.cs" />
+    <Compile Remove="2-Application/Services/BackgroundServices/Importacoes/ImportacaoTremService.cs" />
+    <Compile Remove="2-Application/Services/BackgroundServices/POIs/**/*.cs" />
+    <Compile Remove="2-Application/Services/BackgroundServices/RelacionarParadas*.cs" />
+    <Compile Remove="2-Application/Services/GTFS/GtfsParadaItinerario*.cs" />
+    <Compile Remove="2-Application/Services/GTFS/LegacyEstruturalV24Service.cs" />
+    <Compile Remove="2-Application/Trem/**/*.cs" />
+    <Compile Remove="2-Application/Helper/OrdenacaoHelper.cs" />
+    <Compile Remove="2-Application/Services/BackgroundServices/Importacoes/ImportacaoParadasService.cs" />
+    <Compile Remove="2-Application/Services/SentidoService.cs" />
+    <Compile Remove="2-Application/Services/TarifaService.cs" />
+    <Compile Remove="3-Domain/Entities/itinerario.cs" />
+    <Compile Remove="3-Domain/Entities/paradaItinerario.cs" />
+    <Compile Remove="4-Data/Interfaces/IItinerarioRepository.cs" />
+    <Compile Remove="4-Data/Interfaces/ILinhaRepository.cs" />
+    <Compile Remove="4-Data/Interfaces/IParadaRepository.cs" />
+    <Compile Remove="4-Data/Interfaces/IPoiRepository.cs" />
+    <Compile Remove="4-Data/Repositories/ItinerarioRepository.cs" />
+    <Compile Remove="4-Data/Repositories/LinhaRepository.cs" />
+    <Compile Remove="4-Data/Repositories/ParadaRepository.cs" />
+    <Compile Remove="4-Data/Repositories/PoiRepository.cs" />
+    <Compile Remove="5-Testes/GtfsRebuildTests.cs" />
+    <Compile Remove="5-Testes/LegacyEstruturalV24Tests.cs" />
+    <Compile Remove="5-Testes/PostgresEstabilidadeGeometriaTests.cs" />
+    <Compile Remove="5-Testes/GtfsRelacionamentoTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Update="2-Application/Trem/DadosTrem.json">

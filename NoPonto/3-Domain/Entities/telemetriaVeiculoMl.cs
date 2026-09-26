@@ -20,12 +20,11 @@ public sealed class TelemetriaVeiculoMl : BaseEntity
     public DateTimeOffset? TimestampServidorFonte { get; set; }
     public DateTimeOffset RecebidoEmUtc { get; set; }
     public DateTimeOffset EventoCriadoEmUtc { get; set; }
-    public Guid? ItinerarioId { get; set; }
     public Guid? SentidoId { get; set; }
     public Guid? ViagemId { get; set; }
     public double? PosicaoNaRota { get; set; }
     public double? ComprimentoRotaMetros { get; set; }
-    public Guid? ProximaParadaItinerarioId { get; set; }
+    public Guid? ProximaOcorrenciaParadaPadraoId { get; set; }
     public Guid? PadraoVersaoId { get; set; }
     public Guid? OcorrenciaParadaPadraoId { get; set; }
     public int? Volta { get; set; }

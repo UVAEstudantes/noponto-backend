@@ -41,7 +41,6 @@ public sealed record EventoTelemetriaMl
     [JsonPropertyName("recebido_em_utc")] public DateTimeOffset RecebidoEmUtc { get; init; }
     [JsonPropertyName("evento_criado_em_utc")] public DateTimeOffset EventoCriadoEmUtc { get; init; }
 
-    [JsonPropertyName("itinerario_id")] public Guid? ItinerarioId { get; init; }
     [JsonPropertyName("padrao_versao_id")] public Guid? PadraoVersaoId { get; init; }
     [JsonPropertyName("ocorrencia_parada_padrao_id")] public Guid? OcorrenciaParadaPadraoId { get; init; }
     [JsonPropertyName("volta")] public int? Volta { get; init; }
@@ -50,7 +49,7 @@ public sealed record EventoTelemetriaMl
     [JsonPropertyName("viagem_id")] public Guid? ViagemId { get; init; }
     [JsonPropertyName("posicao_na_rota")] public double? PosicaoNaRota { get; init; }
     [JsonPropertyName("comprimento_rota_metros")] public double? ComprimentoRotaMetros { get; init; }
-    [JsonPropertyName("proxima_parada_itinerario_id")] public Guid? ProximaParadaItinerarioId { get; init; }
+    [JsonPropertyName("proxima_parada_padrao_versao_id")] public Guid? ProximaOcorrenciaParadaPadraoId { get; init; }
     [JsonPropertyName("distancia_proxima_parada_metros")] public double? DistanciaProximaParadaMetros { get; init; }
     [JsonPropertyName("velocidade_media_causal")] public double? VelocidadeMediaCausal { get; init; }
 }
@@ -88,7 +87,6 @@ public static class EventoTelemetriaMlFactory
             TimestampServidorFonte = posicao.TimestampServidorFonte?.ToUniversalTime(),
             RecebidoEmUtc = posicao.RecebidoEmUtc.ToUniversalTime(),
             EventoCriadoEmUtc = criadoEmUtc.ToUniversalTime(),
-            ItinerarioId = posicao.ItinerarioId,
             PadraoVersaoId = posicao.PadraoVersaoId,
             OcorrenciaParadaPadraoId = viagem?.ProximaOcorrenciaOperacional?.Id
                 ?? posicao.ProximaOcorrenciaParadaPadraoId,
@@ -98,7 +96,7 @@ public static class EventoTelemetriaMlFactory
             ViagemId = viagem?.Estado?.ViagemId,
             PosicaoNaRota = posicao.PosicaoNaRota,
             ComprimentoRotaMetros = posicao.ComprimentoRotaMetros,
-            ProximaParadaItinerarioId = viagem?.ProximaOcorrenciaOperacional?.Id,
+            ProximaOcorrenciaParadaPadraoId = viagem?.ProximaOcorrenciaOperacional?.Id,
             DistanciaProximaParadaMetros = posicao.DistanciaProximaParadaMetros,
             VelocidadeMediaCausal = posicao.VelocidadeMedia,
         };

@@ -40,9 +40,9 @@ public sealed class ViagemObservadaRepository(
             or (ARGV[7] ~= 'read' and ARGV[7] ~= 'write') then return {INVALID} end
         local kind = redis.call('TYPE', KEYS[1]).ok
         if kind ~= 'none' and kind ~= 'hash' then return {INVALID} end
-        local names = {'ViagemId', 'OrdemVeiculo', 'ItinerarioId', 'TimestampObservacaoInicial',
+        local names = {'ViagemId', 'OrdemVeiculo', 'PadraoVersaoId', 'TimestampObservacaoInicial',
             'TimestampUltimaAtualizacao', 'PosicaoNaRotaConfirmada',
-            'UltimaParadaItinerarioId', 'UltimaParadaOrdem'}
+            'UltimaOcorrenciaParadaPadraoId', 'UltimaParadaOrdem'}
         local state = nil
         if kind == 'hash' then
             state = redis.call('HMGET', KEYS[1], unpack(names))
@@ -82,9 +82,9 @@ public sealed class ViagemObservadaRepository(
     public static string ChaveVeiculoViagem(string ordem) => $"veiculo:{ordem}:viagem";
 
     public async Task<ViagemObservadaResultado> TentarAtualizarAsync(
-        string ordem, Guid itinerarioId, DateTimeOffset timestampGps, double posicaoNaRota, CancellationToken ct)
+        string ordem, Guid padraoVersaoId, DateTimeOffset timestampGps, double posicaoNaRota, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(ordem) || itinerarioId == Guid.Empty
+        if (string.IsNullOrWhiteSpace(ordem) || padraoVersaoId == Guid.Empty
             || !double.IsFinite(posicaoNaRota) || posicaoNaRota is < 0 or > 1
             || !GpsLeituraValidator.TimestampValido(timestampGps, DateTimeOffset.UtcNow, out _))
             return new(ViagemObservadaStatus.InvalidState);
@@ -96,7 +96,7 @@ public sealed class ViagemObservadaRepository(
                 ct.ThrowIfCancellationRequested();
                 var args = new RedisValue[18];
                 Array.Fill(args, (RedisValue)"");
-                args[0] = Guid.NewGuid().ToString("N"); args[1] = ordem; args[2] = itinerarioId.ToString("N");
+                args[0] = Guid.NewGuid().ToString("N"); args[1] = ordem; args[2] = padraoVersaoId.ToString("N");
                 args[3] = timestampGps.UtcTicks.ToString("D19", CultureInfo.InvariantCulture);
                 args[4] = posicaoNaRota.ToString("R", CultureInfo.InvariantCulture);
                 args[5] = DateTimeOffset.UtcNow.Add(GpsLeituraValidator.ToleranciaFuturo).UtcTicks
@@ -110,12 +110,12 @@ public sealed class ViagemObservadaRepository(
                 var state = exists ? ParseState(snapshot) : null;
                 if (state is not null && timestampGps <= state.TimestampUltimaAtualizacao)
                     return new(ViagemObservadaStatus.RejectedOlderOrEqual, state);
-                if (state is not null && state.ItinerarioId != itinerarioId)
+                if (state is not null && state.PadraoVersaoId != padraoVersaoId)
                     return new(ViagemObservadaStatus.ItineraryChanged, state);
                 var baseline = !exists || (string)snapshot[7]! == "";
-                var transition = await ocorrencias.BuscarTransicaoAsync(itinerarioId,
+                var transition = await ocorrencias.BuscarTransicaoAsync(padraoVersaoId,
                     state?.PosicaoNaRotaConfirmada ?? posicaoNaRota, posicaoNaRota,
-                    state?.UltimaParadaItinerarioId ?? Guid.Empty, state?.UltimaParadaOrdem ?? 0, baseline, ct);
+                    state?.UltimaOcorrenciaParadaPadraoId ?? Guid.Empty, state?.UltimaParadaOrdem ?? 0, baseline, ct);
                 if (transition.Status != ViagemObservadaStatus.Updated) return new(transition.Status);
                 args[6] = "write"; args[7] = exists ? "1" : "0";
                 if (exists) for (var i = 0; i < 8; i++) args[8 + i] = (string)snapshot[i + 1]!;

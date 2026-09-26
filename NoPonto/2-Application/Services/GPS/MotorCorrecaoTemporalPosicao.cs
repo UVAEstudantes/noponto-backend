@@ -226,8 +226,8 @@ public sealed class MotorCorrecaoTemporalPosicao
             return MotivoDescontinuidadeCausal.IdentidadeDiferente;
         if (!string.Equals(a.CodigoLinha, atual.CodigoLinha, StringComparison.Ordinal))
             return MotivoDescontinuidadeCausal.LinhaDiferente;
-        if (a.ItinerarioId == Guid.Empty || a.ItinerarioId != atual.ItinerarioId)
-            return MotivoDescontinuidadeCausal.ItinerarioDiferente;
+        if (a.PadraoVersaoId == Guid.Empty || a.PadraoVersaoId != atual.PadraoVersaoId)
+            return MotivoDescontinuidadeCausal.PadraoVersaoDiferente;
         if ((a.SentidoId.HasValue || atual.SentidoId.HasValue) && a.SentidoId != atual.SentidoId)
             return MotivoDescontinuidadeCausal.SentidoDiferente;
         if ((a.ViagemId.HasValue || atual.ViagemId.HasValue) && a.ViagemId != atual.ViagemId)
@@ -293,8 +293,8 @@ public sealed class MotorCorrecaoTemporalPosicao
 
     private static ContextoCausalPosicao Contexto(ObservacaoPosicaoTemporal observacao) => new(
         observacao.Ordem, observacao.Modal, observacao.Provedor, observacao.CodigoLinha,
-        observacao.ItinerarioId, observacao.SentidoId, observacao.ViagemId,
-        observacao.PadraoVersaoId, observacao.OcorrenciaParadaPadraoId,
+        observacao.PadraoVersaoId, observacao.SentidoId, observacao.ViagemId,
+        observacao.OcorrenciaParadaPadraoId,
         observacao.LinhaId, observacao.Volta);
 
     private bool EstadoCompativelComObservacao(
@@ -313,7 +313,7 @@ public sealed class MotorCorrecaoTemporalPosicao
         if (!string.Equals(observacao.OrigemPosicao, TelemetriaMlContrato.OrigemReal,
                 StringComparison.OrdinalIgnoreCase))
             return MotivoDescontinuidadeCausal.OrigemNaoReal;
-        if (observacao.ItinerarioId == Guid.Empty)
+        if (observacao.PadraoVersaoId == Guid.Empty)
             return MotivoDescontinuidadeCausal.MatchingAusente;
         if (!PosicaoValida(observacao.PosicaoOriginal))
             return MotivoDescontinuidadeCausal.PosicaoInvalida;

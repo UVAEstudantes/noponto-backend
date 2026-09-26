@@ -116,7 +116,7 @@ public sealed class EstadoCausalPosicaoBenchmarkTests(ITestOutputHelper output)
     {
         Ordem = ordem, CodigoLinha = "10", ModalFonte = "BRT", ProvedorFonte = "MOBILIDADE",
         TimestampGps = ts, TimestampServidor = ts, Velocidade = 20, VelocidadeMedia = 20,
-        ItinerarioId = Itinerario, PosicaoNaRota = 0.25, ComprimentoRotaMetros = 10_000,
+        PadraoVersaoId = Itinerario, PosicaoNaRota = 0.25, ComprimentoRotaMetros = 10_000,
     };
     private static EstadoCausalPosicao Estado(string ordem, DateTimeOffset ts) => new(
         new(ordem, "BRT", "MOBILIDADE", "10", Itinerario, null, null),

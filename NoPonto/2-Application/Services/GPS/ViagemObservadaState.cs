@@ -6,23 +6,21 @@ namespace NoPonto.Application.GPS;
 public sealed record ViagemObservadaState(
     Guid ViagemId,
     string OrdemVeiculo,
-    Guid ItinerarioId,
+    Guid PadraoVersaoId,
     DateTimeOffset TimestampObservacaoInicial,
     DateTimeOffset TimestampUltimaAtualizacao,
     double PosicaoNaRotaConfirmada,
-    Guid UltimaParadaItinerarioId = default,
+    Guid UltimaOcorrenciaParadaPadraoId = default,
     int UltimaParadaOrdem = 0,
     Guid PadraoOperacionalId = default,
-    Guid PadraoVersaoId = default,
     Guid OcorrenciaCursorId = default,
     int? OrdemCursor = null,
     int Volta = 0,
     double ProgressoAbsolutoMetros = 0,
     string Topologia = TopologiasPadrao.Linear)
 {
-    public Guid VersaoEstruturalId => PadraoVersaoId != Guid.Empty ? PadraoVersaoId : ItinerarioId;
     public Guid CursorEstruturalId => OcorrenciaCursorId != Guid.Empty
-        ? OcorrenciaCursorId : UltimaParadaItinerarioId;
+        ? OcorrenciaCursorId : UltimaOcorrenciaParadaPadraoId;
 }
 
 public enum ViagemObservadaStatus
@@ -45,12 +43,10 @@ public readonly record struct ViagemObservadaResultado(
     public OcorrenciaParada? ProximaOcorrenciaOperacional { get; init; }
 }
 
-public sealed record OcorrenciaParada(Guid Id, Guid ItinerarioId, Guid ParadaId, int Ordem,
+public sealed record OcorrenciaParada(Guid Id, Guid PadraoVersaoId, Guid ParadaId, int Ordem,
     double PosicaoLinha, double DistanciaAcumuladaMetros = 0,
     double DistanciaDaLinhaMetros = 0, int Volta = 0)
-{
-    public Guid PadraoVersaoId => ItinerarioId;
-}
+;
 
 public sealed record TransicaoParadas(
     ViagemObservadaStatus Status, Guid UltimaId, int UltimaOrdem,

@@ -216,8 +216,7 @@ public sealed class EstruturaFinalRebuildService(
                         StringComparison.OrdinalIgnoreCase)), projector);
                 if (arc is not null && gtfsGeometry is not null)
                 {
-                    var gtfsProjection = projector.Projetar(source,
-                        new Itinerario { Id=Guid.Empty, SentidoId=Guid.Empty, Geometria=gtfsGeometry }, temporaryStops);
+                    var gtfsProjection = projector.Projetar(source, gtfsGeometry, temporaryStops);
                     if (gtfsProjection.Motivos.Count == 0)
                     {
                         var ordered = gtfsProjection.Ocorrencias.Select(x=>x.DistanciaMetros).Order().ToArray();

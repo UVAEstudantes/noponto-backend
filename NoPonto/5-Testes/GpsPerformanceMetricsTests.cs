@@ -69,12 +69,12 @@ public sealed class GpsPerformanceMetricsTests
         var rota = Rota(Guid.NewGuid(), .20);
 
         metrics.RegistrarMatchingCombinado(TimeSpan.FromMilliseconds(2), new(
-            ResultadoBuscaItinerario.Found(rota), ResultadoBuscaItinerario.NotEligible()));
+            ResultadoBuscaPadrao.Found(rota), ResultadoBuscaPadrao.NotEligible()));
         metrics.RegistrarMatchingCombinado(TimeSpan.FromMilliseconds(3), new(
-            ResultadoBuscaItinerario.NotEligible(), ResultadoBuscaItinerario.Found(rota)));
+            ResultadoBuscaPadrao.NotEligible(), ResultadoBuscaPadrao.Found(rota)));
         metrics.RegistrarMatchingCombinado(TimeSpan.FromMilliseconds(4), new(
-            ResultadoBuscaItinerario.InfrastructureFailure(),
-            ResultadoBuscaItinerario.InfrastructureFailure()));
+            ResultadoBuscaPadrao.InfrastructureFailure(),
+            ResultadoBuscaPadrao.InfrastructureFailure()));
 
         Assert.Equal(3, metrics.MatchingCombinados);
         Assert.Equal(3, metrics.MatchingGlobais);
@@ -149,7 +149,7 @@ public sealed class GpsPerformanceMetricsTests
     [Fact]
     public async Task Matching_PrimeiroGlobalSemHistorico_NaoClassificaDirecionado()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var itinerario = Guid.NewGuid();
         repo.Respostas.Enqueue(Rota(itinerario, .20));
         var service = CriarEnriquecedor(repo);
@@ -170,18 +170,18 @@ public sealed class GpsPerformanceMetricsTests
     [Fact]
     public async Task Matching_MesmoItinerarioComFaixa_ClassificaContinuidade()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var itinerario = Guid.NewGuid();
         repo.Respostas.Enqueue(Rota(itinerario, .20));
         repo.Respostas.Enqueue(Rota(itinerario, .21));
-        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(Rota(itinerario, .21)));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaPadrao.Found(Rota(itinerario, .21)));
         var service = CriarEnriquecedor(repo);
         var metrics = NovasMetricas();
 
         await service.EnriquecerAsync(PosicaoEm(0), default, metrics);
         await service.EnriquecerAsync(PosicaoEm(1), default, metrics);
 
-        Assert.Equal(1, metrics.MatchingGlobalMesmoItinerario);
+        Assert.Equal(1, metrics.MatchingGlobalMesmoPadrao);
         Assert.Equal(0, metrics.MatchingDirecionadoContinuidadeFaixa);
         Assert.Equal(0, metrics.MatchingDirecionadoTroca);
         Assert.Equal(0, metrics.MatchingDirecionadoComFaixa);
@@ -205,21 +205,21 @@ public sealed class GpsPerformanceMetricsTests
 
         metrics.RegistrarComparacaoContinuidade(
             Rota(id, .20, bearingLocal: 90, proximaParada: "A", distanciaProxima: 100),
-            ResultadoBuscaItinerario.Found(
+            ResultadoBuscaPadrao.Found(
                 Rota(id, .20005, bearingLocal: 93, proximaParada: "A", distanciaProxima: 103)));
         metrics.RegistrarComparacaoContinuidade(
             Rota(id, .20, distancia: 30, proximaParada: "A"),
-            ResultadoBuscaItinerario.Found(
+            ResultadoBuscaPadrao.Found(
                 Rota(id, .22, distancia: 55, proximaParada: "B")));
         metrics.RegistrarComparacaoContinuidade(
             Rota(id, .20, proximaParada: "A"),
-            ResultadoBuscaItinerario.Found(Rota(id, .20)));
+            ResultadoBuscaPadrao.Found(Rota(id, .20)));
         metrics.RegistrarComparacaoContinuidade(
             Rota(id, .20),
-            ResultadoBuscaItinerario.Found(Rota(id, .20, proximaParada: "A")));
+            ResultadoBuscaPadrao.Found(Rota(id, .20, proximaParada: "A")));
         metrics.RegistrarComparacaoContinuidade(
             Rota(id, .20),
-            ResultadoBuscaItinerario.Found(Rota(id, .20)));
+            ResultadoBuscaPadrao.Found(Rota(id, .20)));
 
         Assert.Equal(5, metrics.ContinuidadeComparacoes);
         Assert.Equal(5, metrics.ContinuidadeDirecionadoFound);
@@ -247,7 +247,7 @@ public sealed class GpsPerformanceMetricsTests
 
         metrics.RegistrarComparacaoContinuidade(
             Rota(Guid.NewGuid(), .20),
-            ResultadoBuscaItinerario.NotEligible());
+            ResultadoBuscaPadrao.NotEligible());
 
         Assert.Equal(1, metrics.ContinuidadeComparacoes);
         Assert.Equal(0, metrics.ContinuidadeDirecionadoFound);
@@ -263,7 +263,7 @@ public sealed class GpsPerformanceMetricsTests
 
         Parallel.For(0, 1_000, _ =>
             metrics.RegistrarComparacaoContinuidade(
-                rota, ResultadoBuscaItinerario.Found(rota)));
+                rota, ResultadoBuscaPadrao.Found(rota)));
 
         Assert.Equal(1_000, metrics.ContinuidadeComparacoes);
         Assert.Equal(1_000, metrics.ContinuidadeDirecionadoFound);
@@ -273,21 +273,21 @@ public sealed class GpsPerformanceMetricsTests
     }
 
     [Fact]
-    public async Task Matching_ItinerarioDiferenteSemFaixa_ClassificaTroca()
+    public async Task Matching_PadraoVersaoDiferenteSemFaixa_ClassificaTroca()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var anterior = Guid.NewGuid();
         var novo = Guid.NewGuid();
         repo.Respostas.Enqueue(Rota(anterior, .20));
         repo.Respostas.Enqueue(Rota(novo, .80));
-        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(Rota(anterior, .20)));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaPadrao.Found(Rota(anterior, .20)));
         var service = CriarEnriquecedor(repo);
         var metrics = NovasMetricas();
 
         await service.EnriquecerAsync(PosicaoEm(0), default, metrics);
         await service.EnriquecerAsync(PosicaoEm(0), default, metrics);
 
-        Assert.Equal(1, metrics.MatchingGlobalItinerarioDiferente);
+        Assert.Equal(1, metrics.MatchingGlobalPadraoVersaoDiferente);
         Assert.Equal(1, metrics.MatchingDirecionadoTroca);
         Assert.Equal(0, metrics.MatchingDirecionadoContinuidadeFaixa);
         Assert.Equal(0, metrics.MatchingDirecionadoComFaixa);
@@ -295,14 +295,14 @@ public sealed class GpsPerformanceMetricsTests
     }
 
     [Fact]
-    public async Task Matching_ItinerarioDiferenteComFaixa_ClassificaSomenteTrocaComoMotivoPrincipal()
+    public async Task Matching_PadraoVersaoDiferenteComFaixa_ClassificaSomenteTrocaComoMotivoPrincipal()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var anterior = Guid.NewGuid();
         var novo = Guid.NewGuid();
         repo.Respostas.Enqueue(Rota(anterior, .20));
         repo.Respostas.Enqueue(Rota(novo, .80));
-        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(Rota(anterior, .21)));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaPadrao.Found(Rota(anterior, .21)));
         var service = CriarEnriquecedor(repo);
         var metrics = NovasMetricas();
 
@@ -323,7 +323,7 @@ public sealed class GpsPerformanceMetricsTests
     [Fact]
     public async Task Matching_MesmoItinerarioSemFaixa_NaoExecutaDirecionado()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var itinerario = Guid.NewGuid();
         repo.Respostas.Enqueue(Rota(itinerario, .20, 10_000));
         repo.Respostas.Enqueue(Rota(itinerario, .21, 20_000));
@@ -333,27 +333,27 @@ public sealed class GpsPerformanceMetricsTests
         await service.EnriquecerAsync(PosicaoEm(0), default, metrics);
         await service.EnriquecerAsync(PosicaoEm(1), default, metrics);
 
-        Assert.Equal(1, metrics.MatchingGlobalMesmoItinerario);
+        Assert.Equal(1, metrics.MatchingGlobalMesmoPadrao);
         Assert.Equal(0, metrics.MatchingDirecionados);
         Assert.Equal(0, metrics.MatchingDirecionadoTroca);
         Assert.Equal(0, metrics.MatchingDirecionadoContinuidadeFaixa);
     }
 
     [Theory]
-    [InlineData(StatusBuscaItinerario.Found)]
-    [InlineData(StatusBuscaItinerario.NotEligible)]
-    [InlineData(StatusBuscaItinerario.InfrastructureFailure)]
-    public async Task Matching_ClassificaResultadoCombinado(StatusBuscaItinerario status)
+    [InlineData(StatusBuscaPadrao.Found)]
+    [InlineData(StatusBuscaPadrao.NotEligible)]
+    [InlineData(StatusBuscaPadrao.InfrastructureFailure)]
+    public async Task Matching_ClassificaResultadoCombinado(StatusBuscaPadrao status)
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var itinerario = Guid.NewGuid();
         repo.Respostas.Enqueue(Rota(itinerario, .20));
         repo.Respostas.Enqueue(Rota(itinerario, .21));
         repo.RespostasDirecionadas.Enqueue(status switch
         {
-            StatusBuscaItinerario.Found => ResultadoBuscaItinerario.Found(Rota(itinerario, .21)),
-            StatusBuscaItinerario.NotEligible => ResultadoBuscaItinerario.NotEligible(),
-            _ => ResultadoBuscaItinerario.InfrastructureFailure(),
+            StatusBuscaPadrao.Found => ResultadoBuscaPadrao.Found(Rota(itinerario, .21)),
+            StatusBuscaPadrao.NotEligible => ResultadoBuscaPadrao.NotEligible(),
+            _ => ResultadoBuscaPadrao.InfrastructureFailure(),
         });
         var service = CriarEnriquecedor(repo);
         var metrics = NovasMetricas();
@@ -362,9 +362,9 @@ public sealed class GpsPerformanceMetricsTests
         await service.EnriquecerAsync(PosicaoEm(1), default, metrics);
 
         Assert.Equal(1, metrics.MatchingCombinados);
-        Assert.Equal(status == StatusBuscaItinerario.NotEligible ? 1 : 0,
+        Assert.Equal(status == StatusBuscaPadrao.NotEligible ? 1 : 0,
             metrics.MatchingCombinadoAnteriorInelegivel);
-        Assert.Equal(status == StatusBuscaItinerario.InfrastructureFailure ? 1 : 0,
+        Assert.Equal(status == StatusBuscaPadrao.InfrastructureFailure ? 1 : 0,
             metrics.MatchingCombinadoFalha);
         Assert.Equal(0, metrics.MatchingDirecionados);
     }
@@ -379,7 +379,7 @@ public sealed class GpsPerformanceMetricsTests
             var mesmo = indice % 2 == 0;
             metrics.RegistrarMotivoMatchingDirecionado(mesmo, temFaixa: mesmo || indice % 3 == 0);
             metrics.RegistrarMatchingDirecionado(TimeSpan.FromMilliseconds(1));
-            metrics.RegistrarResultadoMatchingDirecionado((StatusBuscaItinerario)(indice % 3));
+            metrics.RegistrarResultadoMatchingDirecionado((StatusBuscaPadrao)(indice % 3));
         });
 
         Assert.Equal(1_000, metrics.MatchingDirecionados);
@@ -495,7 +495,7 @@ public sealed class GpsPerformanceMetricsTests
     [Fact]
     public async Task Enriquecimento_RegistraGlobalSimplesECombinadoComoDoisComandos()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var itinerario = Guid.NewGuid();
         repo.Respostas.Enqueue(Rota(itinerario, .20));
         repo.Respostas.Enqueue(Rota(itinerario, .21));
@@ -532,7 +532,7 @@ public sealed class GpsPerformanceMetricsTests
     private static GpsCicloPerformance NovasMetricas() =>
         new(DateTimeOffset.UtcNow, 15_000);
 
-    private static GpsEnriquecimentoService CriarEnriquecedor(IGpsItinerarioRepository repo) =>
+    private static GpsEnriquecimentoService CriarEnriquecedor(IGpsPadraoRepository repo) =>
         new(repo, Options.Create(new GpsPollingOptions()),
             NullLogger<GpsEnriquecimentoService>.Instance);
 
@@ -547,7 +547,7 @@ public sealed class GpsPerformanceMetricsTests
         double distancia = 10, double? bearingLocal = null, string? proximaParada = null,
         double? distanciaProxima = null) => new()
     {
-        ItinerarioId = id,
+        PadraoVersaoId = id,
         PosicaoNaRota = progresso,
         ComprimentoRotaMetros = comprimento,
         DistanciaARotaMetros = distancia,

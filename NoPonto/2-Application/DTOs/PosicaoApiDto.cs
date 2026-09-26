@@ -197,13 +197,6 @@ public sealed record PosicaoVeiculoDto
     /// </summary>
     public double? ComprimentoRotaMetros { get; init; }
 
-    /// <summary>
-    /// ID do itinerário detectado (ida ou volta).
-    /// O frontend usa para buscar a LineString do itinerário uma única vez
-    /// e reutilizá-la para interpolação local.
-    /// </summary>
-    public Guid? ItinerarioId { get; init; }
-
     public Guid? PadraoOperacionalId { get; init; }
     public Guid? PadraoVersaoId { get; init; }
     public Guid? SentidoId { get; init; }
@@ -267,5 +260,5 @@ public sealed record PosicaoVeiculoDto
         PosicaoNaRota.HasValue &&
         ComprimentoRotaMetros.HasValue &&
         VelocidadeMedia.HasValue &&
-        PadraoVersaoId.HasValue || ItinerarioId.HasValue;
+        PadraoVersaoId.HasValue;
 }

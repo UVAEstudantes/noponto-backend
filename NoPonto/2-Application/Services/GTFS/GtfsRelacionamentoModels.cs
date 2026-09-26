@@ -55,7 +55,7 @@ public sealed record GtfsDryRunItem(
     string LinhaCodigo,
     Guid? SentidoId,
     string? SentidoNome,
-    Guid? ItinerarioId,
+    Guid? PadraoVersaoId,
     ClassificacaoGtfs Classificacao,
     string? PadraoExternoId,
     int RelacoesLegadas,

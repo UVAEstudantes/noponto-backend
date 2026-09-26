@@ -15,8 +15,6 @@ namespace NoPonto.Domain.Entities
 
         public Modal? Modal { get; set; }
         public Parada? ParadaPai { get; set; }
-
-        public ICollection<ParadaItinerario> ParadasItinerario { get; set; } = new List<ParadaItinerario>();
     }
 
     public static class TiposLocalParada

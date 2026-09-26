@@ -23,13 +23,13 @@ public sealed class PositionCorrectionShadowRepository(
         INSERT INTO "PositionCorrectionShadowOrigins" (
             "ShadowOriginId","ObservacaoId","ContractVersion","PolicyVersion","PolicyFingerprint",
             "CausalStateVersion","TimestampGpsOrigemUtc","Modal","Provedor","OrdemVeiculo",
-            "CodigoLinha","ItinerarioId","SentidoId","ViagemId","PosicaoB","ComprimentoRotaMetros",
+            "CodigoLinha","SentidoId","ViagemId","PosicaoB","ComprimentoRotaMetros",
             "VelocidadeInstantaneaKmh","VelocidadeMediaLegacyKmh","EstadoMovimento","SamplesBeforeCap",
             "SamplesUsed","MaxSamplesConfigured","MaxSamplesReached","RecebidoEmUtc","PersistidoEmUtc",
             "AmostrasCausais","SinaisParada","CandidateResults","PadraoVersaoId",
             "OcorrenciaParadaPadraoId","Volta")
         VALUES (@id,@obs,@contract,@policy,@fingerprint,@state,@gps,@modal,@provider,@vehicle,
-            @line,@itinerary,@direction,@trip,@position,@length,@instant,@legacy,@movement,@before,
+            @line,@direction,@trip,@position,@length,@instant,@legacy,@movement,@before,
             @used,@max,@reached,@received,@persisted,@samples,@stops,@candidates,
             @padrao_versao,@ocorrencia,@volta)
         ON CONFLICT ("ShadowOriginId") DO NOTHING
@@ -89,10 +89,9 @@ public sealed class PositionCorrectionShadowRepository(
         cmd.Parameters.AddWithValue("provider", c.Provedor);
         cmd.Parameters.AddWithValue("vehicle", c.Ordem);
         cmd.Parameters.AddWithValue("line", c.CodigoLinha);
-        cmd.Parameters.AddWithValue("itinerary", c.ItinerarioId);
         Nullable(cmd, "direction", NpgsqlDbType.Uuid, c.SentidoId);
         Nullable(cmd, "trip", NpgsqlDbType.Uuid, c.ViagemId);
-        Nullable(cmd, "padrao_versao", NpgsqlDbType.Uuid, c.PadraoVersaoId);
+        cmd.Parameters.AddWithValue("padrao_versao", c.PadraoVersaoId);
         Nullable(cmd, "ocorrencia", NpgsqlDbType.Uuid, c.OcorrenciaParadaPadraoId);
         Nullable(cmd, "volta", NpgsqlDbType.Integer, c.Volta);
         cmd.Parameters.AddWithValue("position", o.PosicaoB);

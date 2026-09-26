@@ -713,8 +713,8 @@ public sealed class GpsPollingService : BackgroundService
                 "matching_batch_infrastructure_failures={matching_batch_infrastructure_failures} " +
                 "matching_batch_circuit_reason={matching_batch_circuit_reason} " +
                 "matching_global_sem_historico={matching_global_sem_historico} " +
-                "matching_global_mesmo_itinerario={matching_global_mesmo_itinerario} " +
-                "matching_global_itinerario_diferente={matching_global_itinerario_diferente} " +
+                "matching_global_mesmo_padrao={matching_global_mesmo_padrao} " +
+                "matching_global_padrao_diferente={matching_global_padrao_diferente} " +
                 "matching_direcionado_troca={matching_direcionado_troca} " +
                 "matching_direcionado_continuidade_faixa={matching_direcionado_continuidade_faixa} " +
                 "matching_direcionado_com_faixa={matching_direcionado_com_faixa} " +
@@ -850,8 +850,8 @@ public sealed class GpsPollingService : BackgroundService
                 performance.MatchingBatchInfrastructureFailures,
                 performance.MatchingBatchCircuitReason,
                 performance.MatchingGlobalSemHistorico,
-                performance.MatchingGlobalMesmoItinerario,
-                performance.MatchingGlobalItinerarioDiferente,
+                performance.MatchingGlobalMesmoPadrao,
+                performance.MatchingGlobalPadraoVersaoDiferente,
                 performance.MatchingDirecionadoTroca,
                 performance.MatchingDirecionadoContinuidadeFaixa,
                 performance.MatchingDirecionadoComFaixa,
@@ -1024,7 +1024,7 @@ public sealed class GpsPollingService : BackgroundService
         && observacao.CodigoLinha == posicao.CodigoLinha
         && observacao.Modal == (posicao.ModalFonte ?? string.Empty)
         && observacao.Provedor == (posicao.ProvedorFonte ?? string.Empty)
-        && observacao.ItinerarioId == posicao.ItinerarioId
+        && observacao.PadraoVersaoId == posicao.PadraoVersaoId
         && observacao.PosicaoOriginal == posicao.PosicaoNaRota
         && observacao.ComprimentoRotaMetros == posicao.ComprimentoRotaMetros
         && observacao.VelocidadeInstantaneaKmh == posicao.Velocidade

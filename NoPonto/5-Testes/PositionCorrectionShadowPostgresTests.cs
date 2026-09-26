@@ -42,7 +42,8 @@ public sealed class PositionCorrectionShadowPostgresTests
             // Esta fixture aplica deliberadamente apenas a migration Shadow original.
             await using (var v2 = source.CreateCommand("""
                 ALTER TABLE "PositionCorrectionShadowOrigins"
-                    ADD COLUMN "PadraoVersaoId" uuid NULL,
+                    DROP COLUMN "ItinerarioId",
+                    ADD COLUMN "PadraoVersaoId" uuid NOT NULL,
                     ADD COLUMN "OcorrenciaParadaPadraoId" uuid NULL,
                     ADD COLUMN "Volta" integer NULL
                 """))

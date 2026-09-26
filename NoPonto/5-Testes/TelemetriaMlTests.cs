@@ -19,7 +19,6 @@ public sealed class TelemetriaMlTests
         Latitude = -22.9, Longitude = -43.2, Velocidade = 20, Bearing = 90,
         TimestampGps = T, TimestampEnvioFonte = T.AddSeconds(1),
         TimestampServidorFonte = T.AddSeconds(2), RecebidoEmUtc = T.AddSeconds(3),
-        ItinerarioId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
         PadraoVersaoId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
         ProximaOcorrenciaParadaPadraoId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
         LinhaId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
@@ -34,8 +33,8 @@ public sealed class TelemetriaMlTests
         var viagem = Guid.NewGuid();
         var proxima = Guid.NewGuid();
         var resultado = new ViagemObservadaResultado(ViagemObservadaStatus.Updated,
-            new(viagem, "ML-001", Posicao().ItinerarioId!.Value, T, T, .25))
-        { ProximaOcorrenciaOperacional = new(proxima, Posicao().ItinerarioId!.Value, Guid.NewGuid(), 2, .3) };
+            new(viagem, "ML-001", Posicao().PadraoVersaoId!.Value, T, T, .25))
+        { ProximaOcorrenciaOperacional = new(proxima, Posicao().PadraoVersaoId!.Value, Guid.NewGuid(), 2, .3) };
 
         var evento = EventoTelemetriaMlFactory.Criar(Posicao(), resultado, T.AddSeconds(4));
 
@@ -48,13 +47,13 @@ public sealed class TelemetriaMlTests
         Assert.Null(evento.LatitudeProjetada);
         Assert.Null(evento.LongitudeProjetada);
         Assert.Equal(.25, evento.PosicaoNaRota);
-        Assert.Equal(Posicao().ItinerarioId, evento.ItinerarioId);
+        Assert.Equal(Posicao().PadraoVersaoId, evento.PadraoVersaoId);
         Assert.Equal(Posicao().PadraoVersaoId, evento.PadraoVersaoId);
         Assert.Equal(proxima, evento.OcorrenciaParadaPadraoId);
         Assert.Equal(Posicao().LinhaId, evento.LinhaId);
         Assert.Equal(Posicao().SentidoId, evento.SentidoId);
         Assert.Equal(viagem, evento.ViagemId);
-        Assert.Equal(proxima, evento.ProximaParadaItinerarioId);
+        Assert.Equal(proxima, evento.ProximaOcorrenciaParadaPadraoId);
         Assert.Equal("REAL", evento.OrigemPosicao);
         TelemetriaMlValidator.Validar(evento);
     }

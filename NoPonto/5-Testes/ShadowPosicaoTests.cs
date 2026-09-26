@@ -247,8 +247,8 @@ public sealed class ShadowPosicaoTests
             Volta = 3,
         };
         var contexto = new ContextoCausalPosicao(obs.Ordem, obs.Modal, obs.Provedor,
-            obs.CodigoLinha, obs.ItinerarioId, obs.SentidoId, obs.ViagemId,
-            versao, ocorrencia, linha, 3);
+            obs.CodigoLinha, obs.PadraoVersaoId, obs.SentidoId, obs.ViagemId,
+            ocorrencia, linha, 3);
         var estado = new EstadoCausalPosicao(contexto, obs.TimestampGps, obs.PosicaoOriginal,
             obs.ComprimentoRotaMetros, [], [], EstadoMovimentoPosicao.Movimento);
 
@@ -269,7 +269,7 @@ public sealed class ShadowPosicaoTests
     private static EstadoCausalPosicao Estado(ObservacaoPosicaoTemporal obs,
         params AmostraCausalPosicao[] amostras) => new(
         new(obs.Ordem, obs.Modal, obs.Provedor, obs.CodigoLinha,
-            obs.ItinerarioId, obs.SentidoId, obs.ViagemId),
+            obs.PadraoVersaoId, obs.SentidoId, obs.ViagemId),
         obs.TimestampGps, obs.PosicaoOriginal, obs.ComprimentoRotaMetros,
         amostras, Array.Empty<bool>(), EstadoMovimentoPosicao.Movimento);
 

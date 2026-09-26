@@ -7,17 +7,17 @@ namespace NoPonto.Application.GPS;
 /// <summary>
 /// Servico de enriquecimento geoespacial de posicoes GPS.
 ///
-/// Registrado como SINGLETON para que o estado de itinerario (_itinerarioAtual)
+/// Registrado como SINGLETON para que o estado de padrao (_padraoAtual)
 /// e o historico de velocidades (_historicoVelocidades) sobrevivam entre ciclos.
 ///
 /// Thread-safety:
-///   _itinerarioAtual usa ConcurrentDictionary para leituras/escritas atomicas por chave.
+///   _padraoAtual usa ConcurrentDictionary para leituras/escritas atomicas por chave.
 ///   _historicoVelocidades usa ConcurrentDictionary na chave e lock interno na Queue
 ///   porque Queue nao e thread-safe por si so.
 /// </summary>
 public sealed partial class GpsEnriquecimentoService
 {
-    private readonly IGpsItinerarioRepository _repositorio;
+    private readonly IGpsPadraoRepository _repositorio;
     private readonly GpsPollingOptions _opcoes;
     private readonly ILogger<GpsEnriquecimentoService> _logger;
     private readonly GpsMatchingBatchOptions _opcoesBatch;
@@ -25,7 +25,7 @@ public sealed partial class GpsEnriquecimentoService
     // O polling deduplica Ordem e aguarda o ciclo inteiro antes do próximo.
     // Não há outro chamador de EnriquecerAsync em produção.
     // Estado persistido entre ciclos — DEVE ser thread-safe.
-    private readonly ConcurrentDictionary<string, ItinerarioConfirmado> _itinerarioAtual =
+    private readonly ConcurrentDictionary<string, PadraoConfirmado> _padraoAtual =
         new(StringComparer.OrdinalIgnoreCase);
 
     // Historico de velocidades persistido entre ciclos.
@@ -43,7 +43,7 @@ public sealed partial class GpsEnriquecimentoService
     private const double FatorToleranciaSalto = 2.0;
 
     public GpsEnriquecimentoService(
-        IGpsItinerarioRepository repositorio,
+        IGpsPadraoRepository repositorio,
         IOptions<GpsPollingOptions> opcoes,
         ILogger<GpsEnriquecimentoService> logger)
         : this(repositorio, opcoes, Options.Create(new GpsMatchingBatchOptions()), logger)
@@ -51,7 +51,7 @@ public sealed partial class GpsEnriquecimentoService
     }
 
     public GpsEnriquecimentoService(
-        IGpsItinerarioRepository repositorio,
+        IGpsPadraoRepository repositorio,
         IOptions<GpsPollingOptions> opcoes,
         IOptions<GpsMatchingBatchOptions> opcoesBatch,
         ILogger<GpsEnriquecimentoService> logger)
@@ -124,7 +124,7 @@ public sealed partial class GpsEnriquecimentoService
         EnriquecimentoRotaDto? rota = null;
         EnriquecimentoRotaDto? rotaGlobalObservacional = null;
         ResultadoMatchingCombinado? matchingCombinado = null;
-        ItinerarioConfirmado? historicoParaCombinado = null;
+        PadraoConfirmado? historicoParaCombinado = null;
         FaixaProjecao? faixaCandidata = null;
         SolicitacaoProjecaoOperacional? solicitacaoOperacional = null;
         var resultadoOperacional = ResultadoProjecaoOperacional.NaoSolicitada();
@@ -136,7 +136,7 @@ public sealed partial class GpsEnriquecimentoService
                 - estadoOperacional.Observada.TimestampUltimaAtualizacao).TotalSeconds;
             var orcamento = segundos > 0 ? OrcamentoProjecaoMetros(segundos) : 0;
             if (double.IsFinite(orcamento) && orcamento > 0)
-                solicitacaoOperacional = new(estadoOperacional.Observada.ItinerarioId,
+                solicitacaoOperacional = new(estadoOperacional.Observada.PadraoVersaoId,
                     estadoOperacional.Observada.PosicaoNaRotaConfirmada, orcamento);
             else
                 resultadoOperacional = ResultadoProjecaoOperacional.Inelegivel();
@@ -144,7 +144,7 @@ public sealed partial class GpsEnriquecimentoService
 
         if (bearing.HasValue)
         {
-            if (_itinerarioAtual.TryGetValue(posicao.Ordem, out historicoParaCombinado)
+            if (_padraoAtual.TryGetValue(posicao.Ordem, out historicoParaCombinado)
                 && historicoParaCombinado.Rota is not null)
                 faixaCandidata = CalcularFaixaProjecao(posicao, historicoParaCombinado);
 
@@ -155,7 +155,7 @@ public sealed partial class GpsEnriquecimentoService
                 {
                     matchingCombinado = await executorBatch.BuscarCombinadoAsync(
                         inputId!,
-                        posicao.CodigoLinha, historicoParaCombinado?.Rota?.ItinerarioId,
+                        posicao.CodigoLinha, historicoParaCombinado?.Rota?.PadraoVersaoId,
                         posicao.Latitude, posicao.Longitude, bearing.Value,
                         _opcoes.DistanciaMaximaRotaMetros, faixaCandidata,
                         solicitacaoOperacional, ct);
@@ -167,7 +167,7 @@ public sealed partial class GpsEnriquecimentoService
                     try
                     {
                         matchingCombinado = await _repositorio.BuscarMatchingCombinadoAsync(
-                            posicao.CodigoLinha, historicoParaCombinado?.Rota?.ItinerarioId,
+                            posicao.CodigoLinha, historicoParaCombinado?.Rota?.PadraoVersaoId,
                             posicao.Latitude, posicao.Longitude, bearing.Value,
                             _opcoes.DistanciaMaximaRotaMetros, faixaCandidata,
                             solicitacaoOperacional, ct);
@@ -181,11 +181,11 @@ public sealed partial class GpsEnriquecimentoService
                     }
                 }
 
-                rota = matchingCombinado?.Global.Status == StatusBuscaItinerario.Found
+                rota = matchingCombinado?.Global.Status == StatusBuscaPadrao.Found
                     ? matchingCombinado.Global.Rota
                     : null;
                 rotaGlobalObservacional = rota;
-                if (matchingCombinado?.Global.Status == StatusBuscaItinerario.InfrastructureFailure)
+                if (matchingCombinado?.Global.Status == StatusBuscaPadrao.InfrastructureFailure)
                     _logger.LogWarning(
                         "Veiculo {ordem}: falha no matching combinado; sem matching neste ciclo.",
                         posicao.Ordem);
@@ -202,7 +202,7 @@ public sealed partial class GpsEnriquecimentoService
                         bearing.Value,
                         _opcoes.DistanciaMaximaRotaMetros,
                         ct);
-                    rota = resultadoGlobal.Status == StatusBuscaItinerario.Found
+                    rota = resultadoGlobal.Status == StatusBuscaPadrao.Found
                         ? resultadoGlobal.Rota
                         : null;
                     performance?.RegistrarMatchingGlobalLogico();
@@ -234,15 +234,15 @@ public sealed partial class GpsEnriquecimentoService
             if (executorBatch is not null)
                 await executorBatch.SemConsultaInicialAsync(inputId!, ct);
             // A consulta não ocorreu: preservar bearing não confirma o matching atual.
-            if (_itinerarioAtual.TryGetValue(posicao.Ordem, out var semBearing))
+            if (_padraoAtual.TryGetValue(posicao.Ordem, out var semBearing))
                 bearing = semBearing.Bearing;
         }
 
         // Reprojeta o confirmado com continuidade, inclusive quando vence a busca global.
         var rotaGlobalValida = rota is not null && RotaValida(rota);
-        ItinerarioConfirmado? confirmadoAnterior = null;
+        PadraoConfirmado? confirmadoAnterior = null;
         var temHistoricoConfirmado = rotaGlobalValida
-            && _itinerarioAtual.TryGetValue(posicao.Ordem, out confirmadoAnterior)
+            && _padraoAtual.TryGetValue(posicao.Ordem, out confirmadoAnterior)
             && confirmadoAnterior.Rota is { };
         if (rotaGlobalValida && !temHistoricoConfirmado)
             performance?.RegistrarMatchingGlobalSemHistorico();
@@ -251,18 +251,18 @@ public sealed partial class GpsEnriquecimentoService
         if (rotaGlobalValida && rota is not null && temHistoricoConfirmado
             && confirmadoAnterior!.Rota is { } rotaAnterior)
         {
-            var mesmoItinerario = rota.ItinerarioId == rotaAnterior.ItinerarioId;
-            performance?.RegistrarMatchingGlobalComHistorico(mesmoItinerario);
+            var mesmoPadrao = rota.PadraoVersaoId == rotaAnterior.PadraoVersaoId;
+            performance?.RegistrarMatchingGlobalComHistorico(mesmoPadrao);
             // A 2.2 reinicia a referência quando o comprimento da geometria muda.
-            var faixa = mesmoItinerario && rota.ComprimentoRotaMetros != rotaAnterior.ComprimentoRotaMetros
+            var faixa = mesmoPadrao && rota.ComprimentoRotaMetros != rotaAnterior.ComprimentoRotaMetros
                 ? null : CalcularFaixaProjecao(posicao, confirmadoAnterior);
-            if (!mesmoItinerario || faixa.HasValue)
+            if (!mesmoPadrao || faixa.HasValue)
             {
-                ResultadoBuscaItinerario resultado;
-                var podeUsarAnteriorCombinado = mesmoItinerario
+                ResultadoBuscaPadrao resultado;
+                var podeUsarAnteriorCombinado = mesmoPadrao
                     && faixa.HasValue
                     && matchingCombinado is not null
-                    && historicoParaCombinado?.Rota?.ItinerarioId == rotaAnterior.ItinerarioId
+                    && historicoParaCombinado?.Rota?.PadraoVersaoId == rotaAnterior.PadraoVersaoId
                     && faixaCandidata == faixa;
                 if (podeUsarAnteriorCombinado)
                 {
@@ -273,15 +273,15 @@ public sealed partial class GpsEnriquecimentoService
                 {
                     // Em troca, o ramo anterior restrito do combinado nao participa
                     // da decisao: preserva a consulta direcionada antiga sem faixa.
-                    var faixaDirecionada = mesmoItinerario ? faixa : null;
+                    var faixaDirecionada = mesmoPadrao ? faixa : null;
                     performance?.RegistrarMotivoMatchingDirecionado(
-                        mesmoItinerario, faixaDirecionada.HasValue);
+                        mesmoPadrao, faixaDirecionada.HasValue);
                     if (executorBatch is not null)
                     {
                         consultaDirecionadaRegistrada = true;
                         resultado = await executorBatch.BuscarDirecionadoAsync(
                             inputId!,
-                            posicao.CodigoLinha, rotaAnterior.ItinerarioId,
+                            posicao.CodigoLinha, rotaAnterior.PadraoVersaoId,
                             posicao.Latitude, posicao.Longitude, bearing!.Value,
                             _opcoes.DistanciaMaximaRotaMetros, ct, faixaDirecionada);
                         performance?.RegistrarMatchingDirecionadoLogico();
@@ -291,8 +291,8 @@ public sealed partial class GpsEnriquecimentoService
                         var inicioMatchingDirecionado = System.Diagnostics.Stopwatch.GetTimestamp();
                         try
                         {
-                            resultado = await _repositorio.BuscarEnriquecimentoDoItinerarioAsync(
-                                posicao.CodigoLinha, rotaAnterior.ItinerarioId,
+                            resultado = await _repositorio.BuscarEnriquecimentoDoPadraoAsync(
+                                posicao.CodigoLinha, rotaAnterior.PadraoVersaoId,
                                 posicao.Latitude, posicao.Longitude, bearing!.Value,
                                 _opcoes.DistanciaMaximaRotaMetros, ct, faixaDirecionada);
                         }
@@ -304,20 +304,20 @@ public sealed partial class GpsEnriquecimentoService
                     }
 
                     performance?.RegistrarResultadoMatchingDirecionado(resultado.Status);
-                    if (!mesmoItinerario)
+                    if (!mesmoPadrao)
                         performance?.RegistrarTrocaQueryAntiga();
                 }
 
-                if (mesmoItinerario && faixa.HasValue)
+                if (mesmoPadrao && faixa.HasValue)
                     performance?.RegistrarComparacaoContinuidade(rota, resultado);
 
-                if (resultado.Status == StatusBuscaItinerario.Found)
+                if (resultado.Status == StatusBuscaPadrao.Found)
                 {
                     var anteriorAtual = resultado.Rota!;
-                    if (anteriorAtual.ItinerarioId != rotaAnterior.ItinerarioId || !RotaValida(anteriorAtual)
+                    if (anteriorAtual.PadraoVersaoId != rotaAnterior.PadraoVersaoId || !RotaValida(anteriorAtual)
                         || !double.IsFinite(anteriorAtual.DistanciaARotaMetros) || anteriorAtual.DistanciaARotaMetros < 0)
                         rota = null; // Contrato inconsistente não autoriza troca.
-                    else if (mesmoItinerario)
+                    else if (mesmoPadrao)
                         rota = anteriorAtual;
                     else
                     {
@@ -327,13 +327,13 @@ public sealed partial class GpsEnriquecimentoService
                         if (!podeTracar) rota = anteriorAtual; // Matching do GPS atual, nunca o snapshot antigo.
                     }
                 }
-                else if (resultado.Status != StatusBuscaItinerario.NotEligible)
+                else if (resultado.Status != StatusBuscaPadrao.NotEligible)
                 {
-                    _logger.LogWarning("Veiculo {ordem}: falha ao reavaliar itinerario anterior; sem matching neste ciclo.",
+                    _logger.LogWarning("Veiculo {ordem}: falha ao reavaliar padrao anterior; sem matching neste ciclo.",
                         posicao.Ordem);
                     rota = null;
                 }
-                else if (mesmoItinerario)
+                else if (mesmoPadrao)
                     rota = null; // O matching global irrestrito não substitui o restrito inelegível.
             }
         }
@@ -354,7 +354,7 @@ public sealed partial class GpsEnriquecimentoService
         if (contexto?.PodeProjetar == true && contexto.Estado is { } operacional)
         {
             if (rotaGlobalObservacional is not null
-                && rotaGlobalObservacional.ItinerarioId == operacional.Observada.ItinerarioId)
+                && rotaGlobalObservacional.PadraoVersaoId == operacional.Observada.PadraoVersaoId)
             {
                 var avancoMetros = (rotaGlobalObservacional.PosicaoNaRota
                     - operacional.Observada.PosicaoNaRotaConfirmada)
@@ -363,7 +363,7 @@ public sealed partial class GpsEnriquecimentoService
                     - operacional.Observada.TimestampUltimaAtualizacao).TotalSeconds;
                 var limite = segundos > 0 ? OrcamentoProjecaoMetros(segundos) : 0;
                 resultadoOperacional = avancoMetros >= 0 && avancoMetros <= limite
-                    ? ResultadoProjecaoOperacional.Encontrada(new(rotaGlobalObservacional.ItinerarioId,
+                    ? ResultadoProjecaoOperacional.Encontrada(new(rotaGlobalObservacional.PadraoVersaoId,
                         rotaGlobalObservacional.PosicaoNaRota,
                         rotaGlobalObservacional.DistanciaARotaMetros,
                         rotaGlobalObservacional.ComprimentoRotaMetros))
@@ -379,38 +379,38 @@ public sealed partial class GpsEnriquecimentoService
                 duracaoComandoOperacional ?? TimeSpan.Zero);
         }
 
-        // ── 3. Estabilidade de itinerario ─────────────────────────────────────
+        // ── 3. Estabilidade de padrao ─────────────────────────────────────
         if (rota is not null)
         {
-            _itinerarioAtual[posicao.Ordem] = new ItinerarioConfirmado(rota, bearing,
+            _padraoAtual[posicao.Ordem] = new PadraoConfirmado(rota, bearing,
                 timestampGpsConfirmado: posicao.TimestampGps);
         }
         else
         {
             // Sem matching atual: conta o ciclo e retém estado apenas em memória
             // por MaxCiclosSemRota ciclos, sem copiar a posição antiga para o DTO.
-            _itinerarioAtual.AddOrUpdate(
+            _padraoAtual.AddOrUpdate(
                 posicao.Ordem,
-                _ => new ItinerarioConfirmado(null, bearing),
+                _ => new PadraoConfirmado(null, bearing),
                 (_, anterior) =>
                 {
                     if (anterior.Rota is null)
-                        return new ItinerarioConfirmado(null, bearing);
+                        return new PadraoConfirmado(null, bearing);
 
                     var ciclosSemRota = anterior.CiclosSemRota + 1;
 
                     if (ciclosSemRota >= _opcoes.MaxCiclosSemRota)
-                        return new ItinerarioConfirmado(null, bearing, int.MaxValue);
+                        return new PadraoConfirmado(null, bearing, int.MaxValue);
 
-                    return new ItinerarioConfirmado(anterior.Rota, anterior.Bearing, ciclosSemRota,
+                    return new PadraoConfirmado(anterior.Rota, anterior.Bearing, ciclosSemRota,
                         anterior.TimestampGpsConfirmado);
                 });
 
-            if (_itinerarioAtual.TryGetValue(posicao.Ordem, out var expirado)
+            if (_padraoAtual.TryGetValue(posicao.Ordem, out var expirado)
                 && expirado.CiclosSemRota == int.MaxValue)
             {
-                _itinerarioAtual.TryRemove(
-                    new KeyValuePair<string, ItinerarioConfirmado>(posicao.Ordem, expirado));
+                _padraoAtual.TryRemove(
+                    new KeyValuePair<string, PadraoConfirmado>(posicao.Ordem, expirado));
             }
 
         }
@@ -421,7 +421,6 @@ public sealed partial class GpsEnriquecimentoService
             VelocidadeMedia              = velocidadeMedia,
             PosicaoNaRota                = rota?.PosicaoNaRota,
             ComprimentoRotaMetros        = rota?.ComprimentoRotaMetros,
-            ItinerarioId                 = rota?.PadraoVersaoId,
             PadraoOperacionalId          = rota?.PadraoOperacionalId,
             PadraoVersaoId               = rota?.PadraoVersaoId,
             SentidoId                    = rota?.SentidoId,
@@ -449,7 +448,7 @@ public sealed partial class GpsEnriquecimentoService
         (_opcoes.VelocidadeMaximaKmh * FatorToleranciaSalto / 3.6) * segundos
         + _opcoes.ToleranciaProjecaoMetros;
 
-    private FaixaProjecao? CalcularFaixaProjecao(PosicaoVeiculoDto posicao, ItinerarioConfirmado confirmado)
+    private FaixaProjecao? CalcularFaixaProjecao(PosicaoVeiculoDto posicao, PadraoConfirmado confirmado)
     {
         if (confirmado.Rota is not { } anterior || !RotaValida(anterior)
             || confirmado.TimestampGpsConfirmado is not { } timestamp)
@@ -466,9 +465,9 @@ public sealed partial class GpsEnriquecimentoService
     private bool MatchingTemporalAceitavel(PosicaoVeiculoDto posicao, EnriquecimentoRotaDto atual)
     {
         if (!RotaValida(atual)) return false;
-        if (!_itinerarioAtual.TryGetValue(posicao.Ordem, out var confirmado)
+        if (!_padraoAtual.TryGetValue(posicao.Ordem, out var confirmado)
             || confirmado.Rota is not { } anterior
-            || anterior.ItinerarioId != atual.ItinerarioId)
+            || anterior.PadraoVersaoId != atual.PadraoVersaoId)
             return true; // Primeira referência ou política de troca existente.
 
         if (confirmado.TimestampGpsConfirmado is not { } timestamp || !RotaValida(anterior))
@@ -498,9 +497,9 @@ public sealed partial class GpsEnriquecimentoService
     ///      overwrite por estado anterior (isso é feito aqui, não mais em
     ///      GpsPollingService.MontarComHistorico).
     ///   3. Se a fonte não enviar bearing válido, reutiliza o último bearing
-    ///      CONFIRMADO em memória para este veículo (_itinerarioAtual) —
+    ///      CONFIRMADO em memória para este veículo (_padraoAtual) —
     ///      nunca o BearingLocal calculado a partir da rota, que é derivado
-    ///      da geometria do itinerário, não da leitura de entrada.
+    ///      da geometria do padrão, não da leitura de entrada.
     ///   4. Sem nenhuma evidência confiável, retorna null.
     /// </summary>
     private double? CalcularBearingConfiavel(PosicaoVeiculoDto posicao)
@@ -522,7 +521,7 @@ public sealed partial class GpsEnriquecimentoService
         if (posicao.Bearing.HasValue)
             return posicao.Bearing;
 
-        return _itinerarioAtual.TryGetValue(posicao.Ordem, out var confirmado)
+        return _padraoAtual.TryGetValue(posicao.Ordem, out var confirmado)
             ? confirmado.Bearing
             : null;
     }
@@ -617,14 +616,14 @@ public sealed partial class GpsEnriquecimentoService
 
     // ── Tipos internos ────────────────────────────────────────────────────────
 
-    private sealed class ItinerarioConfirmado
+    private sealed class PadraoConfirmado
     {
         public EnriquecimentoRotaDto? Rota         { get; }
         public double?                Bearing       { get; }
         public int                    CiclosSemRota { get; }
         public DateTimeOffset?        TimestampGpsConfirmado { get; }
 
-        public ItinerarioConfirmado(
+        public PadraoConfirmado(
             EnriquecimentoRotaDto? rota,
             double? bearing,
             int ciclosSemRota = 0,

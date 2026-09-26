@@ -43,7 +43,7 @@ public sealed class ViagemObservadaService
         ResultadoEnriquecimentoGps enriquecimento, CancellationToken ct)
     {
         var posicao = enriquecimento.Posicao;
-        if (posicao.ItinerarioId is null || posicao.PosicaoNaRota is null) return null;
+        if (posicao.PadraoVersaoId is null || posicao.PosicaoNaRota is null) return null;
         ViagemObservadaResultado result;
         try
         {
@@ -62,11 +62,11 @@ public sealed class ViagemObservadaService
         switch (result.Status)
         {
             case ViagemObservadaStatus.Created:
-                _logger.LogInformation("Viagem observada {viagem} criada para {ordem} no itinerário {itinerario}.",
-                    result.Estado?.ViagemId, posicao.Ordem, posicao.ItinerarioId);
+                _logger.LogInformation("Viagem observada {viagem} criada para {ordem} no padrão {padrao}.",
+                    result.Estado?.ViagemId, posicao.Ordem, posicao.PadraoVersaoId);
                 break;
             case ViagemObservadaStatus.ItineraryChanged:
-                GpsCommitPerformanceContext.Current?.RegistrarDivergenciaItinerario();
+                GpsCommitPerformanceContext.Current?.RegistrarDivergenciaPadrao();
                 break;
             case ViagemObservadaStatus.InvalidState:
             case ViagemObservadaStatus.InvalidSequence:

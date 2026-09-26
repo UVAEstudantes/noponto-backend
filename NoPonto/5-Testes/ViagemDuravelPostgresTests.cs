@@ -26,7 +26,7 @@ public sealed class ViagemDuravelPostgresTests(ViagemOperacionalFixture db)
         { StreamKey = _stream, UtcNow = utcNow ?? (() => DateTimeOffset.UtcNow) };
     private PosicaoVeiculoDto G(int seconds, double p = .1) => new()
     {
-        Ordem = _ordem, CodigoLinha = "VIAGEM3", ItinerarioId = db.R1,
+        Ordem = _ordem, CodigoLinha = "VIAGEM3", PadraoVersaoId = db.R1,
         PosicaoNaRota = p, ComprimentoRotaMetros = 2220,
         TimestampGps = _t.AddSeconds(seconds), Latitude = -22.9,
         Longitude = -43.21 + .02 * p, Bearing = 90, Velocidade = 20
@@ -277,13 +277,13 @@ public sealed class ViagemDuravelPostgresTests(ViagemOperacionalFixture db)
             case "enum-invalido":
                 await Redis.HashSetAsync(Key, "EstadoViagem", "Desconhecido"); break;
             case "candidato-parcial":
-                await Redis.HashSetAsync(Key, "CandidatoItinerarioId", Guid.NewGuid().ToString("N")); break;
+                await Redis.HashSetAsync(Key, "CandidatoPadraoVersaoId", Guid.NewGuid().ToString("N")); break;
         }
 
         var context = Assert.IsType<ContextoOperacional>(await repository.LerContextoAsync(_ordem, default));
         Assert.Equal(created.Estado!.ViagemId, context.Estado!.Observada.ViagemId);
         Assert.Equal(G(0).TimestampGps, context.Estado.Observada.TimestampUltimaAtualizacao);
-        Assert.Equal(30, (await Redis.HashGetAllAsync(Key)).Length);
+        Assert.Equal(29, (await Redis.HashGetAllAsync(Key)).Length);
     }
 
     [Fact]

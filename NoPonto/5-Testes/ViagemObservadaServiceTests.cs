@@ -8,7 +8,7 @@ public sealed class ViagemObservadaServiceTests
 {
     private static PosicaoVeiculoDto Position() => new()
     {
-        Ordem = "TESTE", CodigoLinha = "10", ItinerarioId = Guid.NewGuid(), PosicaoNaRota = .54,
+        Ordem = "TESTE", CodigoLinha = "10", PadraoVersaoId = Guid.NewGuid(), PosicaoNaRota = .54,
         TimestampGps = DateTimeOffset.UtcNow, RecebidoEmUtc = DateTimeOffset.UtcNow,
         ModalFonte = "ONIBUS", ProvedorFonte = "SPPO_ZIRIX", Latitude = -22.9, Longitude = -43.2,
     };
@@ -24,7 +24,7 @@ public sealed class ViagemObservadaServiceTests
             string ordem, Guid id, DateTimeOffset ts, double p, CancellationToken ct)
         {
             Before?.Invoke();
-            Calls.Add(new() { Ordem = ordem, ItinerarioId = id, TimestampGps = ts, PosicaoNaRota = p });
+            Calls.Add(new() { Ordem = ordem, PadraoVersaoId = id, TimestampGps = ts, PosicaoNaRota = p });
             if (Throw) throw new TimeoutException();
             var state = ItinerarioAnterior is { } itinerary
                 ? new ViagemObservadaState(Guid.NewGuid(), ordem, itinerary, ts.AddMinutes(-1),
@@ -72,7 +72,7 @@ public sealed class ViagemObservadaServiceTests
     {
         var repo = new Repository();
         var pos = Position();
-        pos = pos with { ItinerarioId = noItinerary ? null : pos.ItinerarioId,
+        pos = pos with { PadraoVersaoId = noItinerary ? null : pos.PadraoVersaoId,
             PosicaoNaRota = noProgress ? null : pos.PosicaoNaRota };
         Assert.Null(await Service(repo).AtualizarAsync(pos, default));
         Assert.Empty(repo.Calls);
@@ -86,7 +86,7 @@ public sealed class ViagemObservadaServiceTests
         await Service(repo).AtualizarAsync(pos, default);
         var call = Assert.Single(repo.Calls);
         Assert.Equal(pos.Ordem, call.Ordem);
-        Assert.Equal(pos.ItinerarioId, call.ItinerarioId);
+        Assert.Equal(pos.PadraoVersaoId, call.PadraoVersaoId);
         Assert.Equal(pos.TimestampGps, call.TimestampGps);
         Assert.Equal(pos.PosicaoNaRota, call.PosicaoNaRota);
     }

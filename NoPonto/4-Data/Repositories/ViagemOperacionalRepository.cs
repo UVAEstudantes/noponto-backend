@@ -25,7 +25,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
     private int _suppressedRedisWarnings;
     private const long RedisWarningWindowMs = 60_000;
 
-    public Task<ViagemObservadaResultado> TentarAtualizarAsync(string ordem, Guid itinerarioId,
+    public Task<ViagemObservadaResultado> TentarAtualizarAsync(string ordem, Guid padraoVersaoId,
         DateTimeOffset timestampGps, double posicaoNaRota, CancellationToken ct) =>
         Task.FromResult(new ViagemObservadaResultado(ViagemObservadaStatus.InvalidState));
 
@@ -82,7 +82,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
         PosicaoVeiculoDto gps, ContextoOperacional? contexto,
         ResultadoProjecaoOperacional projecao, bool snapshotFornecido, CancellationToken ct)
     {
-        if ((gps.PadraoVersaoId ?? gps.ItinerarioId) is not { } itinerary || itinerary == Guid.Empty || gps.PosicaoNaRota is not { } p
+        if (gps.PadraoVersaoId is not { } itinerary || itinerary == Guid.Empty || gps.PosicaoNaRota is not { } p
             || !double.IsFinite(p) || p is < 0 or > 1 || string.IsNullOrWhiteSpace(gps.Ordem)
             || string.IsNullOrWhiteSpace(gps.CodigoLinha)
             || !GpsLeituraValidator.CoordenadaValida(gps.Latitude, gps.Longitude)
@@ -106,31 +106,30 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             var gpsOperacional = gps;
             var usandoProjecao = false;
             var divergente = previous?.Estado is EstadoViagem.Ativa or EstadoViagem.PossivelFim
-                && observed!.ItinerarioId != itinerary;
+                && observed!.PadraoVersaoId != itinerary;
             if (divergente && projecao.Status != StatusProjecaoOperacional.NaoSolicitada)
             {
                 if (projecao.Status == StatusProjecaoOperacional.FalhaInfraestrutura)
                     return new(ViagemObservadaStatus.InfrastructureFailure, observed);
                 if (projecao.Status != StatusProjecaoOperacional.Encontrada
-                    || projecao.Projecao is not { } op || op.ItinerarioId != observed!.ItinerarioId
+                    || projecao.Projecao is not { } op || op.PadraoVersaoId != observed!.PadraoVersaoId
                     || !double.IsFinite(op.PosicaoNaRota) || op.PosicaoNaRota is < 0 or > 1
                     || op.PosicaoNaRota < observed.PosicaoNaRotaConfirmada
                     || !double.IsFinite(op.ComprimentoRotaMetros) || op.ComprimentoRotaMetros <= 0)
                     return Divergencia(observed!);
                 gpsOperacional = gps with { CodigoLinha = previous!.CodigoLinha,
-                    ItinerarioId = previous.Observada.ItinerarioId, PosicaoNaRota = op.PosicaoNaRota,
-                    PadraoVersaoId = previous.Observada.VersaoEstruturalId,
+                    PadraoVersaoId = previous.Observada.PadraoVersaoId, PosicaoNaRota = op.PosicaoNaRota,
                     PadraoOperacionalId = previous.Observada.PadraoOperacionalId,
                     ComprimentoRotaMetros = op.ComprimentoRotaMetros };
-                itinerary = op.ItinerarioId; p = op.PosicaoNaRota; usandoProjecao = true;
+                itinerary = op.PadraoVersaoId; p = op.PosicaoNaRota; usandoProjecao = true;
             }
-            if (previous?.Estado == EstadoViagem.Ativa && observed!.ItinerarioId != itinerary)
+            if (previous?.Estado == EstadoViagem.Ativa && observed!.PadraoVersaoId != itinerary)
                 return Divergencia(observed);
 
             await using var connection = await source.OpenConnectionAsync(ct);
             EstruturaViagem? structure;
             if (usandoProjecao && previous is not null)
-                structure = new(previous.Observada.ItinerarioId, previous.LinhaId,
+                structure = new(previous.Observada.PadraoVersaoId, previous.LinhaId,
                     previous.SentidoId, previous.CodigoLinha, true,
                     previous.Observada.PadraoOperacionalId, previous.Observada.Topologia);
             else
@@ -140,12 +139,12 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             }
             if (structure is null) return new(ViagemObservadaStatus.InvalidSequence);
             var baseline = previous is null || previous.Estado == EstadoViagem.Finalizada
-                || previous.Observada.ItinerarioId != itinerary;
+                || previous.Observada.PadraoVersaoId != itinerary;
             GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
             var transition = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(connection, null,
-                itinerary, previous is null || previous.Observada.ItinerarioId != itinerary
+                itinerary, previous is null || previous.Observada.PadraoVersaoId != itinerary
                     ? p : previous.Observada.PosicaoNaRotaConfirmada, p,
-                baseline ? Guid.Empty : previous!.Observada.UltimaParadaItinerarioId,
+                baseline ? Guid.Empty : previous!.Observada.UltimaOcorrenciaParadaPadraoId,
                 baseline ? 0 : previous!.Observada.UltimaParadaOrdem, baseline, ct,
                 structure.Topologia, baseline ? 0 : previous!.Observada.Volta);
             if (transition.Status != ViagemObservadaStatus.Updated) return new(transition.Status);
@@ -268,7 +267,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
         if (!await reader.ReadAsync(ct)) return null;
         var values = JsonSerializer.Deserialize<string[]>(reader.GetString(0))
             ?? throw new FormatException("Estado duravel vazio.");
-        if (values.Length is not (19 or 21 or 28))
+        if (values.Length != ViagemOperacionalCodec.Names.Length)
             throw new FormatException("Versao desconhecida do estado duravel.");
         var state = ViagemOperacionalCodec.Decode(ViagemOperacionalCodec.Names.Take(values.Length).Zip(values)
             .ToDictionary(x => x.First, x => x.Second), ordem);
@@ -408,7 +407,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             FROM escolhida e
             """;
         await using var command = new NpgsqlCommand(sql, connection, transaction);
-        command.Parameters.AddWithValue("id", gps.PadraoVersaoId ?? gps.ItinerarioId!.Value);
+        command.Parameters.AddWithValue("id", gps.PadraoVersaoId!.Value);
         command.Parameters.AddWithValue("codigo", gps.CodigoLinha);
         command.Parameters.AddWithValue("lat", gps.Latitude);
         command.Parameters.AddWithValue("lon", gps.Longitude);

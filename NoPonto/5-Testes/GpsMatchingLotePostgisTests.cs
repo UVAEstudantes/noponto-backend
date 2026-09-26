@@ -11,12 +11,12 @@ namespace NoPonto.Tests;
 public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixture>
 {
     private readonly PostgisGpsFixture _db;
-    private readonly GpsItinerarioRepository _repo;
+    private readonly GpsPadraoRepository _repo;
 
     public GpsMatchingLotePostgisTests(PostgisGpsFixture db, ITestOutputHelper output)
     {
         _db = db;
-        _repo = new(db.DataSource, NullLogger<GpsItinerarioRepository>.Instance);
+        _repo = new(db.DataSource, NullLogger<GpsPadraoRepository>.Instance);
         output.WriteLine($"PostGIS {db.Version}; batch experimental no schema {db.Schema}");
     }
 
@@ -35,15 +35,15 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
             G("sem-resultado", "SEM_ROTA", -22.9, -43.2, 90),
         ];
 
-        var esperado = new Dictionary<string, ResultadoBuscaItinerario>();
+        var esperado = new Dictionary<string, ResultadoBuscaPadrao>();
         foreach (var entrada in entradas)
         {
             var rota = await _repo.BuscarEnriquecimentoAsync(entrada.CodigoLinha,
                 entrada.Latitude, entrada.Longitude, entrada.Bearing!.Value,
                 entrada.DistanciaMaximaMetros);
             esperado[entrada.InputId] = rota is null
-                ? ResultadoBuscaItinerario.NotEligible()
-                : ResultadoBuscaItinerario.Found(rota);
+                ? ResultadoBuscaPadrao.NotEligible()
+                : ResultadoBuscaPadrao.Found(rota);
         }
 
         var lote = await _repo.BuscarGlobaisEmLoteAsync(entradas.Reverse().ToArray());
@@ -78,7 +78,7 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         var esperados = new Dictionary<string, ResultadoMatchingCombinado>();
         foreach (var entrada in entradas)
             esperados[entrada.InputId] = await _repo.BuscarMatchingCombinadoAsync(
-                entrada.CodigoLinha, entrada.ItinerarioAnteriorId,
+                entrada.CodigoLinha, entrada.PadraoVersaoAnteriorId,
                 entrada.Latitude, entrada.Longitude, entrada.Bearing!.Value,
                 entrada.DistanciaMaximaMetros, entrada.Faixa, entrada.ProjecaoOperacional);
 
@@ -106,10 +106,10 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
             D("fora-faixa", "X25", _db.X, .005, -.005, 90, new(.15,.22)),
             D("sem-resultado", "GPS23", _db.OutraLinha, -22.9, -43.2, 90),
         ];
-        var esperados = new Dictionary<string, ResultadoBuscaItinerario>();
+        var esperados = new Dictionary<string, ResultadoBuscaPadrao>();
         foreach (var entrada in entradas)
-            esperados[entrada.InputId] = await _repo.BuscarEnriquecimentoDoItinerarioAsync(
-                entrada.CodigoLinha, entrada.ItinerarioId, entrada.Latitude, entrada.Longitude,
+            esperados[entrada.InputId] = await _repo.BuscarEnriquecimentoDoPadraoAsync(
+                entrada.CodigoLinha, entrada.PadraoVersaoId, entrada.Latitude, entrada.Longitude,
                 entrada.Bearing!.Value, entrada.DistanciaMaximaMetros, faixa: entrada.Faixa);
 
         var lote = await _repo.BuscarDirecionadosEmLoteAsync(entradas);
@@ -132,9 +132,9 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         var lote = await _repo.BuscarGlobaisEmLoteAsync(entradas);
 
         Assert.Equal(["A", "B", "C"], lote.Resultados.Select(x => x.InputId));
-        Assert.Equal(_db.R1, lote.Resultados[0].Global.Rota!.ItinerarioId);
-        Assert.Equal(_db.Volta, lote.Resultados[1].Global.Rota!.ItinerarioId);
-        Assert.Equal(_db.X, lote.Resultados[2].Global.Rota!.ItinerarioId);
+        Assert.Equal(_db.R1, lote.Resultados[0].Global.Rota!.PadraoVersaoId);
+        Assert.Equal(_db.Volta, lote.Resultados[1].Global.Rota!.PadraoVersaoId);
+        Assert.Equal(_db.X, lote.Resultados[2].Global.Rota!.PadraoVersaoId);
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         Assert.Equal(3, lote.Metricas.MatchingBatchCommandsPostgres);
         Assert.Equal([100, 100, 1], lote.Metricas.MatchingBatchSize);
         Assert.Equal(entradas.Select(x => x.InputId), lote.Resultados.Select(x => x.InputId));
-        Assert.All(lote.Resultados, x => Assert.Equal(StatusBuscaItinerario.Found, x.Global.Status));
+        Assert.All(lote.Resultados, x => Assert.Equal(StatusBuscaPadrao.Found, x.Global.Status));
     }
 
     [Fact]
@@ -167,9 +167,9 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
                 new(_db.R1, .4, 100))]);
 
         Assert.Equal(0, global.Metricas.MatchingBatchCommandsPostgres);
-        Assert.Equal(StatusBuscaItinerario.NotEligible, global.Resultados[0].Global.Status);
+        Assert.Equal(StatusBuscaPadrao.NotEligible, global.Resultados[0].Global.Status);
         Assert.Equal(0, combinado.Metricas.MatchingBatchCommandsPostgres);
-        Assert.Equal(StatusBuscaItinerario.NotEligible, combinado.Resultados[0].Resultado.Global.Status);
+        Assert.Equal(StatusBuscaPadrao.NotEligible, combinado.Resultados[0].Resultado.Global.Status);
         Assert.Equal(StatusProjecaoOperacional.Inelegivel,
             combinado.Resultados[0].Resultado.Operacional!.Status);
     }
@@ -192,8 +192,8 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
             SearchPath = "pg_catalog"
         };
         await using var fonte = NpgsqlDataSource.Create(builder.ConnectionString);
-        var repo = new GpsItinerarioRepository(
-            fonte, NullLogger<GpsItinerarioRepository>.Instance);
+        var repo = new GpsPadraoRepository(
+            fonte, NullLogger<GpsPadraoRepository>.Instance);
 
         var global = await repo.BuscarGlobaisEmLoteAsync(
             [G("global", "GPS23", -22.9, -43.2, 90)]);
@@ -203,12 +203,12 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
             [C("combinado", "GPS23", _db.R1, -22.9, -43.2, 90, new(.4,.6),
                 new(_db.R1, .4, 100))]);
 
-        Assert.Equal(StatusBuscaItinerario.NotEligible, global.Resultados[0].Global.Status);
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure,
+        Assert.Equal(StatusBuscaPadrao.NotEligible, global.Resultados[0].Global.Status);
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure,
             direcionado.Resultados[0].Direcionado.Status);
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure,
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure,
             combinado.Resultados[0].Resultado.Global.Status);
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure,
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure,
             combinado.Resultados[0].Resultado.Anterior.Status);
         Assert.Equal(StatusProjecaoOperacional.FalhaInfraestrutura,
             combinado.Resultados[0].Resultado.Operacional!.Status);
@@ -240,9 +240,9 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
 
         var lote = await _repo.BuscarGlobaisEmLoteAsync(entradas);
 
-        Assert.Equal(StatusBuscaItinerario.Found, lote.Resultados[0].Global.Status);
-        Assert.Equal(StatusBuscaItinerario.NotEligible, lote.Resultados[1].Global.Status);
-        Assert.Equal(StatusBuscaItinerario.Found, lote.Resultados[2].Global.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, lote.Resultados[0].Global.Status);
+        Assert.Equal(StatusBuscaPadrao.NotEligible, lote.Resultados[1].Global.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, lote.Resultados[2].Global.Status);
         Assert.Equal(1, lote.Metricas.MatchingBatchCommandsPostgres);
         Assert.Equal([2], lote.Metricas.MatchingBatchSize);
     }
@@ -261,12 +261,12 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
 
         var lote = await _repo.BuscarCombinadosEmLoteAsync(entradas);
 
-        Assert.Equal(StatusBuscaItinerario.Found, lote.Resultados[0].Resultado.Global.Status);
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure,
+        Assert.Equal(StatusBuscaPadrao.Found, lote.Resultados[0].Resultado.Global.Status);
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure,
             lote.Resultados[1].Resultado.Global.Status);
         Assert.Equal(StatusProjecaoOperacional.FalhaInfraestrutura,
             lote.Resultados[1].Resultado.Operacional!.Status);
-        Assert.Equal(StatusBuscaItinerario.Found, lote.Resultados[2].Resultado.Global.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, lote.Resultados[2].Resultado.Global.Status);
         Assert.Equal(1, lote.Metricas.MatchingBatchCommandsPostgres);
         Assert.Equal([2], lote.Metricas.MatchingBatchSize);
     }
@@ -285,10 +285,10 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
 
         var lote = await _repo.BuscarDirecionadosEmLoteAsync(entradas);
 
-        Assert.Equal(StatusBuscaItinerario.Found, lote.Resultados[0].Direcionado.Status);
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure,
+        Assert.Equal(StatusBuscaPadrao.Found, lote.Resultados[0].Direcionado.Status);
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure,
             lote.Resultados[1].Direcionado.Status);
-        Assert.Equal(StatusBuscaItinerario.Found, lote.Resultados[2].Direcionado.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, lote.Resultados[2].Direcionado.Status);
         Assert.Equal(1, lote.Metricas.MatchingBatchCommandsPostgres);
         Assert.Equal([2], lote.Metricas.MatchingBatchSize);
     }
@@ -310,12 +310,12 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
                 C("valida-B", "X25", _db.X, .00001, .00001, 45, new(.15,.22)),
             ]);
 
-            Assert.Equal(StatusBuscaItinerario.Found, lote.Resultados[0].Resultado.Global.Status);
-            Assert.Equal(StatusBuscaItinerario.InfrastructureFailure,
+            Assert.Equal(StatusBuscaPadrao.Found, lote.Resultados[0].Resultado.Global.Status);
+            Assert.Equal(StatusBuscaPadrao.InfrastructureFailure,
                 lote.Resultados[1].Resultado.Global.Status);
             Assert.Equal(StatusProjecaoOperacional.FalhaInfraestrutura,
                 lote.Resultados[1].Resultado.Operacional!.Status);
-            Assert.Equal(StatusBuscaItinerario.Found, lote.Resultados[2].Resultado.Global.Status);
+            Assert.Equal(StatusBuscaPadrao.Found, lote.Resultados[2].Resultado.Global.Status);
             Assert.Equal(1, lote.Metricas.MatchingBatchCommandsPostgres);
         }
     }
@@ -349,10 +349,10 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
             D("B", "GPS23", _db.R1, -22.9, -43.2, 90),
         ]);
 
-        Assert.Equal(StatusBuscaItinerario.NotEligible, global.Resultados[1].Global.Status);
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure,
+        Assert.Equal(StatusBuscaPadrao.NotEligible, global.Resultados[1].Global.Status);
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure,
             combinado.Resultados[1].Resultado.Global.Status);
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure,
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure,
             direcionado.Resultados[1].Direcionado.Status);
         Assert.All(new[] { global.Metricas, combinado.Metricas, direcionado.Metricas },
             x => Assert.Equal([2], x.MatchingBatchSize));
@@ -381,9 +381,9 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
             D("B", "GPS23", _db.R1, -22.9, -43.2, 90, new(.4,.6)),
         ]);
 
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure,
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure,
             combinado.Resultados[1].Resultado.Global.Status);
-        Assert.Equal(StatusBuscaItinerario.InfrastructureFailure,
+        Assert.Equal(StatusBuscaPadrao.InfrastructureFailure,
             direcionado.Resultados[1].Direcionado.Status);
         Assert.Equal([2], combinado.Metricas.MatchingBatchSize);
         Assert.Equal([2], direcionado.Metricas.MatchingBatchSize);
@@ -418,8 +418,8 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         TipoBatchMatching tipo)
     {
         var fallbacks = new List<string>();
-        var repo = new GpsItinerarioRepository(
-            _db.DataSource, NullLogger<GpsItinerarioRepository>.Instance)
+        var repo = new GpsPadraoRepository(
+            _db.DataSource, NullLogger<GpsPadraoRepository>.Instance)
         {
             AntesDoComandoBatchParaTeste = (atual, numero) =>
             {
@@ -432,7 +432,7 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
 
         MetricasMatchingLote metricas;
         IReadOnlyList<string> idsRetornados;
-        IReadOnlyList<StatusBuscaItinerario> statuses;
+        IReadOnlyList<StatusBuscaPadrao> statuses;
         if (tipo == TipoBatchMatching.GlobalSimples)
         {
             var lote = await repo.BuscarGlobaisEmLoteAsync(
@@ -459,7 +459,7 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         }
 
         Assert.Equal(ids, idsRetornados);
-        Assert.All(statuses, x => Assert.Equal(StatusBuscaItinerario.Found, x));
+        Assert.All(statuses, x => Assert.Equal(StatusBuscaPadrao.Found, x));
         Assert.Equal(["chunk-2", "chunk-3"], fallbacks);
         // A falha ocorre no seam de preparação, antes da abertura da conexão:
         // somente os chunks 1 e 3 representam tentativas PostgreSQL batch reais.
@@ -478,8 +478,8 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         var fallbacks = 0;
-        var repo = new GpsItinerarioRepository(
-            _db.DataSource, NullLogger<GpsItinerarioRepository>.Instance)
+        var repo = new GpsPadraoRepository(
+            _db.DataSource, NullLogger<GpsPadraoRepository>.Instance)
         {
             AntesDoFallbackIndividualParaTeste = (_, _) => fallbacks++
         };
@@ -499,8 +499,8 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         using var cts = new CancellationTokenSource();
         var iniciados = new List<int>();
         var fallbacks = 0;
-        var repo = new GpsItinerarioRepository(
-            _db.DataSource, NullLogger<GpsItinerarioRepository>.Instance)
+        var repo = new GpsPadraoRepository(
+            _db.DataSource, NullLogger<GpsPadraoRepository>.Instance)
         {
             AntesDoComandoBatchParaTeste = (_, numero) => iniciados.Add(numero),
             AposChunkParaTeste = (_, numero) =>
@@ -525,8 +525,8 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
     {
         using var cts = new CancellationTokenSource();
         var fallbacks = 0;
-        var repo = new GpsItinerarioRepository(
-            _db.DataSource, NullLogger<GpsItinerarioRepository>.Instance)
+        var repo = new GpsPadraoRepository(
+            _db.DataSource, NullLogger<GpsPadraoRepository>.Instance)
         {
             AntesDoComandoBatchParaTeste = (_, _) => cts.Cancel(),
             AntesDoFallbackIndividualParaTeste = (_, _) => fallbacks++
@@ -547,7 +547,7 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
 
         Assert.Equal(ids, lote.Resultados.Select(x => x.InputId));
         Assert.All(lote.Resultados,
-            x => Assert.Equal(StatusBuscaItinerario.Found, x.Global.Status));
+            x => Assert.Equal(StatusBuscaPadrao.Found, x.Global.Status));
     }
 
     [Fact]
@@ -558,20 +558,21 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
                 SELECT ST_SetSRID(ST_MakePoint(-43.2,-22.9),4326)::geography AS geog,
                        ST_SetSRID(ST_MakePoint(-43.2,-22.9),4326) AS geom
             )
-            SELECT i."Id",
+            SELECT pv."Id",
               (ABS(MOD((degrees(ST_Azimuth(
-                  ST_LineInterpolatePoint(i."Geometria",
-                    GREATEST(0.0,ST_LineLocatePoint(i."Geometria",p.geom)-0.025))::geography,
-                  ST_LineInterpolatePoint(i."Geometria",
-                    LEAST(1.0,ST_LineLocatePoint(i."Geometria",p.geom)+0.025))::geography
+                  ST_LineInterpolatePoint(pv."Geometria",
+                    GREATEST(0.0,ST_LineLocatePoint(pv."Geometria",p.geom)-0.025))::geography,
+                  ST_LineInterpolatePoint(pv."Geometria",
+                    LEAST(1.0,ST_LineLocatePoint(pv."Geometria",p.geom)+0.025))::geography
                 ))-90+540)::numeric,360)-180)/80.0)
-              +(ST_Distance(p.geog,i."Geometria"::geography)/250.0) AS score
-            FROM "Itinerarios" i
-            JOIN "Sentidos" s ON s."Id"=i."SentidoId"
+              +(ST_Distance(p.geog,pv."Geometria"::geography)/250.0) AS score
+            FROM "PadroesVersoes" pv
+            JOIN "PadroesOperacionais" po ON po."Id"=pv."PadraoOperacionalId" AND po."VersaoAtualId"=pv."Id"
+            JOIN "Sentidos" s ON s."Id"=po."SentidoId"
             JOIN "Linhas" l ON l."Id"=s."LinhaId"
             CROSS JOIN ponto p
             WHERE l."Codigo"='EMPATE'
-            ORDER BY i."Id"
+            ORDER BY pv."Id"
             """);
         var scores = new List<(Guid Id, double Score)>();
         await using (var reader = await cmd.ExecuteReaderAsync())
@@ -582,10 +583,11 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         Assert.Equal(scores[0].Score, scores[1].Score);
 
         await using var ordemFisicaCmd = _db.DataSource.CreateCommand("""
-            SELECT i."Id" FROM "Itinerarios" i
-            JOIN "Sentidos" s ON s."Id"=i."SentidoId"
+            SELECT pv."Id" FROM "PadroesVersoes" pv
+            JOIN "PadroesOperacionais" po ON po."Id"=pv."PadraoOperacionalId" AND po."VersaoAtualId"=pv."Id"
+            JOIN "Sentidos" s ON s."Id"=po."SentidoId"
             JOIN "Linhas" l ON l."Id"=s."LinhaId"
-            WHERE l."Codigo"='EMPATE' ORDER BY i.ctid
+            WHERE l."Codigo"='EMPATE' ORDER BY pv.ctid
             """);
         var ordemFisica = new List<Guid>();
         await using (var reader = await ordemFisicaCmd.ExecuteReaderAsync())
@@ -601,11 +603,11 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         var combinadoBatch = await _repo.BuscarCombinadosEmLoteAsync(
             [C("empate-combinado", "EMPATE", null, -22.9, -43.2, 90, null)]);
 
-        Assert.Equal(_db.EmpateA, individual!.ItinerarioId);
-        Assert.Equal(_db.EmpateA, batch.Resultados[0].Global.Rota!.ItinerarioId);
-        Assert.Equal(_db.EmpateA, combinadoIndividual.Global.Rota!.ItinerarioId);
+        Assert.Equal(_db.EmpateA, individual!.PadraoVersaoId);
+        Assert.Equal(_db.EmpateA, batch.Resultados[0].Global.Rota!.PadraoVersaoId);
+        Assert.Equal(_db.EmpateA, combinadoIndividual.Global.Rota!.PadraoVersaoId);
         Assert.Equal(_db.EmpateA,
-            combinadoBatch.Resultados[0].Resultado.Global.Rota!.ItinerarioId);
+            combinadoBatch.Resultados[0].Resultado.Global.Rota!.PadraoVersaoId);
     }
 
     [Fact]
@@ -620,11 +622,11 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         var combinadoBatch = await _repo.BuscarCombinadosEmLoteAsync(
             [C("score-combinado", "SCORE", null, -22.9, -43.2, 90, null)]);
 
-        Assert.Equal(_db.ScoreMelhor, individual!.ItinerarioId);
-        Assert.Equal(_db.ScoreMelhor, batch.Resultados[0].Global.Rota!.ItinerarioId);
-        Assert.Equal(_db.ScoreMelhor, combinadoIndividual.Global.Rota!.ItinerarioId);
+        Assert.Equal(_db.ScoreMelhor, individual!.PadraoVersaoId);
+        Assert.Equal(_db.ScoreMelhor, batch.Resultados[0].Global.Rota!.PadraoVersaoId);
+        Assert.Equal(_db.ScoreMelhor, combinadoIndividual.Global.Rota!.PadraoVersaoId);
         Assert.Equal(_db.ScoreMelhor,
-            combinadoBatch.Resultados[0].Resultado.Global.Rota!.ItinerarioId);
+            combinadoBatch.Resultados[0].Resultado.Global.Rota!.PadraoVersaoId);
     }
 
     [Fact]
@@ -633,7 +635,7 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         var entrada = C("circular-real", "CIRCULAR", _db.Circular,
             0, 0, 135, new(.85, 1));
         var individual = await _repo.BuscarMatchingCombinadoAsync(
-            entrada.CodigoLinha, entrada.ItinerarioAnteriorId,
+            entrada.CodigoLinha, entrada.PadraoVersaoAnteriorId,
             entrada.Latitude, entrada.Longitude, entrada.Bearing!.Value,
             entrada.DistanciaMaximaMetros, entrada.Faixa);
         var batch = (await _repo.BuscarCombinadosEmLoteAsync([entrada]))
@@ -641,8 +643,8 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
 
         AssertBusca(individual.Global, batch.Global, "circular/GLOBAL");
         AssertBusca(individual.Anterior, batch.Anterior, "circular/ANTERIOR");
-        Assert.Equal(StatusBuscaItinerario.Found, individual.Global.Status);
-        Assert.Equal(StatusBuscaItinerario.Found, individual.Anterior.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, individual.Global.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, individual.Anterior.Status);
         Assert.InRange(individual.Global.Rota!.PosicaoNaRota, 0, .01);
         Assert.InRange(individual.Anterior.Rota!.PosicaoNaRota, .99, 1);
     }
@@ -729,12 +731,12 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
 
         AssertDtos(esperado, atual);
         var porOrdem = atual.ToDictionary(x => x.Posicao.Ordem);
-        Assert.Equal(_db.R1, porOrdem["B-IGUAL-A"].Posicao.ItinerarioId);
+        Assert.Equal(_db.R1, porOrdem["B-IGUAL-A"].Posicao.PadraoVersaoId);
         Assert.Equal(StatusProjecaoOperacional.Encontrada,
             porOrdem["B-IGUAL-A"].ProjecaoOperacional.Status);
-        Assert.Equal(_db.R1, porOrdem["B-IGUAL-A"].ProjecaoOperacional.Projecao!.ItinerarioId);
-        Assert.Equal(_db.R2, porOrdem["B-DIF-A"].Posicao.ItinerarioId);
-        Assert.Equal(_db.R1, porOrdem["B-DIF-A"].ProjecaoOperacional.Projecao!.ItinerarioId);
+        Assert.Equal(_db.R1, porOrdem["B-IGUAL-A"].ProjecaoOperacional.Projecao!.PadraoVersaoId);
+        Assert.Equal(_db.R2, porOrdem["B-DIF-A"].Posicao.PadraoVersaoId);
+        Assert.Equal(_db.R1, porOrdem["B-DIF-A"].ProjecaoOperacional.Projecao!.PadraoVersaoId);
         Assert.Equal(StatusProjecaoOperacional.Inelegivel,
             porOrdem["SEM-BEARING-A"].ProjecaoOperacional.Status);
         Assert.Null(porOrdem["FIM-ROTA"].Posicao.ProximaParadaNome);
@@ -800,7 +802,7 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
             [new(inicial, null)], default,
             new GpsCicloPerformance(DateTimeOffset.UtcNow, 20_000)));
         AssertDtos([esperadoInicial], [atualInicial]);
-        Assert.Equal(_db.R1, atualInicial.Posicao.ItinerarioId);
+        Assert.Equal(_db.R1, atualInicial.Posicao.PadraoVersaoId);
 
         var troca = P("DIRIGIDO-REAL", "GPS23", -22.9, -43.2, 270, t0.AddSeconds(5));
         var metricasIndividual = new GpsCicloPerformance(DateTimeOffset.UtcNow, 20_000);
@@ -811,14 +813,14 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
             [new(troca, null)], default, metricasBatch));
 
         AssertDtos([esperado], [atual]);
-        Assert.Equal(_db.Volta, atual.Posicao.ItinerarioId);
+        Assert.Equal(_db.Volta, atual.Posicao.PadraoVersaoId);
         Assert.Equal(1, metricasIndividual.MatchingDirecionados);
         Assert.Equal(1, metricasBatch.MatchingDirecionados);
         Assert.Equal(1, metricasBatch.MatchingDirectedBatches);
         Assert.Equal(1, metricasBatch.MatchingTrocaQueryAntiga);
     }
 
-    private async Task ExecutarPorTipo(GpsItinerarioRepository repo,
+    private async Task ExecutarPorTipo(GpsPadraoRepository repo,
         TipoBatchMatching tipo, int quantidade, CancellationToken ct)
     {
         var ids = Enumerable.Range(0, quantidade).Select(i => $"cancel-{i}").ToArray();
@@ -886,7 +888,7 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
                 atual[i].Posicao.LongitudeAnterior, 10);
             Assert.Equal(esperado[i].Posicao.TimestampAnterior,
                 atual[i].Posicao.TimestampAnterior);
-            Assert.Equal(esperado[i].Posicao.ItinerarioId, atual[i].Posicao.ItinerarioId);
+            Assert.Equal(esperado[i].Posicao.PadraoVersaoId, atual[i].Posicao.PadraoVersaoId);
             AssertNullable(esperado[i].Posicao.PosicaoNaRota,
                 atual[i].Posicao.PosicaoNaRota, 10);
             AssertNullable(esperado[i].Posicao.ComprimentoRotaMetros,
@@ -981,19 +983,19 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         double lat, double lon, double? bearing, FaixaProjecao? faixa = null,
         double distancia = 250) => new(id, linha, itinerario, lat, lon, bearing, distancia, faixa);
 
-    private static void AssertBusca(ResultadoBuscaItinerario esperado,
-        ResultadoBuscaItinerario atual, string contexto)
+    private static void AssertBusca(ResultadoBuscaPadrao esperado,
+        ResultadoBuscaPadrao atual, string contexto)
     {
         Assert.True(esperado.Status == atual.Status,
             $"{contexto}: status {esperado.Status} != {atual.Status}");
-        if (esperado.Status != StatusBuscaItinerario.Found)
+        if (esperado.Status != StatusBuscaPadrao.Found)
         {
             Assert.Null(atual.Rota);
             return;
         }
         var e = esperado.Rota!;
         var a = atual.Rota!;
-        Assert.Equal(e.ItinerarioId, a.ItinerarioId);
+        Assert.Equal(e.PadraoVersaoId, a.PadraoVersaoId);
         AssertNumero(e.PosicaoNaRota, a.PosicaoNaRota, contexto + "/posicao");
         AssertNumero(e.ComprimentoRotaMetros, a.ComprimentoRotaMetros, contexto + "/comprimento");
         AssertNumero(e.DistanciaARotaMetros, a.DistanciaARotaMetros, contexto + "/distancia");
@@ -1015,7 +1017,7 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
             return;
         }
         var a = Assert.IsType<ProjecaoOperacional>(atual!.Projecao);
-        Assert.Equal(e.ItinerarioId, a.ItinerarioId);
+        Assert.Equal(e.PadraoVersaoId, a.PadraoVersaoId);
         AssertNumero(e.PosicaoNaRota, a.PosicaoNaRota, contexto + "/posicao");
         AssertNumero(e.DistanciaRotaMetros, a.DistanciaRotaMetros, contexto + "/distancia");
         AssertNumero(e.ComprimentoRotaMetros, a.ComprimentoRotaMetros, contexto + "/comprimento");

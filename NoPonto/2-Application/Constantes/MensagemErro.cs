@@ -4,7 +4,6 @@ public static class MensagemErro
 {
     public const string LINHA_NAO_ENCONTRADA = "Essa linha não foi encontrada.";
     public const string SENTIDO_NAO_ENCONTRADO = "Esse sentido não foi encontrado.";
-    public const string ITINERARIO_NAO_ENCONTRADO = "Esse itinerário não foi encontrado.";
     public const string PARADA_NAO_ENCONTRADA = "Essa parada não foi encontrada.";
 
     public const string PAGINA_INVALIDA = "O parâmetro page deve ser maior que zero.";

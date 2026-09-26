@@ -5,6 +5,8 @@
 
 *.zip
 
+lab-output/
+
 BACKEND_CONTEXT.md
 context.md
 

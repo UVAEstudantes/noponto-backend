@@ -6,7 +6,7 @@ using NoPonto.Application.GPS;
 
 namespace NoPonto.Data.Repositories;
 
-public sealed partial class GpsItinerarioRepository
+public sealed partial class GpsPadraoRepository
 {
     public const int TamanhoChunkMatchingPadrao = 100;
 
@@ -67,8 +67,8 @@ public sealed partial class GpsItinerarioRepository
             if (!entrada.Bearing.HasValue)
             {
                 resultados[entrada.InputId] = new(
-                    ResultadoBuscaItinerario.NotEligible(),
-                    ResultadoBuscaItinerario.NotEligible(),
+                    ResultadoBuscaPadrao.NotEligible(),
+                    ResultadoBuscaPadrao.NotEligible(),
                     entrada.ProjecaoOperacional.HasValue
                         ? ResultadoProjecaoOperacional.Inelegivel()
                         : ResultadoProjecaoOperacional.NaoSolicitada());
@@ -137,15 +137,15 @@ public sealed partial class GpsItinerarioRepository
                     AntesDoFallbackIndividualParaTeste?.Invoke(TipoBatchMatching.Combinado, primeira.InputId);
                     var inicioSonda = Stopwatch.GetTimestamp();
                     var sonda = await BuscarMatchingCombinadoAsync(primeira.CodigoLinha,
-                        primeira.ItinerarioAnteriorId, primeira.Latitude, primeira.Longitude,
+                        primeira.PadraoVersaoAnteriorId, primeira.Latitude, primeira.Longitude,
                         primeira.Bearing!.Value, primeira.DistanciaMaximaMetros, primeira.Faixa,
                         primeira.ProjecaoOperacional, cancellationToken);
                     comandos.Add(new(TipoBatchMatching.Combinado,
                         OrigemComandoMatchingLote.FallbackIndividual, 1,
                         Stopwatch.GetElapsedTime(inicioSonda)));
                     resultados[primeira.InputId] = sonda;
-                    var infraestrutura = sonda.Global.Status == StatusBuscaItinerario.InfrastructureFailure
-                        || sonda.Anterior.Status == StatusBuscaItinerario.InfrastructureFailure
+                    var infraestrutura = sonda.Global.Status == StatusBuscaPadrao.InfrastructureFailure
+                        || sonda.Anterior.Status == StatusBuscaPadrao.InfrastructureFailure
                         || sonda.Operacional?.Status == StatusProjecaoOperacional.FalhaInfraestrutura;
                     if (protecao!.ConcluirSonda(TipoBatchMatching.Combinado, infraestrutura))
                     {
@@ -170,7 +170,7 @@ public sealed partial class GpsItinerarioRepository
                     try
                     {
                         resultados[entrada.InputId] = await BuscarMatchingCombinadoAsync(
-                            entrada.CodigoLinha, entrada.ItinerarioAnteriorId,
+                            entrada.CodigoLinha, entrada.PadraoVersaoAnteriorId,
                             entrada.Latitude, entrada.Longitude, entrada.Bearing!.Value,
                             entrada.DistanciaMaximaMetros, entrada.Faixa,
                             entrada.ProjecaoOperacional, cancellationToken);
@@ -205,7 +205,7 @@ public sealed partial class GpsItinerarioRepository
         ValidarLote(entradas, tamanhoChunk, x => x.InputId);
         cancellationToken.ThrowIfCancellationRequested();
         var resultados = entradas.ToDictionary(x => x.InputId,
-            _ => ResultadoBuscaItinerario.NotEligible(), StringComparer.Ordinal);
+            _ => ResultadoBuscaPadrao.NotEligible(), StringComparer.Ordinal);
         var comandos = new List<MetricaComandoMatchingLote>();
         var validas = entradas.Where(x => x.Bearing.HasValue
             && DadosBasicosValidos(x.Latitude, x.Longitude, x.Bearing.Value,
@@ -220,7 +220,7 @@ public sealed partial class GpsItinerarioRepository
             {
                 protecao.RegistrarPulo(chunk.Length);
                 foreach (var entrada in chunk)
-                    resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                    resultados[entrada.InputId] = ResultadoBuscaPadrao.InfrastructureFailure();
                 continue;
             }
             var inicio = Stopwatch.GetTimestamp();
@@ -234,7 +234,7 @@ public sealed partial class GpsItinerarioRepository
                 {
                     input_id = x.InputId, codigo = x.CodigoLinha, lat = x.Latitude,
                     lon = x.Longitude, bearing = x.Bearing!.Value,
-                    dist_max = x.DistanciaMaximaMetros, itinerario_id = Guid.Empty,
+                    dist_max = x.DistanciaMaximaMetros, padrao_versao_id = Guid.Empty,
                     usar_faixa = false, fracao_min = 0d, fracao_max = 1d
                 }));
                 await ExecutarRotaChunkAsync(json, direcionado: false, resultados,
@@ -256,7 +256,7 @@ public sealed partial class GpsItinerarioRepository
                 {
                     _logger.LogWarning("Circuito de matching batch aberto apos falha de infraestrutura no GLOBAL.");
                     foreach (var entrada in chunk)
-                        resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                        resultados[entrada.InputId] = ResultadoBuscaPadrao.InfrastructureFailure();
                     continue;
                 }
 
@@ -274,14 +274,14 @@ public sealed partial class GpsItinerarioRepository
                             primeira.DistanciaMaximaMetros, null, null, cancellationToken,
                             propagarFalhaGlobalParaDiagnostico: true);
                         resultados[primeira.InputId] = rota is null
-                            ? ResultadoBuscaItinerario.NotEligible() : ResultadoBuscaItinerario.Found(rota);
+                            ? ResultadoBuscaPadrao.NotEligible() : ResultadoBuscaPadrao.Found(rota);
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                     catch (Exception probeEx)
                     {
                         infraestrutura = ClassificarFalhaBatch(probeEx) is
                             CategoriaFalhaMatchingBatch.Connectivity or CategoriaFalhaMatchingBatch.Timeout;
-                        resultados[primeira.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                        resultados[primeira.InputId] = ResultadoBuscaPadrao.InfrastructureFailure();
                     }
                     finally
                     {
@@ -293,7 +293,7 @@ public sealed partial class GpsItinerarioRepository
                     {
                         _logger.LogWarning("Circuito de matching batch aberto apos sonda GLOBAL de infraestrutura.");
                         foreach (var entrada in chunk)
-                            resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                            resultados[entrada.InputId] = ResultadoBuscaPadrao.InfrastructureFailure();
                         continue;
                     }
                     pularPrimeira = true;
@@ -317,8 +317,8 @@ public sealed partial class GpsItinerarioRepository
                             entrada.DistanciaMaximaMetros, cancellationToken);
                         cancellationToken.ThrowIfCancellationRequested();
                         resultados[entrada.InputId] = rota is null
-                            ? ResultadoBuscaItinerario.NotEligible()
-                            : ResultadoBuscaItinerario.Found(rota);
+                            ? ResultadoBuscaPadrao.NotEligible()
+                            : ResultadoBuscaPadrao.Found(rota);
                     }
                     finally
                     {
@@ -349,16 +349,16 @@ public sealed partial class GpsItinerarioRepository
     {
         ValidarLote(entradas, tamanhoChunk, x => x.InputId);
         cancellationToken.ThrowIfCancellationRequested();
-        var resultados = new Dictionary<string, ResultadoBuscaItinerario>(StringComparer.Ordinal);
+        var resultados = new Dictionary<string, ResultadoBuscaPadrao>(StringComparer.Ordinal);
         var comandos = new List<MetricaComandoMatchingLote>();
         foreach (var entrada in entradas)
             resultados[entrada.InputId] = !entrada.Bearing.HasValue
-                ? ResultadoBuscaItinerario.NotEligible()
+                ? ResultadoBuscaPadrao.NotEligible()
                 : !DadosBasicosValidos(entrada.Latitude, entrada.Longitude,
                       entrada.Bearing.Value, entrada.DistanciaMaximaMetros)
                     || entrada.Faixa is { } faixa && !faixa.Valida
-                    ? ResultadoBuscaItinerario.InfrastructureFailure()
-                    : ResultadoBuscaItinerario.NotEligible();
+                    ? ResultadoBuscaPadrao.InfrastructureFailure()
+                    : ResultadoBuscaPadrao.NotEligible();
 
         var validas = entradas.Where(x => x.Bearing.HasValue
             && DadosBasicosValidos(x.Latitude, x.Longitude, x.Bearing.Value,
@@ -373,7 +373,7 @@ public sealed partial class GpsItinerarioRepository
             {
                 protecao.RegistrarPulo(chunk.Length);
                 foreach (var entrada in chunk)
-                    resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                    resultados[entrada.InputId] = ResultadoBuscaPadrao.InfrastructureFailure();
                 continue;
             }
             var inicio = Stopwatch.GetTimestamp();
@@ -387,7 +387,7 @@ public sealed partial class GpsItinerarioRepository
                 {
                     input_id = x.InputId, codigo = x.CodigoLinha, lat = x.Latitude,
                     lon = x.Longitude, bearing = x.Bearing!.Value,
-                    dist_max = x.DistanciaMaximaMetros, itinerario_id = x.ItinerarioId,
+                    dist_max = x.DistanciaMaximaMetros, padrao_versao_id = x.PadraoVersaoId,
                     usar_faixa = x.Faixa.HasValue, fracao_min = x.Faixa?.Min ?? 0d,
                     fracao_max = x.Faixa?.Max ?? 1d
                 }));
@@ -410,7 +410,7 @@ public sealed partial class GpsItinerarioRepository
                 {
                     _logger.LogWarning("Circuito de matching batch aberto apos falha de infraestrutura no DIRECIONADO.");
                     foreach (var entrada in chunk)
-                        resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                        resultados[entrada.InputId] = ResultadoBuscaPadrao.InfrastructureFailure();
                     continue;
                 }
 
@@ -420,8 +420,8 @@ public sealed partial class GpsItinerarioRepository
                     var primeira = chunk[0];
                     AntesDoFallbackIndividualParaTeste?.Invoke(TipoBatchMatching.Direcionado, primeira.InputId);
                     var inicioSonda = Stopwatch.GetTimestamp();
-                    var sonda = await BuscarEnriquecimentoDoItinerarioAsync(primeira.CodigoLinha,
-                        primeira.ItinerarioId, primeira.Latitude, primeira.Longitude,
+                    var sonda = await BuscarEnriquecimentoDoPadraoAsync(primeira.CodigoLinha,
+                        primeira.PadraoVersaoId, primeira.Latitude, primeira.Longitude,
                         primeira.Bearing!.Value, primeira.DistanciaMaximaMetros,
                         cancellationToken, primeira.Faixa);
                     comandos.Add(new(TipoBatchMatching.Direcionado,
@@ -429,11 +429,11 @@ public sealed partial class GpsItinerarioRepository
                         Stopwatch.GetElapsedTime(inicioSonda)));
                     resultados[primeira.InputId] = sonda;
                     if (protecao!.ConcluirSonda(TipoBatchMatching.Direcionado,
-                        sonda.Status == StatusBuscaItinerario.InfrastructureFailure))
+                        sonda.Status == StatusBuscaPadrao.InfrastructureFailure))
                     {
                         _logger.LogWarning("Circuito de matching batch aberto apos sonda DIRECIONADA de infraestrutura.");
                         foreach (var entrada in chunk)
-                            resultados[entrada.InputId] = ResultadoBuscaItinerario.InfrastructureFailure();
+                            resultados[entrada.InputId] = ResultadoBuscaPadrao.InfrastructureFailure();
                         continue;
                     }
                     pularPrimeira = true;
@@ -451,8 +451,8 @@ public sealed partial class GpsItinerarioRepository
                     var inicioFallback = Stopwatch.GetTimestamp();
                     try
                     {
-                        resultados[entrada.InputId] = await BuscarEnriquecimentoDoItinerarioAsync(
-                            entrada.CodigoLinha, entrada.ItinerarioId,
+                        resultados[entrada.InputId] = await BuscarEnriquecimentoDoPadraoAsync(
+                            entrada.CodigoLinha, entrada.PadraoVersaoId,
                             entrada.Latitude, entrada.Longitude, entrada.Bearing!.Value,
                             entrada.DistanciaMaximaMetros, cancellationToken, entrada.Faixa);
                     }
@@ -481,7 +481,7 @@ public sealed partial class GpsItinerarioRepository
     private async Task ExecutarRotaChunkAsync(
         string json,
         bool direcionado,
-        Dictionary<string, ResultadoBuscaItinerario> resultados,
+        Dictionary<string, ResultadoBuscaPadrao> resultados,
         Action registrarTentativaPostgres,
         CancellationToken cancellationToken)
     {
@@ -489,7 +489,7 @@ public sealed partial class GpsItinerarioRepository
             WITH inputs AS (
                 SELECT * FROM jsonb_to_recordset(@inputs::jsonb) AS x(
                     input_id text, codigo text, lat double precision, lon double precision,
-                    bearing double precision, dist_max double precision, itinerario_id uuid,
+                    bearing double precision, dist_max double precision, padrao_versao_id uuid,
                     usar_faixa boolean, fracao_min double precision, fracao_max double precision)
             )
             SELECT entrada.input_id, escolhido.*
@@ -509,7 +509,7 @@ public sealed partial class GpsItinerarioRepository
                     JOIN "Sentidos" s ON s."Id" = po."SentidoId"
                     JOIN "Linhas" l ON l."Id" = s."LinhaId"
                     WHERE l."Codigo" = entrada.codigo
-                    /*FILTRO_ITINERARIO*/
+                    /*FILTRO_PADRAO*/
                 ),
                 geometrias_projecao AS (
                     SELECT r.*,
@@ -544,7 +544,7 @@ public sealed partial class GpsItinerarioRepository
                     SELECT cd.*, (cd.diff_bearing / 80.0) + (cd.distancia_rota_metros / entrada.dist_max) AS score
                     FROM com_diff_bearing cd WHERE cd.diff_bearing < 80
                 ),
-                itinerario_escolhido AS (
+                padrao_escolhido AS (
                     SELECT cs.*, ST_LineInterpolatePoint(cs."Geometria", cs.posicao_na_rota) AS ponto_rota
                     FROM com_score cs ORDER BY cs.score ASC /*DESEMPATE_GLOBAL*/ LIMIT 1
                 ),
@@ -556,12 +556,12 @@ public sealed partial class GpsItinerarioRepository
                         ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros
                     FROM "OcorrenciasParadasPadroes" pi
                     JOIN "Paradas" p ON p."Id" = pi."ParadaId"
-                    JOIN itinerario_escolhido ie ON ie."Id" = pi."PadraoVersaoId"
+                    JOIN padrao_escolhido ie ON ie."Id" = pi."PadraoVersaoId"
                     CROSS JOIN veiculo v
                     WHERE pi."PosicaoTracado" > ie.posicao_na_rota
                     ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC LIMIT 1
                 )
-                SELECT ie."Id" AS itinerario_id, ie.padrao_operacional_id,
+                SELECT ie."Id" AS padrao_versao_id, ie.padrao_operacional_id,
                     ie.sentido_id, ie.linha_id, ie.topologia,
                     ie.posicao_na_rota, ie.comprimento_metros,
                     ie.distancia_rota_metros, ie.bearing_local,
@@ -569,7 +569,7 @@ public sealed partial class GpsItinerarioRepository
                     pp.parada_nome, pp.ocorrencia_id, pp.parada_id, pp.parada_ordem,
                     pp.parada_distancia_acumulada, pp.parada_distancia_linha,
                     pp.distancia_parada_metros
-                FROM itinerario_escolhido ie LEFT JOIN proxima_parada pp ON true LIMIT 1
+                FROM padrao_escolhido ie LEFT JOIN proxima_parada pp ON true LIMIT 1
             ) escolhido ON true
             ORDER BY entrada.input_id DESC
             """;
@@ -577,8 +577,8 @@ public sealed partial class GpsItinerarioRepository
         registrarTentativaPostgres();
         await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql.Replace("/*FILTRO_ITINERARIO*/",
-            direcionado ? "AND i.\"Id\" = entrada.itinerario_id" : "")
+        cmd.CommandText = sql.Replace("/*FILTRO_PADRAO*/",
+            direcionado ? "AND i.\"Id\" = entrada.padrao_versao_id" : "")
             .Replace("/*DESEMPATE_GLOBAL*/",
                 direcionado ? "" : ", cs.\"Id\" ASC");
         cmd.Parameters.AddWithValue("inputs", NpgsqlDbType.Jsonb, json);
@@ -586,9 +586,9 @@ public sealed partial class GpsItinerarioRepository
         while (await reader.ReadAsync(cancellationToken))
         {
             var inputId = reader.GetString(reader.GetOrdinal("input_id"));
-            resultados[inputId] = reader.IsDBNull(reader.GetOrdinal("itinerario_id"))
-                ? ResultadoBuscaItinerario.NotEligible()
-                : ResultadoBuscaItinerario.Found(LerRota(reader));
+            resultados[inputId] = reader.IsDBNull(reader.GetOrdinal("padrao_versao_id"))
+                ? ResultadoBuscaPadrao.NotEligible()
+                : ResultadoBuscaPadrao.Found(LerRota(reader));
         }
     }
 
@@ -603,18 +603,18 @@ public sealed partial class GpsItinerarioRepository
             input_id = x.InputId, codigo = x.CodigoLinha, lat = x.Latitude,
             lon = x.Longitude, bearing = x.Bearing!.Value,
             dist_max = x.DistanciaMaximaMetros,
-            usar_anterior = x.ItinerarioAnteriorId.HasValue && x.Faixa.HasValue,
-            itinerario_id = x.ItinerarioAnteriorId ?? Guid.Empty,
+            usar_anterior = x.PadraoVersaoAnteriorId.HasValue && x.Faixa.HasValue,
+            padrao_versao_id = x.PadraoVersaoAnteriorId ?? Guid.Empty,
             fracao_min = x.Faixa?.Min ?? 0d, fracao_max = x.Faixa?.Max ?? 1d,
             usar_operacional = x.ProjecaoOperacional.HasValue,
-            itinerario_operacional = x.ProjecaoOperacional?.ItinerarioId ?? Guid.Empty,
+            padrao_operacional = x.ProjecaoOperacional?.PadraoVersaoId ?? Guid.Empty,
             posicao_operacional_anterior = x.ProjecaoOperacional?.PosicaoAnterior ?? 0d,
             orcamento_operacional_metros = x.ProjecaoOperacional?.OrcamentoMetros ?? 1d
         }));
 
         foreach (var entrada in chunk)
             resultados[entrada.InputId] = new(
-                ResultadoBuscaItinerario.NotEligible(), ResultadoBuscaItinerario.NotEligible(),
+                ResultadoBuscaPadrao.NotEligible(), ResultadoBuscaPadrao.NotEligible(),
                 entrada.ProjecaoOperacional.HasValue
                     ? ResultadoProjecaoOperacional.Inelegivel()
                     : ResultadoProjecaoOperacional.NaoSolicitada());
@@ -631,11 +631,11 @@ public sealed partial class GpsItinerarioRepository
             var atual = resultados[inputId];
             switch (reader.GetString(reader.GetOrdinal("ramo")))
             {
-                case "GLOBAL": atual = atual with { Global = ResultadoBuscaItinerario.Found(LerRota(reader)) }; break;
-                case "ANTERIOR": atual = atual with { Anterior = ResultadoBuscaItinerario.Found(LerRota(reader)) }; break;
+                case "GLOBAL": atual = atual with { Global = ResultadoBuscaPadrao.Found(LerRota(reader)) }; break;
+                case "ANTERIOR": atual = atual with { Anterior = ResultadoBuscaPadrao.Found(LerRota(reader)) }; break;
                 case "OPERACIONAL":
                     atual = atual with { Operacional = ResultadoProjecaoOperacional.Encontrada(new(
-                        reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+                        reader.GetGuid(reader.GetOrdinal("padrao_versao_id")),
                         reader.GetDouble(reader.GetOrdinal("posicao_na_rota")),
                         reader.GetDouble(reader.GetOrdinal("distancia_rota_metros")),
                         reader.GetDouble(reader.GetOrdinal("comprimento_metros")))) };
@@ -705,9 +705,9 @@ public sealed partial class GpsItinerarioRepository
             SELECT * FROM jsonb_to_recordset(@inputs::jsonb) AS x(
                 input_id text, codigo text, lat double precision, lon double precision,
                 bearing double precision, dist_max double precision,
-                usar_anterior boolean, itinerario_id uuid,
+                usar_anterior boolean, padrao_versao_id uuid,
                 fracao_min double precision, fracao_max double precision,
-                usar_operacional boolean, itinerario_operacional uuid,
+                usar_operacional boolean, padrao_operacional uuid,
                 posicao_operacional_anterior double precision,
                 orcamento_operacional_metros double precision)
         )
@@ -770,7 +770,7 @@ public sealed partial class GpsItinerarioRepository
                 JOIN "PadroesOperacionais" po ON po."VersaoAtualId"=i."Id"
                 JOIN "Sentidos" s ON s."Id"=po."SentidoId"
                 JOIN "Linhas" l ON l."Id"=s."LinhaId"
-                WHERE entrada.usar_anterior AND l."Codigo"=entrada.codigo AND i."Id"=entrada.itinerario_id
+                WHERE entrada.usar_anterior AND l."Codigo"=entrada.codigo AND i."Id"=entrada.padrao_versao_id
             ),
             geometria_anterior AS (
                 SELECT r.*,ST_LineSubstring(r."Geometria",entrada.fracao_min,entrada.fracao_max) AS geometria_projecao
@@ -818,8 +818,8 @@ public sealed partial class GpsItinerarioRepository
                 FROM "PadroesVersoes" i
                 JOIN "PadroesOperacionais" po ON po."VersaoAtualId"=i."Id"
                 WHERE entrada.usar_operacional
-                  AND i."Id"=entrada.itinerario_operacional
-                  AND EXISTS(SELECT 1 FROM global_escolhido ge WHERE ge."Id"<>entrada.itinerario_operacional)
+                  AND i."Id"=entrada.padrao_operacional
+                  AND EXISTS(SELECT 1 FROM global_escolhido ge WHERE ge."Id"<>entrada.padrao_operacional)
             ),
             geometria_operacional AS (
                 SELECT ro.*,
@@ -838,7 +838,7 @@ public sealed partial class GpsItinerarioRepository
             operacional_elegivel AS (
                 SELECT * FROM projecao_operacional WHERE posicao_na_rota>=entrada.posicao_operacional_anterior
             )
-            SELECT 'GLOBAL'::text AS ramo,ge."Id" AS itinerario_id,ge.padrao_operacional_id,
+            SELECT 'GLOBAL'::text AS ramo,ge."Id" AS padrao_versao_id,ge.padrao_operacional_id,
                 ge.sentido_id,ge.linha_id,ge.topologia,ge.posicao_na_rota,
                 ge.comprimento_metros,ge.distancia_rota_metros,ge.bearing_local,
                 ST_Y(ge.ponto_rota) AS lat_rota,ST_X(ge.ponto_rota) AS lon_rota,

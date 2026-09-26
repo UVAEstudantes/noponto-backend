@@ -32,13 +32,13 @@ public sealed class TelemetriaMlRepository(NpgsqlDataSource source) : ITelemetri
                      "CodigoLinha","OrigemPosicao","LatitudeRecebida","LongitudeRecebida",
                      "LatitudeProjetada","LongitudeProjetada","VelocidadeInstantanea","Bearing",
                      "TimestampGps","TimestampEnvioFonte","TimestampServidorFonte","RecebidoEmUtc",
-                     "EventoCriadoEmUtc","ItinerarioId","SentidoId","ViagemId","PosicaoNaRota",
-                     "ComprimentoRotaMetros","ProximaParadaItinerarioId","DistanciaProximaParadaMetros",
+                     "EventoCriadoEmUtc","SentidoId","ViagemId","PosicaoNaRota",
+                     "ComprimentoRotaMetros","ProximaOcorrenciaParadaPadraoId","DistanciaProximaParadaMetros",
                      "VelocidadeMediaCausal","PadraoVersaoId","OcorrenciaParadaPadraoId","Volta","LinhaId")
                 VALUES
                     (@id,true,now(),@observacao,@modal,@provedor,@ordem,@linha,@origem,@lat,@lon,
                      @latproj,@lonproj,@velocidade,@bearing,@gps,@envio,@servidor,@recebido,@criado,
-                     @itinerario,@sentido,@viagem,@posicao,@comprimento,@proxima,@distancia,@media,
+                     @sentido,@viagem,@posicao,@comprimento,@proxima,@distancia,@media,
                      @padrao_versao,@ocorrencia,@volta,@linha_id)
                 ON CONFLICT ("ObservacaoId") DO NOTHING
                 """);
@@ -60,12 +60,11 @@ public sealed class TelemetriaMlRepository(NpgsqlDataSource source) : ITelemetri
             AddNullable(command, "servidor", e.TimestampServidorFonte);
             command.Parameters.AddWithValue("recebido", e.RecebidoEmUtc.ToUniversalTime());
             command.Parameters.AddWithValue("criado", e.EventoCriadoEmUtc.ToUniversalTime());
-            AddNullable(command, "itinerario", e.ItinerarioId);
             AddNullable(command, "sentido", e.SentidoId);
             AddNullable(command, "viagem", e.ViagemId);
             AddNullable(command, "posicao", e.PosicaoNaRota);
             AddNullable(command, "comprimento", e.ComprimentoRotaMetros);
-            AddNullable(command, "proxima", e.ProximaParadaItinerarioId);
+            AddNullable(command, "proxima", e.ProximaOcorrenciaParadaPadraoId);
             AddNullable(command, "distancia", e.DistanciaProximaParadaMetros);
             AddNullable(command, "media", e.VelocidadeMediaCausal);
             AddNullable(command, "padrao_versao", e.PadraoVersaoId);

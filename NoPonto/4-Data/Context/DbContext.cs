@@ -14,11 +14,9 @@ public class TransporteDbContext : DbContext
     public DbSet<Modal> Modais => Set<Modal>();
     public DbSet<Linha> Linhas => Set<Linha>();
     public DbSet<Sentido> Sentidos => Set<Sentido>();
-    public DbSet<Itinerario> Itinerarios => Set<Itinerario>();
     public DbSet<Veiculo> Veiculos => Set<Veiculo>();
     public DbSet<PosicaoVeiculo> PosicoesVeiculo => Set<PosicaoVeiculo>();
     public DbSet<Parada> Paradas => Set<Parada>();
-    public DbSet<ParadaItinerario> ParadasItinerario => Set<ParadaItinerario>();
     public DbSet<Poi> Pois => Set<Poi>();
     public DbSet<HistoricoPassagem> HistoricoPassagens => Set<HistoricoPassagem>();
     public DbSet<EventoViagemPersistido> EventosViagem => Set<EventoViagemPersistido>();
@@ -68,14 +66,6 @@ public class TransporteDbContext : DbContext
             e.HasOne<PadraoVersao>().WithMany().HasForeignKey(x => x.PadraoVersaoId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<OcorrenciaParadaPadrao>().WithMany().HasForeignKey(x => x.OcorrenciaParadaPadraoId).OnDelete(DeleteBehavior.Restrict);
         });
-        modelBuilder.Entity<Itinerario>()
-            .Property(x => x.Geometria)
-            .HasColumnType("geometry(LineString,4326)");
-
-        modelBuilder.Entity<Itinerario>()
-            .HasIndex(x => x.Geometria)
-            .HasMethod("GIST");
-
         modelBuilder.Entity<PosicaoVeiculo>()
             .Property(x => x.Localizacao)
             .HasColumnType("geometry(Point,4326)");
@@ -119,20 +109,6 @@ public class TransporteDbContext : DbContext
             .HasIndex(x => new { x.ParadaId, x.PoiId })
             .IsUnique();
 
-        modelBuilder.Entity<ParadaItinerario>()
-            .HasIndex(x => x.ItinerarioId);
-
-        modelBuilder.Entity<ParadaItinerario>()
-            .HasIndex(x => x.ParadaId);
-
-        modelBuilder.Entity<ParadaItinerario>(e =>
-        {
-            e.Property(x => x.Fonte).HasMaxLength(32).HasDefaultValue(FontesParadaItinerario.SpatialLegacy).IsRequired();
-            e.HasIndex(x => new { x.ItinerarioId, x.Ordem }).IsUnique().HasFilter("\"Ativo\" = true");
-            e.HasIndex(x => x.ImportacaoId);
-            e.HasIndex(x => x.SubstituidaPorImportacaoId);
-        });
-
         modelBuilder.Entity<Tarifa>()
             .Property(tarifa => tarifa.Valor)
             .HasColumnName("Tarifa");
@@ -148,7 +124,7 @@ public class TransporteDbContext : DbContext
 
         // Índices para consultas de ML e diagnóstico
         modelBuilder.Entity<HistoricoPassagem>()
-            .HasIndex(h => new { h.CodigoLinha, h.ItinerarioId, h.TimestampGps });
+            .HasIndex(h => new { h.CodigoLinha, h.PadraoVersaoId, h.TimestampGps });
 
         modelBuilder.Entity<HistoricoPassagem>()
             .HasIndex(h => new { h.Ordem, h.TimestampGps });
@@ -159,19 +135,14 @@ public class TransporteDbContext : DbContext
         // TimestampGps como índice para range queries (consultas por período)
         modelBuilder.Entity<HistoricoPassagem>()
             .HasIndex(h => h.TimestampGps);
-        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ViagemId, h.ParadaItinerarioId })
-            .IsUnique().HasFilter("\"ViagemId\" IS NOT NULL AND \"ParadaItinerarioId\" IS NOT NULL");
         modelBuilder.Entity<HistoricoPassagem>()
             .HasIndex(h => new { h.ViagemId, h.OcorrenciaParadaPadraoId, h.Volta })
             .IsUnique().HasFilter("\"ViagemId\" IS NOT NULL AND \"OcorrenciaParadaPadraoId\" IS NOT NULL AND \"Volta\" IS NOT NULL");
         modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ViagemId, h.TimestampPassagem });
-        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ParadaItinerarioId, h.TimestampPassagem });
         modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.SentidoId, h.TimestampPassagem });
-        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.ItinerarioId, h.TimestampPassagem });
+        modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.PadraoVersaoId, h.TimestampPassagem });
         modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.Ordem, h.TimestampPassagem });
         modelBuilder.Entity<HistoricoPassagem>().HasIndex(h => new { h.CodigoLinha, h.TimestampPassagem });
-        modelBuilder.Entity<HistoricoPassagem>().HasOne(h => h.ParadaItinerario).WithMany()
-            .HasForeignKey(h => h.ParadaItinerarioId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<HistoricoPassagem>().HasOne(h => h.Sentido).WithMany()
             .HasForeignKey(h => h.SentidoId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<HistoricoPassagem>().HasOne<PadraoVersao>().WithMany()

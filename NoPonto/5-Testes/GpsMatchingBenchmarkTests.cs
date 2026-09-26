@@ -114,8 +114,8 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
                 await cmd.ExecuteNonQueryAsync();
             });
         await using var source = dataSourceBuilder.Build();
-        var logger = new BenchmarkLogger<GpsItinerarioRepository>();
-        var repo = new GpsItinerarioRepository(source, logger);
+        var logger = new BenchmarkLogger<GpsPadraoRepository>();
+        var repo = new GpsPadraoRepository(source, logger);
 
         _ = await repo.BuscarEnriquecimentoAsync("GPS23", -22.9, -43.2, 90, 100);
         foreach (var tamanho in new[] { 50, 100 })
@@ -127,7 +127,7 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
             Assert.Equal(tamanho, resultado.Resultados.Count);
             Assert.Equal(1, resultado.Metricas.MatchingBatchCommandsPostgres);
             Assert.All(resultado.Resultados,
-                x => Assert.Equal(StatusBuscaItinerario.Found, x.Global.Status));
+                x => Assert.Equal(StatusBuscaPadrao.Found, x.Global.Status));
         }
         Assert.Equal(0, logger.ConnectionErrors);
         Assert.Equal(0, logger.Timeouts);
@@ -284,10 +284,10 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
             ApplicationName = appName,
         };
         var performance = new GpsCicloPerformance(DateTimeOffset.UtcNow, 20_000);
-        var loggerRepo = new BenchmarkLogger<GpsItinerarioRepository>();
+        var loggerRepo = new BenchmarkLogger<GpsPadraoRepository>();
         var loggerService = new BenchmarkLogger<GpsEnriquecimentoService>();
         await using var source = NpgsqlDataSource.Create(mainBuilder.ConnectionString);
-        var repo = new GpsItinerarioRepository(source, loggerRepo);
+        var repo = new GpsPadraoRepository(source, loggerRepo);
         var service = new GpsEnriquecimentoService(repo,
             Options.Create(new GpsPollingOptions()),
             Options.Create(new GpsMatchingBatchOptions
@@ -410,7 +410,7 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
     }
 
     private static bool ResultadoComFalhaInfraestrutura(ResultadoEnriquecimentoGps resultado) =>
-        resultado.Posicao.ItinerarioId is null
+        resultado.Posicao.PadraoVersaoId is null
         || resultado.ProjecaoOperacional.Status == StatusProjecaoOperacional.FalhaInfraestrutura;
 
     private static async Task<ResultadoEnriquecimentoGps[]> ProcessarAsync(
@@ -477,11 +477,11 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
             var a = x.ProjecaoOperacional;
             sb.Append(p.Ordem).Append('|').Append(p.CodigoLinha).Append('|')
                 .Append(F(p.Latitude)).Append('|').Append(F(p.Longitude)).Append('|')
-                .Append(p.ItinerarioId).Append('|').Append(F(p.PosicaoNaRota)).Append('|')
+                .Append(p.PadraoVersaoId).Append('|').Append(F(p.PosicaoNaRota)).Append('|')
                 .Append(F(p.ComprimentoRotaMetros)).Append('|').Append(F(p.Bearing)).Append('|')
                 .Append(F(p.VelocidadeMedia)).Append('|').Append(p.ProximaParadaNome).Append('|')
                 .Append(F(p.DistanciaProximaParadaMetros)).Append('|').Append(p.Status).Append('|')
-                .Append(a.Status).Append('|').Append(a.Projecao?.ItinerarioId).Append('|')
+                .Append(a.Status).Append('|').Append(a.Projecao?.PadraoVersaoId).Append('|')
                 .Append(F(a.Projecao?.PosicaoNaRota)).Append('|')
                 .Append(F(a.Projecao?.DistanciaRotaMetros)).Append('|')
                 .Append(F(a.Projecao?.ComprimentoRotaMetros)).AppendLine();

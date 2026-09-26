@@ -4,14 +4,14 @@ using NoPonto.Application.GPS;
 
 namespace NoPonto.Data.Repositories;
 
-public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
+public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
 {
     private readonly NpgsqlDataSource _dataSource;
-    private readonly ILogger<GpsItinerarioRepository> _logger;
+    private readonly ILogger<GpsPadraoRepository> _logger;
 
-    public GpsItinerarioRepository(
+    public GpsPadraoRepository(
         NpgsqlDataSource dataSource,
-        ILogger<GpsItinerarioRepository> logger)
+        ILogger<GpsPadraoRepository> logger)
     {
         _dataSource = dataSource;
         _logger = logger;
@@ -23,27 +23,27 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
         => BuscarMatchingAsync(codigoLinha, latitude, longitude, bearing,
             distanciaMaximaMetros, null, null, cancellationToken);
 
-    public async Task<ResultadoBuscaItinerario> BuscarEnriquecimentoDoItinerarioAsync(
-        string codigoLinha, Guid itinerarioId, double latitude, double longitude, double bearing,
+    public async Task<ResultadoBuscaPadrao> BuscarEnriquecimentoDoPadraoAsync(
+        string codigoLinha, Guid padraoVersaoId, double latitude, double longitude, double bearing,
         double distanciaMaximaMetros, CancellationToken cancellationToken = default,
         FaixaProjecao? faixa = null)
     {
         // Faixa degenerada produziria POINT em ST_LineSubstring, não LineString.
         if (faixa is { } limites && !limites.Valida)
-            return ResultadoBuscaItinerario.InfrastructureFailure();
+            return ResultadoBuscaPadrao.InfrastructureFailure();
         try
         {
             var rota = await BuscarMatchingAsync(codigoLinha, latitude, longitude, bearing,
-                distanciaMaximaMetros, itinerarioId, faixa, cancellationToken);
-            return rota is null ? ResultadoBuscaItinerario.NotEligible() : ResultadoBuscaItinerario.Found(rota);
+                distanciaMaximaMetros, padraoVersaoId, faixa, cancellationToken);
+            return rota is null ? ResultadoBuscaPadrao.NotEligible() : ResultadoBuscaPadrao.Found(rota);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-        catch (Exception) { return ResultadoBuscaItinerario.InfrastructureFailure(); }
+        catch (Exception) { return ResultadoBuscaPadrao.InfrastructureFailure(); }
     }
 
     public async Task<ResultadoMatchingCombinado> BuscarMatchingCombinadoAsync(
         string codigoLinha,
-        Guid? itinerarioAnteriorId,
+        Guid? padraoVersaoAnteriorId,
         double latitude,
         double longitude,
         double bearing,
@@ -136,7 +136,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 JOIN "Linhas"   l ON l."Id" = s."LinhaId"
                 CROSS JOIN veiculo v
                 WHERE @usar_anterior AND l."Codigo" = @codigo
-                  AND i."Id" = @itinerario_id
+                  AND i."Id" = @padrao_versao_id
             ),
             geometria_anterior AS (
                 SELECT r.*,
@@ -203,9 +203,9 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 FROM "PadroesVersoes" i
                 JOIN "PadroesOperacionais" po ON po."VersaoAtualId" = i."Id"
                 WHERE @usar_operacional
-                  AND i."Id" = @itinerario_operacional
+                  AND i."Id" = @padrao_operacional
                   AND EXISTS (SELECT 1 FROM global_escolhido ge
-                      WHERE ge."Id" <> @itinerario_operacional)
+                      WHERE ge."Id" <> @padrao_operacional)
             ),
             geometria_operacional AS (
                 SELECT ro.*,
@@ -237,7 +237,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             )
             SELECT
                 'GLOBAL'::text AS ramo,
-                ge."Id" AS itinerario_id,
+                ge."Id" AS padrao_versao_id,
                 ge.padrao_operacional_id, ge.sentido_id, ge.linha_id, ge.topologia,
                 ge.posicao_na_rota,
                 ge.comprimento_metros,
@@ -253,7 +253,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             UNION ALL
             SELECT
                 'ANTERIOR'::text AS ramo,
-                ae."Id" AS itinerario_id,
+                ae."Id" AS padrao_versao_id,
                 ae.padrao_operacional_id, ae.sentido_id, ae.linha_id, ae.topologia,
                 ae.posicao_na_rota,
                 ae.comprimento_metros,
@@ -269,7 +269,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             UNION ALL
             SELECT
                 'OPERACIONAL'::text AS ramo,
-                oe."Id" AS itinerario_id,
+                oe."Id" AS padrao_versao_id,
                 NULL::uuid AS padrao_operacional_id, NULL::uuid AS sentido_id,
                 NULL::uuid AS linha_id, NULL::text AS topologia,
                 oe.posicao_na_rota,
@@ -291,8 +291,8 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = sql;
-            cmd.Parameters.AddWithValue("usar_anterior", itinerarioAnteriorId.HasValue && faixa.HasValue);
-            cmd.Parameters.AddWithValue("itinerario_id", itinerarioAnteriorId ?? Guid.Empty);
+            cmd.Parameters.AddWithValue("usar_anterior", padraoVersaoAnteriorId.HasValue && faixa.HasValue);
+            cmd.Parameters.AddWithValue("padrao_versao_id", padraoVersaoAnteriorId ?? Guid.Empty);
             cmd.Parameters.AddWithValue("lat", latitude);
             cmd.Parameters.AddWithValue("lon", longitude);
             cmd.Parameters.AddWithValue("codigo", codigoLinha);
@@ -301,15 +301,15 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             cmd.Parameters.AddWithValue("fracao_min", faixa?.Min ?? 0.0);
             cmd.Parameters.AddWithValue("fracao_max", faixa?.Max ?? 1.0);
             cmd.Parameters.AddWithValue("usar_operacional", projecaoOperacional.HasValue);
-            cmd.Parameters.AddWithValue("itinerario_operacional",
-                projecaoOperacional?.ItinerarioId ?? Guid.Empty);
+            cmd.Parameters.AddWithValue("padrao_operacional",
+                projecaoOperacional?.PadraoVersaoId ?? Guid.Empty);
             cmd.Parameters.AddWithValue("posicao_operacional_anterior",
                 projecaoOperacional?.PosicaoAnterior ?? 0.0);
             cmd.Parameters.AddWithValue("orcamento_operacional_metros",
                 projecaoOperacional?.OrcamentoMetros ?? 1.0);
 
-            ResultadoBuscaItinerario global = ResultadoBuscaItinerario.NotEligible();
-            ResultadoBuscaItinerario anterior = ResultadoBuscaItinerario.NotEligible();
+            ResultadoBuscaPadrao global = ResultadoBuscaPadrao.NotEligible();
+            ResultadoBuscaPadrao anterior = ResultadoBuscaPadrao.NotEligible();
             var operacional = projecaoOperacional.HasValue
                 ? ResultadoProjecaoOperacional.Inelegivel()
                 : ResultadoProjecaoOperacional.NaoSolicitada();
@@ -318,11 +318,11 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             {
                 switch (reader.GetString(reader.GetOrdinal("ramo")))
                 {
-                    case "GLOBAL": global = ResultadoBuscaItinerario.Found(LerRota(reader)); break;
-                    case "ANTERIOR": anterior = ResultadoBuscaItinerario.Found(LerRota(reader)); break;
+                    case "GLOBAL": global = ResultadoBuscaPadrao.Found(LerRota(reader)); break;
+                    case "ANTERIOR": anterior = ResultadoBuscaPadrao.Found(LerRota(reader)); break;
                     case "OPERACIONAL":
                         operacional = ResultadoProjecaoOperacional.Encontrada(new(
-                            reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+                            reader.GetGuid(reader.GetOrdinal("padrao_versao_id")),
                             reader.GetDouble(reader.GetOrdinal("posicao_na_rota")),
                             reader.GetDouble(reader.GetOrdinal("distancia_rota_metros")),
                             reader.GetDouble(reader.GetOrdinal("comprimento_metros"))));
@@ -344,13 +344,13 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
     }
 
     private static ResultadoMatchingCombinado FalhaCombinada(bool operacionalSolicitada = false) => new(
-        ResultadoBuscaItinerario.InfrastructureFailure(),
-        ResultadoBuscaItinerario.InfrastructureFailure(),
+        ResultadoBuscaPadrao.InfrastructureFailure(),
+        ResultadoBuscaPadrao.InfrastructureFailure(),
         operacionalSolicitada ? ResultadoProjecaoOperacional.Falha() : null);
 
     private static EnriquecimentoRotaDto LerRota(NpgsqlDataReader reader) => new()
     {
-        PadraoVersaoId = reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+        PadraoVersaoId = reader.GetGuid(reader.GetOrdinal("padrao_versao_id")),
         PadraoOperacionalId = reader.GetGuid(reader.GetOrdinal("padrao_operacional_id")),
         SentidoId = reader.GetGuid(reader.GetOrdinal("sentido_id")),
         LinhaId = reader.GetGuid(reader.GetOrdinal("linha_id")),
@@ -387,7 +387,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
         double longitude,
         double bearing,
         double distanciaMaximaMetros,
-        Guid? itinerarioId,
+        Guid? padraoVersaoId,
         FaixaProjecao? faixa,
         CancellationToken cancellationToken = default,
         bool propagarFalhaGlobalParaDiagnostico = false)
@@ -409,7 +409,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 JOIN "Linhas"   l ON l."Id" = s."LinhaId"
                 CROSS JOIN veiculo v
                 WHERE l."Codigo" = @codigo
-                  /*FILTRO_ITINERARIO*/
+                  /*FILTRO_PADRAO*/
             ),
             geometrias_projecao AS (
                 SELECT r.*,
@@ -465,7 +465,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 FROM com_diff_bearing cd
                 WHERE cd.diff_bearing < 80
             ),
-            itinerario_escolhido AS (
+            padrao_escolhido AS (
                 SELECT
                     cs.*,
                     ST_LineInterpolatePoint(cs."Geometria", cs.posicao_na_rota) AS ponto_rota
@@ -484,14 +484,14 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                     ST_Distance(v.ponto, p."Localizacao"::geography)                AS distancia_parada_metros
                 FROM "OcorrenciasParadasPadroes" pi
                 JOIN "Paradas"           p  ON p."Id"  = pi."ParadaId"
-                JOIN itinerario_escolhido ie ON ie."Id" = pi."PadraoVersaoId"
+                JOIN padrao_escolhido ie ON ie."Id" = pi."PadraoVersaoId"
                 CROSS JOIN veiculo v
                 WHERE pi."PosicaoTracado" > ie.posicao_na_rota
                 ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC
                 LIMIT 1
             )
             SELECT
-                ie."Id"                   AS itinerario_id,
+                ie."Id"                   AS padrao_versao_id,
                 ie.padrao_operacional_id,
                 ie.sentido_id,
                 ie.linha_id,
@@ -505,7 +505,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                 pp.parada_nome, pp.ocorrencia_id, pp.parada_id, pp.parada_ordem,
                 pp.parada_distancia_acumulada, pp.parada_distancia_linha,
                 pp.distancia_parada_metros
-            FROM itinerario_escolhido ie
+            FROM padrao_escolhido ie
             LEFT JOIN proxima_parada pp ON true
             LIMIT 1
             """;
@@ -515,11 +515,11 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
             await using var cmd = conn.CreateCommand();
 
-            cmd.CommandText = sql.Replace("/*FILTRO_ITINERARIO*/",
-                itinerarioId.HasValue ? "AND i.\"Id\" = @itinerario_id" : "")
+            cmd.CommandText = sql.Replace("/*FILTRO_PADRAO*/",
+                padraoVersaoId.HasValue ? "AND i.\"Id\" = @padrao_versao_id" : "")
                 .Replace("/*DESEMPATE_GLOBAL*/",
-                    itinerarioId.HasValue ? "" : ", cs.\"Id\" ASC");
-            if (itinerarioId.HasValue) cmd.Parameters.AddWithValue("itinerario_id", itinerarioId.Value);
+                    padraoVersaoId.HasValue ? "" : ", cs.\"Id\" ASC");
+            if (padraoVersaoId.HasValue) cmd.Parameters.AddWithValue("padrao_versao_id", padraoVersaoId.Value);
             cmd.Parameters.AddWithValue("lat", latitude);
             cmd.Parameters.AddWithValue("lon", longitude);
             cmd.Parameters.AddWithValue("codigo", codigoLinha);
@@ -534,14 +534,13 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             if (!await reader.ReadAsync(cancellationToken))
                 return null;
 
-            if (reader.IsDBNull(reader.GetOrdinal("itinerario_id")))
+            if (reader.IsDBNull(reader.GetOrdinal("padrao_versao_id")))
                 return null;
 
             return new EnriquecimentoRotaDto
             {
-                ItinerarioId = reader.GetGuid(reader.GetOrdinal("itinerario_id")),
                 PadraoOperacionalId = reader.GetGuid(reader.GetOrdinal("padrao_operacional_id")),
-                PadraoVersaoId = reader.GetGuid(reader.GetOrdinal("itinerario_id")),
+                PadraoVersaoId = reader.GetGuid(reader.GetOrdinal("padrao_versao_id")),
                 SentidoId = reader.GetGuid(reader.GetOrdinal("sentido_id")),
                 LinhaId = reader.GetGuid(reader.GetOrdinal("linha_id")),
                 Topologia = reader.GetString(reader.GetOrdinal("topologia")),
@@ -582,13 +581,13 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
                     "Falha ao enriquecer rota para linha {linha} em ({lat},{lon})",
                     codigoLinha, latitude, longitude);
             // A operação direcionada nunca confunde erro com ausência de matching.
-            if (itinerarioId.HasValue || propagarFalhaGlobalParaDiagnostico) throw;
+            if (padraoVersaoId.HasValue || propagarFalhaGlobalParaDiagnostico) throw;
             return null;
         }
     }
 
     public async Task<string?> BuscarGeometriaGeoJsonAsync(
-        Guid itinerarioId,
+        Guid padraoVersaoId,
         CancellationToken cancellationToken = default)
     {
         const string sql = """
@@ -606,7 +605,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
             await using var cmd = conn.CreateCommand();
 
             cmd.CommandText = sql;
-            cmd.Parameters.AddWithValue("id", itinerarioId);
+            cmd.Parameters.AddWithValue("id", padraoVersaoId);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
 
@@ -618,7 +617,7 @@ public sealed partial class GpsItinerarioRepository : IGpsItinerarioRepository
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "Falha ao buscar geometria GeoJSON do itinerario {id}", itinerarioId);
+                "Falha ao buscar geometria GeoJSON do padrao {id}", padraoVersaoId);
             return null;
         }
     }
