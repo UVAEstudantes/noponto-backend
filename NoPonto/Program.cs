@@ -223,9 +223,15 @@ builder.Services.AddScoped<IModalService, ModalService>();
 
 builder.Services.AddSingleton<GtfsFeedParser>();
 builder.Services.AddSingleton<GtfsProjecaoService>();
+builder.Services.AddScoped<IGtfsDatarioPlanPersister, GtfsDatarioPlanPersister>();
+builder.Services.AddScoped<GtfsDatarioImportService>();
+builder.Services.AddScoped<GtfsDatarioPublicationService>();
 builder.Services.AddHttpClient<ArcGisSppoSnapshotClient>();
 builder.Services.AddScoped<ArcGisEstruturalV23Service>();
 builder.Services.AddScoped<EstruturaFinalRebuildService>();
+builder.Services.AddScoped<ArcGisEstruturalRegularService>();
+builder.Services.AddSingleton<ArcGisParadasReconciliador>();
+builder.Services.AddScoped<ArcGisParadasPersistenciaService>();
 
 // BRT
 builder.Services.AddScoped<ImportacaoParadasBrtService>();

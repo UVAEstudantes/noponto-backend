@@ -10,11 +10,25 @@ public enum ClassificacaoGtfs
     Ambiguo
 }
 
-public sealed record GtfsRoute(string RouteId, string RouteShortName);
-public sealed record GtfsTrip(string RouteId, string ServiceId, string TripId, string DirectionId, string ShapeId);
+public sealed record GtfsRoute(string RouteId, string RouteShortName)
+{
+    public string AgencyId { get; init; } = "";
+    public string RouteLongName { get; init; } = "";
+    public string RouteType { get; init; } = "";
+}
+public sealed record GtfsTrip(string RouteId, string ServiceId, string TripId, string DirectionId, string ShapeId)
+{
+    public string TripHeadsign { get; init; } = "";
+}
 public sealed record GtfsStopTime(string TripId, string StopId, int StopSequence, double? ShapeDistTraveledMetros);
 public sealed record GtfsShapePoint(string ShapeId, int Sequence, double Latitude, double Longitude, double? DistanceMetros);
-public sealed record GtfsStop(string StopId, string StopName, double Latitude, double Longitude);
+public sealed record GtfsStop(string StopId, string StopName, double Latitude, double Longitude)
+{
+    public string StopCode { get; init; } = "";
+    public string LocationType { get; init; } = "";
+    public string ParentStation { get; init; } = "";
+    public string PlatformCode { get; init; } = "";
+}
 
 public sealed record GtfsOcorrencia(
     string StopId,
