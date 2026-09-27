@@ -7,7 +7,7 @@ namespace NoPonto.Application.GPS;
 
 public sealed class GpsSppoCollectorService : BackgroundService
 {
-    private readonly GpsSppoClient _cliente;
+    private readonly IWindowedGpsSource _source;
     private readonly GpsSppoSnapshotStore _snapshot;
     private readonly IOptionsMonitor<GpsSppoCollectorOptions> _opcoesMonitor;
     private readonly ILogger<GpsSppoCollectorService> _logger;
@@ -15,12 +15,14 @@ public sealed class GpsSppoCollectorService : BackgroundService
     private DateTimeOffset? _watermarkConfirmado;
 
     public GpsSppoCollectorService(
-        GpsSppoClient cliente,
+        IGpsSourceResolver sourceResolver,
         GpsSppoSnapshotStore snapshot,
         IOptionsMonitor<GpsSppoCollectorOptions> opcoesMonitor,
         ILogger<GpsSppoCollectorService> logger)
     {
-        _cliente = cliente;
+        _source = sourceResolver.GetPrimary(GpsModalNames.Bus) as IWindowedGpsSource
+            ?? throw new InvalidOperationException(
+                "A fonte GPS primária BUS precisa suportar coleta por janela para preservar watermark/overlap.");
         _snapshot = snapshot;
         _opcoesMonitor = opcoesMonitor;
         _logger = logger;
@@ -86,10 +88,10 @@ public sealed class GpsSppoCollectorService : BackgroundService
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(opcoes.TimeoutSegundos));
 
-            ResultadoFonteGps resultado;
+            GpsSourceReadResult leitura;
             try
             {
-                resultado = await _cliente.BuscarResultadoPorIntervaloAsync(
+                leitura = await _source.GetPositionsAsync(
                     janelaInicio, janelaFim, timeout.Token);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -107,6 +109,12 @@ public sealed class GpsSppoCollectorService : BackgroundService
             }
 
             cronometro.Stop();
+            var resultado = new ResultadoFonteGps(
+                leitura.Status,
+                leitura.Observations.Select(x => GpsObservationMapper.ToPosition(x, "ONIBUS")).ToArray(),
+                leitura.Duration,
+                leitura.FailureReason,
+                leitura.SourceWatermark);
             if (resultado.Status == StatusFonteGps.Falha)
             {
                 _logger.LogWarning(

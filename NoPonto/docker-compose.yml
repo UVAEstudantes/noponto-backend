@@ -116,6 +116,10 @@ services:
       GpsPolling__MaxIdadeGpsSegundos: ${GpsPolling__MaxIdadeGpsSegundos}
       GpsPolling__VelocidadeMinimaBearingKmh: ${GpsPolling__VelocidadeMinimaBearingKmh}
       GpsPolling__MaxCiclosSemRota: ${GpsPolling__MaxCiclosSemRota}
+      GpsSources__BusPrimarySource: ${GpsSources__BusPrimarySource:-ZIRIX_DIRECT}
+      GpsSources__BrtPrimarySource: ${GpsSources__BrtPrimarySource:-BRT_CURRENT}
+      GpsSources__BusShadowSources__0: ${GpsSources__BusShadowSources__0:-DATARIO}
+      GpsSources__BrtShadowSources__0: ${GpsSources__BrtShadowSources__0:-DATARIO}
 
       GpsHistorico__Habilitado: ${GpsHistorico__Habilitado}
       GpsHistorico__DistanciaRegistroMetros: ${GpsHistorico__DistanciaRegistroMetros}

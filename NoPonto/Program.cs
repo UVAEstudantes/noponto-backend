@@ -178,6 +178,29 @@ builder.Services.AddHttpClient<GpsBrtClient>(client =>
         System.Net.DecompressionMethods.Brotli
 });
 
+// Data.Rio agregada — cliente isolado de diagnóstico; não participa do polling operacional.
+builder.Services.AddHttpClient<GpsDatarioClient>(client =>
+{
+    client.BaseAddress = new Uri("https://its.mobilidade.rio/");
+    client.Timeout = TimeSpan.FromSeconds(gpsHttpTimeoutSeconds);
+});
+
+builder.Services
+    .AddOptions<GpsSourcesOptions>()
+    .Bind(builder.Configuration.GetSection(GpsSourcesOptions.Section))
+    .Validate(options => !string.IsNullOrWhiteSpace(options.BusPrimarySource),
+        "GpsSources:BusPrimarySource é obrigatório.")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.BrtPrimarySource),
+        "GpsSources:BrtPrimarySource é obrigatório.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<ZirixGpsSource>();
+builder.Services.AddSingleton<BrtCurrentGpsSource>();
+builder.Services.AddSingleton<DatarioGpsSource>();
+builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<ZirixGpsSource>());
+builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<BrtCurrentGpsSource>());
+builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<DatarioGpsSource>());
+builder.Services.AddSingleton<IGpsSourceResolver, GpsSourceResolver>();
+
 // ML ETA
 var mlBaseUrl =
     builder.Configuration["ML:ETA:BASE_URL"]
@@ -401,6 +424,11 @@ builder.Services.AddHostedService<EstadoCausalPosicaoMetricsReporter>();
 builder.Services.AddSingleton<
     IGpsPadraoRepository,
     GpsPadraoRepository>();
+
+builder.Services.AddSingleton<IGpsStructuralHintLookup, GpsStructuralHintLookup>();
+builder.Services.AddSingleton<IGpsStructuralHintResolver, GpsStructuralHintResolver>();
+builder.Services.AddSingleton<GpsStructuralHintMetrics>();
+builder.Services.AddHostedService<GpsStructuralHintMetricsReporter>();
 
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 

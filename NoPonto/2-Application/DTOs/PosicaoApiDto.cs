@@ -175,6 +175,13 @@ public sealed record PosicaoVeiculoDto
     [JsonIgnore]
     public string ProvedorFonte { get; init; } = "";
 
+    /// <summary>
+    /// Observação original preservada somente durante o pipeline para resolução
+    /// shadow de identidades estruturais. Não integra HTTP, Redis ou SignalR.
+    /// </summary>
+    [JsonIgnore]
+    public GpsObservation? ObservacaoEstrutural { get; init; }
+
     // ── Posição anterior (para interpolação linear simples) ───────────────────
 
     public double? LatitudeAnterior { get; init; }
