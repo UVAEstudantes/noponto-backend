@@ -21,6 +21,7 @@ public class TransporteDbContext : DbContext
     public DbSet<HistoricoPassagem> HistoricoPassagens => Set<HistoricoPassagem>();
     public DbSet<EventoViagemPersistido> EventosViagem => Set<EventoViagemPersistido>();
     public DbSet<TelemetriaVeiculoMl> TelemetriasVeiculoMl => Set<TelemetriaVeiculoMl>();
+    public DbSet<PrevisaoEtaV2> PrevisoesEtaV2 => Set<PrevisaoEtaV2>();
     public DbSet<PositionCorrectionShadowOrigin> PositionCorrectionShadowOrigins => Set<PositionCorrectionShadowOrigin>();
     public DbSet<PoiParada> PoiParadas => Set<PoiParada>();
     public DbSet<Tarifa> Tarifas => Set<Tarifa>();
@@ -167,6 +168,46 @@ public class TransporteDbContext : DbContext
             .HasForeignKey(t => t.PadraoVersaoId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<TelemetriaVeiculoMl>().HasOne<OcorrenciaParadaPadrao>().WithMany()
             .HasForeignKey(t => t.OcorrenciaParadaPadraoId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<PrevisaoEtaV2>(e =>
+        {
+            e.ToTable("PrevisoesEtaV2", t =>
+            {
+                t.HasCheckConstraint("CK_PrevisoesEtaV2_Status",
+                    "\"Status\" IN ('PENDENTE','REALIZADA','EXPIRADA','INVALIDADA')");
+                t.HasCheckConstraint("CK_PrevisoesEtaV2_Contexto",
+                    "\"OrdemOcorrencia\" > 0 AND \"Volta\" >= 0 AND " +
+                    "\"PosicaoNaRota\" >= 0 AND \"PosicaoNaRota\" <= 1 AND " +
+                    "\"DistanciaRestanteRotaMetros\" >= 0");
+                t.HasCheckConstraint("CK_PrevisoesEtaV2_Predicao",
+                    "(\"EtaPrevistoSegundos\" IS NULL) = (\"MotivoSemPrevisao\" IS NOT NULL) AND " +
+                    "(\"EtaPrevistoSegundos\" IS NULL OR \"EtaPrevistoSegundos\" >= 0)");
+                t.HasCheckConstraint("CK_PrevisoesEtaV2_GroundTruth",
+                    "(\"Status\" = 'REALIZADA' AND \"TimestampPassagemReal\" IS NOT NULL " +
+                    "AND \"EtaRealSegundos\" IS NOT NULL) OR " +
+                    "(\"Status\" <> 'REALIZADA' AND \"TimestampPassagemReal\" IS NULL " +
+                    "AND \"EtaRealSegundos\" IS NULL AND \"ErroSegundos\" IS NULL " +
+                    "AND \"ErroAbsolutoSegundos\" IS NULL)");
+            });
+            e.Property(x => x.OrdemVeiculo).HasMaxLength(80).IsRequired();
+            e.Property(x => x.Modal).HasMaxLength(20);
+            e.Property(x => x.Provedor).HasMaxLength(40);
+            e.Property(x => x.Preditor).HasMaxLength(80).IsRequired();
+            e.Property(x => x.VersaoPreditor).HasMaxLength(40).IsRequired();
+            e.Property(x => x.MotivoSemPrevisao).HasMaxLength(80);
+            e.Property(x => x.Status).HasMaxLength(16).IsRequired();
+            e.HasIndex(x => new { x.OrdemVeiculo, x.ViagemId, x.PadraoVersaoId,
+                x.OcorrenciaParadaPadraoId, x.Volta, x.Status });
+            e.HasIndex(x => new { x.OrdemVeiculo, x.ViagemId,
+                x.OcorrenciaParadaPadraoId, x.Volta, x.TimestampPrevisao });
+            e.HasIndex(x => x.TimestampPrevisao);
+            e.HasIndex(x => new { x.LinhaId, x.TimestampPrevisao });
+            e.HasIndex(x => new { x.Status, x.Preditor, x.VersaoPreditor, x.TimestampPrevisao });
+            e.HasOne<Linha>().WithMany().HasForeignKey(x => x.LinhaId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Sentido>().WithMany().HasForeignKey(x => x.SentidoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<PadraoOperacional>().WithMany().HasForeignKey(x => x.PadraoOperacionalId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<PadraoVersao>().WithMany().HasForeignKey(x => x.PadraoVersaoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<OcorrenciaParadaPadrao>().WithMany().HasForeignKey(x => x.OcorrenciaParadaPadraoId).OnDelete(DeleteBehavior.Restrict);
+        });
     }
 
     private static void ConfigurarEstruturaTransporteV21(ModelBuilder modelBuilder)

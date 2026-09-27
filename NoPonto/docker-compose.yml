@@ -82,6 +82,11 @@ services:
       PositionCorrection__Enabled: ${PositionCorrection__Enabled:-false}
       PositionCorrection__ShadowEnabled: ${PositionCorrection__ShadowEnabled:-false}
       PositionCorrection__ShadowSamplingPercent: ${PositionCorrection__ShadowSamplingPercent:-10}
+      EtaV2__Enabled: ${EtaV2__Enabled:-false}
+      EtaV2__ShadowEnabled: ${EtaV2__ShadowEnabled:-false}
+      EtaV2__SamplingSeconds: ${EtaV2__SamplingSeconds:-15}
+      EtaV2__MinSpeedKmh: ${EtaV2__MinSpeedKmh:-3}
+      EtaV2__PendingExpirationMinutes: ${EtaV2__PendingExpirationMinutes:-60}
 
       ARCGIS__BRT__ESTACOES__BASE_URL: ${ARCGIS__BRT__ESTACOES__BASE_URL}
       ARCGIS__BRT__ESTACOES__PAGE_SIZE: ${ARCGIS__BRT__ESTACOES__PAGE_SIZE}

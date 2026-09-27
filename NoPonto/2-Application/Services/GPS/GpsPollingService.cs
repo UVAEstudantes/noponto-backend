@@ -38,6 +38,7 @@ public sealed class GpsPollingService : BackgroundService
     private readonly IOptionsMonitor<CorrecaoTemporalPosicaoOptions>? _shadowOptions;
     private readonly IGpsStructuralHintResolver? _structuralHintResolver;
     private readonly GpsStructuralHintMetrics? _structuralHintMetrics;
+    private readonly EtaV2ShadowService? _etaV2Shadow;
 
     public GpsPollingService(
         GpsSppoSnapshotStore snapshotSppo,
@@ -56,7 +57,8 @@ public sealed class GpsPollingService : BackgroundService
         IPositionCorrectionShadowIngress? shadowIngress = null,
         IOptionsMonitor<CorrecaoTemporalPosicaoOptions>? shadowOptions = null,
         IGpsStructuralHintResolver? structuralHintResolver = null,
-        GpsStructuralHintMetrics? structuralHintMetrics = null)
+        GpsStructuralHintMetrics? structuralHintMetrics = null,
+        EtaV2ShadowService? etaV2Shadow = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -77,6 +79,7 @@ public sealed class GpsPollingService : BackgroundService
         _shadowOptions = shadowOptions;
         _structuralHintResolver = structuralHintResolver;
         _structuralHintMetrics = structuralHintMetrics;
+        _etaV2Shadow = etaV2Shadow;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -1084,6 +1087,8 @@ public sealed class GpsPollingService : BackgroundService
             var viagem = await _viagemObservada.AtualizarAsync(enriquecimento, ct);
             performance?.RegistrarViagem(viagem,
                 System.Diagnostics.Stopwatch.GetElapsedTime(inicioViagem));
+            if (_etaV2Shadow is not null)
+                await _etaV2Shadow.TryRecordAsync(enriquecimento, viagem, ct);
             if (_telemetriaMl is not null)
             {
                 try

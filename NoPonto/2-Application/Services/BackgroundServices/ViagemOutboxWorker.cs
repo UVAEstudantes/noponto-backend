@@ -10,7 +10,8 @@ namespace NoPonto.Application.Services.BackgroundServices;
 
 /// <summary>Consome o outbox PostgreSQL; Redis nao participa de claim, retry ou confirmacao.</summary>
 public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEventoRepository historico,
-    ILogger<ViagemOutboxWorker> logger, IOptions<ViagemOutboxOptions>? configured = null) : BackgroundService
+    ILogger<ViagemOutboxWorker> logger, IOptions<ViagemOutboxOptions>? configured = null,
+    EtaV2Metrics? etaV2Metrics = null) : BackgroundService
 {
     internal const int BatchSize = 100;
     internal static readonly TimeSpan Lease = TimeSpan.FromMinutes(2);
@@ -119,6 +120,7 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
             if (await completed.ExecuteNonQueryAsync(ct) != items.Count)
                 throw new OutboxLeaseLostException();
             await transaction.CommitAsync(ct);
+            etaV2Metrics?.Realize(result.PrevisoesEtaFechadas);
             Interlocked.Add(ref _processed, items.Count);
             Interlocked.Add(ref _eventInserts, result.EventosInseridos);
             Interlocked.Add(ref _historyInserts, result.PassagensInseridas);

@@ -433,6 +433,15 @@ builder.Services.AddHostedService<GpsStructuralHintMetricsReporter>();
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 
 builder.Services.Configure<ViagemOutboxOptions>(builder.Configuration.GetSection("ViagemOutbox"));
+builder.Services.AddOptions<EtaV2Options>().Bind(builder.Configuration.GetSection("EtaV2"))
+    .Validate(x => !x.Enabled || (x.SamplingSeconds > 0 && double.IsFinite(x.MinSpeedKmh)
+        && x.MinSpeedKmh > 0 && x.PendingExpirationMinutes > 0),
+        "EtaV2 habilitado exige sampling, velocidade mínima e expiração positivos.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<EtaV2Metrics>();
+builder.Services.AddSingleton<IEtaV2Repository, EtaV2Repository>();
+builder.Services.AddSingleton<EtaV2ShadowService>();
+builder.Services.AddHostedService<EtaV2MaintenanceWorker>();
 builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();
 builder.Services.AddSingleton(new HistoricoStreamOptions(redisConnection));
 builder.Services.AddHostedService<ViagemOutboxWorker>();

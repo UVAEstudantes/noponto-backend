@@ -16,7 +16,8 @@ public interface IHistoricoEventoRepository
     }
 }
 
-public sealed record HistoricoBatchResult(int EventosInseridos, int PassagensInseridas);
+public sealed record HistoricoBatchResult(int EventosInseridos, int PassagensInseridas,
+    int PrevisoesEtaFechadas = 0);
 
 public sealed class EventoViagemPayloadConflictException(
     string eventId, IReadOnlyList<string> camposDivergentes, bool camposTruncados)
@@ -28,14 +29,17 @@ public sealed class EventoViagemPayloadConflictException(
 }
 
 /// <summary>Journal e passagem na mesma transação; ACK só depois do commit.</summary>
-public sealed class HistoricoEventoRepository(NpgsqlDataSource source) : IHistoricoEventoRepository
+public sealed class HistoricoEventoRepository(NpgsqlDataSource source, IEtaV2Repository? etaV2 = null,
+    EtaV2Metrics? etaV2Metrics = null)
+    : IHistoricoEventoRepository
 {
     public async Task PersistirAsync(EventoViagem e, CancellationToken ct)
     {
         await using var connection = await source.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        await PersistirLoteAsync([e], connection, transaction, ct);
+        var result = await PersistirLoteAsync([e], connection, transaction, ct);
         await transaction.CommitAsync(ct);
+        etaV2Metrics?.Realize(result.PrevisoesEtaFechadas);
     }
 
     public async Task<HistoricoBatchResult> PersistirLoteAsync(IReadOnlyList<EventoViagem> eventos,
@@ -115,7 +119,11 @@ public sealed class HistoricoEventoRepository(NpgsqlDataSource source) : IHistor
                 differences.Take(16).ToArray(), differences.Count > 16);
         }
         if (invalidStructure) throw new FormatException("Ocorrência incompatível com a estrutura relacional.");
-        return new(insertedEvents, insertedPassages);
+        var etaClosures = 0;
+        if (etaV2 is not null)
+            foreach (var passage in eventos.Where(x => x.Tipo == "PassagemParada"))
+                etaClosures += await etaV2.ClosePassageAsync(passage, connection, transaction, ct);
+        return new(insertedEvents, insertedPassages, etaClosures);
     }
 
     private static async Task<List<string>> DiferencasPayloadAsync(NpgsqlConnection connection,
