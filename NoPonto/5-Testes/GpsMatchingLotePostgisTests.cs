@@ -840,13 +840,13 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
         Options.Create(new GpsMatchingBatchOptions { Enabled = batch }),
         NullLogger<GpsEnriquecimentoService>.Instance);
 
-    private static ContextoOperacional Contexto(string ordem, Guid itinerario,
+    private ContextoOperacional Contexto(string ordem, Guid itinerario,
         double posicao, DateTimeOffset timestamp, string codigoLinha)
     {
         var observada = new ViagemObservadaState(Guid.NewGuid(), ordem, itinerario,
-            timestamp, timestamp, posicao);
+            timestamp, timestamp, posicao, PadraoOperacionalId: itinerario);
         return new([], observada, new(observada, codigoLinha,
-            Guid.NewGuid(), Guid.NewGuid()));
+            _db.Linha1, _db.Sentido1));
     }
 
     private static PosicaoVeiculoDto P(string ordem, string linha, double lat, double lon,

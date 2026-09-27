@@ -553,13 +553,23 @@ public sealed partial class GpsPadraoRepository
                         pi."ParadaId" AS parada_id, pi."Ordem" AS parada_ordem,
                         pi."DistanciaAcumuladaMetros" AS parada_distancia_acumulada,
                         pi."DistanciaDaLinhaMetros" AS parada_distancia_linha,
-                        ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros
+                        ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros,
+                        GREATEST(0.0, CASE
+                          WHEN pi."PosicaoTracado">ie.posicao_na_rota THEN
+                            ST_Length(ST_LineSubstring(ie."Geometria",0,pi."PosicaoTracado")::geography)
+                            - ST_Length(ST_LineSubstring(ie."Geometria",0,ie.posicao_na_rota)::geography)
+                          ELSE ie.comprimento_metros
+                            - ST_Length(ST_LineSubstring(ie."Geometria",0,ie.posicao_na_rota)::geography)
+                            + ST_Length(ST_LineSubstring(ie."Geometria",0,pi."PosicaoTracado")::geography)
+                        END) AS distancia_restante_rota_metros
                     FROM "OcorrenciasParadasPadroes" pi
                     JOIN "Paradas" p ON p."Id" = pi."ParadaId"
                     JOIN padrao_escolhido ie ON ie."Id" = pi."PadraoVersaoId"
                     CROSS JOIN veiculo v
                     WHERE pi."PosicaoTracado" > ie.posicao_na_rota
-                    ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC LIMIT 1
+                       OR ie.topologia = 'CIRCULAR'
+                    ORDER BY CASE WHEN pi."PosicaoTracado" > ie.posicao_na_rota THEN 0 ELSE 1 END,
+                        pi."PosicaoTracado" ASC, pi."Ordem" ASC LIMIT 1
                 )
                 SELECT ie."Id" AS padrao_versao_id, ie.padrao_operacional_id,
                     ie.sentido_id, ie.linha_id, ie.topologia,
@@ -568,7 +578,7 @@ public sealed partial class GpsPadraoRepository
                     ST_Y(ie.ponto_rota) AS lat_rota, ST_X(ie.ponto_rota) AS lon_rota,
                     pp.parada_nome, pp.ocorrencia_id, pp.parada_id, pp.parada_ordem,
                     pp.parada_distancia_acumulada, pp.parada_distancia_linha,
-                    pp.distancia_parada_metros
+                    pp.distancia_parada_metros, pp.distancia_restante_rota_metros
                 FROM padrao_escolhido ie LEFT JOIN proxima_parada pp ON true LIMIT 1
             ) escolhido ON true
             ORDER BY entrada.input_id DESC
@@ -608,6 +618,10 @@ public sealed partial class GpsPadraoRepository
             fracao_min = x.Faixa?.Min ?? 0d, fracao_max = x.Faixa?.Max ?? 1d,
             usar_operacional = x.ProjecaoOperacional.HasValue,
             padrao_operacional = x.ProjecaoOperacional?.PadraoVersaoId ?? Guid.Empty,
+            validar_identidade_operacional = x.ProjecaoOperacional?.PadraoOperacionalId.HasValue == true,
+            padrao_operacional_esperado = x.ProjecaoOperacional?.PadraoOperacionalId ?? Guid.Empty,
+            sentido_operacional_esperado = x.ProjecaoOperacional?.SentidoId ?? Guid.Empty,
+            linha_operacional_esperada = x.ProjecaoOperacional?.LinhaId ?? Guid.Empty,
             posicao_operacional_anterior = x.ProjecaoOperacional?.PosicaoAnterior ?? 0d,
             orcamento_operacional_metros = x.ProjecaoOperacional?.OrcamentoMetros ?? 1d
         }));
@@ -708,6 +722,9 @@ public sealed partial class GpsPadraoRepository
                 usar_anterior boolean, padrao_versao_id uuid,
                 fracao_min double precision, fracao_max double precision,
                 usar_operacional boolean, padrao_operacional uuid,
+                validar_identidade_operacional boolean,
+                padrao_operacional_esperado uuid, sentido_operacional_esperado uuid,
+                linha_operacional_esperada uuid,
                 posicao_operacional_anterior double precision,
                 orcamento_operacional_metros double precision)
         )
@@ -757,17 +774,25 @@ public sealed partial class GpsPadraoRepository
                 SELECT p."Nome" AS parada_nome,pi."Id" AS ocorrencia_id,pi."ParadaId" AS parada_id,
                     pi."Ordem" AS parada_ordem,pi."DistanciaAcumuladaMetros" AS parada_distancia_acumulada,
                     pi."DistanciaDaLinhaMetros" AS parada_distancia_linha,
-                    ST_Distance(v.ponto,p."Localizacao"::geography) AS distancia_parada_metros
+                    ST_Distance(v.ponto,p."Localizacao"::geography) AS distancia_parada_metros,
+                    GREATEST(0.0,CASE WHEN pi."PosicaoTracado">ge.posicao_na_rota THEN
+                      ST_Length(ST_LineSubstring(ge."Geometria",0,pi."PosicaoTracado")::geography)
+                      - ST_Length(ST_LineSubstring(ge."Geometria",0,ge.posicao_na_rota)::geography)
+                    ELSE ge.comprimento_metros
+                      - ST_Length(ST_LineSubstring(ge."Geometria",0,ge.posicao_na_rota)::geography)
+                      + ST_Length(ST_LineSubstring(ge."Geometria",0,pi."PosicaoTracado")::geography)
+                    END) AS distancia_restante_rota_metros
                 FROM "OcorrenciasParadasPadroes" pi JOIN "Paradas" p ON p."Id"=pi."ParadaId"
                 JOIN global_escolhido ge ON ge."Id"=pi."PadraoVersaoId" CROSS JOIN veiculo v
-                WHERE pi."PosicaoTracado">ge.posicao_na_rota
-                ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC LIMIT 1
+                WHERE pi."PosicaoTracado">ge.posicao_na_rota OR ge.topologia='CIRCULAR'
+                ORDER BY CASE WHEN pi."PosicaoTracado">ge.posicao_na_rota THEN 0 ELSE 1 END,
+                    pi."PosicaoTracado" ASC, pi."Ordem" ASC LIMIT 1
             ),
             rota_anterior AS (
                 SELECT i."Id",po."Id" AS padrao_operacional_id,
                     po."SentidoId" AS sentido_id,s."LinhaId" AS linha_id,
                     i."Topologia" AS topologia,i."Geometria" FROM "PadroesVersoes" i
-                JOIN "PadroesOperacionais" po ON po."VersaoAtualId"=i."Id"
+                JOIN "PadroesOperacionais" po ON po."Id"=i."PadraoOperacionalId"
                 JOIN "Sentidos" s ON s."Id"=po."SentidoId"
                 JOIN "Linhas" l ON l."Id"=s."LinhaId"
                 WHERE entrada.usar_anterior AND l."Codigo"=entrada.codigo AND i."Id"=entrada.padrao_versao_id
@@ -807,18 +832,33 @@ public sealed partial class GpsPadraoRepository
                 SELECT p."Nome" AS parada_nome,pi."Id" AS ocorrencia_id,pi."ParadaId" AS parada_id,
                     pi."Ordem" AS parada_ordem,pi."DistanciaAcumuladaMetros" AS parada_distancia_acumulada,
                     pi."DistanciaDaLinhaMetros" AS parada_distancia_linha,
-                    ST_Distance(v.ponto,p."Localizacao"::geography) AS distancia_parada_metros
+                    ST_Distance(v.ponto,p."Localizacao"::geography) AS distancia_parada_metros,
+                    GREATEST(0.0,CASE WHEN pi."PosicaoTracado">ae.posicao_na_rota THEN
+                      ST_Length(ST_LineSubstring(ae."Geometria",0,pi."PosicaoTracado")::geography)
+                      - ST_Length(ST_LineSubstring(ae."Geometria",0,ae.posicao_na_rota)::geography)
+                    ELSE ae.comprimento_metros
+                      - ST_Length(ST_LineSubstring(ae."Geometria",0,ae.posicao_na_rota)::geography)
+                      + ST_Length(ST_LineSubstring(ae."Geometria",0,pi."PosicaoTracado")::geography)
+                    END) AS distancia_restante_rota_metros
                 FROM "OcorrenciasParadasPadroes" pi JOIN "Paradas" p ON p."Id"=pi."ParadaId"
                 JOIN anterior_escolhido ae ON ae."Id"=pi."PadraoVersaoId" CROSS JOIN veiculo v
-                WHERE pi."PosicaoTracado">ae.posicao_na_rota
-                ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC LIMIT 1
+                WHERE pi."PosicaoTracado">ae.posicao_na_rota OR ae.topologia='CIRCULAR'
+                ORDER BY CASE WHEN pi."PosicaoTracado">ae.posicao_na_rota THEN 0 ELSE 1 END,
+                    pi."PosicaoTracado" ASC, pi."Ordem" ASC LIMIT 1
             ),
             rota_operacional AS (
                 SELECT i."Id",i."Geometria",ST_Length(i."Geometria"::geography) AS comprimento_metros
                 FROM "PadroesVersoes" i
-                JOIN "PadroesOperacionais" po ON po."VersaoAtualId"=i."Id"
+                JOIN "PadroesOperacionais" po ON po."Id"=i."PadraoOperacionalId"
+                JOIN "Sentidos" s ON s."Id"=po."SentidoId"
+                JOIN "Linhas" l ON l."Id"=s."LinhaId"
                 WHERE entrada.usar_operacional
                   AND i."Id"=entrada.padrao_operacional
+                  AND (NOT entrada.validar_identidade_operacional OR (
+                      po."Id"=entrada.padrao_operacional_esperado
+                      AND s."Id"=entrada.sentido_operacional_esperado
+                      AND l."Id"=entrada.linha_operacional_esperada
+                      AND l."Codigo"=entrada.codigo))
                   AND EXISTS(SELECT 1 FROM global_escolhido ge WHERE ge."Id"<>entrada.padrao_operacional)
             ),
             geometria_operacional AS (
@@ -843,20 +883,22 @@ public sealed partial class GpsPadraoRepository
                 ge.comprimento_metros,ge.distancia_rota_metros,ge.bearing_local,
                 ST_Y(ge.ponto_rota) AS lat_rota,ST_X(ge.ponto_rota) AS lon_rota,
                 ppg.parada_nome,ppg.ocorrencia_id,ppg.parada_id,ppg.parada_ordem,
-                ppg.parada_distancia_acumulada,ppg.parada_distancia_linha,ppg.distancia_parada_metros
+                ppg.parada_distancia_acumulada,ppg.parada_distancia_linha,ppg.distancia_parada_metros,
+                ppg.distancia_restante_rota_metros
             FROM global_escolhido ge LEFT JOIN proxima_parada_global ppg ON true
             UNION ALL
             SELECT 'ANTERIOR',ae."Id",ae.padrao_operacional_id,ae.sentido_id,ae.linha_id,ae.topologia,
                 ae.posicao_na_rota,ae.comprimento_metros,ae.distancia_rota_metros,
                 ae.bearing_local,ST_Y(ae.ponto_rota),ST_X(ae.ponto_rota),ppa.parada_nome,
                 ppa.ocorrencia_id,ppa.parada_id,ppa.parada_ordem,ppa.parada_distancia_acumulada,
-                ppa.parada_distancia_linha,ppa.distancia_parada_metros
+                ppa.parada_distancia_linha,ppa.distancia_parada_metros,ppa.distancia_restante_rota_metros
             FROM anterior_escolhido ae LEFT JOIN proxima_parada_anterior ppa ON true
             UNION ALL
             SELECT 'OPERACIONAL',oe."Id",NULL::uuid,NULL::uuid,NULL::uuid,NULL::text,
                 oe.posicao_na_rota,oe.comprimento_metros,oe.distancia_rota_metros,
                 NULL::double precision,NULL::double precision,NULL::double precision,NULL::text,
-                NULL::uuid,NULL::uuid,NULL::integer,NULL::double precision,NULL::double precision,NULL::double precision
+                NULL::uuid,NULL::uuid,NULL::integer,NULL::double precision,NULL::double precision,
+                NULL::double precision,NULL::double precision
             FROM operacional_elegivel oe
         ) resultado
         ORDER BY entrada.input_id DESC, resultado.ramo DESC

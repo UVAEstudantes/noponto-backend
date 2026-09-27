@@ -37,14 +37,79 @@ public sealed record ResultadoProjecaoOperacional(
 }
 
 public readonly record struct SolicitacaoProjecaoOperacional(
-    Guid PadraoVersaoId, double PosicaoAnterior, double OrcamentoMetros)
+    Guid PadraoVersaoId, double PosicaoAnterior, double OrcamentoMetros,
+    Guid? PadraoOperacionalId = null, Guid? SentidoId = null, Guid? LinhaId = null)
 {
     public bool Valida => PadraoVersaoId != Guid.Empty
         && double.IsFinite(PosicaoAnterior) && PosicaoAnterior is >= 0 and <= 1
-        && double.IsFinite(OrcamentoMetros) && OrcamentoMetros > 0;
+        && double.IsFinite(OrcamentoMetros) && OrcamentoMetros > 0
+        && IdentidadeCompletaOuAusente;
+
+    private bool IdentidadeCompletaOuAusente =>
+        (PadraoOperacionalId is null && SentidoId is null && LinhaId is null)
+        || (PadraoOperacionalId is { } padrao && padrao != Guid.Empty
+            && SentidoId is { } sentido && sentido != Guid.Empty
+            && LinhaId is { } linha && linha != Guid.Empty);
 }
 
-public sealed record ResultadoEnriquecimentoGps(
+internal sealed record ResultadoEnriquecimentoGps(
     PosicaoVeiculoDto Posicao,
     ContextoOperacional? ContextoOperacional,
-    ResultadoProjecaoOperacional ProjecaoOperacional);
+    ResultadoProjecaoOperacional ProjecaoOperacional,
+    DiagnosticoEnriquecimentoGps? Diagnostico = null);
+
+// Diagnóstico efêmero: não integra API, Redis, viagem, outbox ou SignalR.
+internal enum MotivoAusenciaLinhaGps
+{
+    Nenhum,
+    LineCodeMissing,
+    NoTrustedBearing,
+    GlobalNoCandidate,
+    GlobalNoCandidateOrFailure,
+    GlobalInfrastructureFailure,
+    DirectedPreviousPatternNoCandidate,
+    DirectedPreviousPatternFailure,
+    PreviousPatternInvalid,
+    TemporalValidationRejected,
+    Other,
+}
+
+internal enum MotivoValidacaoTemporalGps
+{
+    NotEvaluated,
+    Accepted,
+    TemporalBackwardProgress,
+    TemporalForwardJump,
+    TemporalTimestampInvalid,
+    TemporalCircularWrap,
+    OtherTemporal,
+}
+
+internal sealed record DiagnosticoEnriquecimentoGps(
+    MotivoAusenciaLinhaGps MotivoFinal,
+    bool CodigoLinhaPresente,
+    bool BearingConfiavel,
+    bool MatchingGlobalExecutado,
+    StatusBuscaPadrao? StatusGlobal,
+    bool CandidatoGlobalEncontrado,
+    bool PadraoAnteriorExistente,
+    bool ContinuidadeAplicada,
+    bool HistereseAplicada,
+    bool? ValidacaoTemporalPassou,
+    bool CaminhoBatch,
+    bool? BatchRetornouCandidato,
+    StatusBuscaPadrao? StatusDirecionado,
+    MotivoValidacaoTemporalGps MotivoTemporal = MotivoValidacaoTemporalGps.NotEvaluated,
+    Guid? PadraoOperacionalId = null,
+    Guid? PadraoVersaoId = null,
+    Guid? SentidoId = null,
+    bool? Circular = null,
+    double? PosicaoAnterior = null,
+    double? PosicaoNova = null,
+    double? DeltaPosicao = null,
+    DateTimeOffset? TimestampAnterior = null,
+    DateTimeOffset? TimestampAtual = null,
+    double? DeltaTempoSegundos = null,
+    double? DeltaProgressoMetros = null,
+    double? LimiteProgressoMetros = null,
+    double? VelocidadeImplicitaKmh = null);

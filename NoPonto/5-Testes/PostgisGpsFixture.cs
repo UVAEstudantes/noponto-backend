@@ -15,6 +15,8 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
     public NpgsqlDataSource DataSource { get; private set; } = null!;
     public Guid R1 { get; } = Guid.NewGuid();
     public Guid R2 { get; } = Guid.NewGuid();
+    public Guid Linha1 { get; } = Guid.NewGuid();
+    public Guid Sentido1 { get; } = Guid.NewGuid();
     public Guid Volta { get; } = Guid.NewGuid();
     public Guid OutraLinha { get; } = Guid.NewGuid();
     public Guid Diagonal { get; } = Guid.NewGuid();
@@ -71,9 +73,9 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
             }
             builder.SearchPath = $"{Schema},public";
             DataSource = NpgsqlDataSource.Create(builder.ConnectionString);
-            var linha1 = Guid.NewGuid();
+            var linha1 = Linha1;
             var linha2 = Guid.NewGuid();
-            var sentido1 = Guid.NewGuid();
+            var sentido1 = Sentido1;
             var sentido2 = Guid.NewGuid();
             var linhaX = Guid.NewGuid();
             var sentidoX = Guid.NewGuid();

@@ -388,7 +388,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                 SELECT v."Id", s."LinhaId", s."Id" AS sentido, l."Codigo",
                     p."Id" AS padrao, v."Topologia"
                 FROM "PadroesVersoes" v
-                JOIN "PadroesOperacionais" p ON p."VersaoAtualId" = v."Id"
+                JOIN "PadroesOperacionais" p ON p."Id" = v."PadraoOperacionalId"
                 JOIN "Sentidos" s ON s."Id" = p."SentidoId"
                 JOIN "Linhas" l ON l."Id" = s."LinhaId"
                 WHERE v."Id" = @id AND l."Codigo" = @codigo

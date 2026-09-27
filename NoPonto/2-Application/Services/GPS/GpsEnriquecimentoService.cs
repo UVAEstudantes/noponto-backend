@@ -87,6 +87,19 @@ public sealed partial class GpsEnriquecimentoService
     {
         // ── 1. Bearing e velocidade ───────────────────────────────────────────
         double? bearing     = CalcularBearingConfiavel(posicao);
+        var codigoLinhaPresente = !string.IsNullOrWhiteSpace(posicao.CodigoLinha);
+        var matchingGlobalExecutado = false;
+        StatusBuscaPadrao? statusGlobal = null;
+        StatusBuscaPadrao? statusDirecionado = null;
+        var candidatoGlobalEncontrado = false;
+        var continuidadeAplicada = false;
+        var histereseAplicada = false;
+        bool? validacaoTemporalPassou = null;
+        ResultadoValidacaoTemporal? detalheTemporal = null;
+        var motivoAusencia = MotivoAusenciaLinhaGps.Nenhum;
+        var caminhoBatch = executorBatch is not null;
+        var padraoAnteriorExistente = _padraoAtual.TryGetValue(posicao.Ordem, out var snapshotAnterior)
+            && snapshotAnterior.Rota is not null;
         var velocidadeMedia = AtualizarFilaVelocidade(posicao);
         var veiculoParado   = (velocidadeMedia ?? posicao.Velocidade) < _opcoes.VelocidadeMinimaBearingKmh;
 
@@ -121,6 +134,7 @@ public sealed partial class GpsEnriquecimentoService
         }
 
         // ── 2. Busca rota via PostGIS ─────────────────────────────────────────
+        var bearingConfiavelParaMatching = bearing.HasValue;
         EnriquecimentoRotaDto? rota = null;
         EnriquecimentoRotaDto? rotaGlobalObservacional = null;
         ResultadoMatchingCombinado? matchingCombinado = null;
@@ -137,7 +151,10 @@ public sealed partial class GpsEnriquecimentoService
             var orcamento = segundos > 0 ? OrcamentoProjecaoMetros(segundos) : 0;
             if (double.IsFinite(orcamento) && orcamento > 0)
                 solicitacaoOperacional = new(estadoOperacional.Observada.PadraoVersaoId,
-                    estadoOperacional.Observada.PosicaoNaRotaConfirmada, orcamento);
+                    estadoOperacional.Observada.PosicaoNaRotaConfirmada, orcamento,
+                    estadoOperacional.Observada.PadraoOperacionalId,
+                    estadoOperacional.SentidoId,
+                    estadoOperacional.LinhaId);
             else
                 resultadoOperacional = ResultadoProjecaoOperacional.Inelegivel();
         }
@@ -151,6 +168,7 @@ public sealed partial class GpsEnriquecimentoService
             if ((faixaCandidata.HasValue && historicoParaCombinado?.Rota is not null)
                 || solicitacaoOperacional.HasValue)
             {
+                matchingGlobalExecutado = true;
                 if (executorBatch is not null)
                 {
                     matchingCombinado = await executorBatch.BuscarCombinadoAsync(
@@ -184,6 +202,8 @@ public sealed partial class GpsEnriquecimentoService
                 rota = matchingCombinado?.Global.Status == StatusBuscaPadrao.Found
                     ? matchingCombinado.Global.Rota
                     : null;
+                statusGlobal = matchingCombinado?.Global.Status;
+                candidatoGlobalEncontrado = rota is not null;
                 rotaGlobalObservacional = rota;
                 if (matchingCombinado?.Global.Status == StatusBuscaPadrao.InfrastructureFailure)
                     _logger.LogWarning(
@@ -192,6 +212,7 @@ public sealed partial class GpsEnriquecimentoService
             }
             else
             {
+                matchingGlobalExecutado = true;
                 if (executorBatch is not null)
                 {
                     var resultadoGlobal = await executorBatch.BuscarGlobalAsync(
@@ -205,6 +226,7 @@ public sealed partial class GpsEnriquecimentoService
                     rota = resultadoGlobal.Status == StatusBuscaPadrao.Found
                         ? resultadoGlobal.Rota
                         : null;
+                    statusGlobal = resultadoGlobal.Status;
                     performance?.RegistrarMatchingGlobalLogico();
                 }
                 else
@@ -226,6 +248,9 @@ public sealed partial class GpsEnriquecimentoService
                             System.Diagnostics.Stopwatch.GetElapsedTime(inicioMatching));
                     }
                 }
+                if (executorBatch is null)
+                    statusGlobal = rota is null ? null : StatusBuscaPadrao.Found;
+                candidatoGlobalEncontrado = rota is not null;
                 rotaGlobalObservacional = rota;
             }
         }
@@ -251,6 +276,7 @@ public sealed partial class GpsEnriquecimentoService
         if (rotaGlobalValida && rota is not null && temHistoricoConfirmado
             && confirmadoAnterior!.Rota is { } rotaAnterior)
         {
+            continuidadeAplicada = true;
             var mesmoPadrao = rota.PadraoVersaoId == rotaAnterior.PadraoVersaoId;
             performance?.RegistrarMatchingGlobalComHistorico(mesmoPadrao);
             // A 2.2 reinicia a referência quando o comprimento da geometria muda.
@@ -313,10 +339,14 @@ public sealed partial class GpsEnriquecimentoService
 
                 if (resultado.Status == StatusBuscaPadrao.Found)
                 {
+                    statusDirecionado = resultado.Status;
                     var anteriorAtual = resultado.Rota!;
                     if (anteriorAtual.PadraoVersaoId != rotaAnterior.PadraoVersaoId || !RotaValida(anteriorAtual)
                         || !double.IsFinite(anteriorAtual.DistanciaARotaMetros) || anteriorAtual.DistanciaARotaMetros < 0)
+                    {
                         rota = null; // Contrato inconsistente não autoriza troca.
+                        motivoAusencia = MotivoAusenciaLinhaGps.PreviousPatternInvalid;
+                    }
                     else if (mesmoPadrao)
                         rota = anteriorAtual;
                     else
@@ -324,17 +354,27 @@ public sealed partial class GpsEnriquecimentoService
                         var melhoriaDistancia = anteriorAtual.DistanciaARotaMetros - rota.DistanciaARotaMetros;
                         var podeTracar = (!veiculoParado && bearing.HasValue && melhoriaDistancia > 30)
                                       || melhoriaDistancia > 100;
-                        if (!podeTracar) rota = anteriorAtual; // Matching do GPS atual, nunca o snapshot antigo.
+                        if (!podeTracar)
+                        {
+                            rota = anteriorAtual; // Matching do GPS atual, nunca o snapshot antigo.
+                            histereseAplicada = true;
+                        }
                     }
                 }
                 else if (resultado.Status != StatusBuscaPadrao.NotEligible)
                 {
+                    statusDirecionado = resultado.Status;
                     _logger.LogWarning("Veiculo {ordem}: falha ao reavaliar padrao anterior; sem matching neste ciclo.",
                         posicao.Ordem);
                     rota = null;
+                    motivoAusencia = MotivoAusenciaLinhaGps.DirectedPreviousPatternFailure;
                 }
                 else if (mesmoPadrao)
+                {
+                    statusDirecionado = resultado.Status;
                     rota = null; // O matching global irrestrito não substitui o restrito inelegível.
+                    motivoAusencia = MotivoAusenciaLinhaGps.DirectedPreviousPatternNoCandidate;
+                }
             }
         }
 
@@ -344,11 +384,17 @@ public sealed partial class GpsEnriquecimentoService
         // Valida antes de substituir o último matching realmente confirmado.
         // Fração em geometry(4326) × comprimento geography é uma estimativa;
         // o teto conservador e a margem de projeção evitam uma precisão fictícia.
-        if (rota is not null && !MatchingTemporalAceitavel(posicao, rota))
+        if (rota is not null)
         {
-            _logger.LogWarning("Veiculo {ordem}: matching atual invalido ou temporalmente incompatível.",
-                posicao.Ordem);
-            rota = null;
+            detalheTemporal = AvaliarMatchingTemporal(posicao, rota);
+            validacaoTemporalPassou = detalheTemporal.Aceito;
+            if (!detalheTemporal.Aceito)
+            {
+                _logger.LogWarning("Veiculo {ordem}: matching atual invalido ou temporalmente incompatível.",
+                    posicao.Ordem);
+                rota = null;
+                motivoAusencia = MotivoAusenciaLinhaGps.TemporalValidationRejected;
+            }
         }
 
         if (contexto?.PodeProjetar == true && contexto.Estado is { } operacional)
@@ -415,6 +461,32 @@ public sealed partial class GpsEnriquecimentoService
 
         }
 
+        if (rota is null && motivoAusencia == MotivoAusenciaLinhaGps.Nenhum)
+            motivoAusencia = !codigoLinhaPresente ? MotivoAusenciaLinhaGps.LineCodeMissing
+                : !bearingConfiavelParaMatching ? MotivoAusenciaLinhaGps.NoTrustedBearing
+                : statusGlobal == StatusBuscaPadrao.InfrastructureFailure
+                    ? MotivoAusenciaLinhaGps.GlobalInfrastructureFailure
+                : matchingGlobalExecutado && !caminhoBatch && !candidatoGlobalEncontrado
+                    ? MotivoAusenciaLinhaGps.GlobalNoCandidateOrFailure
+                : matchingGlobalExecutado && statusGlobal == StatusBuscaPadrao.NotEligible
+                    ? MotivoAusenciaLinhaGps.GlobalNoCandidate
+                : MotivoAusenciaLinhaGps.Other;
+
+        var diagnostico = new DiagnosticoEnriquecimentoGps(
+            rota is null ? motivoAusencia : MotivoAusenciaLinhaGps.Nenhum,
+            codigoLinhaPresente, bearingConfiavelParaMatching, matchingGlobalExecutado, statusGlobal,
+            candidatoGlobalEncontrado, padraoAnteriorExistente, continuidadeAplicada,
+            histereseAplicada, validacaoTemporalPassou, caminhoBatch,
+            caminhoBatch && matchingGlobalExecutado ? candidatoGlobalEncontrado : null,
+            statusDirecionado, detalheTemporal?.Motivo ?? MotivoValidacaoTemporalGps.NotEvaluated,
+            detalheTemporal?.PadraoOperacionalId, detalheTemporal?.PadraoVersaoId,
+            detalheTemporal?.SentidoId, detalheTemporal?.Circular,
+            detalheTemporal?.PosicaoAnterior, detalheTemporal?.PosicaoNova,
+            detalheTemporal?.DeltaPosicao, detalheTemporal?.TimestampAnterior,
+            detalheTemporal?.TimestampAtual, detalheTemporal?.DeltaTempoSegundos,
+            detalheTemporal?.DeltaProgressoMetros, detalheTemporal?.LimiteProgressoMetros,
+            detalheTemporal?.VelocidadeImplicitaKmh);
+
         return new(posicao with
         {
             Bearing                      = bearing,
@@ -429,7 +501,8 @@ public sealed partial class GpsEnriquecimentoService
             ProximaOcorrenciaParadaPadraoId = rota?.ProximaOcorrenciaParadaPadraoId,
             ProximaParadaNome            = rota?.ProximaParadaNome,
             DistanciaProximaParadaMetros = rota?.DistanciaProximaParadaMetros,
-        }, contexto, resultadoOperacional);
+            DistanciaRestanteRotaMetros  = rota?.DistanciaRestanteRotaMetros,
+        }, contexto, resultadoOperacional, diagnostico);
     }
 
     public PosicaoVeiculoDto AtualizarHistoricoVelocidade(PosicaoVeiculoDto posicao)
@@ -462,29 +535,85 @@ public sealed partial class GpsEnriquecimentoService
         return faixa.Valida ? faixa : null;
     }
 
-    private bool MatchingTemporalAceitavel(PosicaoVeiculoDto posicao, EnriquecimentoRotaDto atual)
+    private ResultadoValidacaoTemporal AvaliarMatchingTemporal(
+        PosicaoVeiculoDto posicao, EnriquecimentoRotaDto atual)
     {
-        if (!RotaValida(atual)) return false;
+        if (!RotaValida(atual)) return ResultadoValidacaoTemporal.Rejeitado(
+            MotivoValidacaoTemporalGps.OtherTemporal, posicao, atual);
         if (!_padraoAtual.TryGetValue(posicao.Ordem, out var confirmado)
             || confirmado.Rota is not { } anterior
             || anterior.PadraoVersaoId != atual.PadraoVersaoId)
-            return true; // Primeira referência ou política de troca existente.
+            return ResultadoValidacaoTemporal.AceitoSemAnterior(posicao, atual);
 
         if (confirmado.TimestampGpsConfirmado is not { } timestamp || !RotaValida(anterior))
-            return true; // Inicializa referência apenas com candidato válido.
+            return ResultadoValidacaoTemporal.AceitoSemAnterior(posicao, atual);
 
         var segundos = (posicao.TimestampGps - timestamp).TotalSeconds;
-        if (segundos <= 0) return false; // Nunca substitui referência por tempo igual/mais antigo.
+        if (segundos <= 0) return ResultadoValidacaoTemporal.ComAnterior(false,
+            MotivoValidacaoTemporalGps.TemporalTimestampInvalid,
+            posicao, atual, anterior, timestamp, segundos, 0, 0);
 
         // O mesmo comprimento é determinístico para a mesma geometria na query.
         // Qualquer alteração reinicia a referência sem misturar geometrias;
         // não há versionamento que detecte alteração de geometria com comprimento igual.
-        if (atual.ComprimentoRotaMetros != anterior.ComprimentoRotaMetros) return true;
+        if (atual.ComprimentoRotaMetros != anterior.ComprimentoRotaMetros)
+            return ResultadoValidacaoTemporal.AceitoSemAnterior(posicao, atual);
 
-        var distancia = Math.Abs(atual.PosicaoNaRota - anterior.PosicaoNaRota)
-                      * atual.ComprimentoRotaMetros;
+        var deltaPosicao = atual.PosicaoNaRota - anterior.PosicaoNaRota;
+        var circular = string.Equals(atual.Topologia, "CIRCULAR", StringComparison.OrdinalIgnoreCase);
+        // Progresso circular é dirigido: uma fração negativa representa avanço fim→início.
+        // Não usamos min(|delta|, 1-|delta|), pois isso transformaria regressões reais
+        // no sentido inverso em pequenos avanços válidos.
+        var progressoFracional = circular && deltaPosicao < 0
+            ? 1 + deltaPosicao
+            : circular ? deltaPosicao : Math.Abs(deltaPosicao);
+        var distancia = progressoFracional * atual.ComprimentoRotaMetros;
         var limite = OrcamentoProjecaoMetros(segundos);
-        return distancia <= limite;
+        var aceito = distancia <= limite;
+        var circularWrap = !aceito
+            && circular && deltaPosicao < 0;
+        var motivo = aceito ? MotivoValidacaoTemporalGps.Accepted
+            : circularWrap ? MotivoValidacaoTemporalGps.TemporalCircularWrap
+            : deltaPosicao < 0 ? MotivoValidacaoTemporalGps.TemporalBackwardProgress
+            : MotivoValidacaoTemporalGps.TemporalForwardJump;
+        return ResultadoValidacaoTemporal.ComAnterior(aceito, motivo, posicao, atual,
+            anterior, timestamp, segundos, distancia, limite);
+    }
+
+    private sealed record ResultadoValidacaoTemporal(
+        bool Aceito, MotivoValidacaoTemporalGps Motivo,
+        Guid PadraoOperacionalId, Guid PadraoVersaoId, Guid SentidoId, bool Circular,
+        double? PosicaoAnterior, double PosicaoNova, double? DeltaPosicao,
+        DateTimeOffset? TimestampAnterior, DateTimeOffset TimestampAtual,
+        double? DeltaTempoSegundos, double? DeltaProgressoMetros,
+        double? LimiteProgressoMetros, double? VelocidadeImplicitaKmh)
+    {
+        internal static ResultadoValidacaoTemporal AceitoSemAnterior(
+            PosicaoVeiculoDto posicao, EnriquecimentoRotaDto atual) => new(true,
+                MotivoValidacaoTemporalGps.Accepted, atual.PadraoOperacionalId,
+                atual.PadraoVersaoId, atual.SentidoId,
+                string.Equals(atual.Topologia, "CIRCULAR", StringComparison.OrdinalIgnoreCase),
+                null, atual.PosicaoNaRota, null, null, posicao.TimestampGps,
+                null, null, null, null);
+
+        internal static ResultadoValidacaoTemporal Rejeitado(
+            MotivoValidacaoTemporalGps motivo, PosicaoVeiculoDto posicao,
+            EnriquecimentoRotaDto atual) => AceitoSemAnterior(posicao, atual) with
+            { Aceito = false, Motivo = motivo };
+
+        internal static ResultadoValidacaoTemporal ComAnterior(bool aceito,
+            MotivoValidacaoTemporalGps motivo, PosicaoVeiculoDto posicao,
+            EnriquecimentoRotaDto atual, EnriquecimentoRotaDto anterior,
+            DateTimeOffset timestampAnterior, double segundos, double distancia, double limite)
+        {
+            var velocidade = segundos > 0 ? distancia / segundos * 3.6 : (double?)null;
+            return new(aceito, motivo, atual.PadraoOperacionalId, atual.PadraoVersaoId,
+                atual.SentidoId,
+                string.Equals(atual.Topologia, "CIRCULAR", StringComparison.OrdinalIgnoreCase),
+                anterior.PosicaoNaRota, atual.PosicaoNaRota,
+                atual.PosicaoNaRota - anterior.PosicaoNaRota,
+                timestampAnterior, posicao.TimestampGps, segundos, distancia, limite, velocidade);
+        }
     }
 
     /// <summary>

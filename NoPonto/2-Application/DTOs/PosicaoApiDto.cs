@@ -221,6 +221,8 @@ public sealed record PosicaoVeiculoDto
 
     public string? ProximaParadaNome { get; init; }
     public double? DistanciaProximaParadaMetros { get; init; }
+    /// <summary>Distância longitudinal restante na geometria até a próxima ocorrência.</summary>
+    public double? DistanciaRestanteRotaMetros { get; init; }
 
     /// <summary>
     /// ETA até a próxima parada em segundos, calculado pelo modelo ML.

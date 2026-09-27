@@ -117,13 +117,23 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                     pi."ParadaId" AS parada_id, pi."Ordem" AS parada_ordem,
                     pi."DistanciaAcumuladaMetros" AS parada_distancia_acumulada,
                     pi."DistanciaDaLinhaMetros" AS parada_distancia_linha,
-                    ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros
+                    ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros,
+                    GREATEST(0.0, CASE
+                      WHEN pi."PosicaoTracado" > ge.posicao_na_rota THEN
+                        ST_Length(ST_LineSubstring(ge."Geometria",0,pi."PosicaoTracado")::geography)
+                        - ST_Length(ST_LineSubstring(ge."Geometria",0,ge.posicao_na_rota)::geography)
+                      ELSE ge.comprimento_metros
+                        - ST_Length(ST_LineSubstring(ge."Geometria",0,ge.posicao_na_rota)::geography)
+                        + ST_Length(ST_LineSubstring(ge."Geometria",0,pi."PosicaoTracado")::geography)
+                    END) AS distancia_restante_rota_metros
                 FROM "OcorrenciasParadasPadroes" pi
                 JOIN "Paradas" p ON p."Id" = pi."ParadaId"
                 JOIN global_escolhido ge ON ge."Id" = pi."PadraoVersaoId"
                 CROSS JOIN veiculo v
                 WHERE pi."PosicaoTracado" > ge.posicao_na_rota
-                ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC
+                   OR ge.topologia = 'CIRCULAR'
+                ORDER BY CASE WHEN pi."PosicaoTracado" > ge.posicao_na_rota THEN 0 ELSE 1 END,
+                    pi."PosicaoTracado" ASC, pi."Ordem" ASC
                 LIMIT 1
             ),
             rota_anterior AS (
@@ -131,7 +141,7 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                     po."SentidoId" AS sentido_id, s."LinhaId" AS linha_id,
                     i."Topologia" AS topologia, i."Geometria"
                 FROM "PadroesVersoes" i
-                JOIN "PadroesOperacionais" po ON po."VersaoAtualId" = i."Id"
+                JOIN "PadroesOperacionais" po ON po."Id" = i."PadraoOperacionalId"
                 JOIN "Sentidos" s ON s."Id" = po."SentidoId"
                 JOIN "Linhas"   l ON l."Id" = s."LinhaId"
                 CROSS JOIN veiculo v
@@ -188,22 +198,39 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                     pi."ParadaId" AS parada_id, pi."Ordem" AS parada_ordem,
                     pi."DistanciaAcumuladaMetros" AS parada_distancia_acumulada,
                     pi."DistanciaDaLinhaMetros" AS parada_distancia_linha,
-                    ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros
+                    ST_Distance(v.ponto, p."Localizacao"::geography) AS distancia_parada_metros,
+                    GREATEST(0.0, CASE
+                      WHEN pi."PosicaoTracado" > ae.posicao_na_rota THEN
+                        ST_Length(ST_LineSubstring(ae."Geometria",0,pi."PosicaoTracado")::geography)
+                        - ST_Length(ST_LineSubstring(ae."Geometria",0,ae.posicao_na_rota)::geography)
+                      ELSE ae.comprimento_metros
+                        - ST_Length(ST_LineSubstring(ae."Geometria",0,ae.posicao_na_rota)::geography)
+                        + ST_Length(ST_LineSubstring(ae."Geometria",0,pi."PosicaoTracado")::geography)
+                    END) AS distancia_restante_rota_metros
                 FROM "OcorrenciasParadasPadroes" pi
                 JOIN "Paradas" p ON p."Id" = pi."ParadaId"
                 JOIN anterior_escolhido ae ON ae."Id" = pi."PadraoVersaoId"
                 CROSS JOIN veiculo v
                 WHERE pi."PosicaoTracado" > ae.posicao_na_rota
-                ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC
+                   OR ae.topologia = 'CIRCULAR'
+                ORDER BY CASE WHEN pi."PosicaoTracado" > ae.posicao_na_rota THEN 0 ELSE 1 END,
+                    pi."PosicaoTracado" ASC, pi."Ordem" ASC
                 LIMIT 1
             ),
             rota_operacional AS (
                 SELECT i."Id", i."Geometria",
                     ST_Length(i."Geometria"::geography) AS comprimento_metros
                 FROM "PadroesVersoes" i
-                JOIN "PadroesOperacionais" po ON po."VersaoAtualId" = i."Id"
+                JOIN "PadroesOperacionais" po ON po."Id" = i."PadraoOperacionalId"
+                JOIN "Sentidos" s ON s."Id" = po."SentidoId"
+                JOIN "Linhas" l ON l."Id" = s."LinhaId"
                 WHERE @usar_operacional
                   AND i."Id" = @padrao_operacional
+                  AND (@validar_identidade_operacional = false OR (
+                      po."Id" = @padrao_operacional_esperado
+                      AND s."Id" = @sentido_operacional_esperado
+                      AND l."Id" = @linha_operacional_esperada
+                      AND l."Codigo" = @codigo))
                   AND EXISTS (SELECT 1 FROM global_escolhido ge
                       WHERE ge."Id" <> @padrao_operacional)
             ),
@@ -247,7 +274,7 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                 ST_X(ge.ponto_rota) AS lon_rota,
                 ppg.parada_nome, ppg.ocorrencia_id, ppg.parada_id, ppg.parada_ordem,
                 ppg.parada_distancia_acumulada, ppg.parada_distancia_linha,
-                ppg.distancia_parada_metros
+                ppg.distancia_parada_metros, ppg.distancia_restante_rota_metros
             FROM global_escolhido ge
             LEFT JOIN proxima_parada_global ppg ON true
             UNION ALL
@@ -263,7 +290,7 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                 ST_X(ae.ponto_rota) AS lon_rota,
                 ppa.parada_nome, ppa.ocorrencia_id, ppa.parada_id, ppa.parada_ordem,
                 ppa.parada_distancia_acumulada, ppa.parada_distancia_linha,
-                ppa.distancia_parada_metros
+                ppa.distancia_parada_metros, ppa.distancia_restante_rota_metros
             FROM anterior_escolhido ae
             LEFT JOIN proxima_parada_anterior ppa ON true
             UNION ALL
@@ -282,7 +309,8 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                 NULL::uuid AS parada_id, NULL::integer AS parada_ordem,
                 NULL::double precision AS parada_distancia_acumulada,
                 NULL::double precision AS parada_distancia_linha,
-                NULL::double precision AS distancia_parada_metros
+                NULL::double precision AS distancia_parada_metros,
+                NULL::double precision AS distancia_restante_rota_metros
             FROM operacional_elegivel oe
             """;
 
@@ -307,6 +335,14 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                 projecaoOperacional?.PosicaoAnterior ?? 0.0);
             cmd.Parameters.AddWithValue("orcamento_operacional_metros",
                 projecaoOperacional?.OrcamentoMetros ?? 1.0);
+            cmd.Parameters.AddWithValue("validar_identidade_operacional",
+                projecaoOperacional?.PadraoOperacionalId.HasValue == true);
+            cmd.Parameters.AddWithValue("padrao_operacional_esperado",
+                projecaoOperacional?.PadraoOperacionalId ?? Guid.Empty);
+            cmd.Parameters.AddWithValue("sentido_operacional_esperado",
+                projecaoOperacional?.SentidoId ?? Guid.Empty);
+            cmd.Parameters.AddWithValue("linha_operacional_esperada",
+                projecaoOperacional?.LinhaId ?? Guid.Empty);
 
             ResultadoBuscaPadrao global = ResultadoBuscaPadrao.NotEligible();
             ResultadoBuscaPadrao anterior = ResultadoBuscaPadrao.NotEligible();
@@ -378,6 +414,8 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
             ? null : reader.GetDouble(reader.GetOrdinal("parada_distancia_linha")),
         DistanciaProximaParadaMetros = reader.IsDBNull(reader.GetOrdinal("distancia_parada_metros"))
             ? null : reader.GetDouble(reader.GetOrdinal("distancia_parada_metros")),
+        DistanciaRestanteRotaMetros = reader.IsDBNull(reader.GetOrdinal("distancia_restante_rota_metros"))
+            ? null : reader.GetDouble(reader.GetOrdinal("distancia_restante_rota_metros")),
     };
 
     // Núcleo único: a busca global mantém seus filtros/score/ORDER BY/LIMIT.
@@ -404,7 +442,8 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                     po."SentidoId" AS sentido_id, s."LinhaId" AS linha_id,
                     i."Topologia" AS topologia, i."Geometria"
                 FROM "PadroesVersoes" i
-                JOIN "PadroesOperacionais" po ON po."VersaoAtualId" = i."Id"
+                JOIN "PadroesOperacionais" po ON po."Id" = i."PadraoOperacionalId"
+                    AND (@usar_padrao OR po."VersaoAtualId" = i."Id")
                 JOIN "Sentidos" s ON s."Id" = po."SentidoId"
                 JOIN "Linhas"   l ON l."Id" = s."LinhaId"
                 CROSS JOIN veiculo v
@@ -481,13 +520,23 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                     pi."Ordem"                                                       AS parada_ordem,
                     pi."DistanciaAcumuladaMetros"                                   AS parada_distancia_acumulada,
                     pi."DistanciaDaLinhaMetros"                                     AS parada_distancia_linha,
-                    ST_Distance(v.ponto, p."Localizacao"::geography)                AS distancia_parada_metros
+                    ST_Distance(v.ponto, p."Localizacao"::geography)                AS distancia_parada_metros,
+                    GREATEST(0.0, CASE
+                      WHEN pi."PosicaoTracado" > ie.posicao_na_rota THEN
+                        ST_Length(ST_LineSubstring(ie."Geometria",0,pi."PosicaoTracado")::geography)
+                        - ST_Length(ST_LineSubstring(ie."Geometria",0,ie.posicao_na_rota)::geography)
+                      ELSE ie.comprimento_metros
+                        - ST_Length(ST_LineSubstring(ie."Geometria",0,ie.posicao_na_rota)::geography)
+                        + ST_Length(ST_LineSubstring(ie."Geometria",0,pi."PosicaoTracado")::geography)
+                    END) AS distancia_restante_rota_metros
                 FROM "OcorrenciasParadasPadroes" pi
                 JOIN "Paradas"           p  ON p."Id"  = pi."ParadaId"
                 JOIN padrao_escolhido ie ON ie."Id" = pi."PadraoVersaoId"
                 CROSS JOIN veiculo v
                 WHERE pi."PosicaoTracado" > ie.posicao_na_rota
-                ORDER BY pi."PosicaoTracado" ASC, pi."Ordem" ASC
+                   OR ie.topologia = 'CIRCULAR'
+                ORDER BY CASE WHEN pi."PosicaoTracado" > ie.posicao_na_rota THEN 0 ELSE 1 END,
+                    pi."PosicaoTracado" ASC, pi."Ordem" ASC
                 LIMIT 1
             )
             SELECT
@@ -504,7 +553,7 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                 ST_X(ie.ponto_rota)        AS lon_rota,
                 pp.parada_nome, pp.ocorrencia_id, pp.parada_id, pp.parada_ordem,
                 pp.parada_distancia_acumulada, pp.parada_distancia_linha,
-                pp.distancia_parada_metros
+                pp.distancia_parada_metros, pp.distancia_restante_rota_metros
             FROM padrao_escolhido ie
             LEFT JOIN proxima_parada pp ON true
             LIMIT 1
@@ -526,6 +575,7 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
             cmd.Parameters.AddWithValue("bearing", bearing);
             cmd.Parameters.AddWithValue("dist_max", distanciaMaximaMetros);
             cmd.Parameters.AddWithValue("usar_faixa", faixa.HasValue);
+            cmd.Parameters.AddWithValue("usar_padrao", padraoVersaoId.HasValue);
             cmd.Parameters.AddWithValue("fracao_min", faixa?.Min ?? 0.0);
             cmd.Parameters.AddWithValue("fracao_max", faixa?.Max ?? 1.0);
 
@@ -572,6 +622,9 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                 DistanciaProximaParadaMetros = reader.IsDBNull(reader.GetOrdinal("distancia_parada_metros"))
                                                     ? null
                                                     : reader.GetDouble(reader.GetOrdinal("distancia_parada_metros")),
+                DistanciaRestanteRotaMetros = reader.IsDBNull(reader.GetOrdinal("distancia_restante_rota_metros"))
+                                                    ? null
+                                                    : reader.GetDouble(reader.GetOrdinal("distancia_restante_rota_metros")),
             };
         }
         catch (Exception ex)

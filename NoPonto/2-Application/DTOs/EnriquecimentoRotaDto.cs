@@ -30,4 +30,5 @@ public sealed class EnriquecimentoRotaDto
     public double? ProximaParadaDistanciaAcumuladaMetros { get; init; }
     public double? ProximaParadaDistanciaDaLinhaMetros { get; init; }
     public double? DistanciaProximaParadaMetros { get; init; }
+    public double? DistanciaRestanteRotaMetros { get; init; }
 }
