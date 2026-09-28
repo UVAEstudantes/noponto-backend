@@ -118,7 +118,9 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
         var repo = new GpsPadraoRepository(source, logger);
 
         _ = await repo.BuscarEnriquecimentoAsync("GPS23", -22.9, -43.2, 90, 100);
-        foreach (var tamanho in new[] { 50, 100 })
+        // auto_explain registra no PostgreSQL descartavel o plano real do SQL privado
+        // sem copiar o SQL produtivo para o projeto de testes.
+        foreach (var tamanho in new[] { 10, 100, 1000 })
         {
             var entradas = Enumerable.Range(0, tamanho).Select(i =>
                 new EntradaMatchingGlobalLote($"explain-{tamanho}-{i}", "GPS23",
@@ -132,6 +134,56 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
         Assert.Equal(0, logger.ConnectionErrors);
         Assert.Equal(0, logger.Timeouts);
     }
+
+    [Fact]
+    [Trait("Category", "BenchmarkBaseline")]
+    public async Task BaselineBatchAtual_10_100_500_1000_E3000Manual()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("RUN_GPS_MATCHING_BASELINE"),
+                "true", StringComparison.OrdinalIgnoreCase)) return;
+
+        var repository = new GpsPadraoRepository(_db.DataSource,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<GpsPadraoRepository>.Instance);
+        var include3000 = string.Equals(
+            Environment.GetEnvironmentVariable("RUN_GPS_MATCHING_BASELINE_3000"),
+            "true", StringComparison.OrdinalIgnoreCase);
+        var sizes = include3000 ? new[] { 10, 100, 500, 1000, 3000 } : new[] { 10, 100, 500, 1000 };
+
+        // Warm-up fora das amostras. Benchmark informativo: nenhum limite temporal
+        // participa de assert e, portanto, nenhuma variacao de CI causa flakiness.
+        _ = await repository.BuscarGlobaisEmLoteAsync(CreateBaselineInputs(100), 100);
+        foreach (var size in sizes)
+        {
+            var samples = new List<double>(5);
+            ResultadoMatchingLote<ResultadoMatchingGlobalLote>? last = null;
+            for (var round = 0; round < 5; round++)
+            {
+                var started = Stopwatch.GetTimestamp();
+                last = await repository.BuscarGlobaisEmLoteAsync(CreateBaselineInputs(size), 100);
+                samples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            }
+            samples.Sort();
+            var median = samples[samples.Count / 2];
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                schemaVersion = 1,
+                size,
+                medianMs = median,
+                millisecondsPerInput = median / size,
+                commands = last!.Metricas.MatchingCommandsPostgres,
+                batchSizes = last.Metricas.MatchingBatchSize,
+                samplesMs = samples,
+            }, JsonOptions));
+            Assert.Equal(size, last!.Resultados.Count);
+            Assert.Equal((int)Math.Ceiling(size / 100d), last.Metricas.MatchingCommandsPostgres);
+        }
+    }
+
+    private static EntradaMatchingGlobalLote[] CreateBaselineInputs(int size) =>
+        Enumerable.Range(0, size).Select(i => new EntradaMatchingGlobalLote(
+            $"baseline-{size}-{i:D5}", "GPS23",
+            -22.9 + (i % 5) * .00001, -43.209 + (i % 100) * .00018,
+            i % 2 == 0 ? 90 : 89.5, 250)).ToArray();
 
     [Fact]
     [Trait("Category", "BenchmarkRecovery")]
