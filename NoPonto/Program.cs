@@ -8,6 +8,7 @@ using NoPonto.API.Configuration;
 using NoPonto.API.Hubs;
 using NoPonto.API.Middlewares;
 using NoPonto.Application.GPS;
+using NoPonto.Application.DTOs.EstruturaV2;
 using NoPonto.Application.Interfaces;
 using NoPonto.Application.Services;
 using NoPonto.Application.Services.BackgroundServices;
@@ -437,6 +438,7 @@ builder.Services.AddSingleton<GpsStructuralHintMetrics>();
 builder.Services.AddHostedService<GpsStructuralHintMetricsReporter>();
 
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
+builder.Services.AddScoped<IEstruturaLeituraV2Repository, EstruturaLeituraV2Repository>();
 
 builder.Services.Configure<ViagemOutboxOptions>(builder.Configuration.GetSection("ViagemOutbox"));
 builder.Services.AddOptions<EtaV2Options>().Bind(builder.Configuration.GetSection("EtaV2"))
