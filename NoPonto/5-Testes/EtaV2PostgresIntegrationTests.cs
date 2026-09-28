@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using NoPonto.Application.GPS;
+using NoPonto.Application.Services.BackgroundServices;
 using NoPonto.Data.Repositories;
 using NoPonto.Domain.Entities;
 using Npgsql;
@@ -10,6 +13,42 @@ namespace NoPonto.Tests;
 
 public sealed class EtaV2PostgresIntegrationTests
 {
+    [Fact]
+    public async Task Throughput_OptIn_ThreeThousandCandidatesUseBatches()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("ETA_V2_THROUGHPUT_ENABLED"), "true",
+            StringComparison.OrdinalIgnoreCase)) return;
+        var connectionString = Environment.GetEnvironmentVariable("ETA_V2_TEST_CONNECTION");
+        Assert.False(string.IsNullOrWhiteSpace(connectionString));
+        Assert.Contains("localhost", connectionString!, StringComparison.OrdinalIgnoreCase);
+        await using var source = new NpgsqlDataSourceBuilder(connectionString).UseNetTopologySuite().Build();
+        var dbOptions = new DbContextOptionsBuilder<TransporteDbContext>()
+            .UseNpgsql(source, x => x.UseNetTopologySuite()).Options;
+        await using var db = new TransporteDbContext(dbOptions); await db.Database.MigrateAsync();
+        var ids = await SeedAsync(db); var metrics = new EtaV2Metrics();
+        var settings = new EtaV2Options { Enabled = true, ShadowEnabled = true, CanaryPercent = 100,
+            QueueCapacity = 5000, BatchSize = 250, BatchMaxDelayMs = 500,
+            PersistenceRetryDelayMs = 1000, ShutdownDrainSeconds = 10,
+            ExpirationBatchSize = 5000, PendingCountIntervalMinutes = 5 };
+        var channel = new EtaV2Channel(Options.Create(settings), metrics);
+        var worker = new EtaV2BatchWorker(channel, new EtaV2Repository(source, metrics),
+            Options.Create(settings), metrics, NullLogger<EtaV2BatchWorker>.Instance);
+        await worker.StartAsync(default);
+        var now = DateTimeOffset.UtcNow; var provider = "THROUGHPUT-" + Guid.NewGuid().ToString("N")[..12];
+        var enqueue = System.Diagnostics.Stopwatch.StartNew();
+        for (var i = 0; i < 3000; i++)
+            Assert.True(channel.TryWrite(Request(ids, now) with { Id = Guid.NewGuid(),
+                OrdemVeiculo = $"ETA-LOAD-{i:D4}", ViagemId = Guid.NewGuid(), Provedor = provider }));
+        enqueue.Stop();
+        var timeout = DateTimeOffset.UtcNow.AddMinutes(2);
+        while (metrics.Persisted < 3000 && DateTimeOffset.UtcNow < timeout) await Task.Delay(50);
+        await worker.StopAsync(default);
+        var rows = await db.PrevisoesEtaV2.CountAsync(x => x.Provedor == provider);
+        Console.WriteLine("ETA_V2_THROUGHPUT candidates=3000 enqueue_ms={0} total_batches={1} rows={2} drops={3}",
+            enqueue.ElapsedMilliseconds, metrics.Batches, rows, metrics.DroppedQueueFull);
+        Assert.Equal(3000, rows); Assert.Equal(0, metrics.DroppedQueueFull); Assert.InRange(metrics.Batches, 1, 12);
+    }
+
     [Fact]
     public async Task SamplingCorrelationIdempotencyExpirationAndInvalidation()
     {
@@ -29,14 +68,23 @@ public sealed class EtaV2PostgresIntegrationTests
         var repository = new EtaV2Repository(source, metrics);
         var now = DateTimeOffset.UtcNow;
         var request = Request(ids, now);
-        Assert.True(await repository.TryInsertAsync(request, default));
-        Assert.False(await repository.TryInsertAsync(request with { Id = Guid.NewGuid(),
-            TimestampPrevisao = now.AddSeconds(5) }, default));
+        Assert.Equal(1, (await repository.PersistBatchAsync([request], default)).Persisted);
+        Assert.Equal(0, (await repository.PersistBatchAsync([request with { Id = Guid.NewGuid(),
+            TimestampPrevisao = now.AddSeconds(5) }], default)).Persisted);
 
         // Mudança de alvo ignora o sampling do alvo anterior.
-        Assert.True(await repository.TryInsertAsync(request with { Id = Guid.NewGuid(),
+        Assert.Equal(1, (await repository.PersistBatchAsync([request with { Id = Guid.NewGuid(),
             OcorrenciaParadaPadraoId = ids.OtherOccurrence, OrdemOcorrencia = 2,
-            TimestampPrevisao = now.AddSeconds(5) }, default));
+            TimestampPrevisao = now.AddSeconds(5) }], default)).Persisted);
+
+        // Duas instâncias concorrentes não atravessam o sampling do mesmo alvo.
+        var concurrent = request with { Id = Guid.NewGuid(),
+            OcorrenciaParadaPadraoId = ids.OtherOccurrence, OrdemOcorrencia = 2,
+            TimestampPrevisao = now.AddSeconds(30) };
+        var concurrentResults = await Task.WhenAll(
+            repository.PersistBatchAsync([concurrent], default),
+            repository.PersistBatchAsync([concurrent with { Id = Guid.NewGuid() }], default));
+        Assert.Equal(1, concurrentResults.Sum(x => x.Persisted));
 
         var wrongVehicle = request with { Id = Guid.NewGuid(), OrdemVeiculo = "OTHER-VEHICLE",
             TimestampPrevisao = now.AddSeconds(20) };
@@ -45,9 +93,7 @@ public sealed class EtaV2PostgresIntegrationTests
             TimestampPrevisao = now.AddSeconds(20) };
         var wrongLap = request with { Id = Guid.NewGuid(), Volta = 2,
             TimestampPrevisao = now.AddSeconds(20) };
-        Assert.True(await repository.TryInsertAsync(wrongVehicle, default));
-        Assert.True(await repository.TryInsertAsync(wrongTrip, default));
-        Assert.True(await repository.TryInsertAsync(wrongLap, default));
+        Assert.Equal(3, (await repository.PersistBatchAsync([wrongVehicle, wrongTrip, wrongLap], default)).Persisted);
 
         var passageAt = now.AddSeconds(50);
         var passage = new EventoViagem($"passagem:{request.ViagemId:D}:{ids.Occurrence:D}:1",
@@ -75,7 +121,8 @@ public sealed class EtaV2PostgresIntegrationTests
         Assert.Equal(StatusPrevisaoEtaV2.Pendente,
             (await db.PrevisoesEtaV2.SingleAsync(x => x.Id == wrongLap.Id)).Status);
 
-        Assert.True(await repository.ExpireAsync(now.AddMinutes(1), default) >= 1);
+        Assert.Equal(1, await repository.ExpireBatchAsync(now.AddMinutes(1), 1, default));
+        Assert.True(await repository.ExpireBatchAsync(now.AddMinutes(1), 5000, default) >= 1);
         Assert.DoesNotContain(await db.PrevisoesEtaV2.Where(x => x.Status == StatusPrevisaoEtaV2.Realizada)
             .ToListAsync(), x => x.Id != request.Id);
     }

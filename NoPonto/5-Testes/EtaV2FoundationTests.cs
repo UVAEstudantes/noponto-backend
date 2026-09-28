@@ -28,12 +28,12 @@ public sealed class EtaV2FoundationTests
         EtaV2LongitudinalSpeedV0.Predict(value, 10, 3).MotivoSemPrevisao);
 
     [Fact]
-    public async Task Shadow_PreservaIdentidadeCompletaDaOcorrenciaEViagem()
+    public void Shadow_PreservaIdentidadeCompletaDaOcorrenciaEViagem()
     {
-        var repo = new RecordingRepository();
+        var repo = new RecordingIngress();
         var service = Service(repo);
         var data = Scenario();
-        await service.TryRecordAsync(data.Enrichment, data.Trip, default);
+        service.TryRecord(data.Enrichment, data.Trip);
         var request = Assert.Single(repo.Requests);
         Assert.Equal(data.Trip.Estado!.ViagemId, request.ViagemId);
         Assert.Equal(data.Target.Id, request.OcorrenciaParadaPadraoId);
@@ -43,123 +43,121 @@ public sealed class EtaV2FoundationTests
     }
 
     [Fact]
-    public async Task Shadow_ParadaRepetidaMantemOcorrenciaEspecifica()
+    public void Shadow_ParadaRepetidaMantemOcorrenciaEspecifica()
     {
-        var repo = new RecordingRepository(); var service = Service(repo);
+        var repo = new RecordingIngress(); var service = Service(repo);
         var data = Scenario(); var otherOccurrence = Guid.NewGuid();
         var target = data.Target with { Id = otherOccurrence, Ordem = data.Target.Ordem + 5 };
         var position = data.Enrichment.Posicao with { ProximaOcorrenciaParadaPadraoId = otherOccurrence };
-        await service.TryRecordAsync(data.Enrichment with { Posicao = position },
-            data.Trip with { ProximaOcorrenciaOperacional = target }, default);
+        service.TryRecord(data.Enrichment with { Posicao = position },
+            data.Trip with { ProximaOcorrenciaOperacional = target });
         Assert.Equal(otherOccurrence, Assert.Single(repo.Requests).OcorrenciaParadaPadraoId);
     }
 
     [Fact]
-    public async Task Shadow_VoltaDiferentePermaneceNaIdentidade()
+    public void Shadow_VoltaDiferentePermaneceNaIdentidade()
     {
-        var repo = new RecordingRepository(); var service = Service(repo); var data = Scenario();
+        var repo = new RecordingIngress(); var service = Service(repo); var data = Scenario();
         var state = data.Trip.Estado! with { Volta = 3 };
-        await service.TryRecordAsync(data.Enrichment, data.Trip with { Estado = state }, default);
+        service.TryRecord(data.Enrichment, data.Trip with { Estado = state });
         Assert.Equal(3, Assert.Single(repo.Requests).Volta);
     }
 
     [Fact]
-    public async Task Shadow_VersaoHistoricaPinadaEhAceitaQuandoProjecaoCoincide()
+    public void Shadow_VersaoHistoricaPinadaEhAceitaQuandoProjecaoCoincide()
     {
-        var repo = new RecordingRepository(); var service = Service(repo); var data = Scenario();
-        await service.TryRecordAsync(data.Enrichment, data.Trip, default);
+        var repo = new RecordingIngress(); var service = Service(repo); var data = Scenario();
+        service.TryRecord(data.Enrichment, data.Trip);
         Assert.Equal(data.Trip.Estado!.PadraoVersaoId, Assert.Single(repo.Requests).PadraoVersaoId);
     }
 
     [Fact]
-    public async Task Shadow_VersoesDiferentesNaoProduzemEvento()
+    public void Shadow_VersoesDiferentesNaoProduzemEvento()
     {
-        var repo = new RecordingRepository(); var service = Service(repo); var data = Scenario();
+        var repo = new RecordingIngress(); var service = Service(repo); var data = Scenario();
         var position = data.Enrichment.Posicao with { PadraoVersaoId = Guid.NewGuid() };
-        await service.TryRecordAsync(data.Enrichment with { Posicao = position }, data.Trip, default);
+        service.TryRecord(data.Enrichment with { Posicao = position }, data.Trip);
         Assert.Empty(repo.Requests);
     }
 
     [Fact]
-    public async Task Shadow_OcorrenciaDiferenteNaoProduzEvento()
+    public void Shadow_OcorrenciaDiferenteNaoProduzEvento()
     {
-        var repo = new RecordingRepository(); var service = Service(repo); var data = Scenario();
+        var repo = new RecordingIngress(); var service = Service(repo); var data = Scenario();
         var position = data.Enrichment.Posicao with { ProximaOcorrenciaParadaPadraoId = Guid.NewGuid() };
-        await service.TryRecordAsync(data.Enrichment with { Posicao = position }, data.Trip, default);
+        service.TryRecord(data.Enrichment with { Posicao = position }, data.Trip);
         Assert.Empty(repo.Requests);
     }
 
     [Fact]
-    public async Task Shadow_DistanciaAusenteNaoProduzEvento()
+    public void Shadow_DistanciaAusenteNaoProduzEvento()
     {
-        var repo = new RecordingRepository(); var service = Service(repo); var data = Scenario();
-        await service.TryRecordAsync(data.Enrichment with { Posicao = data.Enrichment.Posicao with
-            { DistanciaRestanteRotaMetros = null } }, data.Trip, default);
+        var repo = new RecordingIngress(); var service = Service(repo); var data = Scenario();
+        service.TryRecord(data.Enrichment with { Posicao = data.Enrichment.Posicao with
+            { DistanciaRestanteRotaMetros = null } }, data.Trip);
         Assert.Empty(repo.Requests);
     }
 
     [Fact]
-    public async Task Shadow_DistanciaInvalidaNaoContaminaDataset()
+    public void Shadow_DistanciaInvalidaNaoContaminaDataset()
     {
-        var repo = new RecordingRepository(); var data = Scenario();
-        await Service(repo).TryRecordAsync(data.Enrichment with { Posicao = data.Enrichment.Posicao with
-            { DistanciaRestanteRotaMetros = double.NaN } }, data.Trip, default);
+        var repo = new RecordingIngress(); var data = Scenario();
+        Service(repo).TryRecord(data.Enrichment with { Posicao = data.Enrichment.Posicao with
+            { DistanciaRestanteRotaMetros = double.NaN } }, data.Trip);
         Assert.Empty(repo.Requests);
     }
 
     [Fact]
-    public async Task Shadow_FlagDesligadaNaoProduzEvento()
+    public void Shadow_FlagDesligadaNaoProduzEvento()
     {
-        var repo = new RecordingRepository(); var data = Scenario();
-        await Service(repo, enabled: false).TryRecordAsync(data.Enrichment, data.Trip, default);
+        var repo = new RecordingIngress(); var data = Scenario();
+        Service(repo, enabled: false).TryRecord(data.Enrichment, data.Trip);
         Assert.Empty(repo.Requests);
     }
 
     [Fact]
-    public async Task Shadow_FalhaPersistenciaEhFailOpen()
+    public void Shadow_FalhaIngressEhFailOpen()
     {
         var data = Scenario();
-        await Service(new RecordingRepository { Failure = new TimeoutException() })
-            .TryRecordAsync(data.Enrichment, data.Trip, default);
+        Assert.False(Service(new RecordingIngress { Accept = false }).TryRecord(data.Enrichment, data.Trip));
     }
 
     [Fact]
-    public async Task Shadow_NaoAlteraEtaOperacionalExistente()
+    public void Shadow_NaoAlteraEtaOperacionalExistente()
     {
-        var repo = new RecordingRepository(); var data = Scenario();
+        var repo = new RecordingIngress(); var data = Scenario();
         var original = data.Enrichment.Posicao with { EtaProximaParadaSegundos = 123, EtaConfianca = "legacy" };
-        await Service(repo).TryRecordAsync(data.Enrichment with { Posicao = original }, data.Trip, default);
+        Service(repo).TryRecord(data.Enrichment with { Posicao = original }, data.Trip);
         Assert.Equal(123, original.EtaProximaParadaSegundos);
         Assert.Equal("legacy", original.EtaConfianca);
     }
 
     [Fact]
-    public async Task Shadow_MudancaDeAlvoProduzNovaSolicitacao()
+    public void Shadow_MudancaDeAlvoProduzNovaSolicitacao()
     {
-        var repo = new RecordingRepository(); var service = Service(repo); var data = Scenario();
-        await service.TryRecordAsync(data.Enrichment, data.Trip, default);
+        var repo = new RecordingIngress(); var service = Service(repo); var data = Scenario();
+        service.TryRecord(data.Enrichment, data.Trip);
         var next = Guid.NewGuid();
-        await service.TryRecordAsync(data.Enrichment with { Posicao = data.Enrichment.Posicao with
+        service.TryRecord(data.Enrichment with { Posicao = data.Enrichment.Posicao with
             { ProximaOcorrenciaParadaPadraoId = next } }, data.Trip with
-            { ProximaOcorrenciaOperacional = data.Target with { Id = next, Ordem = 8 } }, default);
+            { ProximaOcorrenciaOperacional = data.Target with { Id = next, Ordem = 8 } });
         Assert.Equal(2, repo.Requests.Count);
     }
 
     [Fact]
-    public async Task Shadow_RegistraCoverageSemEta()
+    public void Shadow_RegistraCoverageSemEta()
     {
-        var repo = new RecordingRepository(); var data = Scenario();
-        await Service(repo).TryRecordAsync(data.Enrichment with { Posicao = data.Enrichment.Posicao with
-            { Velocidade = 0 } }, data.Trip, default);
+        var repo = new RecordingIngress(); var data = Scenario();
+        Service(repo).TryRecord(data.Enrichment with { Posicao = data.Enrichment.Posicao with
+            { Velocidade = 0 } }, data.Trip);
         var request = Assert.Single(repo.Requests);
         Assert.Null(request.EtaPrevistoSegundos);
         Assert.Equal("VELOCIDADE_ZERO", request.MotivoSemPrevisao);
     }
 
-    private static EtaV2ShadowService Service(IEtaV2Repository repository, bool enabled = true) => new(
-        repository, Options.Create(new EtaV2Options { Enabled = enabled, ShadowEnabled = enabled,
-            SamplingSeconds = 15, MinSpeedKmh = 3 }), new EtaV2Metrics(),
-        NullLogger<EtaV2ShadowService>.Instance);
+    private static EtaV2ShadowService Service(IEtaV2Ingress ingress, bool enabled = true) => new(
+        ingress, Options.Create(new EtaV2Options { Enabled = enabled, ShadowEnabled = enabled,
+            CanaryPercent = 100, SamplingSeconds = 15, MinSpeedKmh = 3 }), new EtaV2Metrics());
 
     private static (ResultadoEnriquecimentoGps Enrichment, ViagemObservadaResultado Trip,
         OcorrenciaParada Target) Scenario()
@@ -177,18 +175,10 @@ public sealed class EtaV2FoundationTests
             new(ViagemObservadaStatus.Updated, state) { ProximaOcorrenciaOperacional = target }, target);
     }
 
-    private sealed class RecordingRepository : IEtaV2Repository
+    private sealed class RecordingIngress : IEtaV2Ingress
     {
         public List<EtaV2PredictionRequest> Requests { get; } = [];
-        public Exception? Failure { get; init; }
-        public Task<bool> TryInsertAsync(EtaV2PredictionRequest request, CancellationToken ct)
-        {
-            if (Failure is not null) throw Failure;
-            Requests.Add(request); return Task.FromResult(true);
-        }
-        public Task<int> ClosePassageAsync(EventoViagem passage, NpgsqlConnection connection,
-            NpgsqlTransaction transaction, CancellationToken ct) => Task.FromResult(0);
-        public Task<int> ExpireAsync(DateTimeOffset cutoff, CancellationToken ct) => Task.FromResult(0);
-        public Task<long> CountPendingAsync(CancellationToken ct) => Task.FromResult(0L);
+        public bool Accept { get; init; } = true;
+        public bool TryWrite(EtaV2PredictionRequest request) { if (Accept) Requests.Add(request); return Accept; }
     }
 }

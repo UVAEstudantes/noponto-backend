@@ -1087,8 +1087,8 @@ public sealed class GpsPollingService : BackgroundService
             var viagem = await _viagemObservada.AtualizarAsync(enriquecimento, ct);
             performance?.RegistrarViagem(viagem,
                 System.Diagnostics.Stopwatch.GetElapsedTime(inicioViagem));
-            if (_etaV2Shadow is not null)
-                await _etaV2Shadow.TryRecordAsync(enriquecimento, viagem, ct);
+            // Hot path estritamente não bloqueante: nenhuma conexão/query PostgreSQL ETA.
+            _etaV2Shadow?.TryRecord(enriquecimento, viagem);
             if (_telemetriaMl is not null)
             {
                 try

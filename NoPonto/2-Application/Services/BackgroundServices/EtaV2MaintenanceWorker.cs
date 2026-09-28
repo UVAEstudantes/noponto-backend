@@ -12,6 +12,8 @@ public sealed class EtaV2MaintenanceWorker(IEtaV2Repository repository,
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        var lastPendingCount = DateTimeOffset.MinValue;
+        long? pending = null;
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             var settings = options.CurrentValue;
@@ -19,14 +21,21 @@ public sealed class EtaV2MaintenanceWorker(IEtaV2Repository repository,
             try
             {
                 var minutes = Math.Max(1, settings.PendingExpirationMinutes);
-                await repository.ExpireAsync(DateTimeOffset.UtcNow.AddMinutes(-minutes), stoppingToken);
-                var pending = await repository.CountPendingAsync(stoppingToken);
+                await repository.ExpireBatchAsync(DateTimeOffset.UtcNow.AddMinutes(-minutes),
+                    settings.ExpirationBatchSize, stoppingToken);
+                var now = DateTimeOffset.UtcNow;
+                if (now - lastPendingCount >= TimeSpan.FromMinutes(settings.PendingCountIntervalMinutes))
+                { pending = await repository.CountPendingAsync(stoppingToken); lastPendingCount = now; }
                 logger.LogInformation(
-                    "ETA V2 shadow: attempted={Attempted} persisted={Persisted} no_eta={NoEta} " +
+                    "ETA V2 shadow: eligible={Eligible} ineligible={Ineligible} skipped_canary={SkippedCanary} " +
+                    "enqueued={Enqueued} dropped_queue_full={Dropped} queue_depth={QueueDepth} " +
+                    "batches={Batches} batch_items={BatchItems} persisted={Persisted} no_eta={NoEta} " +
                     "realized={Realized} expired={Expired} invalidated={Invalidated} failures={Failures} " +
-                    "pending={Pending} latency_total_ms={Latency:F1} coverage={Coverage:P2}",
-                    metrics.Attempted, metrics.Persisted, metrics.WithoutEta, metrics.Realized,
-                    metrics.Expired, metrics.Invalidated, metrics.Failures, pending, metrics.LatencyMs,
+                    "pending={Pending} batch_latency_total_ms={BatchLatency:F1} persistence_latency_total_ms={PersistenceLatency:F1} coverage={Coverage:P2}",
+                    metrics.Eligible, metrics.Ineligible, metrics.SkippedCanary, metrics.Enqueued,
+                    metrics.DroppedQueueFull, metrics.QueueDepth, metrics.Batches, metrics.BatchItems,
+                    metrics.Persisted, metrics.WithoutEta, metrics.Realized, metrics.Expired,
+                    metrics.Invalidated, metrics.Failures, pending, metrics.BatchLatencyMs, metrics.PersistenceLatencyMs,
                     metrics.Persisted == 0 ? 0 : (double)(metrics.Persisted - metrics.WithoutEta) / metrics.Persisted);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
