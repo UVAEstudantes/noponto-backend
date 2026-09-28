@@ -135,12 +135,14 @@ public sealed class GpsMatchingDifferentialHarnessTests : IClassFixture<PostgisG
     private readonly PostgisGpsFixture _db;
     private readonly GpsPadraoRepository _repository;
     private readonly GpsMatchingGlobalSetBasedCandidate _candidate;
+    private readonly GpsMatchingCombinadoSetBasedCandidate _combinedCandidate;
 
     public GpsMatchingDifferentialHarnessTests(PostgisGpsFixture db)
     {
         _db = db;
         _repository = new(db.DataSource, NullLogger<GpsPadraoRepository>.Instance);
         _candidate = new(db.DataSource);
+        _combinedCandidate = new(db.DataSource);
     }
 
     [Fact]
@@ -242,11 +244,34 @@ public sealed class GpsMatchingDifferentialHarnessTests : IClassFixture<PostgisG
         Assert.True(wrap.DistanciaRestanteRotaMetros>0);
     }
 
+    [Fact]
+    public async Task CombinadoSetBased_EquivaleNosDezPerfisEmOrdemNormalEInvertida()
+    {
+        EntradaMatchingCombinadoLote[] inputs =
+        [
+            new("sem-historico-multipattern","GPS23",null,-22.9,-43.2,90,250,null),
+            new("historico-igual-global","GPS23",_db.R1,-22.9,-43.2,90,250,new(.4,.6)),
+            new("anterior-diferente","GPS23",_db.R1,-22.8998,-43.2,90,250,new(.4,.6)),
+            new("anterior-inelegivel","GPS23",_db.OutraLinha,-22.9,-43.2,90,250,new(.4,.6)),
+            new("operacional-valida","GPS23",_db.R1,-22.8998,-43.2,90,250,new(.4,.6),
+                new(_db.R1,.5,500,_db.R1,_db.Sentido1,_db.Linha1)),
+            new("operacional-coincide-global","GPS23",_db.R1,-22.9,-43.2,90,250,new(.4,.6),
+                new(_db.R1,.5,500,_db.R1,_db.Sentido1,_db.Linha1)),
+            new("single-pattern","OUTRA23",_db.OutraLinha,-22.9,-43.2,90,250,new(.4,.6)),
+            new("circular","CIRCULAR",_db.Circular,.001,.00001,180,250,new(.9,1.0)),
+            new("bearing-incompativel","OUTRA23",null,-22.9,-43.2,270,250,null),
+            new("sem-candidato","SEM_ROTA",_db.R1,-22.9,-43.2,90,250,new(.4,.6)),
+        ];
+        var harness=OracleAgainstSetBasedCandidate();
+        await harness.CompareCombinedAsync(inputs);
+        await harness.CompareCombinedAsync(inputs.Reverse().ToArray());
+    }
+
     private GpsMatchingDifferentialHarness OracleAgainstSetBasedCandidate() => new(
         (x, ct) => _repository.BuscarGlobaisEmLoteAsync(x, 100, ct),
         (x, ct) => _candidate.BuscarAsync(x, 100, ct),
         (x, ct) => _repository.BuscarCombinadosEmLoteAsync(x, 100, ct),
-        (x, ct) => _repository.BuscarCombinadosEmLoteAsync(x, 100, ct),
+        (x, ct) => _combinedCandidate.BuscarAsync(x, 100, ct),
         (x, ct) => _repository.BuscarDirecionadosEmLoteAsync(x, 100, ct),
         (x, ct) => _repository.BuscarDirecionadosEmLoteAsync(x, 100, ct));
 

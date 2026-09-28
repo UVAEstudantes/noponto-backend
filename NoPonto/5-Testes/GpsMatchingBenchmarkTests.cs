@@ -243,28 +243,39 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
 
         var repository = new GpsPadraoRepository(_db.DataSource,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<GpsPadraoRepository>.Instance);
+        var candidate = new GpsMatchingCombinadoSetBasedCandidate(_db.DataSource);
         _ = await repository.BuscarCombinadosEmLoteAsync(CreateCombinedBaselineInputs(100), 100);
+        _ = await candidate.BuscarAsync(CreateCombinedBaselineInputs(100),100);
         foreach (var size in new[] { 10, 100, 500, 1000, 3000 })
         {
             var inputs=CreateCombinedBaselineInputs(size);
             var samples=new List<double>(5);
+            var candidateSamples=new List<double>(5);
             ResultadoMatchingLote<ResultadoMatchingCombinadoLote>? last=null;
+            ResultadoMatchingLote<ResultadoMatchingCombinadoLote>? candidateLast=null;
             for (var round=0; round<5; round++)
             {
                 var started=Stopwatch.GetTimestamp();
                 last=await repository.BuscarCombinadosEmLoteAsync(inputs,100);
                 samples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                started=Stopwatch.GetTimestamp();
+                candidateLast=await candidate.BuscarAsync(inputs,100);
+                candidateSamples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             }
-            samples.Sort();
+            samples.Sort(); candidateSamples.Sort();
             var median=samples[2];
+            var candidateMedian=candidateSamples[2];
             Console.WriteLine(JsonSerializer.Serialize(new { schemaVersion=1,size,
                 commands=last!.Metricas.MatchingCommandsPostgres,
                 chunks=last.Metricas.MatchingBatchSize,medianMs=median,
-                millisecondsPerInput=median/size,samplesMs=samples,
+                candidateMedianMs=candidateMedian,speedup=median/candidateMedian,
+                millisecondsPerInput=median/size,candidateMillisecondsPerInput=candidateMedian/size,
+                samplesMs=samples,candidateSamplesMs=candidateSamples,
                 corpus=CombinedCorpusComposition(size) },JsonOptions));
             Assert.Equal(size,last.Resultados.Count);
             Assert.Equal((int)Math.Ceiling(size/100d),last.Metricas.MatchingCommandsPostgres);
             Assert.Equal(size,last.Metricas.MatchingBatchSize.Sum());
+            Assert.Equal(size,candidateLast!.Resultados.Count);
         }
     }
 
@@ -301,12 +312,16 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
         await using var source=sourceBuilder.Build();
         var logger=new BenchmarkLogger<GpsPadraoRepository>();
         var repository=new GpsPadraoRepository(source,logger);
+        var candidate=new GpsMatchingCombinadoSetBasedCandidate(source);
         foreach (var size in new[] { 10,100,1000 })
         {
             var result=await repository.BuscarCombinadosEmLoteAsync(
                 CreateCombinedBaselineInputs(size),size);
             Assert.Equal(size,result.Resultados.Count);
             Assert.Equal(1,result.Metricas.MatchingBatchCommandsPostgres);
+            var candidateResult=await candidate.BuscarAsync(CreateCombinedBaselineInputs(size),size);
+            Assert.Equal(size,candidateResult.Resultados.Count);
+            Assert.Equal(1,candidateResult.Metricas.MatchingBatchCommandsPostgres);
         }
         Assert.Equal(0,logger.ConnectionErrors);
         Assert.Equal(0,logger.Timeouts);
