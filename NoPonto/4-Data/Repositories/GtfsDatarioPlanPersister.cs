@@ -64,7 +64,7 @@ public sealed class GtfsDatarioPlanPersister(TransporteDbContext db) : IGtfsData
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             watch.Stop();
-            return new(lineResult.Counts, directionResult.Counts, stopResult.Counts,
+            return new(import.Id, lineResult.Counts, directionResult.Counts, stopResult.Counts,
                 structural.Patterns, structural.Versions, structural.Occurrences,
                 watch.ElapsedMilliseconds, plan.Report.Warnings);
         }

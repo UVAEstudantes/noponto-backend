@@ -21,6 +21,12 @@ using System.Reflection;
 
 Env.NoClobber().Load();
 
+if (StructuralImportCommand.IsRequested(args))
+{
+    Environment.ExitCode = await StructuralImportCommand.ExecuteAsync(args);
+    return;
+}
+
 static int GetOptionalPositiveInt(string? value, int defaultValue, string key)
 {
     if (string.IsNullOrWhiteSpace(value))

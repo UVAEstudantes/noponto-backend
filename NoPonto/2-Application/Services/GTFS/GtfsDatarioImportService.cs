@@ -29,6 +29,7 @@ public sealed record GtfsDatarioPatternPlan(
 
 public sealed record GtfsDatarioEntityCounts(int Created, int Reused, int Updated = 0);
 public sealed record GtfsDatarioPersistenceReport(
+    Guid ImportacaoEstruturalId,
     GtfsDatarioEntityCounts Lines,
     GtfsDatarioEntityCounts Directions,
     GtfsDatarioEntityCounts Stops,
