@@ -134,17 +134,19 @@ public sealed class GpsMatchingDifferentialHarnessTests : IClassFixture<PostgisG
 {
     private readonly PostgisGpsFixture _db;
     private readonly GpsPadraoRepository _repository;
+    private readonly GpsMatchingGlobalSetBasedCandidate _candidate;
 
     public GpsMatchingDifferentialHarnessTests(PostgisGpsFixture db)
     {
         _db = db;
         _repository = new(db.DataSource, NullLogger<GpsPadraoRepository>.Instance);
+        _candidate = new(db.DataSource);
     }
 
     [Fact]
     public async Task OracleECandidatoAtual_EquivalemNosTresCaminhosEOrdemEmbaralhada()
     {
-        var harness = CurrentAgainstCurrent();
+        var harness = OracleAgainstSetBasedCandidate();
         EntradaMatchingGlobalLote[] globals =
         [
             new("linear-primeira", "GPS23", -22.9, -43.2099, 90, 250),
@@ -188,9 +190,61 @@ public sealed class GpsMatchingDifferentialHarnessTests : IClassFixture<PostgisG
         await harness.CompareDirectedAsync(directed.Reverse().ToArray());
     }
 
-    private GpsMatchingDifferentialHarness CurrentAgainstCurrent() => new(
+    [Fact]
+    public async Task GlobalSetBased_PreservaElegibilidadeEContratoEmEntradasInvalidas()
+    {
+        var harness=OracleAgainstSetBasedCandidate();
+        EntradaMatchingGlobalLote[] inputs =
+        [
+            new("bearing-null","GPS23",-22.9,-43.2,null,250),
+            new("latitude-invalida","GPS23",double.NaN,-43.2,90,250),
+            new("longitude-invalida","GPS23",-22.9,181,90,250),
+            new("distancia-invalida","GPS23",-22.9,-43.2,90,double.PositiveInfinity),
+        ];
+        await harness.CompareGlobalAsync(inputs);
+        await harness.CompareGlobalAsync(inputs.Reverse().ToArray());
+    }
+
+    [Fact]
+    public async Task GlobalSetBased_PreservaWrapCircularEParadaRepetidaPorOcorrencia()
+    {
+        var parada=Guid.NewGuid();
+        var primeira=Guid.NewGuid();
+        var repetida=Guid.NewGuid();
+        await using (var cmd=_db.DataSource.CreateCommand("""
+            INSERT INTO "Paradas" VALUES (@parada,'Parada circular repetida',
+                ST_SetSRID(ST_MakePoint(0.002,0),4326));
+            INSERT INTO "OcorrenciasParadasPadroes"
+                ("Id","ParadaId","PadraoVersaoId","Ordem","PosicaoTracado",
+                 "DistanciaAcumuladaMetros","DistanciaDaLinhaMetros") VALUES
+                (@primeira,@parada,@versao,1,0.05,220,0),
+                (@repetida,@parada,@versao,2,0.55,2440,0);
+            """))
+        {
+            cmd.Parameters.AddWithValue("parada",parada);
+            cmd.Parameters.AddWithValue("primeira",primeira);
+            cmd.Parameters.AddWithValue("repetida",repetida);
+            cmd.Parameters.AddWithValue("versao",_db.Circular);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        var inputs=new[]
+        {
+            new EntradaMatchingGlobalLote("wrap","CIRCULAR",.001,.00001,180,250),
+            new EntradaMatchingGlobalLote("antes-repetida","CIRCULAR",.01,.009,270,250),
+        };
+        await OracleAgainstSetBasedCandidate().CompareGlobalAsync(inputs);
+        await OracleAgainstSetBasedCandidate().CompareGlobalAsync(inputs.Reverse().ToArray());
+        var result=await _candidate.BuscarAsync(inputs,100);
+        var wrap=result.Resultados.Single(x=>x.InputId=="wrap").Global.Rota!;
+        Assert.Equal(primeira,wrap.ProximaOcorrenciaParadaPadraoId);
+        Assert.Equal(parada,wrap.ProximaParadaId);
+        Assert.True(wrap.DistanciaRestanteRotaMetros>0);
+    }
+
+    private GpsMatchingDifferentialHarness OracleAgainstSetBasedCandidate() => new(
         (x, ct) => _repository.BuscarGlobaisEmLoteAsync(x, 100, ct),
-        (x, ct) => _repository.BuscarGlobaisEmLoteAsync(x, 100, ct),
+        (x, ct) => _candidate.BuscarAsync(x, 100, ct),
         (x, ct) => _repository.BuscarCombinadosEmLoteAsync(x, 100, ct),
         (x, ct) => _repository.BuscarCombinadosEmLoteAsync(x, 100, ct),
         (x, ct) => _repository.BuscarDirecionadosEmLoteAsync(x, 100, ct),

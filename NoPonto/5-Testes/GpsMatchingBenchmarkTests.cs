@@ -116,6 +116,7 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
         await using var source = dataSourceBuilder.Build();
         var logger = new BenchmarkLogger<GpsPadraoRepository>();
         var repo = new GpsPadraoRepository(source, logger);
+        var candidate = new GpsMatchingGlobalSetBasedCandidate(source);
 
         _ = await repo.BuscarEnriquecimentoAsync("GPS23", -22.9, -43.2, 90, 100);
         // auto_explain registra no PostgreSQL descartavel o plano real do SQL privado
@@ -130,9 +131,57 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
             Assert.Equal(1, resultado.Metricas.MatchingBatchCommandsPostgres);
             Assert.All(resultado.Resultados,
                 x => Assert.Equal(StatusBuscaPadrao.Found, x.Global.Status));
+            var resultadoCandidate = await candidate.BuscarAsync(entradas, tamanho);
+            Assert.Equal(tamanho, resultadoCandidate.Resultados.Count);
+            Assert.All(resultadoCandidate.Resultados,
+                x => Assert.Equal(StatusBuscaPadrao.Found, x.Global.Status));
         }
         Assert.Equal(0, logger.ConnectionErrors);
         Assert.Equal(0, logger.Timeouts);
+    }
+
+    [Fact]
+    [Trait("Category", "BenchmarkSetBased")]
+    public async Task GlobalOldVersusSetBased_10_100_500_1000_E3000Manual()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("RUN_GPS_MATCHING_SETBASED"),
+                "true", StringComparison.OrdinalIgnoreCase)) return;
+
+        var oracle = new GpsPadraoRepository(_db.DataSource,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<GpsPadraoRepository>.Instance);
+        var candidate = new GpsMatchingGlobalSetBasedCandidate(_db.DataSource);
+        _ = await oracle.BuscarGlobaisEmLoteAsync(CreateBaselineInputs(100), 100);
+        _ = await candidate.BuscarAsync(CreateBaselineInputs(100), 100);
+        foreach (var size in new[] { 10, 100, 500, 1000, 3000 })
+        {
+            var inputs=CreateBaselineInputs(size);
+            var oldSamples=new List<double>(5);
+            var newSamples=new List<double>(5);
+            ResultadoMatchingLote<ResultadoMatchingGlobalLote>? oldResult=null;
+            ResultadoMatchingLote<ResultadoMatchingGlobalLote>? newResult=null;
+            for (var round=0; round<5; round++)
+            {
+                var started=Stopwatch.GetTimestamp();
+                oldResult=await oracle.BuscarGlobaisEmLoteAsync(inputs,100);
+                oldSamples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                started=Stopwatch.GetTimestamp();
+                newResult=await candidate.BuscarAsync(inputs,100);
+                newSamples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            }
+            oldSamples.Sort(); newSamples.Sort();
+            var oldMedian=oldSamples[2]; var newMedian=newSamples[2];
+            Console.WriteLine(JsonSerializer.Serialize(new { schemaVersion=1,size,
+                oldMedianMs=oldMedian,newMedianMs=newMedian,speedup=oldMedian/newMedian,
+                oldMillisecondsPerInput=oldMedian/size,newMillisecondsPerInput=newMedian/size,
+                oldCommands=oldResult!.Metricas.MatchingCommandsPostgres,
+                newCommands=newResult!.Metricas.MatchingCommandsPostgres,
+                oldSamplesMs=oldSamples,newSamplesMs=newSamples },JsonOptions));
+            Assert.Equal(size,oldResult.Resultados.Count);
+            Assert.Equal(size,newResult.Resultados.Count);
+            foreach (var pair in oldResult.Resultados.Zip(newResult.Resultados))
+                GpsMatchingDifferentialHarness.CompareSearch(pair.First.Global,pair.Second.Global,
+                    $"benchmark/{size}/{pair.First.InputId}");
+        }
     }
 
     [Fact]
