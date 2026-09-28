@@ -53,7 +53,7 @@ public sealed class ViagemObservadaRepositoryTests : IAsyncLifetime
         var state = Assert.IsType<ViagemObservadaState>(result.Estado);
         Assert.NotEqual(Guid.Empty, state.ViagemId);
         Assert.Equal(_ordem, state.OrdemVeiculo);
-        Assert.Equal(_r1, state.ItinerarioId);
+        Assert.Equal(_r1, state.PadraoVersaoId);
         Assert.Equal(_t0, state.TimestampObservacaoInicial);
         Assert.Equal(_t0, state.TimestampUltimaAtualizacao);
         Assert.Equal(p, state.PosicaoNaRotaConfirmada);
@@ -101,7 +101,7 @@ public sealed class ViagemObservadaRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ItinerarioDiferente_PreservaTodosOsCampos()
+    public async Task PadraoVersaoDiferente_PreservaTodosOsCampos()
     {
         var first = await Write(_t0);
         var before = await Snapshot();
@@ -195,8 +195,8 @@ public sealed class ViagemObservadaRepositoryTests : IAsyncLifetime
     [InlineData("ViagemId", "00000000000000000000000000000000")]
     [InlineData("OrdemVeiculo", null)]
     [InlineData("OrdemVeiculo", "OUTRO")]
-    [InlineData("ItinerarioId", null)]
-    [InlineData("ItinerarioId", "invalid")]
+    [InlineData("PadraoVersaoId", null)]
+    [InlineData("PadraoVersaoId", "invalid")]
     [InlineData("TimestampObservacaoInicial", null)]
     [InlineData("TimestampObservacaoInicial", "invalid")]
     [InlineData("TimestampUltimaAtualizacao", null)]
@@ -251,7 +251,7 @@ public sealed class ViagemObservadaRepositoryTests : IAsyncLifetime
         var service = new ViagemObservadaService(_repo, NullLogger<ViagemObservadaService>.Instance);
         Assert.Null(await service.AtualizarAsync(new PosicaoVeiculoDto
         {
-            Ordem = _ordem, ItinerarioId = noId ? null : _r1, PosicaoNaRota = noProgress ? null : .3,
+            Ordem = _ordem, PadraoVersaoId = noId ? null : _r1, PosicaoNaRota = noProgress ? null : .3,
             TimestampGps = _t0.AddSeconds(1),
         }, default));
         Assert.Equal(before, await Snapshot());

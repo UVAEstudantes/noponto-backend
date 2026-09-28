@@ -159,9 +159,13 @@ public static class ShadowPosicaoFactory
             || estado.Contexto.Modal != observacao.Modal
             || estado.Contexto.Provedor != observacao.Provedor
             || estado.Contexto.CodigoLinha != observacao.CodigoLinha
-            || estado.Contexto.ItinerarioId != observacao.ItinerarioId
+            || estado.Contexto.PadraoVersaoId != observacao.PadraoVersaoId
             || estado.Contexto.SentidoId != observacao.SentidoId
             || estado.Contexto.ViagemId != observacao.ViagemId
+            || estado.Contexto.PadraoVersaoId != observacao.PadraoVersaoId
+            || estado.Contexto.OcorrenciaParadaPadraoId != observacao.OcorrenciaParadaPadraoId
+            || estado.Contexto.LinhaId != observacao.LinhaId
+            || estado.Contexto.Volta != observacao.Volta
             || estado.Amostras.Count > opcoesCongeladas.MaxCausalSamples
             || !AmostrasValidas(estado.Amostras, observacao.TimestampGps)
             || (samplesBeforeCap is { } n && n < estado.Amostras.Count))

@@ -261,7 +261,7 @@ public sealed class EstadoCausalPosicaoTests
         Assert.Equal(0.25, origin.PosicaoB);
         Assert.Equal(10_000, origin.ComprimentoRotaMetros);
         Assert.Equal(posicao.Ordem, origin.CausalContext.Ordem);
-        Assert.Equal(Itinerario, origin.CausalContext.ItinerarioId);
+        Assert.Equal(Itinerario, origin.CausalContext.PadraoVersaoId);
         Assert.Equal(opcoes.PolicyVersion, origin.PolicyVersion);
         Assert.Equal(ShadowPosicaoContrato.PolicyFingerprint(opcoes), origin.PolicyFingerprint);
         Assert.Equal(efetivos[posicao.Ordem].Estado.Versao, origin.CausalStateVersion);
@@ -412,7 +412,7 @@ public sealed class EstadoCausalPosicaoTests
     private static PosicaoVeiculoDto Posicao() => new()
     {
         Ordem = "BRT-123", CodigoLinha = "10", ModalFonte = "BRT", ProvedorFonte = "MOBILIDADE",
-        TimestampGps = Base, TimestampServidor = Base, ItinerarioId = Itinerario,
+        TimestampGps = Base, TimestampServidor = Base, PadraoVersaoId = Itinerario,
         PosicaoNaRota = 0.25, ComprimentoRotaMetros = 10_000, Velocidade = 20, VelocidadeMedia = 20,
     };
 
@@ -494,7 +494,7 @@ public sealed class EstadoCausalPosicaoTests
     private sealed class ViagemRepositorySpy : IViagemObservadaRepository
     {
         public Task<ViagemObservadaResultado> TentarAtualizarAsync(
-            string ordem, Guid itinerarioId, DateTimeOffset timestampGps,
+            string ordem, Guid padraoVersaoId, DateTimeOffset timestampGps,
             double posicaoNaRota, CancellationToken ct) =>
             Task.FromResult(new ViagemObservadaResultado(ViagemObservadaStatus.Updated));
     }

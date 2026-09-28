@@ -82,6 +82,19 @@ services:
       PositionCorrection__Enabled: ${PositionCorrection__Enabled:-false}
       PositionCorrection__ShadowEnabled: ${PositionCorrection__ShadowEnabled:-false}
       PositionCorrection__ShadowSamplingPercent: ${PositionCorrection__ShadowSamplingPercent:-10}
+      EtaV2__Enabled: ${EtaV2__Enabled:-false}
+      EtaV2__ShadowEnabled: ${EtaV2__ShadowEnabled:-false}
+      EtaV2__CanaryPercent: ${EtaV2__CanaryPercent:-0}
+      EtaV2__SamplingSeconds: ${EtaV2__SamplingSeconds:-15}
+      EtaV2__MinSpeedKmh: ${EtaV2__MinSpeedKmh:-3}
+      EtaV2__PendingExpirationMinutes: ${EtaV2__PendingExpirationMinutes:-60}
+      EtaV2__QueueCapacity: ${EtaV2__QueueCapacity:-5000}
+      EtaV2__BatchSize: ${EtaV2__BatchSize:-250}
+      EtaV2__BatchMaxDelayMs: ${EtaV2__BatchMaxDelayMs:-500}
+      EtaV2__PersistenceRetryDelayMs: ${EtaV2__PersistenceRetryDelayMs:-1000}
+      EtaV2__ShutdownDrainSeconds: ${EtaV2__ShutdownDrainSeconds:-10}
+      EtaV2__ExpirationBatchSize: ${EtaV2__ExpirationBatchSize:-5000}
+      EtaV2__PendingCountIntervalMinutes: ${EtaV2__PendingCountIntervalMinutes:-5}
 
       ARCGIS__BRT__ESTACOES__BASE_URL: ${ARCGIS__BRT__ESTACOES__BASE_URL}
       ARCGIS__BRT__ESTACOES__PAGE_SIZE: ${ARCGIS__BRT__ESTACOES__PAGE_SIZE}
@@ -116,6 +129,10 @@ services:
       GpsPolling__MaxIdadeGpsSegundos: ${GpsPolling__MaxIdadeGpsSegundos}
       GpsPolling__VelocidadeMinimaBearingKmh: ${GpsPolling__VelocidadeMinimaBearingKmh}
       GpsPolling__MaxCiclosSemRota: ${GpsPolling__MaxCiclosSemRota}
+      GpsSources__BusPrimarySource: ${GpsSources__BusPrimarySource:-ZIRIX_DIRECT}
+      GpsSources__BrtPrimarySource: ${GpsSources__BrtPrimarySource:-BRT_CURRENT}
+      GpsSources__BusShadowSources__0: ${GpsSources__BusShadowSources__0:-DATARIO}
+      GpsSources__BrtShadowSources__0: ${GpsSources__BrtShadowSources__0:-DATARIO}
 
       GpsHistorico__Habilitado: ${GpsHistorico__Habilitado}
       GpsHistorico__DistanciaRegistroMetros: ${GpsHistorico__DistanciaRegistroMetros}

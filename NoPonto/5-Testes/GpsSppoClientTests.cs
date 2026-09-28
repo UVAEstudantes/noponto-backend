@@ -36,6 +36,18 @@ public sealed class GpsSppoClientTests
         Assert.Equal("SPPO_ZIRIX", posicao.ProvedorFonte);
     }
 
+    [Theory]
+    [InlineData("0", 0d)]
+    [InlineData("90", 90d)]
+    [InlineData("180", 180d)]
+    [InlineData("359.9", 359.9d)]
+    [InlineData("360", 0d)]
+    [InlineData("-1", null)]
+    [InlineData("360.1", null)]
+    [InlineData(null, null)]
+    public void BearingDaFonte_EhPreservadoSomenteQuandoValido(string? valor, double? esperado)
+        => Assert.Equal(esperado, GpsSppoClient.NormalizarBearing(valor));
+
     [Fact]
     public async Task JsonValido_200_Vazio_RetornaListaVazia()
     {

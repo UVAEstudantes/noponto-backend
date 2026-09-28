@@ -16,11 +16,16 @@ using NoPonto.Data.Configuration;
 using NoPonto.Data.Repositories;
 using StackExchange.Redis;
 using System.Net.Sockets;
-using NoPonto.Application.Trem;
 using NoPonto.Application.GTFS;
 using System.Reflection;
 
 Env.NoClobber().Load();
+
+if (StructuralImportCommand.IsRequested(args))
+{
+    Environment.ExitCode = await StructuralImportCommand.ExecuteAsync(args);
+    return;
+}
 
 static int GetOptionalPositiveInt(string? value, int defaultValue, string key)
 {
@@ -179,6 +184,29 @@ builder.Services.AddHttpClient<GpsBrtClient>(client =>
         System.Net.DecompressionMethods.Brotli
 });
 
+// Data.Rio agregada — cliente isolado de diagnóstico; não participa do polling operacional.
+builder.Services.AddHttpClient<GpsDatarioClient>(client =>
+{
+    client.BaseAddress = new Uri("https://its.mobilidade.rio/");
+    client.Timeout = TimeSpan.FromSeconds(gpsHttpTimeoutSeconds);
+});
+
+builder.Services
+    .AddOptions<GpsSourcesOptions>()
+    .Bind(builder.Configuration.GetSection(GpsSourcesOptions.Section))
+    .Validate(options => !string.IsNullOrWhiteSpace(options.BusPrimarySource),
+        "GpsSources:BusPrimarySource é obrigatório.")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.BrtPrimarySource),
+        "GpsSources:BrtPrimarySource é obrigatório.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<ZirixGpsSource>();
+builder.Services.AddSingleton<BrtCurrentGpsSource>();
+builder.Services.AddSingleton<DatarioGpsSource>();
+builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<ZirixGpsSource>());
+builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<BrtCurrentGpsSource>());
+builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<DatarioGpsSource>());
+builder.Services.AddSingleton<IGpsSourceResolver, GpsSourceResolver>();
+
 // ML ETA
 var mlBaseUrl =
     builder.Configuration["ML:ETA:BASE_URL"]
@@ -216,44 +244,26 @@ builder.Services.AddHttpClient("arcgis-trem", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddScoped<ImportacaoTremService>();
-
-builder.Services.AddScoped<ILinhaRepository, LinhaRepository>();
 builder.Services.AddScoped<ISentidoRepository, SentidoRepository>();
-builder.Services.AddScoped<IItinerarioRepository, ItinerarioRepository>();
-builder.Services.AddScoped<IParadaRepository, ParadaRepository>();
-builder.Services.AddScoped<IPoiRepository, PoiRepository>();
 builder.Services.AddScoped<IModalRepository, ModalRepository>();
 builder.Services.AddScoped<ITarifaRepository, TarifaRepository>();
 
-builder.Services.AddScoped<ILinhaService, LinhaService>();
-builder.Services.AddScoped<ISentidoService, SentidoService>();
-builder.Services.AddScoped<IItinerarioService, ItinerarioService>();
-builder.Services.AddScoped<IParadaService, ParadaService>();
-builder.Services.AddScoped<IPoiService, PoiService>();
 builder.Services.AddScoped<IModalService, ModalService>();
-builder.Services.AddScoped<ITarifaService, TarifaService>();
 
-builder.Services.AddHttpClient<ArcGisClientService>();
-builder.Services.AddScoped<ImportacaoParadasService>();
-builder.Services.AddScoped<RelacionarParadasItinerariosService>();
-builder.Services.AddScoped<RelacionarParadasJob>();
 builder.Services.AddSingleton<GtfsFeedParser>();
 builder.Services.AddSingleton<GtfsProjecaoService>();
+builder.Services.AddScoped<IGtfsDatarioPlanPersister, GtfsDatarioPlanPersister>();
+builder.Services.AddScoped<GtfsDatarioImportService>();
+builder.Services.AddScoped<GtfsDatarioPublicationService>();
 builder.Services.AddHttpClient<ArcGisSppoSnapshotClient>();
 builder.Services.AddScoped<ArcGisEstruturalV23Service>();
-builder.Services.AddScoped<GtfsParadaItinerarioDryRunService>();
-builder.Services.AddScoped<GtfsParadaItinerarioRebuildService>();
-builder.Services.AddSingleton<ImportacaoItinerariosService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ImportacaoItinerariosService>());
-
-builder.Services.AddHttpClient<OverpassClient>();
-builder.Services.AddScoped<PopularPoisService>();
-builder.Services.AddScoped<IPoiRepository, PoiRepository>();
+builder.Services.AddScoped<EstruturaFinalRebuildService>();
+builder.Services.AddScoped<ArcGisEstruturalRegularService>();
+builder.Services.AddSingleton<ArcGisParadasReconciliador>();
+builder.Services.AddScoped<ArcGisParadasPersistenciaService>();
 
 // BRT
 builder.Services.AddScoped<ImportacaoParadasBrtService>();
-builder.Services.AddScoped<RelacionarParadasBrtJob>();
 
 // ArcGIS trem
 builder.Services.AddHttpClient("arcgis-trem", client =>
@@ -264,18 +274,6 @@ builder.Services.AddHttpClient("arcgis-trem", client =>
         "User-Agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
 });
-
-var superviaBaseUrl = builder.Configuration["SUPERVIA:API:BASE_URL"]   ?? "";
-
-builder.Services.AddHttpClient<SuperviaApiClient>(client =>
-{
-    client.BaseAddress = new Uri(superviaBaseUrl);
-    client.Timeout     = TimeSpan.FromSeconds(10);
-    client.DefaultRequestHeaders.Add("User-Agent", "Dart/3.9 (dart:io)");
-});
-
-builder.Services.AddSingleton<TremTempoRealService>();
-builder.Services.AddHostedService<TremSimulacaoWorker>();
 
 // Docker socket
 builder.Services.AddHttpClient("docker", client =>
@@ -300,9 +298,6 @@ builder.Services.AddHttpClient("docker", client =>
             return new NetworkStream(socket, ownsSocket: true);
         }
     });
-
-builder.Services.AddHttpClient<ArcGisClientService>();
-builder.Services.AddHttpClient<OverpassClient>();
 
 // --------------------------------------------------------------------
 // OPTIONS
@@ -433,12 +428,27 @@ builder.Services.AddHostedService<EstadoCausalPosicaoMetricsReporter>();
 
 // GPS enriquecimento
 builder.Services.AddSingleton<
-    IGpsItinerarioRepository,
-    GpsItinerarioRepository>();
+    IGpsPadraoRepository,
+    GpsPadraoRepository>();
+
+builder.Services.AddSingleton<IGpsStructuralHintLookup, GpsStructuralHintLookup>();
+builder.Services.AddSingleton<IGpsStructuralHintResolver, GpsStructuralHintResolver>();
+builder.Services.AddSingleton<GpsStructuralHintMetrics>();
+builder.Services.AddHostedService<GpsStructuralHintMetricsReporter>();
 
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 
 builder.Services.Configure<ViagemOutboxOptions>(builder.Configuration.GetSection("ViagemOutbox"));
+builder.Services.AddOptions<EtaV2Options>().Bind(builder.Configuration.GetSection("EtaV2"))
+    .Validate(x => !x.Enabled || x.Valid(), "Configuração EtaV2 inválida.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<EtaV2Metrics>();
+builder.Services.AddSingleton<IEtaV2Repository, EtaV2Repository>();
+builder.Services.AddSingleton<EtaV2Channel>();
+builder.Services.AddSingleton<IEtaV2Ingress>(sp => sp.GetRequiredService<EtaV2Channel>());
+builder.Services.AddSingleton<EtaV2ShadowService>();
+builder.Services.AddHostedService<EtaV2BatchWorker>();
+builder.Services.AddHostedService<EtaV2MaintenanceWorker>();
 builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();
 builder.Services.AddSingleton(new HistoricoStreamOptions(redisConnection));
 builder.Services.AddHostedService<ViagemOutboxWorker>();
@@ -462,37 +472,11 @@ builder.Services.AddSingleton<GpsSppoSnapshotStore>();
 builder.Services.AddHostedService<GpsSppoCollectorService>();
 builder.Services.AddHostedService<GpsPollingService>();
 
-//builder.Services.AddScoped<ImportacaoTremService>();
-
-builder.Services.AddScoped<ILinhaRepository, LinhaRepository>();
 builder.Services.AddScoped<ISentidoRepository, SentidoRepository>();
-builder.Services.AddScoped<IItinerarioRepository, ItinerarioRepository>();
-builder.Services.AddScoped<IParadaRepository, ParadaRepository>();
-builder.Services.AddScoped<IPoiRepository, PoiRepository>();
 builder.Services.AddScoped<IModalRepository, ModalRepository>();
 builder.Services.AddScoped<ITarifaRepository, TarifaRepository>();
 
-builder.Services.AddScoped<ILinhaService, LinhaService>();
-builder.Services.AddScoped<ISentidoService, SentidoService>();
-builder.Services.AddScoped<IItinerarioService, ItinerarioService>();
-builder.Services.AddScoped<IParadaService, ParadaService>();
-builder.Services.AddScoped<IPoiService, PoiService>();
 builder.Services.AddScoped<IModalService, ModalService>();
-builder.Services.AddScoped<ITarifaService, TarifaService>();
-
-builder.Services.AddScoped<ImportacaoParadasService>();
-builder.Services.AddScoped<RelacionarParadasItinerariosService>();
-builder.Services.AddScoped<RelacionarParadasJob>();
-
-builder.Services.AddSingleton<ImportacaoItinerariosService>();
-
-builder.Services.AddHostedService(sp =>
-    sp.GetRequiredService<ImportacaoItinerariosService>());
-
-builder.Services.AddScoped<PopularPoisService>();
-
-builder.Services.AddSingleton<PopularPoisQueue>();
-builder.Services.AddHostedService<PopularPoisWorker>();
 
 // --------------------------------------------------------------------
 // BUILD

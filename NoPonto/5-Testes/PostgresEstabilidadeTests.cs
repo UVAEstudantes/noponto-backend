@@ -15,7 +15,7 @@ public sealed class PostgresEstabilidadeTests
 {
     private static PosicaoVeiculoDto[] Positions() => Enumerable.Range(0, 120)
         .Select(i => new PosicaoVeiculoDto { Ordem = "ESTABILIDADE_" + i,
-            ItinerarioId = Guid.NewGuid(), PosicaoNaRota = .4,
+            PadraoVersaoId = Guid.NewGuid(), PosicaoNaRota = .4,
             TimestampGps = DateTimeOffset.UtcNow }).ToArray();
 
     private sealed class Cache : IPosicaoVeiculoCacheRepository
@@ -107,7 +107,7 @@ public sealed class PostgresEstabilidadeTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AdicionarPostgresCompartilhado("Host=localhost;Database=teste;Username=teste;Password=teste");
-        services.AddSingleton<IGpsItinerarioRepository, GpsItinerarioRepository>();
+        services.AddSingleton<IGpsPadraoRepository, GpsPadraoRepository>();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var source = provider.GetRequiredService<NpgsqlDataSource>();
         using var scope1 = provider.CreateScope();
@@ -122,9 +122,9 @@ public sealed class PostgresEstabilidadeTests
             Assert.Same(source, extension.GetType().GetProperty("DataSource")!.GetValue(extension));
         }
         Assert.Same(source, scope2.ServiceProvider.GetRequiredService<NpgsqlDataSource>());
-        var repository = provider.GetRequiredService<IGpsItinerarioRepository>();
-        Assert.Same(repository, scope2.ServiceProvider.GetRequiredService<IGpsItinerarioRepository>());
-        Assert.Same(source, typeof(GpsItinerarioRepository).GetField("_dataSource",
+        var repository = provider.GetRequiredService<IGpsPadraoRepository>();
+        Assert.Same(repository, scope2.ServiceProvider.GetRequiredService<IGpsPadraoRepository>());
+        Assert.Same(source, typeof(GpsPadraoRepository).GetField("_dataSource",
             BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(repository));
     }
 }

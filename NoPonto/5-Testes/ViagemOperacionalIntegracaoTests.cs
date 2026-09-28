@@ -23,7 +23,7 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     private string Key=>ViagemObservadaRepository.ChaveVeiculoViagem(_ordem);
     private ViagemOperacionalRepository Repository()=>new(db.Redis,db.Source,Options.Create(new GpsPollingOptions()),NullLogger<ViagemOperacionalRepository>.Instance){StreamKey=_stream};
     private HistoricoPassagemWorker Worker(IHistoricoEventoRepository? repository=null)=>new(db.Redis,repository??new HistoricoEventoRepository(db.Source),NullLogger<HistoricoPassagemWorker>.Instance){StreamKey=_stream,DeadLetterKey=_stream+":dlq"};
-    private PosicaoVeiculoDto G(int seconds,double p=.1,bool novo=false)=>new(){Ordem=_ordem,CodigoLinha="VIAGEM3",ItinerarioId=novo?db.R2:db.R1,
+    private PosicaoVeiculoDto G(int seconds,double p=.1,bool novo=false)=>new(){Ordem=_ordem,CodigoLinha="VIAGEM3",PadraoVersaoId=novo?db.R2:db.R1,
         PosicaoNaRota=p,ComprimentoRotaMetros=2220,TimestampGps=_t.AddSeconds(seconds),Latitude=-22.9,
         Longitude=novo?-43.19-.02*p:-43.21+.02*p,Bearing=novo?270:90,Velocidade=20};
     public Task InitializeAsync()=>Task.CompletedTask;
@@ -60,7 +60,9 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         var context=scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
         var history=await context.HistoricoPassagens.Where(h=>h.Ordem==_ordem).OrderBy(h=>h.TimestampPassagem).ToArrayAsync();
         Assert.Equal(3,history.Length);
-        Assert.All(history,h=>{Assert.NotNull(h.ViagemId);Assert.NotNull(h.ParadaItinerarioId);Assert.NotNull(h.SentidoId);Assert.NotNull(h.TimestampPassagem);Assert.Null(h.DistanciaParadaMetros);});
+        Assert.All(history,h=>{Assert.NotNull(h.ViagemId);
+            Assert.Equal(db.R1,h.PadraoVersaoId);Assert.NotNull(h.OcorrenciaParadaPadraoId);Assert.Equal(0,h.Volta);
+            Assert.NotNull(h.SentidoId);Assert.NotNull(h.TimestampPassagem);Assert.Null(h.DistanciaParadaMetros);});
     }
 
     [Fact]
@@ -79,7 +81,7 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         await Repository().TentarAtualizarAsync(G(140,.1,true),default);
         Assert.NotNull((await State()).Candidato);
         await Repository().TentarAtualizarAsync(G(150,.2,true),default);
-        var second=await State();Assert.Equal(EstadoViagem.Ativa,second.Estado);Assert.NotEqual(old,second.Observada.ViagemId);Assert.Equal(db.R2,second.Observada.ItinerarioId);
+        var second=await State();Assert.Equal(EstadoViagem.Ativa,second.Estado);Assert.NotEqual(old,second.Observada.ViagemId);Assert.Equal(db.R2,second.Observada.PadraoVersaoId);
         Assert.Equal(6,await Redis.StreamLengthAsync(_stream));
     }
 
@@ -140,7 +142,7 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     {
         await Redis.HashSetAsync(Key,"EstadoViagem","Ativa");
         Assert.Equal(ViagemObservadaStatus.Created,(await Repository().TentarAtualizarAsync(G(0),default)).Status);
-        Assert.Equal(23,await Redis.HashLengthAsync(Key));Assert.True(await Redis.KeyExistsAsync(_stream));
+        Assert.Equal(29,await Redis.HashLengthAsync(Key));Assert.True(await Redis.KeyExistsAsync(_stream));
     }
 
     [Fact]
@@ -281,8 +283,8 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     public async Task Migration_LegadoNullable_ModeloSemDiferenca()
     {
         using var scope=db.Provider.CreateScope();var context=scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
-        var legacy=await context.HistoricoPassagens.SingleAsync(h=>h.Id==db.Legacy);
-        Assert.Null(legacy.ViagemId);Assert.Null(legacy.ParadaItinerarioId);Assert.Null(legacy.SentidoId);Assert.Null(legacy.TimestampPassagem);
+        var legacy=await context.HistoricoPassagens.SingleAsync(h=>h.Id==db.Historico);
+        Assert.Null(legacy.ViagemId);Assert.Null(legacy.OcorrenciaParadaPadraoId);Assert.Null(legacy.SentidoId);Assert.Null(legacy.TimestampPassagem);
         Assert.Equal(50,legacy.DistanciaParadaMetros);
         Assert.Contains("20260914180000_ViagemOperacionalOutbox",await context.Database.GetAppliedMigrationsAsync());
         Assert.False(context.Database.HasPendingModelChanges());
@@ -385,9 +387,9 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
             Assert.Equal(true,await semantic.ExecuteScalarAsync());
         }
         using var scope=db.Provider.CreateScope();var context=scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
-        HistoricoPassagem H(Guid ocorrencia)=>new(){Id=Guid.NewGuid(),Ordem=_ordem,CodigoLinha="VIAGEM3",ItinerarioId=db.R1,ParadaId=db.Stop,
-            ViagemId=e.ViagemId,ParadaItinerarioId=ocorrencia,SentidoId=db.S1,TimestampPassagem=e.TimestampPassagem,TimestampGps=G(100).TimestampGps,TimestampRegistro=DateTimeOffset.UtcNow};
-        context.HistoricoPassagens.Add(H(e.ParadaItinerarioId!.Value));
+        HistoricoPassagem H(Guid ocorrencia)=>new(){Id=Guid.NewGuid(),Ordem=_ordem,CodigoLinha="VIAGEM3",PadraoVersaoId=db.R1,ParadaId=db.Stop,
+            ViagemId=e.ViagemId,OcorrenciaParadaPadraoId=ocorrencia,Volta=e.Volta,SentidoId=db.S1,TimestampPassagem=e.TimestampPassagem,TimestampGps=G(100).TimestampGps,TimestampRegistro=DateTimeOffset.UtcNow};
+        context.HistoricoPassagens.Add(H(e.OcorrenciaParadaPadraoId!.Value));
         var duplicate=await Assert.ThrowsAsync<DbUpdateException>(()=>context.SaveChangesAsync());
         Assert.Equal("23505",Assert.IsType<PostgresException>(duplicate.InnerException).SqlState);
         context.ChangeTracker.Clear();context.HistoricoPassagens.Add(H(Guid.NewGuid()));
@@ -435,7 +437,7 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         await Repository().TentarAtualizarAsync(G(130,.1,true),default);Assert.NotNull((await State()).Candidato);
         await Repository().TentarAtualizarAsync(G(140,.68),default);
         var finalizada = await State();
-        Assert.NotNull(finalizada.Candidato);Assert.Equal(db.R1,finalizada.Candidato!.ItinerarioId);
+        Assert.NotNull(finalizada.Candidato);Assert.Equal(db.R1,finalizada.Candidato!.PadraoVersaoId);
         Assert.Equal(id,finalizada.Observada.ViagemId);Assert.Equal(EstadoViagem.Finalizada,finalizada.Estado);
         Assert.Equal(5,await Redis.StreamLengthAsync(_stream));
     }
@@ -443,37 +445,47 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     [Fact]
     public async Task AmbiguidadeEntreSentidos_Reais_PreservaPossivelFimSemCandidato()
     {
-        await Terminal();var sense=Guid.NewGuid();var route=Guid.NewGuid();
+        await Terminal();var sense=Guid.NewGuid();var route=Guid.NewGuid();var pattern=Guid.NewGuid();
         using var scope=db.Provider.CreateScope();var context=scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
         context.Sentidos.Add(new(){Id=sense,LinhaId=db.Linha,Nome="Não interpretar"});
-        var geometry=await context.Itinerarios.Where(i=>i.Id==db.R2).Select(i=>i.Geometria).SingleAsync();
-        context.Itinerarios.Add(new(){Id=route,SentidoId=sense,Geometria=geometry});await context.SaveChangesAsync();
+        var geometry=await context.PadroesVersoes.Where(i=>i.Id==db.R2).Select(i=>i.Geometria).SingleAsync();
+        context.PadroesOperacionais.Add(new(){Id=pattern,SentidoId=sense,Chave="AMBIGUO",TipoServico="TESTE"});
+        context.PadroesVersoes.Add(new(){Id=route,PadraoOperacionalId=pattern,Numero=1,Geometria=geometry,
+            ComprimentoMetros=2000,HashEstrutural="ambiguo",MetodoConstrucao="TESTE",AlgoritmoVersao="TESTE",
+            Confianca=1,ResultadoValidacao=ResultadosValidacaoPadrao.Valida,Relatorio="{}",CriadoEmUtc=DateTimeOffset.UtcNow});
+        await context.SaveChangesAsync();
+        await context.PadroesOperacionais.Where(x=>x.Id==pattern).ExecuteUpdateAsync(x=>x.SetProperty(p=>p.VersaoAtualId,route));
         try
         {
             await Repository().TentarAtualizarAsync(G(110,.1,true),default);
             Assert.Equal(EstadoViagem.PossivelFim,(await State()).Estado);Assert.Null((await State()).Candidato);
             Assert.Equal(4,await Redis.StreamLengthAsync(_stream));
         }
-        finally{await context.Itinerarios.Where(i=>i.Id==route).ExecuteDeleteAsync();await context.Sentidos.Where(s=>s.Id==sense).ExecuteDeleteAsync();}
+        finally{await context.PadroesOperacionais.Where(x=>x.Id==pattern).ExecuteUpdateAsync(x=>x.SetProperty(p=>p.VersaoAtualId,(Guid?)null));await context.PadroesVersoes.Where(i=>i.Id==route).ExecuteDeleteAsync();await context.PadroesOperacionais.Where(x=>x.Id==pattern).ExecuteDeleteAsync();await context.Sentidos.Where(s=>s.Id==sense).ExecuteDeleteAsync();}
     }
 
     [Fact]
     public async Task LinhaDiferenteEstrutural_PreservaPossivelFimSemCandidato()
     {
-        await Terminal();var line=Guid.NewGuid();var sense=Guid.NewGuid();var route=Guid.NewGuid();
+        await Terminal();var line=Guid.NewGuid();var sense=Guid.NewGuid();var route=Guid.NewGuid();var pattern=Guid.NewGuid();
         using var scope=db.Provider.CreateScope();var context=scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
         var modal=await context.Linhas.Where(l=>l.Id==db.Linha).Select(l=>l.ModalId).SingleAsync();
-        var geometry=await context.Itinerarios.Where(i=>i.Id==db.R2).Select(i=>i.Geometria).SingleAsync();
+        var geometry=await context.PadroesVersoes.Where(i=>i.Id==db.R2).Select(i=>i.Geometria).SingleAsync();
         context.Linhas.Add(new(){Id=line,ModalId=modal,Codigo="OUTRA3",Nome="Outra"});
-        context.Sentidos.Add(new(){Id=sense,LinhaId=line,Nome="Outra"});context.Itinerarios.Add(new(){Id=route,SentidoId=sense,Geometria=geometry});
+        context.Sentidos.Add(new(){Id=sense,LinhaId=line,Nome="Outra"});
+        context.PadroesOperacionais.Add(new(){Id=pattern,SentidoId=sense,Chave="OUTRA",TipoServico="TESTE"});
+        context.PadroesVersoes.Add(new(){Id=route,PadraoOperacionalId=pattern,Numero=1,Geometria=geometry,
+            ComprimentoMetros=2000,HashEstrutural="outra",MetodoConstrucao="TESTE",AlgoritmoVersao="TESTE",
+            Confianca=1,ResultadoValidacao=ResultadosValidacaoPadrao.Valida,Relatorio="{}",CriadoEmUtc=DateTimeOffset.UtcNow});
         await context.SaveChangesAsync();
+        await context.PadroesOperacionais.Where(x=>x.Id==pattern).ExecuteUpdateAsync(x=>x.SetProperty(p=>p.VersaoAtualId,route));
         try
         {
-            await Repository().TentarAtualizarAsync(G(110,.1,true) with{CodigoLinha="OUTRA3",ItinerarioId=route},default);
+            await Repository().TentarAtualizarAsync(G(110,.1,true) with{CodigoLinha="OUTRA3",PadraoVersaoId=route},default);
             Assert.Equal(EstadoViagem.PossivelFim,(await State()).Estado);Assert.Null((await State()).Candidato);
             Assert.Equal(db.Linha,(await State()).LinhaId);Assert.Equal(4,await Redis.StreamLengthAsync(_stream));
         }
-        finally{await context.Itinerarios.Where(i=>i.Id==route).ExecuteDeleteAsync();await context.Sentidos.Where(s=>s.Id==sense).ExecuteDeleteAsync();await context.Linhas.Where(l=>l.Id==line).ExecuteDeleteAsync();}
+        finally{await context.PadroesOperacionais.Where(x=>x.Id==pattern).ExecuteUpdateAsync(x=>x.SetProperty(p=>p.VersaoAtualId,(Guid?)null));await context.PadroesVersoes.Where(i=>i.Id==route).ExecuteDeleteAsync();await context.PadroesOperacionais.Where(x=>x.Id==pattern).ExecuteDeleteAsync();await context.Sentidos.Where(s=>s.Id==sense).ExecuteDeleteAsync();await context.Linhas.Where(l=>l.Id==line).ExecuteDeleteAsync();}
     }
 
     [Theory]
@@ -630,18 +642,18 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
 
         Assert.Equal(ViagemObservadaStatus.Updated,resultado.Status);
         var estado=await State();
-        Assert.Equal(db.R1,estado.Observada.ItinerarioId);
+        Assert.Equal(db.R1,estado.Observada.PadraoVersaoId);
         Assert.Equal("VIAGEM3",estado.CodigoLinha);
         Assert.Equal(db.S1,estado.SentidoId);
         Assert.Equal(.21,estado.Observada.PosicaoNaRotaConfirmada);
         var passagem=Assert.Single(resultado.OcorrenciasUltrapassadas);
         Assert.Equal(db.Occurrences[0],passagem.Id);
-        Assert.Equal(db.R1,passagem.ItinerarioId);
+        Assert.Equal(db.R1,passagem.PadraoVersaoId);
         Assert.Equal(2,await Redis.StreamLengthAsync(_stream));
         var eventos=(await Redis.StreamRangeAsync(_stream))
             .Select(x=>EventoViagemValidator.Parse(x.Values.ToDictionary(
                 v=>v.Name.ToString(),v=>v.Value.ToString()))).ToArray();
-        Assert.DoesNotContain(eventos,e=>e.ItinerarioId==db.R2);
+        Assert.DoesNotContain(eventos,e=>e.PadraoVersaoId==db.R2);
 
         var retorno=await repository.TentarAtualizarAsync(G(20,.21),
             Assert.IsType<ContextoOperacional>(await repository.LerContextoAsync(_ordem,default)),
@@ -649,6 +661,60 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         Assert.Equal(ViagemObservadaStatus.Updated,retorno.Status);
         Assert.Empty(retorno.OcorrenciasUltrapassadas);
         Assert.Equal(2,await Redis.StreamLengthAsync(_stream));
+    }
+
+    [Fact]
+    public async Task MudancaDoPointerPublicado_NaoMigraViagemAtiva()
+    {
+        var repository = Repository();
+        Assert.Equal(ViagemObservadaStatus.Created,
+            (await repository.TentarAtualizarAsync(G(0, .19), default)).Status);
+        var novaVersao = Guid.NewGuid();
+        using var scope = db.Provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
+        var padrao = await context.PadroesOperacionais.SingleAsync(x => x.Id == db.P1);
+        context.PadroesVersoes.Add(new PadraoVersao
+        {
+            Id = novaVersao,
+            PadraoOperacionalId = db.P1,
+            Numero = 2,
+            Geometria = new NetTopologySuite.Geometries.LineString(
+                [new(-43.21, -22.9), new(-43.19, -22.9)]) { SRID = 4326 },
+            ComprimentoMetros = 2000,
+            HashEstrutural = "r1-v2",
+            MetodoConstrucao = "TESTE",
+            AlgoritmoVersao = "TESTE",
+            Confianca = 1,
+            ResultadoValidacao = ResultadosValidacaoPadrao.Valida,
+            Relatorio = "{}",
+            CriadoEmUtc = DateTimeOffset.UtcNow,
+            PublicadoEmUtc = DateTimeOffset.UtcNow,
+        });
+        padrao.VersaoAtualId = novaVersao;
+        await context.SaveChangesAsync();
+        try
+        {
+            var contexto = Assert.IsType<ContextoOperacional>(
+                await repository.LerContextoAsync(_ordem, default));
+            var observacaoNova = G(10, .21) with
+            {
+                PadraoOperacionalId = db.P1,
+                PadraoVersaoId = novaVersao,
+            };
+
+            var resultado = await repository.TentarAtualizarAsync(observacaoNova, contexto,
+                ResultadoProjecaoOperacional.Encontrada(new(db.R1, .21, 2, 2220)), default);
+
+            Assert.Equal(ViagemObservadaStatus.Updated, resultado.Status);
+            Assert.Equal(db.R1, (await State()).Observada.PadraoVersaoId);
+        }
+        finally
+        {
+            padrao.VersaoAtualId = db.R1;
+            await context.SaveChangesAsync();
+            context.PadroesVersoes.Remove(await context.PadroesVersoes.SingleAsync(x => x.Id == novaVersao));
+            await context.SaveChangesAsync();
+        }
     }
 
     [Fact]
@@ -680,7 +746,7 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         var final=await State();
         Assert.Equal(ViagemObservadaStatus.Updated,segunda.Status);
         Assert.Equal(EstadoViagem.Finalizada,final.Estado);
-        Assert.Equal(db.R1,final.Observada.ItinerarioId);
+        Assert.Equal(db.R1,final.Observada.PadraoVersaoId);
         Assert.Equal(db.S1,final.SentidoId);
     }
 

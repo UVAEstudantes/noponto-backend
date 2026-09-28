@@ -272,6 +272,7 @@ public sealed class GpsSppoClient
             Latitude          = lat,
             Longitude         = lon,
             Velocidade        = velocidade,
+            Bearing           = NormalizarBearing(dto.Direcao),
             TimestampGps      = timestampGps,
             TimestampServidor = timestampServidor,
             TimestampEnvioFonte = dto.DataHoraEnvio,
@@ -302,5 +303,13 @@ public sealed class GpsSppoClient
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out resultado);
+    }
+
+    internal static double? NormalizarBearing(string? valor)
+    {
+        if (!TryParseDouble(valor, out var bearing) || !double.IsFinite(bearing)
+            || bearing < 0 || bearing > 360)
+            return null;
+        return bearing == 360 ? 0 : bearing;
     }
 }

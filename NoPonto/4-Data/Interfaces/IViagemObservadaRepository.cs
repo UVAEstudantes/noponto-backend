@@ -11,10 +11,10 @@ public interface IViagemObservadaRepository
         TentarAtualizarAsync(posicao, ct);
 
     Task<ViagemObservadaResultado> TentarAtualizarAsync(PosicaoVeiculoDto posicao, CancellationToken ct) =>
-        TentarAtualizarAsync(posicao.Ordem, posicao.ItinerarioId!.Value,
+        TentarAtualizarAsync(posicao.Ordem, posicao.PadraoVersaoId!.Value,
             posicao.TimestampGps, posicao.PosicaoNaRota!.Value, ct);
     /// <summary>Chamado somente para posições cujo commit GPS foi confirmado como Accepted.</summary>
     Task<ViagemObservadaResultado> TentarAtualizarAsync(
-        string ordem, Guid itinerarioId, DateTimeOffset timestampGps,
+        string ordem, Guid padraoVersaoId, DateTimeOffset timestampGps,
         double posicaoNaRota, CancellationToken ct);
 }

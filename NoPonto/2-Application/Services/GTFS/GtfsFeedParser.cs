@@ -11,17 +11,42 @@ public sealed class GtfsFeedParser
     public GtfsFeed Parse(Stream zipStream)
     {
         using var zip = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: true);
-        var routes = Read(zip, "routes.txt").Select(x => new GtfsRoute(Required(x,"route_id"), Required(x,"route_short_name"))).ToArray();
-        var trips = Read(zip, "trips.txt").Select(x => new GtfsTrip(Required(x,"route_id"), x.GetValueOrDefault("service_id") ?? "", Required(x,"trip_id"), Required(x,"direction_id"), Required(x,"shape_id"))).ToArray();
+        var routes = Read(zip, "routes.txt").Select(x => new GtfsRoute(Required(x,"route_id"), Required(x,"route_short_name"))
+        { AgencyId = Value(x,"agency_id"), RouteLongName = Value(x,"route_long_name"), RouteType = Value(x,"route_type") }).ToArray();
+        var trips = Read(zip, "trips.txt").Select(x => new GtfsTrip(Required(x,"route_id"), Value(x,"service_id"), Required(x,"trip_id"), Required(x,"direction_id"), Required(x,"shape_id"))
+        { TripHeadsign = Value(x,"trip_headsign") }).ToArray();
         var stopTimes = Read(zip, "stop_times.txt").Select(x => new GtfsStopTime(Required(x,"trip_id"), Required(x,"stop_id"), Int(Required(x,"stop_sequence")), Double(x.GetValueOrDefault("shape_dist_traveled")))).ToArray();
         var shapes = Read(zip, "shapes.txt").Select(x => new GtfsShapePoint(Required(x,"shape_id"), Int(Required(x,"shape_pt_sequence")), Num(Required(x,"shape_pt_lat")), Num(Required(x,"shape_pt_lon")), Double(x.GetValueOrDefault("shape_dist_traveled")))).ToArray();
         var stops = Read(zip, "stops.txt").Select(x => new GtfsStop(Required(x,"stop_id"), Required(x,"stop_name"),
-            Num(Required(x,"stop_lat")), Num(Required(x,"stop_lon")))).ToArray();
+            Num(Required(x,"stop_lat")), Num(Required(x,"stop_lon")))
+        { StopCode = Value(x,"stop_code"), LocationType = Value(x,"location_type"),
+            ParentStation = Value(x,"parent_station"), PlatformCode = Value(x,"platform_code") }).ToArray();
         if (stops.Any(x => !double.IsFinite(x.Latitude) || !double.IsFinite(x.Longitude)
             || x.Latitude is < -90 or > 90 || x.Longitude is < -180 or > 180))
             throw new InvalidDataException("Coordenada inválida em stops.txt.");
         if (stops.GroupBy(x => x.StopId, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1))
             throw new InvalidDataException("stop_id duplicado em stops.txt.");
+        if (routes.GroupBy(x => x.RouteId, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1)
+            || routes.GroupBy(x => x.RouteShortName, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1))
+            throw new InvalidDataException("Identidade de rota duplicada ou código comercial ambíguo.");
+        if (trips.GroupBy(x => x.TripId, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1))
+            throw new InvalidDataException("trip_id duplicado em trips.txt.");
+        var routeIds = routes.Select(x => x.RouteId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var tripIds = trips.Select(x => x.TripId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var stopIds = stops.Select(x => x.StopId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var shapeIds = shapes.Select(x => x.ShapeId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (trips.Any(x => !routeIds.Contains(x.RouteId))) throw new InvalidDataException("Trip referencia rota inexistente.");
+        if (stopTimes.Any(x => !tripIds.Contains(x.TripId))) throw new InvalidDataException("Stop-time referencia trip inexistente.");
+        if (stopTimes.Any(x => !stopIds.Contains(x.StopId))) throw new InvalidDataException("Stop-time referencia stop inexistente.");
+        if (trips.Any(x => !shapeIds.Contains(x.ShapeId))) throw new InvalidDataException("Trip referencia shape inexistente.");
+        foreach (var group in stopTimes.GroupBy(x => x.TripId, StringComparer.OrdinalIgnoreCase))
+        {
+            var ordered = group.OrderBy(x => x.StopSequence).ToArray();
+            if (ordered.Select(x => x.StopSequence).Distinct().Count() != ordered.Length)
+                throw new InvalidDataException($"stop_sequence duplicada no trip {group.Key}.");
+            if (!NaoDecrescente(ordered.Where(x => x.ShapeDistTraveledMetros.HasValue).Select(x => x.ShapeDistTraveledMetros!.Value)))
+                throw new InvalidDataException($"shape_dist_traveled regressiva no trip {group.Key}.");
+        }
         return new(routes, trips, stopTimes, shapes, stops, BuildPatterns(routes, trips, stopTimes, shapes));
     }
 
@@ -89,6 +114,8 @@ public sealed class GtfsFeedParser
 
     private static string Required(IReadOnlyDictionary<string, string> row, string key) =>
         row.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value.Trim() : throw new InvalidDataException($"Campo obrigatório ausente: {key}.");
+    private static string Value(IReadOnlyDictionary<string, string> row, string key) =>
+        row.TryGetValue(key, out var value) ? value.Trim() : "";
     private static int Int(string value) => int.Parse(value, NumberStyles.Integer, CultureInfo.InvariantCulture);
     private static double Num(string value) => double.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture);
     private static double? Double(string? value) => string.IsNullOrWhiteSpace(value) ? null : Num(value);

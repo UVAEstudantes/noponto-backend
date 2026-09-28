@@ -16,16 +16,16 @@ public sealed class VeiculosController : ControllerBase
     };
 
     private readonly IDistributedCache _cache;
-    private readonly IGpsItinerarioRepository _gpsItinerarioRepo;
+    private readonly IGpsPadraoRepository _gpsPadraoRepo;
     private readonly TransporteDbContext _db;
 
     public VeiculosController(
         IDistributedCache cache,
-        IGpsItinerarioRepository gpsItinerarioRepo,
+        IGpsPadraoRepository gpsPadraoRepo,
         TransporteDbContext db)
     {
         _cache             = cache;
-        _gpsItinerarioRepo = gpsItinerarioRepo;
+        _gpsPadraoRepo = gpsPadraoRepo;
         _db                = db;
     }
 
@@ -110,19 +110,19 @@ public sealed class VeiculosController : ControllerBase
     }
 
     /// <summary>
-    /// Retorna a geometria GeoJSON de um itinerário para dead-reckoning no frontend.
+    /// Retorna a geometria GeoJSON de uma versão estrutural para dead-reckoning no frontend.
     /// </summary>
-    [HttpGet("itinerario/{itinerarioId:guid}/geometria")]
-    public async Task<IActionResult> GetGeometriaItinerario(Guid itinerarioId, CancellationToken ct)
+    [HttpGet("padrao-versao/{padraoVersaoId:guid}/geometria")]
+    public async Task<IActionResult> GetGeometriaPadraoVersao(Guid padraoVersaoId, CancellationToken ct)
     {
-        var geoJson = await _gpsItinerarioRepo.BuscarGeometriaGeoJsonAsync(itinerarioId, ct);
+        var geoJson = await _gpsPadraoRepo.BuscarGeometriaGeoJsonAsync(padraoVersaoId, ct);
 
         if (geoJson is null)
-            return NotFound(new { mensagem = $"Itinerário {itinerarioId} não encontrado." });
+            return NotFound(new { mensagem = $"Versão estrutural {padraoVersaoId} não encontrada." });
 
         var geoJsonObj = JsonSerializer.Deserialize<object>(geoJson, JsonOptions);
 
-        return Ok(new { itinerarioId, geoJson = geoJsonObj });
+        return Ok(new { padraoVersaoId, geoJson = geoJsonObj });
     }
 
     /// <summary>

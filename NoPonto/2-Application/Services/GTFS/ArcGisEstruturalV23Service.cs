@@ -228,8 +228,7 @@ public sealed class ArcGisEstruturalV23Service(
                 var gtfsVersion = await db.PadroesVersoes.AsNoTracking().Where(x =>
                         x.PadraoOperacionalId == pattern.Id && x.AlgoritmoVersao == GtfsEstruturalV22Service.AlgoritmoVersao)
                     .OrderByDescending(x => x.Numero).FirstAsync(ct);
-                var gtfsProjection = projector.Projetar(source,
-                    new Itinerario { Id = Guid.Empty, SentidoId = direction.Id, Geometria = gtfsVersion.Geometria }, stops);
+                var gtfsProjection = projector.Projetar(source, gtfsVersion.Geometria, stops);
                 var gtfsP95 = Percentile(gtfsProjection.Ocorrencias.Select(x => x.DistanciaMetros), .95);
                 var classification = selected.P95 + 1 < gtfsP95 ? "ARCGIS_PREFERIDA"
                     : gtfsP95 + 1 < selected.P95 ? "GTFS_PREFERIDA" : "EQUIVALENTES";
@@ -255,6 +254,11 @@ public sealed class ArcGisEstruturalV23Service(
                 var version = new PadraoVersao { Id = Guid.NewGuid(), PadraoOperacionalId = pattern.Id,
                     Numero = number, Geometria = selected.Feature.Geometria,
                     DistanciaMetros = selected.Feature.ShapeLength, MetodoConstrucao = "GTFS_ARCGIS_MULTIFONTE",
+                    Topologia = selected.Feature.Geometria.IsClosed ? TopologiasPadrao.Circular : TopologiasPadrao.Linear,
+                    HashEstrutural = EstruturaHash.Calcular(selected.Feature.Geometria,
+                        selected.Feature.Geometria.IsClosed ? TopologiasPadrao.Circular : TopologiasPadrao.Linear,
+                        selected.Occurrences.Select(x => new EstruturaHashOccurrence(x.ParadaCodigo,
+                            x.Ordem, x.PosicaoLinha, x.PosicaoLinha * selected.Feature.ShapeLength, x.DistanciaMetros))),
                     Confianca = 1, AlgoritmoVersao = AlgoritmoVersao,
                     ResultadoValidacao = ResultadosValidacaoPadrao.Valida, CriadaEmUtc = DateTimeOffset.UtcNow,
                     Relatorio = JsonSerializer.Serialize(new { source.RouteId, source.DirectionId,
@@ -268,7 +272,9 @@ public sealed class ArcGisEstruturalV23Service(
                     db.OcorrenciasParadasPadroes.Add(new() { Id = Guid.NewGuid(), PadraoVersaoId = version.Id,
                         ParadaId = occurrence.ParadaId, Ordem = occurrence.Ordem,
                         SourceSequence = occurrence.SourceStopSequence, PosicaoTracado = occurrence.PosicaoLinha,
-                        DistanciaAcumuladaMetros = occurrence.SourceShapeDistTraveledMetros });
+                        DistanciaAcumuladaMetros = occurrence.PosicaoLinha * version.ComprimentoMetros,
+                        DistanciaDaLinhaMetros = occurrence.DistanciaMetros,
+                        SourceShapeDistTraveledMetros = occurrence.SourceShapeDistTraveledMetros });
                 db.PadroesVersoesImportacoes.AddRange(
                     new() { PadraoVersaoId = version.Id, ImportacaoEstruturalId = gtfsImport.Id, Papel = PapeisImportacaoPadrao.Membership },
                     new() { PadraoVersaoId = version.Id, ImportacaoEstruturalId = gtfsImport.Id, Papel = PapeisImportacaoPadrao.Paradas },
@@ -317,8 +323,7 @@ public sealed class ArcGisEstruturalV23Service(
     {
         var valid = candidates.Select(feature =>
         {
-            var projection = projector.Projetar(source,
-                new Itinerario { Id = Guid.Empty, SentidoId = directionId, Geometria = feature.Geometria }, stops);
+            var projection = projector.Projetar(source, feature.Geometria, stops);
             return projection.Motivos.Count == 0
                 ? new ArcGisCandidateSelection(feature, projection.Ocorrencias,
                     Percentile(projection.Ocorrencias.Select(x => x.DistanciaMetros), .95),

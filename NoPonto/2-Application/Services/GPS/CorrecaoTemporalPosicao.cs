@@ -46,7 +46,7 @@ public enum MotivoDescontinuidadeCausal
     ComprimentoInvalido,
     IdentidadeDiferente,
     LinhaDiferente,
-    ItinerarioDiferente,
+    PadraoVersaoDiferente,
     SentidoDiferente,
     ViagemDiferente,
     ComprimentoIncompativel,
@@ -62,7 +62,7 @@ public sealed record ObservacaoPosicaoTemporal(
     string Modal,
     string Provedor,
     string CodigoLinha,
-    Guid ItinerarioId,
+    Guid PadraoVersaoId,
     Guid? SentidoId,
     Guid? ViagemId,
     DateTimeOffset TimestampGps,
@@ -70,16 +70,22 @@ public sealed record ObservacaoPosicaoTemporal(
     double ComprimentoRotaMetros,
     double? VelocidadeInstantaneaKmh,
     double? VelocidadeMediaLegacyKmh,
-    string OrigemPosicao = TelemetriaMlContrato.OrigemReal);
+    string OrigemPosicao = TelemetriaMlContrato.OrigemReal,
+    Guid? OcorrenciaParadaPadraoId = null,
+    Guid? LinhaId = null,
+    int? Volta = null);
 
 public sealed record ContextoCausalPosicao(
     string Ordem,
     string Modal,
     string Provedor,
     string CodigoLinha,
-    Guid ItinerarioId,
+    Guid PadraoVersaoId,
     Guid? SentidoId,
-    Guid? ViagemId);
+    Guid? ViagemId,
+    Guid? OcorrenciaParadaPadraoId = null,
+    Guid? LinhaId = null,
+    int? Volta = null);
 
 public sealed record AmostraCausalPosicao(DateTimeOffset TimestampGps, double VelocidadeKmh);
 

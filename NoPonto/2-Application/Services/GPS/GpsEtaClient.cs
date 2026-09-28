@@ -87,6 +87,10 @@ public sealed class GpsEtaClient
                         distancia_metros = v.DistanciaProximaParadaMetros!.Value,
                         velocidade_media = v.VelocidadeMedia ?? 0,
                         posicao_na_rota  = v.PosicaoNaRota!.Value,
+                        padrao_versao_id = v.PadraoVersaoId,
+                        ocorrencia_parada_padrao_id = v.ProximaOcorrenciaParadaPadraoId,
+                        sentido_id = v.SentidoId,
+                        linha_id = v.LinhaId,
                     }).ToList();
 
                     var resposta = await _http.PostAsJsonAsync("/eta/batch", payloadChunk, ct);

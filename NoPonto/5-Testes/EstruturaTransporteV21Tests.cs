@@ -214,7 +214,8 @@ public sealed class EstruturaTransporteV21Tests(EstruturaTransporteV21Fixture fi
     {
         Id = Guid.NewGuid(), PadraoOperacionalId = padrao, Numero = numero,
         Geometria = new LineString([new(-43.2, -22.9), new(-43.1, -22.8)]) { SRID = 4326 },
-        DistanciaMetros = 1000, MetodoConstrucao = "GTFS_AUTORITATIVO", Confianca = 1,
+        DistanciaMetros = 1000, Topologia = TopologiasPadrao.Linear,
+        HashEstrutural = Guid.NewGuid().ToString("N").PadRight(64, '0'), MetodoConstrucao = "GTFS_AUTORITATIVO", Confianca = 1,
         AlgoritmoVersao = "v1", ResultadoValidacao = ResultadosValidacaoPadrao.Valida,
         Relatorio = "{}", CriadaEmUtc = DateTimeOffset.UtcNow
     };

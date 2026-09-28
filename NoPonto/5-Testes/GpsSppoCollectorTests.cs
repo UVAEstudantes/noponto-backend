@@ -220,9 +220,12 @@ public sealed class GpsSppoCollectorTests
             Timeout = Timeout.InfiniteTimeSpan,
         };
         var cliente = new GpsSppoClient(http, NullLogger<GpsSppoClient>.Instance);
+        var resolver = new GpsSourceResolver(
+            [new ZirixGpsSource(cliente)],
+            Options.Create(new GpsSourcesOptions()));
         snapshot = new GpsSppoSnapshotStore();
         return new GpsSppoCollectorService(
-            cliente,
+            resolver,
             snapshot,
             new Monitor(opcoes ?? new GpsSppoCollectorOptions()),
             NullLogger<GpsSppoCollectorService>.Instance);

@@ -38,6 +38,16 @@ public sealed class PositionCorrectionShadowPostgresTests
                 await history.ExecuteNonQueryAsync();
             await using (var command = source.CreateCommand(script))
                 await command.ExecuteNonQueryAsync();
+            // A migration estrutural da Etapa 1/2 adiciona estes campos no banco completo.
+            // Esta fixture aplica deliberadamente apenas a migration Shadow original.
+            await using (var v2 = source.CreateCommand("""
+                ALTER TABLE "PositionCorrectionShadowOrigins"
+                    DROP COLUMN "ItinerarioId",
+                    ADD COLUMN "PadraoVersaoId" uuid NOT NULL,
+                    ADD COLUMN "OcorrenciaParadaPadraoId" uuid NULL,
+                    ADD COLUMN "Volta" integer NULL
+                """))
+                await v2.ExecuteNonQueryAsync();
 
             await using (var verify = source.CreateCommand("""
                 SELECT count(*) FROM information_schema.columns

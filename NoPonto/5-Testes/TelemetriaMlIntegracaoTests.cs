@@ -37,7 +37,7 @@ public sealed class TelemetriaMlIntegracaoTests(ViagemOperacionalFixture fixture
             OrdemVeiculo = ordem, CodigoLinha = "VIAGEM3", LatitudeRecebida = -22.9,
             LongitudeRecebida = -43.2, VelocidadeInstantanea = 20, TimestampGps = gps,
             RecebidoEmUtc = gps.AddSeconds(3), EventoCriadoEmUtc = gps.AddSeconds(4),
-            ItinerarioId = fixtureStaticR1, PosicaoNaRota = .2,
+            PadraoVersaoId = fixtureStaticR1, PosicaoNaRota = .2,
         };
     }
 
@@ -63,7 +63,7 @@ public sealed class TelemetriaMlIntegracaoTests(ViagemOperacionalFixture fixture
     public async Task Repository_ReprocessamentoEhIdempotente()
     {
         var evento = Evento("ML-PG-" + Guid.NewGuid().ToString("N")) with
-        { ItinerarioId = fixture.R1, ViagemId = Guid.NewGuid() };
+        { PadraoVersaoId = fixture.R1, ViagemId = Guid.NewGuid() };
         var repository = new TelemetriaMlRepository(fixture.Source);
 
         var primeira = await repository.PersistirLoteAsync([evento], default);
@@ -81,9 +81,9 @@ public sealed class TelemetriaMlIntegracaoTests(ViagemOperacionalFixture fixture
     {
         var eventos = new[]
         {
-            Evento("ML-CONCORRENTE-X-" + Guid.NewGuid().ToString("N")) with { ItinerarioId = fixture.R1 },
-            Evento("ML-CONCORRENTE-Y-" + Guid.NewGuid().ToString("N")) with { ItinerarioId = fixture.R1 },
-            Evento("ML-CONCORRENTE-Z-" + Guid.NewGuid().ToString("N")) with { ItinerarioId = fixture.R1 },
+            Evento("ML-CONCORRENTE-X-" + Guid.NewGuid().ToString("N")) with { PadraoVersaoId = fixture.R1 },
+            Evento("ML-CONCORRENTE-Y-" + Guid.NewGuid().ToString("N")) with { PadraoVersaoId = fixture.R1 },
+            Evento("ML-CONCORRENTE-Z-" + Guid.NewGuid().ToString("N")) with { PadraoVersaoId = fixture.R1 },
         }.OrderBy(e => e.ObservacaoId, StringComparer.Ordinal).ToArray();
         var repository = new TelemetriaMlRepository(fixture.Source);
 

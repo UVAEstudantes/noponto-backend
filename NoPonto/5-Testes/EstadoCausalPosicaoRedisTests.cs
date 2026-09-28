@@ -311,7 +311,7 @@ public sealed class EstadoCausalPosicaoRedisTests : IAsyncLifetime
         Ordem = ordem, CodigoLinha = "10", ModalFonte = "BRT", ProvedorFonte = "MOBILIDADE",
         TimestampGps = timestamp, TimestampServidor = timestamp,
         Latitude = -22.9, Longitude = -43.2, Velocidade = 20, VelocidadeMedia = 20,
-        ItinerarioId = Itinerario, PosicaoNaRota = posicao, ComprimentoRotaMetros = 10_000,
+        PadraoVersaoId = Itinerario, PosicaoNaRota = posicao, ComprimentoRotaMetros = 10_000,
     };
 
     private sealed class Monitor(CorrecaoTemporalPosicaoOptions value)

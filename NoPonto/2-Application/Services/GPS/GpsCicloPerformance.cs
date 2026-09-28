@@ -22,8 +22,8 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     private int _matchingGlobais;
     private int _matchingDirecionados;
     private int _matchingGlobalSemHistorico;
-    private int _matchingGlobalMesmoItinerario;
-    private int _matchingGlobalItinerarioDiferente;
+    private int _matchingGlobalMesmoPadrao;
+    private int _matchingGlobalPadraoVersaoDiferente;
     private int _matchingDirecionadoTroca;
     private int _matchingDirecionadoContinuidadeFaixa;
     private int _matchingDirecionadoComFaixa;
@@ -193,8 +193,8 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     public int MatchingGlobais => Volatile.Read(ref _matchingGlobais);
     public int MatchingDirecionados => Volatile.Read(ref _matchingDirecionados);
     public int MatchingGlobalSemHistorico => Volatile.Read(ref _matchingGlobalSemHistorico);
-    public int MatchingGlobalMesmoItinerario => Volatile.Read(ref _matchingGlobalMesmoItinerario);
-    public int MatchingGlobalItinerarioDiferente => Volatile.Read(ref _matchingGlobalItinerarioDiferente);
+    public int MatchingGlobalMesmoPadrao => Volatile.Read(ref _matchingGlobalMesmoPadrao);
+    public int MatchingGlobalPadraoVersaoDiferente => Volatile.Read(ref _matchingGlobalPadraoVersaoDiferente);
     public int MatchingDirecionadoTroca => Volatile.Read(ref _matchingDirecionadoTroca);
     public int MatchingDirecionadoContinuidadeFaixa =>
         Volatile.Read(ref _matchingDirecionadoContinuidadeFaixa);
@@ -403,12 +403,12 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     private void RegistrarResultadoMatchingCombinado(ResultadoMatchingCombinado? resultado)
     {
         if (resultado is null
-            || resultado.Global.Status == StatusBuscaItinerario.InfrastructureFailure
-            || resultado.Anterior.Status == StatusBuscaItinerario.InfrastructureFailure)
+            || resultado.Global.Status == StatusBuscaPadrao.InfrastructureFailure
+            || resultado.Anterior.Status == StatusBuscaPadrao.InfrastructureFailure)
             Interlocked.Increment(ref _matchingCombinadoFalha);
-        if (resultado?.Global.Status == StatusBuscaItinerario.NotEligible)
+        if (resultado?.Global.Status == StatusBuscaPadrao.NotEligible)
             Interlocked.Increment(ref _matchingCombinadoGlobalInelegivel);
-        if (resultado?.Anterior.Status == StatusBuscaItinerario.NotEligible)
+        if (resultado?.Anterior.Status == StatusBuscaPadrao.NotEligible)
             Interlocked.Increment(ref _matchingCombinadoAnteriorInelegivel);
     }
 
@@ -511,17 +511,17 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     public void RegistrarMatchingGlobalSemHistorico() =>
         Interlocked.Increment(ref _matchingGlobalSemHistorico);
 
-    public void RegistrarMatchingGlobalComHistorico(bool mesmoItinerario)
+    public void RegistrarMatchingGlobalComHistorico(bool mesmoPadrao)
     {
-        if (mesmoItinerario)
-            Interlocked.Increment(ref _matchingGlobalMesmoItinerario);
+        if (mesmoPadrao)
+            Interlocked.Increment(ref _matchingGlobalMesmoPadrao);
         else
-            Interlocked.Increment(ref _matchingGlobalItinerarioDiferente);
+            Interlocked.Increment(ref _matchingGlobalPadraoVersaoDiferente);
     }
 
-    public void RegistrarMotivoMatchingDirecionado(bool mesmoItinerario, bool temFaixa)
+    public void RegistrarMotivoMatchingDirecionado(bool mesmoPadrao, bool temFaixa)
     {
-        if (!mesmoItinerario)
+        if (!mesmoPadrao)
             Interlocked.Increment(ref _matchingDirecionadoTroca);
         else
             Interlocked.Increment(ref _matchingDirecionadoContinuidadeFaixa);
@@ -532,36 +532,36 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
             Interlocked.Increment(ref _matchingDirecionadoSemFaixa);
     }
 
-    public void RegistrarResultadoMatchingDirecionado(StatusBuscaItinerario status)
+    public void RegistrarResultadoMatchingDirecionado(StatusBuscaPadrao status)
     {
         switch (status)
         {
-            case StatusBuscaItinerario.Found:
+            case StatusBuscaPadrao.Found:
                 Interlocked.Increment(ref _matchingDirecionadoEncontrado);
                 break;
-            case StatusBuscaItinerario.NotEligible:
+            case StatusBuscaPadrao.NotEligible:
                 Interlocked.Increment(ref _matchingDirecionadoInelegivel);
                 break;
-            case StatusBuscaItinerario.InfrastructureFailure:
+            case StatusBuscaPadrao.InfrastructureFailure:
                 Interlocked.Increment(ref _matchingDirecionadoFalha);
                 break;
         }
     }
 
     public void RegistrarComparacaoContinuidade(
-        EnriquecimentoRotaDto global, ResultadoBuscaItinerario direcionado)
+        EnriquecimentoRotaDto global, ResultadoBuscaPadrao direcionado)
         {
             Interlocked.Increment(ref _continuidadeComparacoes);
 
             switch (direcionado.Status)
             {
-                case StatusBuscaItinerario.Found:
+                case StatusBuscaPadrao.Found:
                     Interlocked.Increment(ref _continuidadeDirecionadoFound);
                     break;
-                case StatusBuscaItinerario.NotEligible:
+                case StatusBuscaPadrao.NotEligible:
                     Interlocked.Increment(ref _continuidadeDirecionadoInelegivel);
                     return;
-                case StatusBuscaItinerario.InfrastructureFailure:
+                case StatusBuscaPadrao.InfrastructureFailure:
                     Interlocked.Increment(ref _continuidadeDirecionadoFalha);
                     return;
             }
@@ -696,7 +696,7 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
             Interlocked.Increment(ref _viagemInfra);
     }
 
-    public void RegistrarDivergenciaItinerario() =>
+    public void RegistrarDivergenciaPadrao() =>
         Interlocked.Increment(ref _itineraryChangedOcorrencias);
 
     public void RegistrarViagemPgRead() => Interlocked.Increment(ref _viagemPgReads);

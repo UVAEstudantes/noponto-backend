@@ -27,7 +27,7 @@ public sealed class GpsPollingService : BackgroundService
     private readonly Dictionary<string, string> _linhaPorVeiculo =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly GpsEtaClient _etaClient;
-    private readonly GpsBrtClient _brtClient;
+    private readonly IStatusGpsSource _brtSource;
     private readonly GpsBrtPollingGate _brtGate = new();
 
     private readonly IPosicaoVeiculoCacheRepository _posicaoCache;
@@ -36,6 +36,9 @@ public sealed class GpsPollingService : BackgroundService
     private readonly CorrecaoTemporalPosicaoCoordinator? _correcaoTemporal;
     private readonly IPositionCorrectionShadowIngress? _shadowIngress;
     private readonly IOptionsMonitor<CorrecaoTemporalPosicaoOptions>? _shadowOptions;
+    private readonly IGpsStructuralHintResolver? _structuralHintResolver;
+    private readonly GpsStructuralHintMetrics? _structuralHintMetrics;
+    private readonly EtaV2ShadowService? _etaV2Shadow;
 
     public GpsPollingService(
         GpsSppoSnapshotStore snapshotSppo,
@@ -46,13 +49,16 @@ public sealed class GpsPollingService : BackgroundService
         IServiceScopeFactory scopeFactory,
         GpsEnriquecimentoService enriquecedor,
         GpsEtaClient etaClient,
-        GpsBrtClient brtClient,
+        IGpsSourceResolver sourceResolver,
         IPosicaoVeiculoCacheRepository posicaoCache,
         ViagemObservadaService viagemObservada,
         ITelemetriaMlIngress? telemetriaMl = null,
         CorrecaoTemporalPosicaoCoordinator? correcaoTemporal = null,
         IPositionCorrectionShadowIngress? shadowIngress = null,
-        IOptionsMonitor<CorrecaoTemporalPosicaoOptions>? shadowOptions = null)
+        IOptionsMonitor<CorrecaoTemporalPosicaoOptions>? shadowOptions = null,
+        IGpsStructuralHintResolver? structuralHintResolver = null,
+        GpsStructuralHintMetrics? structuralHintMetrics = null,
+        EtaV2ShadowService? etaV2Shadow = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -62,13 +68,18 @@ public sealed class GpsPollingService : BackgroundService
         _scopeFactory = scopeFactory;
         _enriquecedor = enriquecedor;
         _etaClient = etaClient;
-        _brtClient = brtClient;
+        _brtSource = sourceResolver.GetPrimary(GpsModalNames.Brt) as IStatusGpsSource
+            ?? throw new InvalidOperationException(
+                "A fonte GPS primária BRT precisa expor status para preservar o cache/fail-open operacional.");
         _posicaoCache = posicaoCache;
         _viagemObservada = viagemObservada;
         _telemetriaMl = telemetriaMl;
         _correcaoTemporal = correcaoTemporal;
         _shadowIngress = shadowIngress;
         _shadowOptions = shadowOptions;
+        _structuralHintResolver = structuralHintResolver;
+        _structuralHintMetrics = structuralHintMetrics;
+        _etaV2Shadow = etaV2Shadow;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -168,7 +179,7 @@ public sealed class GpsPollingService : BackgroundService
         inicioEtapa = System.Diagnostics.Stopwatch.GetTimestamp();
         var brtPolling = await _brtGate.ObterAsync(
             TimeSpan.FromSeconds(opcoes.IntervaloBrtSegundos),
-            _brtClient.BuscarResultadoAsync, ct);
+            BuscarResultadoBrtAsync, ct);
         var resultadoBrt = brtPolling.ResultadoEfetivo;
         performance.BrtConsultasHttp = brtPolling.ConsultaHttpReal ? 1 : 0;
         performance.BrtCacheReutilizacoes = brtPolling.CacheReutilizado ? 1 : 0;
@@ -377,6 +388,8 @@ public sealed class GpsPollingService : BackgroundService
         performance.MatchingEtapaMs = (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
         performance.Enriquecidas = resultadosEnriquecidos.Count(p => p.PosicaoNaRota.HasValue);
+
+        await RegistrarDiagnosticosEstruturaisAsync(resultadosEnriquecidos, ct);
 
         // Veículos sem enriquecimento: atualiza só o histórico de velocidade
         var resultadosSemEnriquecimento = semEnriquecimento
@@ -713,8 +726,8 @@ public sealed class GpsPollingService : BackgroundService
                 "matching_batch_infrastructure_failures={matching_batch_infrastructure_failures} " +
                 "matching_batch_circuit_reason={matching_batch_circuit_reason} " +
                 "matching_global_sem_historico={matching_global_sem_historico} " +
-                "matching_global_mesmo_itinerario={matching_global_mesmo_itinerario} " +
-                "matching_global_itinerario_diferente={matching_global_itinerario_diferente} " +
+                "matching_global_mesmo_padrao={matching_global_mesmo_padrao} " +
+                "matching_global_padrao_diferente={matching_global_padrao_diferente} " +
                 "matching_direcionado_troca={matching_direcionado_troca} " +
                 "matching_direcionado_continuidade_faixa={matching_direcionado_continuidade_faixa} " +
                 "matching_direcionado_com_faixa={matching_direcionado_com_faixa} " +
@@ -850,8 +863,8 @@ public sealed class GpsPollingService : BackgroundService
                 performance.MatchingBatchInfrastructureFailures,
                 performance.MatchingBatchCircuitReason,
                 performance.MatchingGlobalSemHistorico,
-                performance.MatchingGlobalMesmoItinerario,
-                performance.MatchingGlobalItinerarioDiferente,
+                performance.MatchingGlobalMesmoPadrao,
+                performance.MatchingGlobalPadraoVersaoDiferente,
                 performance.MatchingDirecionadoTroca,
                 performance.MatchingDirecionadoContinuidadeFaixa,
                 performance.MatchingDirecionadoComFaixa,
@@ -943,6 +956,17 @@ public sealed class GpsPollingService : BackgroundService
             grauParalelismo, ct, performance);
     }
 
+    private async Task<ResultadoFonteGps> BuscarResultadoBrtAsync(CancellationToken ct)
+    {
+        var leitura = await _brtSource.GetResultAsync(ct);
+        return new ResultadoFonteGps(
+            leitura.Status,
+            leitura.Observations.Select(x => GpsObservationMapper.ToPosition(x, "BRT")).ToArray(),
+            leitura.Duration,
+            leitura.FailureReason,
+            leitura.SourceWatermark);
+    }
+
     private async Task<(PosicaoVeiculoDto Posicao, PosicaoVeiculoCacheResultado Resultado)[]> ConfirmarLoteDetalhadoAsync(
         IReadOnlyList<ResultadoEnriquecimentoGps> posicoes, TimeSpan ttlAtivo, TimeSpan ttlRecente,
         int grauParalelismo, CancellationToken ct, GpsCicloPerformance? performance = null)
@@ -1024,7 +1048,7 @@ public sealed class GpsPollingService : BackgroundService
         && observacao.CodigoLinha == posicao.CodigoLinha
         && observacao.Modal == (posicao.ModalFonte ?? string.Empty)
         && observacao.Provedor == (posicao.ProvedorFonte ?? string.Empty)
-        && observacao.ItinerarioId == posicao.ItinerarioId
+        && observacao.PadraoVersaoId == posicao.PadraoVersaoId
         && observacao.PosicaoOriginal == posicao.PosicaoNaRota
         && observacao.ComprimentoRotaMetros == posicao.ComprimentoRotaMetros
         && observacao.VelocidadeInstantaneaKmh == posicao.Velocidade
@@ -1063,6 +1087,8 @@ public sealed class GpsPollingService : BackgroundService
             var viagem = await _viagemObservada.AtualizarAsync(enriquecimento, ct);
             performance?.RegistrarViagem(viagem,
                 System.Diagnostics.Stopwatch.GetElapsedTime(inicioViagem));
+            // Hot path estritamente não bloqueante: nenhuma conexão/query PostgreSQL ETA.
+            _etaV2Shadow?.TryRecord(enriquecimento, viagem);
             if (_telemetriaMl is not null)
             {
                 try
@@ -1094,6 +1120,34 @@ public sealed class GpsPollingService : BackgroundService
             //Bearing = anterior?.Bearing,
             Status = StatusVeiculo.Ativo,
         };
+
+    private async Task RegistrarDiagnosticosEstruturaisAsync(
+        IReadOnlyList<PosicaoVeiculoDto> posicoes, CancellationToken ct)
+    {
+        if (_structuralHintResolver is null || _structuralHintMetrics is null) return;
+        foreach (var posicao in posicoes)
+        {
+            var observation = posicao.ObservacaoEstrutural;
+            if (observation is null) continue;
+            try
+            {
+                var hints = await _structuralHintResolver.ResolveAsync(observation, ct);
+                _structuralHintMetrics.Record(
+                    GpsStructuralHintShadowEvaluator.Compare(
+                        observation, hints, posicao, posicao.ModalFonte));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _structuralHintMetrics.RecordFailure();
+                _logger.LogDebug(ex,
+                    "Falha fail-open ao resolver hints estruturais GPS; matching operacional preservado.");
+            }
+        }
+    }
 
     private async Task LimparVeiculosDeLinhasAntigasAsync(
         List<(string Ordem, string LinhaAntiga)> trocas,

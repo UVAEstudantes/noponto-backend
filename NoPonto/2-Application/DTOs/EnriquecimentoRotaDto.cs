@@ -1,8 +1,15 @@
+using NoPonto.Domain.Entities;
+
 namespace NoPonto.Application.GPS;
 
 public sealed class EnriquecimentoRotaDto
 {
-    public Guid ItinerarioId { get; init; }
+    public Guid PadraoOperacionalId { get; init; }
+    public Guid PadraoVersaoId { get; init; }
+    public Guid SentidoId { get; init; }
+    public Guid LinhaId { get; init; }
+    public string Topologia { get; init; } = TopologiasPadrao.Linear;
+
     public double PosicaoNaRota { get; init; }
     public double ComprimentoRotaMetros { get; init; }
     public double DistanciaARotaMetros { get; init; }
@@ -17,5 +24,11 @@ public sealed class EnriquecimentoRotaDto
     public double? BearingLocal { get; init; }
 
     public string? ProximaParadaNome { get; init; }
+    public Guid? ProximaOcorrenciaParadaPadraoId { get; init; }
+    public Guid? ProximaParadaId { get; init; }
+    public int? ProximaParadaOrdem { get; init; }
+    public double? ProximaParadaDistanciaAcumuladaMetros { get; init; }
+    public double? ProximaParadaDistanciaDaLinhaMetros { get; init; }
     public double? DistanciaProximaParadaMetros { get; init; }
+    public double? DistanciaRestanteRotaMetros { get; init; }
 }

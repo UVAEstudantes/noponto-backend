@@ -23,7 +23,7 @@ public class GpsMatchingBatchOrquestracaoTests
     [Fact]
     public async Task FlagOff_UsaCaminhoIndividual_PreservaResultadoEMetricas_SemBatch()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var rota = Rota(Guid.NewGuid(), .25, 7);
         repo.Respostas.Enqueue(rota);
         var service = Criar(repo, enabled: false);
@@ -32,7 +32,7 @@ public class GpsMatchingBatchOrquestracaoTests
         var resultado = await service.EnriquecerComContextoAsync(
             Posicao("OFF-1", 0), null, default, metrics);
 
-        Assert.Equal(rota.ItinerarioId, resultado.Posicao.ItinerarioId);
+        Assert.Equal(rota.PadraoVersaoId, resultado.Posicao.PadraoVersaoId);
         Assert.Equal(.25, resultado.Posicao.PosicaoNaRota);
         Assert.Equal(1, repo.ChamadasGlobaisSimples);
         Assert.Equal(0, repo.ChamadasBatchGlobal);
@@ -56,7 +56,7 @@ public class GpsMatchingBatchOrquestracaoTests
     [Fact]
     public async Task FlagOn_AgrupaSimpleCombinedEDirecionaSomenteSubset_PreservandoCorrelacao()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var rotaA1 = Rota(Guid.NewGuid(), .20, 8);
         var rotaA2 = Rota(Guid.NewGuid(), .30, 9);
         repo.Respostas.Enqueue(rotaA1);
@@ -67,14 +67,14 @@ public class GpsMatchingBatchOrquestracaoTests
             [new(Posicao("V1", 0), null), new(Posicao("V2", 0), null)], default, Metricas());
 
         var rotaNova = Rota(Guid.NewGuid(), .10, 2);
-        var rotaV2 = Rota(rotaA2.ItinerarioId, .31, 8);
+        var rotaV2 = Rota(rotaA2.PadraoVersaoId, .31, 8);
         var rotaV3 = Rota(Guid.NewGuid(), .40, 4);
         // O executor emite simple antes de combined: V3, depois V1 e V2.
         repo.Respostas.Enqueue(rotaV3);
         repo.Respostas.Enqueue(rotaNova);
         repo.Respostas.Enqueue(rotaV2);
-        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaItinerario.Found(
-            Rota(rotaA1.ItinerarioId, .21, 70)));
+        repo.RespostasDirecionadas.Enqueue(ResultadoBuscaPadrao.Found(
+            Rota(rotaA1.PadraoVersaoId, .21, 70)));
         var metrics = Metricas();
 
         var resultados = await service.EnriquecerLoteComContextoAsync(
@@ -84,9 +84,9 @@ public class GpsMatchingBatchOrquestracaoTests
             new(Posicao("V3", 5), null),
         ], default, metrics);
 
-        Assert.Equal(rotaNova.ItinerarioId, resultados[0].Posicao.ItinerarioId);
-        Assert.Equal(rotaA2.ItinerarioId, resultados[1].Posicao.ItinerarioId);
-        Assert.Equal(rotaV3.ItinerarioId, resultados[2].Posicao.ItinerarioId);
+        Assert.Equal(rotaNova.PadraoVersaoId, resultados[0].Posicao.PadraoVersaoId);
+        Assert.Equal(rotaA2.PadraoVersaoId, resultados[1].Posicao.PadraoVersaoId);
+        Assert.Equal(rotaV3.PadraoVersaoId, resultados[2].Posicao.PadraoVersaoId);
         Assert.Equal(2, repo.ChamadasBatchGlobal); // um em cada ciclo
         Assert.Equal(1, repo.ChamadasBatchCombinado);
         Assert.Equal(1, repo.ChamadasBatchDirecionado);
@@ -101,7 +101,7 @@ public class GpsMatchingBatchOrquestracaoTests
     [Fact]
     public async Task FlagOn_BearingAusente_NaoEntraNosBatchesNemContaComando()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var service = Criar(repo, enabled: true);
         var metrics = Metricas();
         var semBearing = Posicao("SEM-BEARING", 0) with { Bearing = null };
@@ -109,7 +109,7 @@ public class GpsMatchingBatchOrquestracaoTests
         var resultado = await service.EnriquecerLoteComContextoAsync(
             [new(semBearing, null)], default, metrics);
 
-        Assert.Null(resultado[0].Posicao.ItinerarioId);
+        Assert.Null(resultado[0].Posicao.PadraoVersaoId);
         Assert.Equal(1, metrics.MatchingBatchInputs);
         Assert.Equal(0, metrics.MatchingBatchOperations);
         Assert.Equal(0, metrics.MatchingComandosPostgres);
@@ -122,8 +122,8 @@ public class GpsMatchingBatchOrquestracaoTests
     {
         var id1 = Guid.NewGuid();
         var id2 = Guid.NewGuid();
-        var repoIndividual = new FakeGpsItinerarioRepository();
-        var repoBatch = new FakeGpsItinerarioRepository();
+        var repoIndividual = new FakeGpsPadraoRepository();
+        var repoBatch = new FakeGpsPadraoRepository();
         foreach (var repo in new[] { repoIndividual, repoBatch })
         {
             repo.Respostas.Enqueue(Rota(id1, .15, 3, "P1"));
@@ -145,7 +145,7 @@ public class GpsMatchingBatchOrquestracaoTests
     [Fact]
     public async Task FlagOn_ResultadosForaDeOrdem_ContinuamCorrelacionadosPorInputId()
     {
-        var repo = new FakeGpsItinerarioRepository { InverterResultadosBatch = true };
+        var repo = new FakeGpsPadraoRepository { InverterResultadosBatch = true };
         var rotas = new[]
         {
             Rota(Guid.NewGuid(), .10, 1),
@@ -162,14 +162,14 @@ public class GpsMatchingBatchOrquestracaoTests
             new(Posicao("I3", 0), null),
         ], default, Metricas());
 
-        Assert.Equal(rotas.Select(x => (Guid?)x.ItinerarioId).ToArray(),
-            resultados.Select(x => x.Posicao.ItinerarioId).ToArray());
+        Assert.Equal(rotas.Select(x => (Guid?)x.PadraoVersaoId).ToArray(),
+            resultados.Select(x => x.Posicao.PadraoVersaoId).ToArray());
     }
 
     [Fact]
     public async Task FlagOn_PreservaBObservacionalSeparadoDaProjecaoOperacionalA()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var itinerarioA = Guid.NewGuid();
         var itinerarioB = Guid.NewGuid();
         var gps = Posicao("AB-1", 20) with { CodigoLinha = "414" };
@@ -185,10 +185,10 @@ public class GpsMatchingBatchOrquestracaoTests
         var resultado = Assert.Single(await service.EnriquecerLoteComContextoAsync(
             [new(gps, contexto)], default, Metricas()));
 
-        Assert.Equal(itinerarioB, resultado.Posicao.ItinerarioId);
+        Assert.Equal(itinerarioB, resultado.Posicao.PadraoVersaoId);
         Assert.Equal(.70, resultado.Posicao.PosicaoNaRota);
         Assert.Equal(StatusProjecaoOperacional.Encontrada, resultado.ProjecaoOperacional.Status);
-        Assert.Equal(itinerarioA, resultado.ProjecaoOperacional.Projecao!.ItinerarioId);
+        Assert.Equal(itinerarioA, resultado.ProjecaoOperacional.Projecao!.PadraoVersaoId);
         Assert.Equal(.21, resultado.ProjecaoOperacional.Projecao.PosicaoNaRota);
         Assert.Equal(1, repo.ChamadasBatchCombinado);
         Assert.Equal(0, repo.ChamadasBatchDirecionado);
@@ -198,8 +198,8 @@ public class GpsMatchingBatchOrquestracaoTests
     public async Task FlagOn_CorpusGrande_ReduzChamadasEstruturalmente()
     {
         const int quantidade = 201;
-        var repoIndividual = new FakeGpsItinerarioRepository();
-        var repoBatch = new FakeGpsItinerarioRepository();
+        var repoIndividual = new FakeGpsPadraoRepository();
+        var repoBatch = new FakeGpsPadraoRepository();
         for (var i = 0; i < quantidade; i++)
         {
             repoIndividual.Respostas.Enqueue(Rota(Guid.NewGuid(), .1, 2));
@@ -223,7 +223,7 @@ public class GpsMatchingBatchOrquestracaoTests
     [Fact]
     public async Task FlagOn_CancelamentoPropaga()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         repo.Respostas.Enqueue(Rota(Guid.NewGuid(), .2, 2));
         var service = Criar(repo, enabled: true);
         using var cts = new CancellationTokenSource();
@@ -286,14 +286,14 @@ public class GpsMatchingBatchOrquestracaoTests
     public void Classificador_DistingueConectividadeTimeoutETransientes()
     {
         Assert.Equal(CategoriaFalhaMatchingBatch.Connectivity,
-            GpsItinerarioRepository.ClassificarFalhaBatch(new SocketException()));
+            GpsPadraoRepository.ClassificarFalhaBatch(new SocketException()));
         Assert.Equal(CategoriaFalhaMatchingBatch.Timeout,
-            GpsItinerarioRepository.ClassificarFalhaBatch(new TimeoutException()));
+            GpsPadraoRepository.ClassificarFalhaBatch(new TimeoutException()));
         Assert.Equal(CategoriaFalhaMatchingBatch.TransientPostgres,
-            GpsItinerarioRepository.ClassificarFalhaBatch(new PostgresException(
+            GpsPadraoRepository.ClassificarFalhaBatch(new PostgresException(
                 "deadlock", "ERROR", "ERROR", "40P01")));
         Assert.Equal(CategoriaFalhaMatchingBatch.SqlOrSchema,
-            GpsItinerarioRepository.ClassificarFalhaBatch(new PostgresException(
+            GpsPadraoRepository.ClassificarFalhaBatch(new PostgresException(
                 "schema", "ERROR", "ERROR", "42P01")));
     }
 
@@ -309,16 +309,16 @@ public class GpsMatchingBatchOrquestracaoTests
     [InlineData("22003", CategoriaFalhaMatchingBatch.DataOrMapping)]
     public void Classificador_ClassificaSqlStateSemConfundirTransienteComOutage(
         string sqlState, CategoriaFalhaMatchingBatch esperado) =>
-        Assert.Equal(esperado, GpsItinerarioRepository.ClassificarFalhaBatch(
+        Assert.Equal(esperado, GpsPadraoRepository.ClassificarFalhaBatch(
             new PostgresException("teste", "ERROR", "ERROR", sqlState)));
 
     [Fact]
     public void Classificador_ClassificaIOExceptionECancelamento()
     {
         Assert.Equal(CategoriaFalhaMatchingBatch.Connectivity,
-            GpsItinerarioRepository.ClassificarFalhaBatch(new IOException()));
+            GpsPadraoRepository.ClassificarFalhaBatch(new IOException()));
         Assert.Equal(CategoriaFalhaMatchingBatch.Cancellation,
-            GpsItinerarioRepository.ClassificarFalhaBatch(new OperationCanceledException()));
+            GpsPadraoRepository.ClassificarFalhaBatch(new OperationCanceledException()));
     }
 
     [Fact]
@@ -345,7 +345,7 @@ public class GpsMatchingBatchOrquestracaoTests
     [Fact]
     public async Task ExecutorCompleto_GlobalAbreCircuito_BloqueiaCombinadoELiberaTodasBarreiras()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         repo.Respostas.Enqueue(Rota(Guid.NewGuid(), .20, 3));
         var service = Criar(repo, enabled: true);
         var existente = Posicao("EXISTENTE", 0);
@@ -376,13 +376,13 @@ public class GpsMatchingBatchOrquestracaoTests
         Assert.Equal(1, metrics.MatchingBatchProbes);
         Assert.Equal(1, metrics.MatchingBatchProbesFalha);
         Assert.Equal(1, metrics.MatchingBatchEntradasPuladas);
-        Assert.All(resultados, x => Assert.Null(x.Posicao.ItinerarioId));
+        Assert.All(resultados, x => Assert.Null(x.Posicao.PadraoVersaoId));
     }
 
     [Fact]
     public async Task ExecutorProtegido_CancelamentoPropagaSemSondaCircuitoOuTcsPendente()
     {
-        var repo = new FakeGpsItinerarioRepository();
+        var repo = new FakeGpsPadraoRepository();
         var service = Criar(repo, enabled: true);
         var metrics = Metricas();
         using var cts = new CancellationTokenSource();
@@ -403,8 +403,8 @@ public class GpsMatchingBatchOrquestracaoTests
     {
         await using var source = NpgsqlDataSource.Create(
             "Host=127.0.0.1;Port=1;Database=inexistente;Username=x;Password=x;Timeout=1;Command Timeout=1;SSL Mode=Disable");
-        var repo = new GpsItinerarioRepository(source,
-            NullLogger<GpsItinerarioRepository>.Instance);
+        var repo = new GpsPadraoRepository(source,
+            NullLogger<GpsPadraoRepository>.Instance);
         var protecao = new MatchingBatchStageProtection();
         var entradas = Enumerable.Range(0, 201).Select(i => new EntradaMatchingGlobalLote(
             $"outage-{i}", "100", -22.9, -43.2, 90, 250)).ToArray();
@@ -419,11 +419,11 @@ public class GpsMatchingBatchOrquestracaoTests
         Assert.Equal(1, lote.Metricas.MatchingBatchCommandsPostgres);
         Assert.Equal(1, lote.Metricas.MatchingFallbackCommandsPostgres);
         Assert.All(lote.Resultados,
-            x => Assert.Equal(StatusBuscaItinerario.InfrastructureFailure, x.Global.Status));
+            x => Assert.Equal(StatusBuscaPadrao.InfrastructureFailure, x.Global.Status));
     }
 
     private static GpsEnriquecimentoService Criar(
-        IGpsItinerarioRepository repo, bool enabled) => new(
+        IGpsPadraoRepository repo, bool enabled) => new(
             repo, Options.Create(new GpsPollingOptions()),
             Options.Create(new GpsMatchingBatchOptions { Enabled = enabled }),
             NullLogger<GpsEnriquecimentoService>.Instance);
@@ -445,7 +445,7 @@ public class GpsMatchingBatchOrquestracaoTests
     private static EnriquecimentoRotaDto Rota(
         Guid id, double posicao, double distancia, string? parada = null) => new()
     {
-        ItinerarioId = id, PosicaoNaRota = posicao, ComprimentoRotaMetros = 10_000,
+        PadraoVersaoId = id, PosicaoNaRota = posicao, ComprimentoRotaMetros = 10_000,
         DistanciaARotaMetros = distancia, BearingLocal = 90,
         LatitudeProjetada = -22.90, LongitudeProjetada = -43.20,
         ProximaParadaNome = parada, DistanciaProximaParadaMetros = 100,
@@ -453,7 +453,7 @@ public class GpsMatchingBatchOrquestracaoTests
 
     private static object Assinatura(ResultadoEnriquecimentoGps x) => new
     {
-        x.Posicao.Ordem, x.Posicao.ItinerarioId, x.Posicao.PosicaoNaRota,
+        x.Posicao.Ordem, x.Posicao.PadraoVersaoId, x.Posicao.PosicaoNaRota,
         x.Posicao.ComprimentoRotaMetros, x.Posicao.Bearing,
         x.Posicao.VelocidadeMedia, x.Posicao.ProximaParadaNome,
         x.Posicao.DistanciaProximaParadaMetros,

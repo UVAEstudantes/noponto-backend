@@ -175,6 +175,13 @@ public sealed record PosicaoVeiculoDto
     [JsonIgnore]
     public string ProvedorFonte { get; init; } = "";
 
+    /// <summary>
+    /// Observação original preservada somente durante o pipeline para resolução
+    /// shadow de identidades estruturais. Não integra HTTP, Redis ou SignalR.
+    /// </summary>
+    [JsonIgnore]
+    public GpsObservation? ObservacaoEstrutural { get; init; }
+
     // ── Posição anterior (para interpolação linear simples) ───────────────────
 
     public double? LatitudeAnterior { get; init; }
@@ -197,12 +204,12 @@ public sealed record PosicaoVeiculoDto
     /// </summary>
     public double? ComprimentoRotaMetros { get; init; }
 
-    /// <summary>
-    /// ID do itinerário detectado (ida ou volta).
-    /// O frontend usa para buscar a LineString do itinerário uma única vez
-    /// e reutilizá-la para interpolação local.
-    /// </summary>
-    public Guid? ItinerarioId { get; init; }
+    public Guid? PadraoOperacionalId { get; init; }
+    public Guid? PadraoVersaoId { get; init; }
+    public Guid? SentidoId { get; init; }
+    public Guid? LinhaId { get; init; }
+    public string? TopologiaPadrao { get; init; }
+    public Guid? ProximaOcorrenciaParadaPadraoId { get; init; }
 
     /// <summary>
     /// Velocidade média das últimas N leituras (configurável via GPS__JANELA_VELOCIDADE_LEITURAS).
@@ -221,6 +228,8 @@ public sealed record PosicaoVeiculoDto
 
     public string? ProximaParadaNome { get; init; }
     public double? DistanciaProximaParadaMetros { get; init; }
+    /// <summary>Distância longitudinal restante na geometria até a próxima ocorrência.</summary>
+    public double? DistanciaRestanteRotaMetros { get; init; }
 
     /// <summary>
     /// ETA até a próxima parada em segundos, calculado pelo modelo ML.
@@ -260,5 +269,5 @@ public sealed record PosicaoVeiculoDto
         PosicaoNaRota.HasValue &&
         ComprimentoRotaMetros.HasValue &&
         VelocidadeMedia.HasValue &&
-        ItinerarioId.HasValue;
+        PadraoVersaoId.HasValue;
 }

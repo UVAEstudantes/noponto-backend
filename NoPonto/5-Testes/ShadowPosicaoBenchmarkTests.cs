@@ -65,6 +65,14 @@ public sealed class ShadowPosicaoBenchmarkTests(ITestOutputHelper output)
             var script = context.GetService<IMigrator>().GenerateScript(
                 "20260916002042_TelemetriaMlContinua", "20260921144201_PositionCorrectionShadowOrigins");
             await using (var migration = source.CreateCommand(script)) await migration.ExecuteNonQueryAsync();
+            await using (var v2 = source.CreateCommand("""
+                ALTER TABLE "PositionCorrectionShadowOrigins"
+                    DROP COLUMN "ItinerarioId",
+                    ADD COLUMN "PadraoVersaoId" uuid NOT NULL,
+                    ADD COLUMN "OcorrenciaParadaPadraoId" uuid NULL,
+                    ADD COLUMN "Volta" integer NULL
+                """))
+                await v2.ExecuteNonQueryAsync();
 
             foreach (var (name, samples) in new[] { ("SMALL", 2), ("TYPICAL", 12), ("NEAR_CAP", 30) })
             {

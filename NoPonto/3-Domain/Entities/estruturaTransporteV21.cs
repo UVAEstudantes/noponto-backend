@@ -1,4 +1,5 @@
 using NetTopologySuite.Geometries;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace NoPonto.Domain.Entities;
 
@@ -32,6 +33,8 @@ public sealed class LinhaIdentidadeExterna : BaseEntity
     public string Tipo { get; set; } = null!;
     public string ExternalId { get; set; } = null!;
     public string OrigemMapeamento { get; set; } = OrigensMapeamento.Fonte;
+    public double? Confianca { get; set; }
+    public string? Justificativa { get; set; }
     public Linha Linha { get; set; } = null!;
     public FonteEstrutural FonteEstrutural { get; set; } = null!;
 }
@@ -43,6 +46,8 @@ public sealed class SentidoIdentidadeExterna : BaseEntity
     public string Tipo { get; set; } = null!;
     public string ExternalId { get; set; } = null!;
     public string OrigemMapeamento { get; set; } = OrigensMapeamento.Fonte;
+    public double? Confianca { get; set; }
+    public string? Justificativa { get; set; }
     public Sentido Sentido { get; set; } = null!;
     public FonteEstrutural FonteEstrutural { get; set; } = null!;
 }
@@ -54,6 +59,8 @@ public sealed class ParadaIdentidadeExterna : BaseEntity
     public string Tipo { get; set; } = null!;
     public string ExternalId { get; set; } = null!;
     public string OrigemMapeamento { get; set; } = OrigensMapeamento.Fonte;
+    public double? Confianca { get; set; }
+    public string? Justificativa { get; set; }
     public Parada Parada { get; set; } = null!;
     public FonteEstrutural FonteEstrutural { get; set; } = null!;
 }
@@ -78,6 +85,8 @@ public sealed class PadraoIdentidadeExterna : BaseEntity
     public string Tipo { get; set; } = null!;
     public string ExternalId { get; set; } = null!;
     public string OrigemMapeamento { get; set; } = OrigensMapeamento.Fonte;
+    public double? Confianca { get; set; }
+    public string? Justificativa { get; set; }
     public PadraoOperacional PadraoOperacional { get; set; } = null!;
     public FonteEstrutural FonteEstrutural { get; set; } = null!;
 }
@@ -88,14 +97,19 @@ public sealed class PadraoVersao
     public Guid PadraoOperacionalId { get; set; }
     public int Numero { get; set; }
     public LineString Geometria { get; set; } = null!;
-    public double DistanciaMetros { get; set; }
+    public string Topologia { get; set; } = TopologiasPadrao.Linear;
+    public double ComprimentoMetros { get; set; }
+    public string HashEstrutural { get; set; } = null!;
+    [NotMapped] public double DistanciaMetros { get => ComprimentoMetros; set => ComprimentoMetros = value; }
     public string MetodoConstrucao { get; set; } = null!;
     public double Confianca { get; set; }
     public string AlgoritmoVersao { get; set; } = null!;
     public string ResultadoValidacao { get; set; } = ResultadosValidacaoPadrao.Pendente;
     public string Relatorio { get; set; } = "{}";
-    public DateTimeOffset CriadaEmUtc { get; set; }
-    public DateTimeOffset? PublicadaEmUtc { get; set; }
+    public DateTimeOffset CriadoEmUtc { get; set; }
+    [NotMapped] public DateTimeOffset CriadaEmUtc { get => CriadoEmUtc; set => CriadoEmUtc = value; }
+    public DateTimeOffset? PublicadoEmUtc { get; set; }
+    [NotMapped] public DateTimeOffset? PublicadaEmUtc { get => PublicadoEmUtc; set => PublicadoEmUtc = value; }
     public PadraoOperacional PadraoOperacional { get; set; } = null!;
     public ICollection<OcorrenciaParadaPadrao> Ocorrencias { get; set; } = [];
     public ICollection<PadraoVersaoImportacao> Importacoes { get; set; } = [];
@@ -118,7 +132,9 @@ public sealed class OcorrenciaParadaPadrao
     public int Ordem { get; set; }
     public int? SourceSequence { get; set; }
     public double PosicaoTracado { get; set; }
-    public double? DistanciaAcumuladaMetros { get; set; }
+    public double DistanciaAcumuladaMetros { get; set; }
+    public double DistanciaDaLinhaMetros { get; set; }
+    public double? SourceShapeDistTraveledMetros { get; set; }
     public PadraoVersao PadraoVersao { get; set; } = null!;
     public Parada Parada { get; set; } = null!;
 }
@@ -163,6 +179,12 @@ public static class ResultadosValidacaoPadrao
     public const string Pendente = "PENDENTE";
     public const string Valida = "VALIDA";
     public const string Rejeitada = "REJEITADA";
+}
+
+public static class TopologiasPadrao
+{
+    public const string Linear = "LINEAR";
+    public const string Circular = "CIRCULAR";
 }
 
 public static class AcoesOverrideOcorrencia

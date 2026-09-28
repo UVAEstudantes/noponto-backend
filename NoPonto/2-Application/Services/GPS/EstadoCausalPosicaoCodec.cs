@@ -84,7 +84,7 @@ public sealed class EstadoCausalPosicaoCodec(
         && !string.IsNullOrWhiteSpace(estado.Contexto.Modal)
         && !string.IsNullOrWhiteSpace(estado.Contexto.Provedor)
         && !string.IsNullOrWhiteSpace(estado.Contexto.CodigoLinha)
-        && estado.Contexto.ItinerarioId != Guid.Empty
+        && estado.Contexto.PadraoVersaoId != Guid.Empty
         && estado.UltimoTimestampGps > DateTimeOffset.UnixEpoch
         && Finito(estado.UltimaPosicao)
         && estado.UltimaPosicao is >= 0 and <= 1
