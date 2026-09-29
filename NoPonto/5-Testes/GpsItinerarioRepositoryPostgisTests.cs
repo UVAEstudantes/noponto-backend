@@ -39,10 +39,52 @@ public sealed class GpsPadraoRepositoryPostgisTests : IClassFixture<PostgisGpsFi
     }
 
     [Fact]
-    public async Task VersaoNaoPublicada_NaoParticipaDoMatchingOperacional()
+    public async Task VersaoSemPointer_NaoParticipaDaSelecaoGlobal()
     {
+        var resultado = await _repo.BuscarEnriquecimentoAsync(
+            "GPS23", -22.9, -43.2, 90, 250);
+
+        Assert.NotNull(resultado);
+        Assert.Equal(_db.R1, resultado.PadraoVersaoId);
+        Assert.NotEqual(_db.Unpublished, resultado.PadraoVersaoId);
+    }
+
+    [Fact]
+    public async Task VersaoPinadaExplicita_PodeSerProjetadaSemSerVersaoAtual()
+    {
+        Guid padraoOperacionalId;
+        Guid sentidoId;
+        Guid linhaId;
+        await using (var cmd = _db.DataSource.CreateCommand("""
+            SELECT po."Id", s."Id", l."Id"
+            FROM "PadroesVersoes" pv
+            JOIN "PadroesOperacionais" po ON po."Id"=pv."PadraoOperacionalId"
+            JOIN "Sentidos" s ON s."Id"=po."SentidoId"
+            JOIN "Linhas" l ON l."Id"=s."LinhaId"
+            WHERE pv."Id"=@id AND po."VersaoAtualId" IS NULL
+            """))
+        {
+            cmd.Parameters.AddWithValue("id", _db.Unpublished);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            padraoOperacionalId = reader.GetGuid(0);
+            sentidoId = reader.GetGuid(1);
+            linhaId = reader.GetGuid(2);
+            Assert.False(await reader.ReadAsync());
+        }
+
         var resultado = await Direcionada(_db.Unpublished);
-        Assert.Equal(StatusBuscaPadrao.NotEligible, resultado.Status);
+
+        Assert.Equal(StatusBuscaPadrao.Found, resultado.Status);
+        Assert.NotNull(resultado.Rota);
+        Assert.Equal(_db.Unpublished, resultado.Rota.PadraoVersaoId);
+        Assert.Equal(padraoOperacionalId, resultado.Rota.PadraoOperacionalId);
+        Assert.Equal(sentidoId, resultado.Rota.SentidoId);
+        Assert.Equal(linhaId, resultado.Rota.LinhaId);
+        Assert.Equal(_db.Linha1, resultado.Rota.LinhaId);
+        Assert.Equal(_db.Sentido1, resultado.Rota.SentidoId);
+        Assert.InRange(resultado.Rota.PosicaoNaRota, 0.49, 0.51);
+        Assert.InRange(resultado.Rota.DistanciaARotaMetros, 0, 0.1);
     }
 
     [Fact]

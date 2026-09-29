@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using NoPonto.Application.GPS;
 
@@ -8,13 +9,18 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
 {
     private readonly NpgsqlDataSource _dataSource;
     private readonly ILogger<GpsPadraoRepository> _logger;
+    private readonly MotorCombinadoMatchingLote _motorCombinado;
 
     public GpsPadraoRepository(
         NpgsqlDataSource dataSource,
-        ILogger<GpsPadraoRepository> logger)
+        ILogger<GpsPadraoRepository> logger,
+        IOptions<GpsMatchingBatchOptions>? opcoes = null)
     {
         _dataSource = dataSource;
         _logger = logger;
+        _motorCombinado = opcoes?.Value.CombinadoSetBasedEnabled == true
+            ? MotorCombinadoMatchingLote.SetBased
+            : MotorCombinadoMatchingLote.Legacy;
     }
 
     public Task<EnriquecimentoRotaDto?> BuscarEnriquecimentoAsync(

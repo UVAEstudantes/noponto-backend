@@ -60,8 +60,14 @@ public sealed class GpsPollingOptions
 public sealed class GpsMatchingBatchOptions
 {
     public bool Enabled { get; init; }
+    public bool CombinadoSetBasedEnabled { get; init; }
     internal int TamanhoChunk { get; init; } = 100;
 
-    public static GpsMatchingBatchOptions FromConfiguration(string? value) =>
-        new() { Enabled = bool.TryParse(value, out var enabled) && enabled };
+    public static GpsMatchingBatchOptions FromConfiguration(
+        string? value,
+        string? combinadoSetBased = null) => new()
+        {
+            Enabled = bool.TryParse(value, out var enabled) && enabled,
+            CombinadoSetBasedEnabled = bool.TryParse(combinadoSetBased, out var setBased) && setBased
+        };
 }

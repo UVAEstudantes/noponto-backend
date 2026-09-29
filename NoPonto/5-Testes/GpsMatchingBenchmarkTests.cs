@@ -116,9 +116,12 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
         await using var source = dataSourceBuilder.Build();
         var logger = new BenchmarkLogger<GpsPadraoRepository>();
         var repo = new GpsPadraoRepository(source, logger);
+        var candidate = new GpsMatchingGlobalSetBasedCandidate(source);
 
         _ = await repo.BuscarEnriquecimentoAsync("GPS23", -22.9, -43.2, 90, 100);
-        foreach (var tamanho in new[] { 50, 100 })
+        // auto_explain registra no PostgreSQL descartavel o plano real do SQL privado
+        // sem copiar o SQL produtivo para o projeto de testes.
+        foreach (var tamanho in new[] { 10, 100, 1000 })
         {
             var entradas = Enumerable.Range(0, tamanho).Select(i =>
                 new EntradaMatchingGlobalLote($"explain-{tamanho}-{i}", "GPS23",
@@ -128,9 +131,234 @@ public sealed class GpsMatchingBenchmarkTests : IClassFixture<PostgisGpsFixture>
             Assert.Equal(1, resultado.Metricas.MatchingBatchCommandsPostgres);
             Assert.All(resultado.Resultados,
                 x => Assert.Equal(StatusBuscaPadrao.Found, x.Global.Status));
+            var resultadoCandidate = await candidate.BuscarAsync(entradas, tamanho);
+            Assert.Equal(tamanho, resultadoCandidate.Resultados.Count);
+            Assert.All(resultadoCandidate.Resultados,
+                x => Assert.Equal(StatusBuscaPadrao.Found, x.Global.Status));
         }
         Assert.Equal(0, logger.ConnectionErrors);
         Assert.Equal(0, logger.Timeouts);
+    }
+
+    [Fact]
+    [Trait("Category", "BenchmarkSetBased")]
+    public async Task GlobalOldVersusSetBased_10_100_500_1000_E3000Manual()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("RUN_GPS_MATCHING_SETBASED"),
+                "true", StringComparison.OrdinalIgnoreCase)) return;
+
+        var oracle = new GpsPadraoRepository(_db.DataSource,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<GpsPadraoRepository>.Instance);
+        var candidate = new GpsMatchingGlobalSetBasedCandidate(_db.DataSource);
+        _ = await oracle.BuscarGlobaisEmLoteAsync(CreateBaselineInputs(100), 100);
+        _ = await candidate.BuscarAsync(CreateBaselineInputs(100), 100);
+        foreach (var size in new[] { 10, 100, 500, 1000, 3000 })
+        {
+            var inputs=CreateBaselineInputs(size);
+            var oldSamples=new List<double>(5);
+            var newSamples=new List<double>(5);
+            ResultadoMatchingLote<ResultadoMatchingGlobalLote>? oldResult=null;
+            ResultadoMatchingLote<ResultadoMatchingGlobalLote>? newResult=null;
+            for (var round=0; round<5; round++)
+            {
+                var started=Stopwatch.GetTimestamp();
+                oldResult=await oracle.BuscarGlobaisEmLoteAsync(inputs,100);
+                oldSamples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                started=Stopwatch.GetTimestamp();
+                newResult=await candidate.BuscarAsync(inputs,100);
+                newSamples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            }
+            oldSamples.Sort(); newSamples.Sort();
+            var oldMedian=oldSamples[2]; var newMedian=newSamples[2];
+            Console.WriteLine(JsonSerializer.Serialize(new { schemaVersion=1,size,
+                oldMedianMs=oldMedian,newMedianMs=newMedian,speedup=oldMedian/newMedian,
+                oldMillisecondsPerInput=oldMedian/size,newMillisecondsPerInput=newMedian/size,
+                oldCommands=oldResult!.Metricas.MatchingCommandsPostgres,
+                newCommands=newResult!.Metricas.MatchingCommandsPostgres,
+                oldSamplesMs=oldSamples,newSamplesMs=newSamples },JsonOptions));
+            Assert.Equal(size,oldResult.Resultados.Count);
+            Assert.Equal(size,newResult.Resultados.Count);
+            foreach (var pair in oldResult.Resultados.Zip(newResult.Resultados))
+                GpsMatchingDifferentialHarness.CompareSearch(pair.First.Global,pair.Second.Global,
+                    $"benchmark/{size}/{pair.First.InputId}");
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "BenchmarkBaseline")]
+    public async Task BaselineBatchAtual_10_100_500_1000_E3000Manual()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("RUN_GPS_MATCHING_BASELINE"),
+                "true", StringComparison.OrdinalIgnoreCase)) return;
+
+        var repository = new GpsPadraoRepository(_db.DataSource,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<GpsPadraoRepository>.Instance);
+        var include3000 = string.Equals(
+            Environment.GetEnvironmentVariable("RUN_GPS_MATCHING_BASELINE_3000"),
+            "true", StringComparison.OrdinalIgnoreCase);
+        var sizes = include3000 ? new[] { 10, 100, 500, 1000, 3000 } : new[] { 10, 100, 500, 1000 };
+
+        // Warm-up fora das amostras. Benchmark informativo: nenhum limite temporal
+        // participa de assert e, portanto, nenhuma variacao de CI causa flakiness.
+        _ = await repository.BuscarGlobaisEmLoteAsync(CreateBaselineInputs(100), 100);
+        foreach (var size in sizes)
+        {
+            var samples = new List<double>(5);
+            ResultadoMatchingLote<ResultadoMatchingGlobalLote>? last = null;
+            for (var round = 0; round < 5; round++)
+            {
+                var started = Stopwatch.GetTimestamp();
+                last = await repository.BuscarGlobaisEmLoteAsync(CreateBaselineInputs(size), 100);
+                samples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            }
+            samples.Sort();
+            var median = samples[samples.Count / 2];
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                schemaVersion = 1,
+                size,
+                medianMs = median,
+                millisecondsPerInput = median / size,
+                commands = last!.Metricas.MatchingCommandsPostgres,
+                batchSizes = last.Metricas.MatchingBatchSize,
+                samplesMs = samples,
+            }, JsonOptions));
+            Assert.Equal(size, last!.Resultados.Count);
+            Assert.Equal((int)Math.Ceiling(size / 100d), last.Metricas.MatchingCommandsPostgres);
+        }
+    }
+
+    private static EntradaMatchingGlobalLote[] CreateBaselineInputs(int size) =>
+        Enumerable.Range(0, size).Select(i => new EntradaMatchingGlobalLote(
+            $"baseline-{size}-{i:D5}", "GPS23",
+            -22.9 + (i % 5) * .00001, -43.209 + (i % 100) * .00018,
+            i % 2 == 0 ? 90 : 89.5, 250)).ToArray();
+
+    [Fact]
+    [Trait("Category", "BenchmarkCombinedBaseline")]
+    public async Task BaselineCombinadoAtual_10_100_500_1000_E3000Manual()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("RUN_GPS_MATCHING_COMBINED_BASELINE"),
+                "true", StringComparison.OrdinalIgnoreCase)) return;
+
+        var repository = new GpsPadraoRepository(_db.DataSource,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<GpsPadraoRepository>.Instance);
+        var candidate = new GpsMatchingCombinadoSetBasedCandidate(_db.DataSource);
+        _ = await repository.BuscarCombinadosEmLoteAsync(CreateCombinedBaselineInputs(100), 100);
+        _ = await candidate.BuscarAsync(CreateCombinedBaselineInputs(100),100);
+        foreach (var size in new[] { 10, 100, 500, 1000, 3000 })
+        {
+            var inputs=CreateCombinedBaselineInputs(size);
+            var samples=new List<double>(5);
+            var candidateSamples=new List<double>(5);
+            ResultadoMatchingLote<ResultadoMatchingCombinadoLote>? last=null;
+            ResultadoMatchingLote<ResultadoMatchingCombinadoLote>? candidateLast=null;
+            for (var round=0; round<5; round++)
+            {
+                var started=Stopwatch.GetTimestamp();
+                last=await repository.BuscarCombinadosEmLoteAsync(inputs,100);
+                samples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                started=Stopwatch.GetTimestamp();
+                candidateLast=await candidate.BuscarAsync(inputs,100);
+                candidateSamples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            }
+            samples.Sort(); candidateSamples.Sort();
+            var median=samples[2];
+            var candidateMedian=candidateSamples[2];
+            Console.WriteLine(JsonSerializer.Serialize(new { schemaVersion=1,size,
+                commands=last!.Metricas.MatchingCommandsPostgres,
+                chunks=last.Metricas.MatchingBatchSize,medianMs=median,
+                candidateMedianMs=candidateMedian,speedup=median/candidateMedian,
+                millisecondsPerInput=median/size,candidateMillisecondsPerInput=candidateMedian/size,
+                samplesMs=samples,candidateSamplesMs=candidateSamples,
+                corpus=CombinedCorpusComposition(size) },JsonOptions));
+            Assert.Equal(size,last.Resultados.Count);
+            Assert.Equal((int)Math.Ceiling(size/100d),last.Metricas.MatchingCommandsPostgres);
+            Assert.Equal(size,last.Metricas.MatchingBatchSize.Sum());
+            Assert.Equal(size,candidateLast!.Resultados.Count);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "BenchmarkCombinedExplain")]
+    public async Task ExplainCombinadoAtual_10_100_E1000Manual()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("RUN_GPS_MATCHING_COMBINED_EXPLAIN"),
+                "true",StringComparison.OrdinalIgnoreCase)) return;
+        var connection=Environment.GetEnvironmentVariable("POSTGIS_TEST_CONNECTION")
+            ?? throw new InvalidOperationException("Defina POSTGIS_TEST_CONNECTION para banco descartável.");
+        var builder=new NpgsqlConnectionStringBuilder(connection)
+        {
+            SearchPath=$"{_db.Schema},public", ApplicationName=PrefixoApplicationName+"combined-explain",
+            NoResetOnClose=true,
+        };
+        const string setup="""
+            LOAD 'auto_explain';
+            SET auto_explain.log_min_duration = 0;
+            SET auto_explain.log_analyze = on;
+            SET auto_explain.log_buffers = on;
+            SET auto_explain.log_timing = on;
+            SET auto_explain.log_nested_statements = on;
+            """;
+        var sourceBuilder=new NpgsqlDataSourceBuilder(builder.ConnectionString);
+        sourceBuilder.UsePhysicalConnectionInitializer(conn =>
+        {
+            using var cmd=conn.CreateCommand(); cmd.CommandText=setup; cmd.ExecuteNonQuery();
+        },async conn =>
+        {
+            await using var cmd=conn.CreateCommand(); cmd.CommandText=setup;
+            await cmd.ExecuteNonQueryAsync();
+        });
+        await using var source=sourceBuilder.Build();
+        var logger=new BenchmarkLogger<GpsPadraoRepository>();
+        var repository=new GpsPadraoRepository(source,logger);
+        var candidate=new GpsMatchingCombinadoSetBasedCandidate(source);
+        foreach (var size in new[] { 10,100,1000 })
+        {
+            var result=await repository.BuscarCombinadosEmLoteAsync(
+                CreateCombinedBaselineInputs(size),size);
+            Assert.Equal(size,result.Resultados.Count);
+            Assert.Equal(1,result.Metricas.MatchingBatchCommandsPostgres);
+            var candidateResult=await candidate.BuscarAsync(CreateCombinedBaselineInputs(size),size);
+            Assert.Equal(size,candidateResult.Resultados.Count);
+            Assert.Equal(1,candidateResult.Metricas.MatchingBatchCommandsPostgres);
+        }
+        Assert.Equal(0,logger.ConnectionErrors);
+        Assert.Equal(0,logger.Timeouts);
+    }
+
+    private EntradaMatchingCombinadoLote[] CreateCombinedBaselineInputs(int size) =>
+        Enumerable.Range(0,size).Select(i=>CombinedProfile(i%10,i,size)).ToArray();
+
+    private EntradaMatchingCombinadoLote CombinedProfile(int profile,int index,int size)
+    {
+        var id=$"combined-{size}-{index:D5}-p{profile}";
+        return profile switch
+        {
+            0 => new(id,"GPS23",null,-22.9,-43.2,90,250,null),
+            1 => new(id,"GPS23",_db.R1,-22.9,-43.2,90,250,new(.4,.6)),
+            2 => new(id,"GPS23",_db.R1,-22.8998,-43.2,90,250,new(.4,.6)),
+            3 => new(id,"GPS23",_db.OutraLinha,-22.9,-43.2,90,250,new(.4,.6)),
+            4 => new(id,"GPS23",_db.R1,-22.8998,-43.2,90,250,new(.4,.6),
+                new(_db.R1,.5,500,_db.R1,_db.Sentido1,_db.Linha1)),
+            5 => new(id,"GPS23",_db.R1,-22.9,-43.2,90,250,new(.4,.6),
+                new(_db.R1,.5,500,_db.R1,_db.Sentido1,_db.Linha1)),
+            6 => new(id,"OUTRA23",_db.OutraLinha,-22.9,-43.2,90,250,new(.4,.6)),
+            7 => new(id,"CIRCULAR",_db.Circular,.001,.00001,180,250,new(.9,1.0)),
+            8 => new(id,"OUTRA23",null,-22.9,-43.2,270,250,null),
+            _ => new(id,"SEM_ROTA",_db.R1,-22.9,-43.2,90,250,new(.4,.6)),
+        };
+    }
+
+    private static IReadOnlyDictionary<string,int> CombinedCorpusComposition(int size)
+    {
+        string[] names = ["sem_historico_multipattern","historico_valido_igual_global",
+            "anterior_diferente_troca_padrao","anterior_inelegivel","operacional_valida",
+            "operacional_inelegivel","single_pattern","circular","bearing_incompativel",
+            "sem_candidato"];
+        return names.Select((name,profile)=>new { name,count=Enumerable.Range(0,size)
+                .Count(i=>i%10==profile) })
+            .ToDictionary(x=>x.name,x=>x.count,StringComparer.Ordinal);
     }
 
     [Fact]

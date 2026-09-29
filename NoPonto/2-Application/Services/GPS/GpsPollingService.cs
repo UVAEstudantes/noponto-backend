@@ -716,6 +716,8 @@ public sealed class GpsPollingService : BackgroundService
                 "matching_batch_duration_max_ms={matching_batch_duration_max_ms:F1} " +
                 "global_simple_batches={global_simple_batches} " +
                 "combined_batches={combined_batches} directed_batches={directed_batches} " +
+                "matching_combinado_legacy_commands={matching_combinado_legacy_commands} " +
+                "matching_combinado_setbased_commands={matching_combinado_setbased_commands} " +
                 "matching_batch_circuit_opened={matching_batch_circuit_opened} " +
                 "matching_batch_probes={matching_batch_probes} " +
                 "matching_batch_probes_sucesso={matching_batch_probes_sucesso} " +
@@ -853,6 +855,8 @@ public sealed class GpsPollingService : BackgroundService
                 performance.MatchingGlobalSimpleBatches,
                 performance.MatchingCombinedBatches,
                 performance.MatchingDirectedBatches,
+                performance.MatchingCombinadoLegacyCommands,
+                performance.MatchingCombinadoSetBasedCommands,
                 performance.MatchingBatchCircuitOpened,
                 performance.MatchingBatchProbes,
                 performance.MatchingBatchProbesSucesso,

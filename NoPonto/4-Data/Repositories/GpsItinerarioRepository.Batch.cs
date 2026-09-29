@@ -53,10 +53,17 @@ public sealed partial class GpsPadraoRepository
         CancellationToken cancellationToken, MatchingBatchStageProtection protecao) =>
         ExecutarCombinadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken, protecao);
 
+    internal Task<ResultadoMatchingLote<ResultadoMatchingCombinadoLote>> BuscarCombinadosEmLoteAsync(
+        IReadOnlyList<EntradaMatchingCombinadoLote> entradas, int tamanhoChunk,
+        MotorCombinadoMatchingLote motor, CancellationToken cancellationToken = default) =>
+        ExecutarCombinadosEmLoteAsync(entradas, tamanhoChunk, cancellationToken, null, motor);
+
     private async Task<ResultadoMatchingLote<ResultadoMatchingCombinadoLote>> ExecutarCombinadosEmLoteAsync(
         IReadOnlyList<EntradaMatchingCombinadoLote> entradas, int tamanhoChunk,
-        CancellationToken cancellationToken, MatchingBatchStageProtection? protecao)
+        CancellationToken cancellationToken, MatchingBatchStageProtection? protecao,
+        MotorCombinadoMatchingLote? motorForcado = null)
     {
+        var motor = motorForcado ?? _motorCombinado;
         ValidarLote(entradas, tamanhoChunk, x => x.InputId);
         cancellationToken.ThrowIfCancellationRequested();
         var resultados = new Dictionary<string, ResultadoMatchingCombinado>(StringComparer.Ordinal);
@@ -108,7 +115,7 @@ public sealed partial class GpsPadraoRepository
                 AntesDoComandoBatchParaTeste?.Invoke(TipoBatchMatching.Combinado, numeroChunk);
                 cancellationToken.ThrowIfCancellationRequested();
                 await ExecutarCombinadoChunkAsync(chunk, resultados,
-                    () => tentativaPostgres = true, cancellationToken);
+                    () => tentativaPostgres = true, motor, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
@@ -117,7 +124,7 @@ public sealed partial class GpsPadraoRepository
                 {
                     comandos.Add(new(TipoBatchMatching.Combinado,
                         OrigemComandoMatchingLote.Batch, chunk.Length,
-                        Stopwatch.GetElapsedTime(inicio)));
+                        Stopwatch.GetElapsedTime(inicio), motor));
                     comandoBatchRegistrado = true;
                 }
                 var acao = protecao?.RegistrarFalha(TipoBatchMatching.Combinado,
@@ -188,7 +195,7 @@ public sealed partial class GpsPadraoRepository
                 if (tentativaPostgres && !comandoBatchRegistrado)
                     comandos.Add(new(TipoBatchMatching.Combinado,
                         OrigemComandoMatchingLote.Batch, chunk.Length,
-                        Stopwatch.GetElapsedTime(inicio)));
+                        Stopwatch.GetElapsedTime(inicio), motor));
             }
             AposChunkParaTeste?.Invoke(TipoBatchMatching.Combinado, numeroChunk);
         }
@@ -606,6 +613,7 @@ public sealed partial class GpsPadraoRepository
         EntradaMatchingCombinadoLote[] chunk,
         Dictionary<string, ResultadoMatchingCombinado> resultados,
         Action registrarTentativaPostgres,
+        MotorCombinadoMatchingLote motor,
         CancellationToken cancellationToken)
     {
         var json = JsonSerializer.Serialize(chunk.Select(x => new
@@ -636,7 +644,9 @@ public sealed partial class GpsPadraoRepository
         registrarTentativaPostgres();
         await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = SqlMatchingCombinadoLote;
+        cmd.CommandText = motor == MotorCombinadoMatchingLote.SetBased
+            ? SqlMatchingCombinadoLoteSetBased
+            : SqlMatchingCombinadoLoteLegacy;
         cmd.Parameters.AddWithValue("inputs", NpgsqlDbType.Jsonb, json);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -714,7 +724,7 @@ public sealed partial class GpsPadraoRepository
         && double.IsFinite(bearing)
         && double.IsFinite(distanciaMaximaMetros);
 
-    private const string SqlMatchingCombinadoLote = """
+    private const string SqlMatchingCombinadoLoteLegacy = """
         WITH inputs AS (
             SELECT * FROM jsonb_to_recordset(@inputs::jsonb) AS x(
                 input_id text, codigo text, lat double precision, lon double precision,
