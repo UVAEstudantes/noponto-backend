@@ -47,20 +47,22 @@ public sealed partial class GpsPadraoRepository
         ),
         global_espacial AS (
           SELECT e.input_id,e.bearing,e.dist_max,e.ponto_geom,e.ponto_geography,c.*,
-            ST_Distance(e.ponto_geography,c.geometria_geography) distancia_rota_metros,
-            ST_LineLocatePoint(c."Geometria",e.ponto_geom) posicao_na_rota
+            x.distancia_rota_metros,x.posicao_na_rota
           FROM pontos e JOIN contexto_global c ON c.codigo=e.codigo
-          WHERE ST_Distance(e.ponto_geography,c.geometria_geography)<=e.dist_max
+          CROSS JOIN LATERAL (SELECT
+            ST_Distance(e.ponto_geography,c.geometria_geography) distancia_rota_metros,
+            ST_LineLocatePoint(c."Geometria",e.ponto_geom) posicao_na_rota OFFSET 0) x
+          WHERE x.distancia_rota_metros<=e.dist_max
         ),
         global_bearing AS (
-          SELECT c.*,degrees(ST_Azimuth(
+          SELECT c.*,b.bearing_local FROM global_espacial c
+          CROSS JOIN LATERAL (SELECT degrees(ST_Azimuth(
             ST_LineInterpolatePoint(c."Geometria",GREATEST(0.0,LEAST(1.0,c.posicao_na_rota-0.025)))::geography,
-            ST_LineInterpolatePoint(c."Geometria",GREATEST(0.0,LEAST(1.0,c.posicao_na_rota+0.025)))::geography)) bearing_local
-          FROM global_espacial c
+            ST_LineInterpolatePoint(c."Geometria",GREATEST(0.0,LEAST(1.0,c.posicao_na_rota+0.025)))::geography)) bearing_local OFFSET 0) b
         ),
         global_diff AS (
-          SELECT c.*,ABS(MOD((c.bearing_local-c.bearing+540.0)::numeric,360.0)-180.0) diff_bearing
-          FROM global_bearing c
+          SELECT c.*,d.diff_bearing FROM global_bearing c
+          CROSS JOIN LATERAL (SELECT ABS(MOD((c.bearing_local-c.bearing+540.0)::numeric,360.0)-180.0) diff_bearing OFFSET 0) d
         ),
         global_rank AS (
           SELECT c.*,ROW_NUMBER() OVER(PARTITION BY input_id ORDER BY
