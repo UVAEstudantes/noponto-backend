@@ -23,6 +23,74 @@ public sealed class GpsPadraoRepositoryPostgisTests : IClassFixture<PostgisGpsFi
         => _repo.BuscarEnriquecimentoDoPadraoAsync(linha, id, lat, -43.2, bearing, 250);
 
     [Fact]
+    public async Task FracaoNumericaAcimaDeUm_ProjecoesGlobalEDirecionadaNaoFalham()
+    {
+        const double latitude = -22.900026;
+        const double longitude = -43.210749;
+        const double bearing = 319.10701636361495;
+
+        await using (var cmd = _db.DataSource.CreateCommand("""
+            SELECT ST_LineLocatePoint("Geometria", ST_SetSRID(ST_MakePoint(@lon,@lat),4326))
+            FROM "PadroesVersoes" WHERE "Id"=@id
+            """))
+        {
+            cmd.Parameters.AddWithValue("lon", longitude);
+            cmd.Parameters.AddWithValue("lat", latitude);
+            cmd.Parameters.AddWithValue("id", _db.LimiteFracao);
+            var fracaoBruta = (double)(await cmd.ExecuteScalarAsync())!;
+            Assert.True(fracaoBruta > 1.0, $"A fixture deixou de reproduzir o overshoot: {fracaoBruta:R}");
+        }
+
+        var global = await _repo.BuscarEnriquecimentoAsync(
+            "EDGE165", latitude, longitude, bearing, 250);
+        var direcionada = await _repo.BuscarEnriquecimentoDoPadraoAsync(
+            "EDGE165", _db.LimiteFracao, latitude, longitude, bearing, 250);
+
+        Assert.NotNull(global);
+        Assert.Equal(_db.LimiteFracao, global.PadraoVersaoId);
+        Assert.True(global.PosicaoNaRota >= 1.0);
+        Assert.Equal(StatusBuscaPadrao.Found, direcionada.Status);
+        Assert.Equal(_db.LimiteFracao, direcionada.Rota!.PadraoVersaoId);
+        Assert.Equal(global.PosicaoNaRota, direcionada.Rota.PosicaoNaRota);
+        Assert.Equal(-43.2107, global.LongitudeProjetada!.Value, 6);
+        Assert.Equal(-22.90011, global.LatitudeProjetada!.Value, 6);
+    }
+
+    [Theory]
+    [InlineData(-43.21)]
+    [InlineData(-43.209999999)]
+    [InlineData(-43.190000001)]
+    [InlineData(-43.19)]
+    public async Task ExtremosDaLinha_AmostrasAnteriorEPosteriorPermanecemNoDominio(double longitude)
+    {
+        await using var cmd = _db.DataSource.CreateCommand("""
+            WITH p AS (
+              SELECT "Geometria",
+                     ST_LineLocatePoint("Geometria",ST_SetSRID(ST_MakePoint(@lon,-22.9),4326)) pos
+              FROM "PadroesVersoes" WHERE "Id"=@id
+            )
+            SELECT pos,
+                   GREATEST(0.0,LEAST(1.0,pos-0.025)) anterior,
+                   GREATEST(0.0,LEAST(1.0,pos+0.025)) posterior,
+                   ST_AsText(ST_LineInterpolatePoint("Geometria",GREATEST(0.0,LEAST(1.0,pos-0.025)))),
+                   ST_AsText(ST_LineInterpolatePoint("Geometria",GREATEST(0.0,LEAST(1.0,pos+0.025))))
+            FROM p
+            """);
+        cmd.Parameters.AddWithValue("lon", longitude);
+        cmd.Parameters.AddWithValue("id", _db.R1);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.InRange(reader.GetDouble(1), 0.0, 1.0);
+        Assert.InRange(reader.GetDouble(2), 0.0, 1.0);
+        Assert.False(reader.IsDBNull(3));
+        Assert.False(reader.IsDBNull(4));
+
+        var resultado = await _repo.BuscarEnriquecimentoAsync(
+            "GPS23", -22.9, longitude, 90, 250);
+        Assert.NotNull(resultado);
+    }
+
+    [Fact]
     public async Task DirecionadaElegivel_RetornaMatchingAtualCompleto()
     {
         var resultado = await Direcionada(_db.R1);

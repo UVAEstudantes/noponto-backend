@@ -347,7 +347,7 @@ enriquecido AS (
         ST_ClosestPoint(i.""Geometria"", m.""Loc"")                             AS ""PontoProj"",
         ST_LineInterpolatePoint(
             i.""Geometria"",
-            LEAST(ST_LineLocatePoint(i.""Geometria"", m.""Loc"") + 0.001, 1.0)
+            GREATEST(0.0, LEAST(ST_LineLocatePoint(i.""Geometria"", m.""Loc"") + 0.001, 1.0))
         )                                                                        AS ""PontoAdiante"",
         m.""Loc"",
         ST_Y(m.""Loc"")                                                         AS ""Latitude"",
