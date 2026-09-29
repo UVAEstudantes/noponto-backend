@@ -110,6 +110,7 @@ public sealed class TelemetriaMlMetrics
 
 public sealed class TelemetriaMlMetricsReporter(
     TelemetriaMlMetrics metrics,
+    TelemetriaMlBackpressureState backpressure,
     ILogger<TelemetriaMlMetricsReporter> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -119,6 +120,7 @@ public sealed class TelemetriaMlMetricsReporter(
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
+                var backlog = backpressure.CaptureSnapshot();
                 logger.LogInformation(
                     "Telemetria ML: produzidos={produzidos}, falhas_publicacao={falhas}, " +
                     "consumidos={consumidos}, persistidos={persistidos}, duplicados={duplicados}, " +
@@ -131,6 +133,9 @@ public sealed class TelemetriaMlMetricsReporter(
                     "publisher_falhas_preparacao={publisherFalhasPreparacao}, " +
                     "publisher_falhas_inesperadas={publisherFalhasInesperadas}, " +
                     "falhas_channel={falhasChannel}, drops_backpressure={dropsBackpressure}, " +
+                    "backlog_disponivel={backlogDisponivel}, telemetria_backlog_lag={backlogLag}, " +
+                    "telemetria_backlog_pending={backlogPending}, telemetria_backlog_total={backlogTotal}, " +
+                    "telemetria_stream_length={streamLength}, " +
                     "channel_ocupacao={channelAtual}, channel_ocupacao_max={channelMax}, channel_capacidade={channelCapacidade}, " +
                     "worker_leitura_ms={workerLeitura:F1}, worker_desserializacao_ms={workerDesserializacao:F1}, " +
                     "worker_postgres_ms={workerPostgres:F1}, worker_ack_ms={workerAck:F1}, worker_cleanup_ms={workerCleanup:F1}",
@@ -144,6 +149,8 @@ public sealed class TelemetriaMlMetricsReporter(
                     metrics.PublisherPublicados, metrics.PublisherFalhasRedis,
                     metrics.PublisherFalhasPreparacao, metrics.PublisherFalhasInesperadas,
                     metrics.FalhasChannel, metrics.DropsBackpressure,
+                    backlog.Available, backlog.Lag, backlog.Pending,
+                    backlog.BacklogTotal, backlog.StreamLength,
                     metrics.ChannelOcupacao, metrics.ChannelOcupacaoMaxima,
                     TelemetriaMlStreamPublisher.Capacidade,
                     metrics.WorkerLeituraMs, metrics.WorkerDesserializacaoMs,
