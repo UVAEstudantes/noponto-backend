@@ -357,7 +357,8 @@ builder.Services.AddPositionCorrectionShadowPipeline(
 
 builder.Services.AddSingleton(Options.Create(
     GpsMatchingBatchOptions.FromConfiguration(
-        builder.Configuration["GPS_MATCHING_BATCH_ENABLED"])));
+        builder.Configuration["GPS_MATCHING_BATCH_ENABLED"],
+        builder.Configuration["GpsMatching:CombinadoSetBasedEnabled"])));
 
 builder.Services
     .AddOptions<GpsSppoCollectorOptions>()

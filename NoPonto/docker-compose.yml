@@ -79,6 +79,7 @@ services:
       GPS__HTTP_TIMEOUT_SECONDS: ${GPS__HTTP_TIMEOUT_SECONDS}
       GPS__HUB__ROUTE: ${GPS__HUB__ROUTE}
       GPS_MATCHING_BATCH_ENABLED: ${GPS_MATCHING_BATCH_ENABLED:-false}
+      GpsMatching__CombinadoSetBasedEnabled: ${GpsMatching__CombinadoSetBasedEnabled:-false}
       PositionCorrection__Enabled: ${PositionCorrection__Enabled:-false}
       PositionCorrection__ShadowEnabled: ${PositionCorrection__ShadowEnabled:-false}
       PositionCorrection__ShadowSamplingPercent: ${PositionCorrection__ShadowSamplingPercent:-10}

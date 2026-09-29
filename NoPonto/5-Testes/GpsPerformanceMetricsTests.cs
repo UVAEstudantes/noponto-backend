@@ -11,6 +11,22 @@ namespace NoPonto.Tests;
 public sealed class GpsPerformanceMetricsTests
 {
     [Fact]
+    public void MatchingCombinado_SeparaComandosLegacyESetBased()
+    {
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
+        metrics.RegistrarMatchingLote(new MetricasMatchingLote(2,
+        [
+            new(TipoBatchMatching.Combinado, OrigemComandoMatchingLote.Batch,
+                1, TimeSpan.FromMilliseconds(1), MotorCombinadoMatchingLote.Legacy),
+            new(TipoBatchMatching.Combinado, OrigemComandoMatchingLote.Batch,
+                1, TimeSpan.FromMilliseconds(1), MotorCombinadoMatchingLote.SetBased),
+        ]));
+
+        Assert.Equal(1, metrics.MatchingCombinadoLegacyCommands);
+        Assert.Equal(1, metrics.MatchingCombinadoSetBasedCommands);
+    }
+
+    [Fact]
     public void MatchingLote_RegistraInputsBatchesTamanhoDuracaoETipos()
     {
         var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);

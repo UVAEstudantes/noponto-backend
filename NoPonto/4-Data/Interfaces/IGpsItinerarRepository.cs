@@ -137,12 +137,14 @@ public sealed record ResultadoMatchingDirecionadoLote(string InputId, ResultadoB
 
 public enum TipoBatchMatching { GlobalSimples, Combinado, Direcionado }
 public enum OrigemComandoMatchingLote { Batch, FallbackIndividual }
+public enum MotorCombinadoMatchingLote { NaoAplicavel, Legacy, SetBased }
 
 public sealed record MetricaComandoMatchingLote(
     TipoBatchMatching Tipo,
     OrigemComandoMatchingLote Origem,
     int TamanhoBatch,
-    TimeSpan Duracao);
+    TimeSpan Duracao,
+    MotorCombinadoMatchingLote MotorCombinado = MotorCombinadoMatchingLote.NaoAplicavel);
 
 public sealed record MetricasMatchingLote(
     int MatchingBatchOperations,
@@ -164,6 +166,12 @@ public sealed record MetricasMatchingLote(
         && x.Origem == OrigemComandoMatchingLote.Batch);
     public int CombinedBatches => Comandos.Count(x => x.Tipo == TipoBatchMatching.Combinado
         && x.Origem == OrigemComandoMatchingLote.Batch);
+    public int CombinedLegacyCommands => Comandos.Count(x => x.Tipo == TipoBatchMatching.Combinado
+        && x.Origem == OrigemComandoMatchingLote.Batch
+        && x.MotorCombinado == MotorCombinadoMatchingLote.Legacy);
+    public int CombinedSetBasedCommands => Comandos.Count(x => x.Tipo == TipoBatchMatching.Combinado
+        && x.Origem == OrigemComandoMatchingLote.Batch
+        && x.MotorCombinado == MotorCombinadoMatchingLote.SetBased);
     public int DirectedBatches => Comandos.Count(x => x.Tipo == TipoBatchMatching.Direcionado
         && x.Origem == OrigemComandoMatchingLote.Batch);
 }

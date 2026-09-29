@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
 using NoPonto.Data.Repositories;
 using Xunit;
@@ -265,6 +266,42 @@ public sealed class GpsMatchingDifferentialHarnessTests : IClassFixture<PostgisG
         var harness=OracleAgainstSetBasedCandidate();
         await harness.CompareCombinedAsync(inputs);
         await harness.CompareCombinedAsync(inputs.Reverse().ToArray());
+    }
+
+    [Fact]
+    public async Task FeatureFlagCombinado_SelecionaEngineProdutivo_EPreservaResultado()
+    {
+        EntradaMatchingCombinadoLote[] inputs =
+        [
+            new("flag", "GPS23", _db.R1, -22.9, -43.2, 90, 250, new(.4, .6))
+        ];
+        var defaultRepository = new GpsPadraoRepository(
+            _db.DataSource, NullLogger<GpsPadraoRepository>.Instance);
+        var legacyRepository = new GpsPadraoRepository(
+            _db.DataSource, NullLogger<GpsPadraoRepository>.Instance,
+            Options.Create(new GpsMatchingBatchOptions { CombinadoSetBasedEnabled = false }));
+        var setBasedRepository = new GpsPadraoRepository(
+            _db.DataSource, NullLogger<GpsPadraoRepository>.Instance,
+            Options.Create(new GpsMatchingBatchOptions { CombinadoSetBasedEnabled = true }));
+
+        var padrao = await defaultRepository.BuscarCombinadosEmLoteAsync(inputs);
+        var legacy = await legacyRepository.BuscarCombinadosEmLoteAsync(inputs);
+        var setBased = await setBasedRepository.BuscarCombinadosEmLoteAsync(inputs);
+
+        Assert.Equal(1, padrao.Metricas.CombinedLegacyCommands);
+        Assert.Equal(0, padrao.Metricas.CombinedSetBasedCommands);
+        Assert.Equal(1, legacy.Metricas.CombinedLegacyCommands);
+        Assert.Equal(0, legacy.Metricas.CombinedSetBasedCommands);
+        Assert.Equal(0, setBased.Metricas.CombinedLegacyCommands);
+        Assert.Equal(1, setBased.Metricas.CombinedSetBasedCommands);
+        GpsMatchingDifferentialHarness.CompareSearch(
+            legacy.Resultados[0].Resultado.Global,
+            setBased.Resultados[0].Resultado.Global,
+            "flag/global");
+        GpsMatchingDifferentialHarness.CompareSearch(
+            legacy.Resultados[0].Resultado.Anterior,
+            setBased.Resultados[0].Resultado.Anterior,
+            "flag/anterior");
     }
 
     private GpsMatchingDifferentialHarness OracleAgainstSetBasedCandidate() => new(

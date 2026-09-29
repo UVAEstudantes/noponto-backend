@@ -49,6 +49,8 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
     private long _matchingBatchMaxTicks;
     private int _matchingGlobalSimpleBatches;
     private int _matchingCombinedBatches;
+    private int _matchingCombinadoLegacyCommands;
+    private int _matchingCombinadoSetBasedCommands;
     private int _matchingDirectedBatches;
     private int _matchingBatchCircuitOpened;
     private int _matchingBatchProbes;
@@ -230,6 +232,8 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
         TimeSpan.FromTicks(Volatile.Read(ref _matchingBatchMaxTicks)).TotalMilliseconds;
     public int MatchingGlobalSimpleBatches => Volatile.Read(ref _matchingGlobalSimpleBatches);
     public int MatchingCombinedBatches => Volatile.Read(ref _matchingCombinedBatches);
+    public int MatchingCombinadoLegacyCommands => Volatile.Read(ref _matchingCombinadoLegacyCommands);
+    public int MatchingCombinadoSetBasedCommands => Volatile.Read(ref _matchingCombinadoSetBasedCommands);
     public int MatchingDirectedBatches => Volatile.Read(ref _matchingDirectedBatches);
     public int MatchingBatchCircuitOpened => Volatile.Read(ref _matchingBatchCircuitOpened);
     public int MatchingBatchProbes => Volatile.Read(ref _matchingBatchProbes);
@@ -455,6 +459,10 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
                     break;
                 case TipoBatchMatching.Combinado:
                     Interlocked.Increment(ref _matchingCombinedBatches);
+                    if (comando.MotorCombinado == MotorCombinadoMatchingLote.SetBased)
+                        Interlocked.Increment(ref _matchingCombinadoSetBasedCommands);
+                    else if (comando.MotorCombinado == MotorCombinadoMatchingLote.Legacy)
+                        Interlocked.Increment(ref _matchingCombinadoLegacyCommands);
                     break;
                 case TipoBatchMatching.Direcionado:
                     Interlocked.Increment(ref _matchingDirectedBatches);

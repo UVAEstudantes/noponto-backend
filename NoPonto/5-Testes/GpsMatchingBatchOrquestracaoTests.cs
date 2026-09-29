@@ -20,6 +20,17 @@ public class GpsMatchingBatchOrquestracaoTests
     public void FeatureFlag_SomenteTrueExplicitoHabilita(string? valor, bool esperado) =>
         Assert.Equal(esperado, GpsMatchingBatchOptions.FromConfiguration(valor).Enabled);
 
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("false", false)]
+    [InlineData("valor-invalido", false)]
+    [InlineData("true", true)]
+    public void FeatureFlagCombinadoSetBased_SomenteTrueExplicitoHabilita(
+        string? valor, bool esperado) =>
+        Assert.Equal(esperado,
+            GpsMatchingBatchOptions.FromConfiguration(null, valor).CombinadoSetBasedEnabled);
+
     [Fact]
     public async Task FlagOff_UsaCaminhoIndividual_PreservaResultadoEMetricas_SemBatch()
     {
