@@ -399,8 +399,8 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                 CROSS JOIN LATERAL (SELECT ST_LineLocatePoint(v."Geometria", ST_SetSRID(ST_MakePoint(@lon,@lat),4326)) AS p) local
                 WHERE ST_DWithin(v."Geometria"::geography, ST_SetSRID(ST_MakePoint(@lon,@lat),4326)::geography,@dist)
                 AND abs(mod((degrees(ST_Azimuth(
-                    ST_LineInterpolatePoint(v."Geometria",greatest(0,local.p-0.025))::geography,
-                    ST_LineInterpolatePoint(v."Geometria",least(1,local.p+0.025))::geography)) - @bearing + 540)::numeric,360)-180) < 80
+                    ST_LineInterpolatePoint(v."Geometria",greatest(0,least(1,local.p-0.025)))::geography,
+                    ST_LineInterpolatePoint(v."Geometria",greatest(0,least(1,local.p+0.025)))::geography)) - @bearing + 540)::numeric,360)-180) < 80
             ) SELECT e."Id", e."LinhaId", e.sentido, e."Codigo", e.padrao, e."Topologia",
                 @tem_bearing AND (SELECT count(*) FROM candidatos) = 1
                 AND EXISTS (SELECT 1 FROM candidatos WHERE "Id" = e.sentido)

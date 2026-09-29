@@ -92,10 +92,10 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                 SELECT c.*,
                     degrees(ST_Azimuth(
                         ST_LineInterpolatePoint(
-                            c."Geometria", GREATEST(0.0, c.posicao_na_rota - 0.025)
+                            c."Geometria", GREATEST(0.0, LEAST(1.0, c.posicao_na_rota - 0.025))
                         )::geography,
                         ST_LineInterpolatePoint(
-                            c."Geometria", LEAST(1.0, c.posicao_na_rota + 0.025)
+                            c."Geometria", GREATEST(0.0, LEAST(1.0, c.posicao_na_rota + 0.025))
                         )::geography
                     )) AS bearing_local
                 FROM candidatos_global c
@@ -113,7 +113,7 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
             ),
             global_escolhido AS (
                 SELECT sg.*,
-                    ST_LineInterpolatePoint(sg."Geometria", sg.posicao_na_rota) AS ponto_rota
+                    ST_LineInterpolatePoint(sg."Geometria", GREATEST(0.0, LEAST(1.0, sg.posicao_na_rota))) AS ponto_rota
                 FROM score_global sg
                 ORDER BY sg.score ASC, sg."Id" ASC
                 LIMIT 1
@@ -173,10 +173,10 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                 SELECT c.*,
                     degrees(ST_Azimuth(
                         ST_LineInterpolatePoint(
-                            c."Geometria", GREATEST(0.0, c.posicao_na_rota - 0.025)
+                            c."Geometria", GREATEST(0.0, LEAST(1.0, c.posicao_na_rota - 0.025))
                         )::geography,
                         ST_LineInterpolatePoint(
-                            c."Geometria", LEAST(1.0, c.posicao_na_rota + 0.025)
+                            c."Geometria", GREATEST(0.0, LEAST(1.0, c.posicao_na_rota + 0.025))
                         )::geography
                     )) AS bearing_local
                 FROM candidatos_anterior c
@@ -194,7 +194,7 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
             ),
             anterior_escolhido AS (
                 SELECT sa.*,
-                    ST_LineInterpolatePoint(sa."Geometria", sa.posicao_na_rota) AS ponto_rota
+                    ST_LineInterpolatePoint(sa."Geometria", GREATEST(0.0, LEAST(1.0, sa.posicao_na_rota))) AS ponto_rota
                 FROM score_anterior sa
                 ORDER BY sa.score ASC
                 LIMIT 1
@@ -483,11 +483,11 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
                     degrees(ST_Azimuth(
                         ST_LineInterpolatePoint(
                             c."Geometria",
-                            GREATEST(0.0, c.posicao_na_rota - 0.025)
+                            GREATEST(0.0, LEAST(1.0, c.posicao_na_rota - 0.025))
                         )::geography,
                         ST_LineInterpolatePoint(
                             c."Geometria",
-                            LEAST(1.0, c.posicao_na_rota + 0.025)
+                            GREATEST(0.0, LEAST(1.0, c.posicao_na_rota + 0.025))
                         )::geography
                     )) AS bearing_local
                 FROM candidatos c
@@ -513,7 +513,7 @@ public sealed partial class GpsPadraoRepository : IGpsPadraoRepository
             padrao_escolhido AS (
                 SELECT
                     cs.*,
-                    ST_LineInterpolatePoint(cs."Geometria", cs.posicao_na_rota) AS ponto_rota
+                    ST_LineInterpolatePoint(cs."Geometria", GREATEST(0.0, LEAST(1.0, cs.posicao_na_rota))) AS ponto_rota
                 FROM com_score cs
                 ORDER BY cs.score ASC /*DESEMPATE_GLOBAL*/
                 LIMIT 1

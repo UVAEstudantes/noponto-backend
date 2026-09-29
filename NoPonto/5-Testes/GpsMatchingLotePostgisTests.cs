@@ -21,6 +21,51 @@ public sealed class GpsMatchingLotePostgisTests : IClassFixture<PostgisGpsFixtur
     }
 
     [Fact]
+    public async Task FracaoNumericaAcimaDeUm_CombinadoEBatchesConcluemSemPerderEntradas()
+    {
+        const double latitude = -22.900026;
+        const double longitude = -43.210749;
+        const double bearing = 319.10701636361495;
+        var setBased = new GpsPadraoRepository(_db.DataSource,
+            NullLogger<GpsPadraoRepository>.Instance,
+            Options.Create(new GpsMatchingBatchOptions { CombinadoSetBasedEnabled = true }));
+
+        var legado = await _repo.BuscarMatchingCombinadoAsync(
+            "EDGE165", null, latitude, longitude, bearing, 250, null);
+        var combinado = await setBased.BuscarMatchingCombinadoAsync(
+            "EDGE165", null, latitude, longitude, bearing, 250, null);
+        var normalEsperado = await setBased.BuscarMatchingCombinadoAsync(
+            "GPS23", null, -22.9, -43.2, 90, 250, null);
+        var loteCombinado = await setBased.BuscarCombinadosEmLoteAsync([
+            C("edge", "EDGE165", null, latitude, longitude, bearing, null),
+            C("normal", "GPS23", null, -22.9, -43.2, 90, null)
+        ]);
+        var loteGlobal = await _repo.BuscarGlobaisEmLoteAsync([
+            G("edge", "EDGE165", latitude, longitude, bearing),
+            G("normal", "GPS23", -22.9, -43.2, 90)
+        ]);
+
+        Assert.Equal(StatusBuscaPadrao.Found, legado.Global.Status);
+        Assert.Equal(StatusBuscaPadrao.Found, combinado.Global.Status);
+        Assert.Equal(_db.LimiteFracao, legado.Global.Rota!.PadraoVersaoId);
+        Assert.Equal(_db.LimiteFracao, combinado.Global.Rota!.PadraoVersaoId);
+        Assert.Equal(2, loteCombinado.Resultados.Count);
+        Assert.All(loteCombinado.Resultados,
+            x => Assert.Equal(StatusBuscaPadrao.Found, x.Resultado.Global.Status));
+        AssertBusca(normalEsperado.Global,
+            loteCombinado.Resultados.Single(x => x.InputId == "normal").Resultado.Global,
+            "normal/GLOBAL");
+        AssertBusca(normalEsperado.Anterior,
+            loteCombinado.Resultados.Single(x => x.InputId == "normal").Resultado.Anterior,
+            "normal/ANTERIOR");
+        Assert.Equal(2, loteGlobal.Resultados.Count);
+        Assert.All(loteGlobal.Resultados,
+            x => Assert.Equal(StatusBuscaPadrao.Found, x.Global.Status));
+        Assert.Equal(combinado.Global.Rota.PosicaoNaRota,
+            loteCombinado.Resultados.Single(x => x.InputId == "edge").Resultado.Global.Rota!.PosicaoNaRota);
+    }
+
+    [Fact]
     public async Task GlobalLote_EquivaleAoIndividual_NosCasosDeBorda()
     {
         EntradaMatchingGlobalLote[] entradas =

@@ -54,8 +54,8 @@ public sealed partial class GpsPadraoRepository
         ),
         global_bearing AS (
           SELECT c.*,degrees(ST_Azimuth(
-            ST_LineInterpolatePoint(c."Geometria",GREATEST(0.0,c.posicao_na_rota-0.025))::geography,
-            ST_LineInterpolatePoint(c."Geometria",LEAST(1.0,c.posicao_na_rota+0.025))::geography)) bearing_local
+            ST_LineInterpolatePoint(c."Geometria",GREATEST(0.0,LEAST(1.0,c.posicao_na_rota-0.025)))::geography,
+            ST_LineInterpolatePoint(c."Geometria",GREATEST(0.0,LEAST(1.0,c.posicao_na_rota+0.025)))::geography)) bearing_local
           FROM global_espacial c
         ),
         global_diff AS (
@@ -68,7 +68,7 @@ public sealed partial class GpsPadraoRepository
           FROM global_diff c WHERE diff_bearing<80
         ),
         global_vencedor AS MATERIALIZED (
-          SELECT c.*,ST_LineInterpolatePoint(c."Geometria",c.posicao_na_rota) ponto_rota
+          SELECT c.*,ST_LineInterpolatePoint(c."Geometria",GREATEST(0.0,LEAST(1.0,c.posicao_na_rota))) ponto_rota
           FROM global_rank c WHERE ranking=1
         ),
         anterior_geometria AS (
@@ -87,12 +87,12 @@ public sealed partial class GpsPadraoRepository
         ),
         anterior_bearing AS (
           SELECT a.*,degrees(ST_Azimuth(
-            ST_LineInterpolatePoint(a."Geometria",GREATEST(0.0,a.posicao_na_rota-0.025))::geography,
-            ST_LineInterpolatePoint(a."Geometria",LEAST(1.0,a.posicao_na_rota+0.025))::geography)) bearing_local
+            ST_LineInterpolatePoint(a."Geometria",GREATEST(0.0,LEAST(1.0,a.posicao_na_rota-0.025)))::geography,
+            ST_LineInterpolatePoint(a."Geometria",GREATEST(0.0,LEAST(1.0,a.posicao_na_rota+0.025)))::geography)) bearing_local
           FROM anterior_espacial a
         ),
         anterior_vencedor AS MATERIALIZED (
-          SELECT a.*,ST_LineInterpolatePoint(a."Geometria",a.posicao_na_rota) ponto_rota
+          SELECT a.*,ST_LineInterpolatePoint(a."Geometria",GREATEST(0.0,LEAST(1.0,a.posicao_na_rota))) ponto_rota
           FROM anterior_bearing a
           WHERE ABS(MOD((a.bearing_local-a.bearing+540.0)::numeric,360.0)-180.0)<80
         ),

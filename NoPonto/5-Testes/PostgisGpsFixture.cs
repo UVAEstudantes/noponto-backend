@@ -27,6 +27,7 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
     public Guid ScoreUuidMenor { get; } = Guid.Parse("00000000-0000-0000-0000-000000000003");
     public Guid ScoreMelhor { get; } = Guid.Parse("00000000-0000-0000-0000-000000000004");
     public Guid Circular { get; } = Guid.NewGuid();
+    public Guid LimiteFracao { get; } = Guid.NewGuid();
     public Guid Unpublished { get; } = Guid.NewGuid();
     private NpgsqlDataSource? _admin;
     private bool _created;
@@ -87,15 +88,17 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
             var sentidoScore = Guid.NewGuid();
             var linhaCircular = Guid.NewGuid();
             var sentidoCircular = Guid.NewGuid();
+            var linhaLimite = Guid.NewGuid();
+            var sentidoLimite = Guid.NewGuid();
             await using var seed = DataSource.CreateCommand("""
                 INSERT INTO "Linhas" VALUES (@l1,'GPS23'),(@l2,'OUTRA23'),(@lx,'X25'),(@lp,'P25'),
-                    (@le,'EMPATE'),(@ls,'SCORE'),(@lc,'CIRCULAR');
+                    (@le,'EMPATE'),(@ls,'SCORE'),(@lc,'CIRCULAR'),(@ll,'EDGE165');
                 INSERT INTO "Sentidos" VALUES (@s1,@l1),(@s2,@l2),(@sx,@lx),(@sp,@lp),
-                    (@se,@le),(@ss,@ls),(@sc,@lc);
+                    (@se,@le),(@ss,@ls),(@sc,@lc),(@sl,@ll);
                 INSERT INTO "PadroesOperacionais" ("Id","SentidoId","VersaoAtualId") VALUES
                   (@r1,@s1,@r1),(@r2,@s1,@r2),(@volta,@s1,@volta),(@outra,@s2,@outra),
                   (@diag,@s1,@diag),(@x,@sx,@x),(@p,@sp,@p),(@eb,@se,@eb),(@ea,@se,@ea),
-                  (@su,@ss,@su),(@sm,@ss,@sm),(@circ,@sc,@circ);
+                  (@su,@ss,@su),(@sm,@ss,@sm),(@circ,@sc,@circ),(@limite,@sl,@limite);
                 INSERT INTO "PadroesVersoes" ("Id","PadraoOperacionalId","Geometria","Topologia") VALUES
                   (@r1,@r1,ST_GeomFromText('LINESTRING(-43.21 -22.9,-43.19 -22.9)',4326),'LINEAR'),
                   (@r2,@r2,ST_GeomFromText('LINESTRING(-43.21 -22.8998,-43.19 -22.8998)',4326),'LINEAR'),
@@ -109,6 +112,8 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
                   (@su,@su,ST_GeomFromText('LINESTRING(-43.21 -22.8998,-43.19 -22.8998)',4326),'LINEAR'),
                   (@sm,@sm,ST_GeomFromText('LINESTRING(-43.21 -22.9,-43.19 -22.9)',4326),'LINEAR'),
                   (@circ,@circ,ST_GeomFromText('LINESTRING(0 0,0.01 0,0.01 0.01,0 0.01,0 0)',4326),'CIRCULAR');
+                INSERT INTO "PadroesVersoes" ("Id","PadraoOperacionalId","Geometria","Topologia") VALUES
+                  (@limite,@limite,ST_GeomFromText('LINESTRING(-43.18571 -22.93105,-43.18617 -22.93049,-43.19312 -22.92137,-43.19385 -22.92046,-43.19416 -22.92002,-43.1943 -22.91974,-43.19439 -22.91951,-43.19444 -22.91931,-43.1945 -22.91892,-43.19451 -22.91874,-43.19445 -22.91813,-43.1942 -22.91696,-43.19415 -22.91654,-43.19415 -22.91632,-43.19419 -22.91606,-43.19431 -22.91565,-43.19591 -22.91143,-43.19678 -22.90901,-43.19771 -22.90659,-43.19771 -22.90636,-43.19767 -22.90613,-43.19759 -22.90599,-43.1975 -22.90589,-43.19728 -22.90577,-43.19713 -22.90573,-43.19701 -22.90571,-43.19677 -22.90574,-43.19665 -22.9058,-43.19656 -22.90588,-43.19651 -22.90598,-43.19649 -22.9061,-43.1965 -22.90621,-43.19655 -22.90634,-43.19662 -22.90643,-43.19671 -22.90649,-43.19799 -22.90708,-43.20087 -22.90801,-43.20524 -22.90942,-43.20557 -22.90947,-43.20591 -22.90957,-43.20611 -22.90964,-43.20638 -22.90976,-43.20638 -22.90977,-43.20686 -22.90995,-43.20743 -22.9101,-43.20758 -22.91012,-43.20785 -22.9101,-43.20893 -22.90988,-43.20903 -22.90983,-43.20913 -22.90973,-43.20922 -22.90956,-43.20929 -22.90922,-43.20933 -22.90801,-43.20936 -22.90758,-43.20936 -22.907574,-43.2094 -22.90705,-43.20958 -22.90424,-43.20958 -22.904234,-43.20981 -22.90063,-43.20986 -22.90003,-43.210325 -22.90004,-43.21033 -22.90004,-43.21042 -22.90005,-43.21053 -22.90011,-43.21059 -22.90014,-43.21068 -22.90013,-43.2107 -22.90011,-43.2107 -22.90011)',4326),'LINEAR');
                 INSERT INTO "PadroesOperacionais" VALUES (@up_po,@s1,NULL);
                 INSERT INTO "PadroesVersoes" VALUES (@up,@up_po,
                     ST_GeomFromText('LINESTRING(-43.21 -22.9,-43.19 -22.9)',4326),'LINEAR');
@@ -127,6 +132,7 @@ public sealed class PostgisGpsFixture : IAsyncLifetime
                 ("le",linhaEmpate),("se",sentidoEmpate),("ea",EmpateA),("eb",EmpateB),
                 ("ls",linhaScore),("ss",sentidoScore),("su",ScoreUuidMenor),("sm",ScoreMelhor),
                 ("lc",linhaCircular),("sc",sentidoCircular),("circ",Circular),
+                ("ll",linhaLimite),("sl",sentidoLimite),("limite",LimiteFracao),
                 ("up",Unpublished),("up_po",Guid.NewGuid()) })
                 seed.Parameters.AddWithValue(pair.Item1, pair.Item2);
             await seed.ExecuteNonQueryAsync();
