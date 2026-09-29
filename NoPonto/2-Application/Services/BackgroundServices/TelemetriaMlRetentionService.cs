@@ -19,23 +19,50 @@ public sealed class TelemetriaMlRetentionOptions
     public int MaxDeadLetterEntries { get; set; } = 10_000;
 }
 
+public sealed record TelemetriaMlBackpressureSnapshot(
+    bool Available, long Lag, long Pending, long BacklogTotal, long StreamLength);
+
 public sealed class TelemetriaMlBackpressureState
 {
-    private long _streamLength;
-    public long StreamLength => Interlocked.Read(ref _streamLength);
-    public void Observe(long streamLength) => Interlocked.Exchange(ref _streamLength, Math.Max(0, streamLength));
+    private static readonly TelemetriaMlBackpressureSnapshot Initial = new(false, 0, 0, 0, 0);
+    private TelemetriaMlBackpressureSnapshot _snapshot = Initial;
+
+    public TelemetriaMlBackpressureSnapshot CaptureSnapshot() => Volatile.Read(ref _snapshot);
+
+    public void Observe(long? lag, long? pending, long streamLength)
+    {
+        if (lag is null or < 0 || pending is null or < 0)
+        {
+            ObserveUnavailable();
+            return;
+        }
+
+        Interlocked.Exchange(ref _snapshot, new(true, lag.Value, pending.Value,
+            SaturatingAdd(lag.Value, pending.Value), Math.Max(0, streamLength)));
+    }
+
+    public void ObserveUnavailable()
+    {
+        var previous = CaptureSnapshot();
+        Interlocked.Exchange(ref _snapshot, previous with { Available = false });
+    }
 
     public bool ShouldAccept(string observationId, int maximum)
     {
-        var length = StreamLength;
-        if (length < maximum / 2) return true;
-        if (length >= maximum) return false;
-        var divisor = length >= maximum * 9L / 10 ? 10
-            : length >= maximum * 3L / 4 ? 4 : 2;
+        var snapshot = CaptureSnapshot();
+        if (!snapshot.Available) return true;
+        var backlog = snapshot.BacklogTotal;
+        if (backlog < maximum / 2) return true;
+        if (backlog >= maximum) return false;
+        var divisor = backlog >= maximum * 9L / 10 ? 10
+            : backlog >= maximum * 3L / 4 ? 4 : 2;
         var hash = 2166136261u;
         foreach (var c in observationId) hash = (hash ^ c) * 16777619u;
         return hash % divisor == 0;
     }
+
+    private static long SaturatingAdd(long left, long right) =>
+        left > long.MaxValue - right ? long.MaxValue : left + right;
 }
 
 public sealed class TelemetriaMlRetentionMetrics
@@ -133,13 +160,15 @@ public sealed class TelemetriaMlRetentionService(
             var principalRaw = await db.ScriptEvaluateAsync(MainRetentionScript, [StreamKey],
                 [ExpectedGroup, temporalMs, config.TrimLimit, config.MaxStreamEntries]).WaitAsync(ct);
             var principal = ParsePrincipal(principalRaw, agora, temporalMs);
-            backpressure?.Observe(Math.Max(0, principal.Xlen - principal.RemovidosPrincipal));
             if (principal.FailClosed)
             {
+                backpressure?.ObserveUnavailable();
                 metrics.Registrar(principal, Stopwatch.GetElapsedTime(inicio));
                 LogWarningSeguro(null, "Retenção ML fail-closed no Stream principal: {Status}.", principal.Status);
                 return principal;
             }
+            backpressure?.Observe(principal.Lag, principal.Pending,
+                Math.Max(0, principal.Xlen - principal.RemovidosPrincipal));
 
             var dlqRaw = await db.ScriptEvaluateAsync(DeadLetterRetentionScript, [DeadLetterKey],
                 [dlqMs, config.TrimLimit, config.MaxDeadLetterEntries]).WaitAsync(ct);
@@ -160,6 +189,7 @@ public sealed class TelemetriaMlRetentionService(
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
+            backpressure?.ObserveUnavailable();
             metrics.RegistrarFalhaRedis(Stopwatch.GetElapsedTime(inicio));
             LogWarningSeguro(ex, "Retenção ML falhou; ciclo encerrado sem afetar ingestão.");
             return new("FAIL_REDIS", 0, 0, 0, 0, 0, 0, 0, 0);
@@ -243,23 +273,26 @@ public sealed class TelemetriaMlRetentionService(
         if type(groups) ~= 'table' or #groups == 0 then return fail('FAIL_NO_GROUPS') end
         local expected = false
         local safe = nil
-        local total_pending = 0
-        local max_lag = 0
+        local expected_pending = 0
+        local expected_lag = 0
         for _, raw in ipairs(groups) do
             local g = fields(raw)
             if not g or type(g['name']) ~= 'string' then return fail('FAIL_INVALID_GROUP') end
-            if g['name'] == ARGV[1] then expected = true end
+            local is_expected = g['name'] == ARGV[1]
+            if is_expected then expected = true end
             local delivered = g['last-delivered-id']
             local dm, ds = parse_id(delivered)
             if not dm or (dm == 0 and ds == 0) then return fail('FAIL_INVALID_PROGRESS') end
             local lag = tonumber(g['lag'])
             if not lag or lag < 0 then return fail('FAIL_INVALID_LAG') end
-            if lag > max_lag then max_lag = lag end
             local pending = redis.call('XPENDING', KEYS[1], g['name'])
             if type(pending) ~= 'table' or #pending < 4 then return fail('FAIL_INVALID_PENDING') end
             local count = tonumber(pending[1])
             if not count or count < 0 then return fail('FAIL_INVALID_PENDING') end
-            total_pending = total_pending + count
+            if is_expected then
+                expected_lag = lag
+                expected_pending = count
+            end
             local progress = successor(delivered)
             if not progress then return fail('FAIL_INVALID_PROGRESS') end
             if count > 0 then
@@ -292,7 +325,7 @@ public sealed class TelemetriaMlRetentionService(
         if after>maximum then
             removed=removed+redis.call('XTRIM',KEYS[1],'MAXLEN','~',maximum,'LIMIT',limit)
         end
-        return {'OK', removed, parse_id(cutoff), total_pending, max_lag, tonumber(stream['length']), oldest}
+        return {'OK', removed, parse_id(cutoff), expected_pending, expected_lag, tonumber(stream['length']), oldest}
         """;
 
     // A DLQ é diagnóstica e hoje não possui consumer group. Se um surgir, falha fechado para revisão da política.

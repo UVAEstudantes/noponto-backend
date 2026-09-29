@@ -315,6 +315,7 @@ public sealed class TelemetriaMlTests
         Assert.Equal(TelemetriaMlStreamPublisher.Capacidade, metrics.ChannelOcupacao);
         Assert.Equal(1, metrics.FalhasPublicacao);
         Assert.Equal(1, metrics.FalhasChannel);
+        Assert.Equal(0, metrics.DropsBackpressure);
     }
 
     [Fact]
@@ -322,10 +323,10 @@ public sealed class TelemetriaMlTests
     {
         var state = new TelemetriaMlBackpressureState();
         const int maximum = 100;
-        state.Observe(49);
+        state.Observe(49, 0, 100_000);
         Assert.True(state.ShouldAccept("observacao-a", maximum));
 
-        state.Observe(75);
+        state.Observe(50, 25, 100_000);
         var first = Enumerable.Range(0, 1000)
             .Count(i => state.ShouldAccept($"observacao-{i}", maximum));
         var second = Enumerable.Range(0, 1000)
@@ -333,8 +334,70 @@ public sealed class TelemetriaMlTests
         Assert.Equal(first, second);
         Assert.InRange(first, 180, 320);
 
-        state.Observe(maximum);
+        state.Observe(maximum, 0, 1);
         Assert.False(state.ShouldAccept("observacao-a", maximum));
+    }
+
+    [Fact]
+    public void BackpressureUsaLagMaisPendingENaoXlen()
+    {
+        var state = new TelemetriaMlBackpressureState();
+        const int maximum = 100;
+
+        state.Observe(0, 0, 1_000_000);
+        Assert.True(state.ShouldAccept("xlen-alto", maximum));
+
+        state.Observe(0, maximum, 1);
+        Assert.False(state.ShouldAccept("pending-alto", maximum));
+
+        state.Observe(20, 20, 1_000_000);
+        Assert.True(state.ShouldAccept("backlog-baixo", maximum));
+        var snapshot = state.CaptureSnapshot();
+        Assert.Equal(40, snapshot.BacklogTotal);
+    }
+
+    [Fact]
+    public void BackpressureSemLeituraValidaDoRedisEhFailOpen()
+    {
+        var state = new TelemetriaMlBackpressureState();
+        state.Observe(100, 100, 1_000_000);
+        state.ObserveUnavailable();
+
+        var snapshot = state.CaptureSnapshot();
+        Assert.False(snapshot.Available);
+        Assert.True(state.ShouldAccept("redis-indisponivel", 100));
+    }
+
+    [Fact]
+    public void BackpressurePublicaSnapshotImutavelEmUmaUnicaGeracao()
+    {
+        var state = new TelemetriaMlBackpressureState();
+        state.Observe(12, 34, 5_678);
+        var primeira = state.CaptureSnapshot();
+
+        Assert.Same(primeira, state.CaptureSnapshot());
+        Assert.Equal(new(true, 12, 34, 46, 5_678), primeira);
+
+        state.Observe(56, 78, 9_012);
+        var segunda = state.CaptureSnapshot();
+        Assert.NotSame(primeira, segunda);
+        Assert.Equal(new(true, 56, 78, 134, 9_012), segunda);
+        Assert.Equal(new(true, 12, 34, 46, 5_678), primeira);
+    }
+
+    [Fact]
+    public void LagDesconhecidoOuInvalidoPublicaSnapshotIndisponivelEFailOpen()
+    {
+        var state = new TelemetriaMlBackpressureState();
+        state.Observe(100, 20, 500);
+
+        state.Observe(null, 20, 500);
+        Assert.False(state.CaptureSnapshot().Available);
+        Assert.True(state.ShouldAccept("lag-desconhecido", 100));
+
+        state.Observe(-1, 20, 500);
+        Assert.False(state.CaptureSnapshot().Available);
+        Assert.True(state.ShouldAccept("lag-invalido", 100));
     }
 
     [Fact]
@@ -342,13 +405,14 @@ public sealed class TelemetriaMlTests
     {
         var metrics = new TelemetriaMlMetrics();
         var state = new TelemetriaMlBackpressureState();
-        state.Observe(10);
+        state.Observe(10, 0, 1_000_000);
         var options = Options.Create(new TelemetriaMlRetentionOptions { MaxStreamEntries = 10 });
         var publisher = new TelemetriaMlStreamPublisher(null!, metrics,
             NullLogger<TelemetriaMlStreamPublisher>.Instance, options, state);
 
         Assert.False(publisher.TentarPublicar(Evento("ML-LIMIT")));
         Assert.Equal(1, metrics.DropsBackpressure);
+        Assert.Equal(0, metrics.FalhasChannel);
         Assert.Equal(1, metrics.FalhasPublicacao);
         Assert.Equal(0, metrics.ChannelOcupacao);
     }

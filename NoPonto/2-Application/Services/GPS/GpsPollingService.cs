@@ -1098,10 +1098,7 @@ public sealed class GpsPollingService : BackgroundService
                 try
                 {
                     var evento = EventoTelemetriaMlFactory.Criar(posicao, viagem, DateTimeOffset.UtcNow);
-                    if (!_telemetriaMl.TentarPublicar(evento))
-                        _logger.LogWarning(
-                            "Telemetria ML de {ordem} descartada por fila local saturada; GPS permanece aceito.",
-                            posicao.Ordem);
+                    _telemetriaMl.TentarPublicar(evento);
                 }
                 catch (Exception ex)
                 {

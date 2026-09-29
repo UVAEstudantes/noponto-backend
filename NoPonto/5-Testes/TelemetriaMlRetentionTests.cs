@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using System.Reflection;
 using NoPonto.Application.GPS;
 using NoPonto.Application.Services.BackgroundServices;
 using StackExchange.Redis;
@@ -23,7 +24,8 @@ public sealed class TelemetriaMlRetentionTests : IAsyncLifetime
         await _redis.DisposeAsync();
     }
 
-    private (TelemetriaMlRetentionService Service, TelemetriaMlRetentionMetrics Metrics, string Stream, string Group, string Dlq)
+    private (TelemetriaMlRetentionService Service, TelemetriaMlRetentionMetrics Metrics,
+        TelemetriaMlBackpressureState Backpressure, string Stream, string Group, string Dlq)
         Criar(int marginMinutes = 60, int dlqDays = 7, int limit = 100_000,
             int maxStream = 100_000, int maxDlq = 10_000)
     {
@@ -32,6 +34,7 @@ public sealed class TelemetriaMlRetentionTests : IAsyncLifetime
         var dlq = stream + ":dlq";
         _keys.Add(stream); _keys.Add(dlq); _keys.Add("noponto:viagem:eventos:teste-retention");
         var metrics = new TelemetriaMlRetentionMetrics();
+        var backpressure = new TelemetriaMlBackpressureState();
         var options = Options.Create(new TelemetriaMlRetentionOptions
         {
             MainStreamSafetyMarginMinutes = marginMinutes,
@@ -41,9 +44,9 @@ public sealed class TelemetriaMlRetentionTests : IAsyncLifetime
             MaxDeadLetterEntries = maxDlq,
         });
         var service = new TelemetriaMlRetentionService(_redis, options, metrics,
-            NullLogger<TelemetriaMlRetentionService>.Instance)
+            NullLogger<TelemetriaMlRetentionService>.Instance, backpressure)
         { StreamKey = stream, ExpectedGroup = group, DeadLetterKey = dlq };
-        return (service, metrics, stream, group, dlq);
+        return (service, metrics, backpressure, stream, group, dlq);
     }
 
     private async Task<List<RedisValue>> AdicionarAsync(string stream, long ms, int quantidade, int seqInicial = 0)
@@ -100,6 +103,63 @@ public sealed class TelemetriaMlRetentionTests : IAsyncLifetime
         Assert.True(resultado.RemovidosPrincipal > 0);
         Assert.Empty(await Db.StreamRangeAsync(x.Stream, antigos[0], antigos[^1]));
         Assert.Single(await Db.StreamRangeAsync(x.Stream, recente, recente));
+    }
+
+    [Fact]
+    public async Task XlenAltoSemLagOuPendingNaoAtivaBackpressure()
+    {
+        var x = Criar(maxStream: 100); var agora = DateTimeOffset.UtcNow;
+        await AdicionarAsync(x.Stream, agora.AddMinutes(-1).ToUnixTimeMilliseconds(), 300);
+        await Db.StreamCreateConsumerGroupAsync(x.Stream, x.Group, "0-0");
+        var lidas = await Db.StreamReadGroupAsync(x.Stream, x.Group, "c1", ">", 1000);
+        await Db.StreamAcknowledgeAsync(x.Stream, x.Group, lidas.Select(e => e.Id).ToArray());
+
+        await x.Service.ExecutarCicloSeguroAsync(agora);
+
+        var snapshot = x.Backpressure.CaptureSnapshot();
+        Assert.True(snapshot.StreamLength >= 100);
+        Assert.Equal(0, snapshot.Lag);
+        Assert.Equal(0, snapshot.Pending);
+        Assert.True(x.Backpressure.ShouldAccept("acked-retido", 100));
+    }
+
+    [Fact]
+    public async Task LagEPendingDoGrupoEsperadoFormamBacklogReal()
+    {
+        var x = Criar(maxStream: 100); var agora = DateTimeOffset.UtcNow;
+        await AdicionarAsync(x.Stream, agora.AddMinutes(-1).ToUnixTimeMilliseconds(), 120);
+        await Db.StreamCreateConsumerGroupAsync(x.Stream, x.Group, "0-0");
+        await Db.StreamReadGroupAsync(x.Stream, x.Group, "c1", ">", 30);
+
+        await x.Service.ExecutarCicloSeguroAsync(agora);
+
+        var snapshot = x.Backpressure.CaptureSnapshot();
+        Assert.Equal(90, snapshot.Lag);
+        Assert.Equal(30, snapshot.Pending);
+        Assert.Equal(120, snapshot.BacklogTotal);
+        Assert.False(x.Backpressure.ShouldAccept("grupo-atrasado", 100));
+    }
+
+    [Fact]
+    public async Task BacklogDeOutroGrupoNaoAlimentaBackpressureDoGrupoEsperado()
+    {
+        var x = Criar(maxStream: 100); var agora = DateTimeOffset.UtcNow;
+        var outro = "outro:" + Guid.NewGuid().ToString("N");
+        await AdicionarAsync(x.Stream, agora.AddMinutes(-1).ToUnixTimeMilliseconds(), 120);
+        await Db.StreamCreateConsumerGroupAsync(x.Stream, x.Group, "0-0");
+        await Db.StreamCreateConsumerGroupAsync(x.Stream, outro, "0-0");
+        var esperadas = await Db.StreamReadGroupAsync(x.Stream, x.Group, "c1", ">", 200);
+        await Db.StreamAcknowledgeAsync(x.Stream, x.Group, esperadas.Select(e => e.Id).ToArray());
+        await Db.StreamReadGroupAsync(x.Stream, outro, "c2", ">", 30);
+
+        await x.Service.ExecutarCicloSeguroAsync(agora);
+
+        var snapshot = x.Backpressure.CaptureSnapshot();
+        Assert.True(snapshot.Available);
+        Assert.Equal(0, snapshot.Lag);
+        Assert.Equal(0, snapshot.Pending);
+        Assert.True(snapshot.StreamLength > 0);
+        Assert.True(x.Backpressure.ShouldAccept("grupo-esperado-saudavel", 100));
     }
 
     [Fact]
@@ -166,6 +226,25 @@ public sealed class TelemetriaMlRetentionTests : IAsyncLifetime
 
         Assert.True(resultado.FailClosed);
         Assert.Equal(1, x.Metrics.CiclosFailClosed);
+        Assert.False(x.Backpressure.CaptureSnapshot().Available);
+        Assert.True(x.Backpressure.ShouldAccept("estado-inseguro", 100));
+    }
+
+    [Fact]
+    public async Task FalhaRedisTornaSnapshotIndisponivelEServicoPermaneceFailOpen()
+    {
+        var redis = DispatchProxy.Create<IConnectionMultiplexer, RedisFailureProxy>();
+        var state = new TelemetriaMlBackpressureState();
+        state.Observe(100, 0, 100);
+        var service = new TelemetriaMlRetentionService(redis,
+            Options.Create(new TelemetriaMlRetentionOptions()), new TelemetriaMlRetentionMetrics(),
+            NullLogger<TelemetriaMlRetentionService>.Instance, state);
+
+        var resultado = await service.ExecutarCicloSeguroAsync(DateTimeOffset.UtcNow);
+
+        Assert.Equal("FAIL_REDIS", resultado.Status);
+        Assert.False(state.CaptureSnapshot().Available);
+        Assert.True(state.ShouldAccept("redis-falhou", 100));
     }
 
     [Fact]
@@ -299,5 +378,12 @@ public sealed class TelemetriaMlRetentionTests : IAsyncLifetime
         Assert.Equal(300, quantidadeConsumida);
         Assert.Equal(0, (await Db.StreamPendingAsync(x.Stream, x.Group)).PendingMessageCount);
         Assert.Equal(0, (await Db.StreamGroupInfoAsync(x.Stream)).Single().Lag);
+    }
+
+    public class RedisFailureProxy : DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
+            throw new RedisConnectionException(ConnectionFailureType.UnableToConnect,
+                $"Falha simulada em {targetMethod?.Name}.");
     }
 }
