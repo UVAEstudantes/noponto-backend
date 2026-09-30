@@ -474,6 +474,58 @@ public sealed class ViagemDuravelPostgresTests(ViagemOperacionalFixture db)
     }
 
     [Fact]
+    public async Task SchemaViagem_SemIndiceTemporal_PreservaPkEUpdatesElegiveisAHot()
+    {
+        await Repository().TentarAtualizarAsync(G(0), default);
+
+        await using var connection = await db.Source.OpenConnectionAsync();
+        await using (var indexes = new NpgsqlCommand("""
+            SELECT indexname, indexdef
+            FROM pg_indexes
+            WHERE schemaname=current_schema() AND tablename='ViagensOperacionais'
+            ORDER BY indexname
+            """, connection))
+        await using (var reader = await indexes.ExecuteReaderAsync())
+        {
+            var definitions = new List<(string Name, string Definition)>();
+            while (await reader.ReadAsync()) definitions.Add((reader.GetString(0), reader.GetString(1)));
+            Assert.Contains(definitions, x => x.Name == "ViagensOperacionais_pkey"
+                && x.Definition.Contains("\"OrdemVeiculo\"", StringComparison.Ordinal));
+            Assert.DoesNotContain(definitions, x => x.Name == "IX_ViagensOperacionais_AtualizadoEmUtc"
+                || x.Definition.Contains("\"AtualizadoEmUtc\"", StringComparison.Ordinal));
+        }
+
+        for (var i = 0; i < 20; i++)
+        {
+            await using var update = new NpgsqlCommand("""
+                UPDATE "ViagensOperacionais"
+                SET "Estado"="Estado", "Versao"="Versao" + 1, "AtualizadoEmUtc"=now()
+                WHERE "OrdemVeiculo"=@ordem
+                """, connection);
+            update.Parameters.AddWithValue("ordem", _ordem);
+            Assert.Equal(1, await update.ExecuteNonQueryAsync());
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync();
+        await using (var explain = new NpgsqlCommand("""
+            SET LOCAL enable_seqscan=off;
+            EXPLAIN (FORMAT TEXT)
+            SELECT "Estado" FROM "ViagensOperacionais" WHERE "OrdemVeiculo"=@ordem
+            """, connection, transaction))
+        {
+            explain.Parameters.AddWithValue("ordem", _ordem);
+            var plan = new List<string>();
+            await using var reader = await explain.ExecuteReaderAsync();
+            do
+            {
+                while (await reader.ReadAsync()) plan.Add(reader.GetString(0));
+            } while (await reader.NextResultAsync());
+            Assert.Contains(plan, line => line.Contains("ViagensOperacionais_pkey", StringComparison.Ordinal));
+        }
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
     public async Task Chaos_RedisPara_ReiniciaVazio_ContinuaMesmaViagem()
     {
         var container = Environment.GetEnvironmentVariable("REDIS_TEST_CONTAINER");

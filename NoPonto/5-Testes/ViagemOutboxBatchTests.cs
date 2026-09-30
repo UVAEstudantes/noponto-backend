@@ -205,9 +205,73 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         Assert.Equal(1, metrics.CatchupGapGt180s);
     }
 
-    private ViagemOutboxWorker Worker(int batchSize = 100) => new(db.Source,
+    [Fact]
+    public async Task Cleanup_RemoveSomenteProcessadoExpirado()
+    {
+        var pending = "cleanup-pending-" + Guid.NewGuid().ToString("N");
+        var recent = "cleanup-recent-" + Guid.NewGuid().ToString("N");
+        var expired = "cleanup-expired-" + Guid.NewGuid().ToString("N");
+        var ids = new[] { pending, recent, expired };
+        await InsertOutboxForCleanup(pending, null);
+        await InsertOutboxForCleanup(recent, DateTimeOffset.UtcNow.AddDays(-6));
+        await InsertOutboxForCleanup(expired, DateTimeOffset.UtcNow.AddDays(-8));
+
+        var removed = await Worker(cleanupBatchSize: 10, cleanupMaxBatches: 1)
+            .LimparProcessadosAsync(default);
+
+        Assert.Equal(1, removed);
+        Assert.Equal(1, await CountOutbox(pending));
+        Assert.Equal(1, await CountOutbox(recent));
+        Assert.Equal(0, await CountOutbox(expired));
+        await DeleteOutboxIds(ids);
+    }
+
+    [Fact]
+    public async Task Cleanup_RespeitaLimiteDoBatch()
+    {
+        var ids = Enumerable.Range(0, 3)
+            .Select(_ => "cleanup-limit-" + Guid.NewGuid().ToString("N")).ToArray();
+        foreach (var id in ids) await InsertOutboxForCleanup(id, DateTimeOffset.UtcNow.AddDays(-8));
+
+        var removed = await Worker(cleanupBatchSize: 2, cleanupMaxBatches: 1)
+            .LimparProcessadosAsync(default);
+
+        Assert.Equal(2, removed);
+        Assert.Equal(1, await CountOutbox(ids));
+        await DeleteOutboxIds(ids);
+    }
+
+    [Fact]
+    public async Task Cleanup_MultiplosBatchesDrenamBacklogSemLoopIlimitado()
+    {
+        var ids = Enumerable.Range(0, 5)
+            .Select(_ => "cleanup-drain-" + Guid.NewGuid().ToString("N")).ToArray();
+        foreach (var id in ids) await InsertOutboxForCleanup(id, DateTimeOffset.UtcNow.AddDays(-8));
+        var worker = Worker(cleanupBatchSize: 2, cleanupMaxBatches: 2);
+
+        Assert.Equal(4, await worker.LimparProcessadosAsync(default));
+        Assert.Equal(1, await CountOutbox(ids));
+        Assert.Equal(1, await worker.LimparProcessadosAsync(default));
+        Assert.Equal(0, await CountOutbox(ids));
+    }
+
+    [Fact]
+    public async Task Cleanup_SemItensExpirados_EhSeguro()
+    {
+        Assert.Equal(0, await Worker(cleanupBatchSize: 10, cleanupMaxBatches: 2)
+            .LimparProcessadosAsync(default));
+    }
+
+    private ViagemOutboxWorker Worker(int batchSize = 100, int cleanupBatchSize = 1000,
+        int cleanupMaxBatches = 2) => new(db.Source,
         new HistoricoEventoRepository(db.Source), NullLogger<ViagemOutboxWorker>.Instance,
-        Options.Create(new ViagemOutboxOptions { BatchSize = batchSize, DelayEntreBatchesMs = 1 }));
+        Options.Create(new ViagemOutboxOptions
+        {
+            BatchSize = batchSize,
+            DelayEntreBatchesMs = 1,
+            CleanupBatchSize = cleanupBatchSize,
+            CleanupMaxBatchesPerRun = cleanupMaxBatches
+        }));
 
     private EventoViagem StartEvent(int index)
     {
@@ -330,6 +394,36 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         await using var command = db.Source.CreateCommand(
             "DELETE FROM \"OutboxViagens\" WHERE \"EventId\"=ANY(@ids)");
         command.Parameters.AddWithValue("ids", events.Select(x => x.EventId).ToArray());
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private async Task InsertOutboxForCleanup(string eventId, DateTimeOffset? processedAt)
+    {
+        await using var command = db.Source.CreateCommand("""
+            INSERT INTO "OutboxViagens"
+                ("EventId","Tipo","Payload","CriadoEmUtc","ProcessadoEmUtc","Tentativas")
+            VALUES (@id,'ViagemIniciada','{}'::jsonb,now() - interval '9 days',@processed,0)
+            """);
+        command.Parameters.AddWithValue("id", eventId);
+        command.Parameters.AddWithValue("processed", (object?)processedAt ?? DBNull.Value);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private async Task<int> CountOutbox(string eventId) => await CountOutbox([eventId]);
+
+    private async Task<int> CountOutbox(IReadOnlyList<string> eventIds)
+    {
+        await using var command = db.Source.CreateCommand(
+            "SELECT count(*) FROM \"OutboxViagens\" WHERE \"EventId\"=ANY(@ids)");
+        command.Parameters.AddWithValue("ids", eventIds.ToArray());
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+    private async Task DeleteOutboxIds(IReadOnlyList<string> eventIds)
+    {
+        await using var command = db.Source.CreateCommand(
+            "DELETE FROM \"OutboxViagens\" WHERE \"EventId\"=ANY(@ids)");
+        command.Parameters.AddWithValue("ids", eventIds.ToArray());
         await command.ExecuteNonQueryAsync();
     }
 }

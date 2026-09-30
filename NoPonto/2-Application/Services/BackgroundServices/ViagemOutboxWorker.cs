@@ -47,7 +47,8 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
                 if (DateTimeOffset.UtcNow >= _nextCleanupUtc)
                 {
                     await LimparProcessadosAsync(stoppingToken);
-                    _nextCleanupUtc = DateTimeOffset.UtcNow.AddHours(1);
+                    _nextCleanupUtc = DateTimeOffset.UtcNow.AddMinutes(
+                        Math.Clamp(_options.CleanupIntervalMinutes, 1, 1440));
                 }
                 if (items.Count == 0) await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
                 LogMetricsIfDue();
@@ -192,17 +193,27 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
 
     internal async Task<int> LimparProcessadosAsync(CancellationToken ct)
     {
-        await using var command = source.CreateCommand("""
-            WITH antigos AS (
-                SELECT ctid FROM "OutboxViagens"
-                WHERE "ProcessadoEmUtc" < now() - @retencao
-                ORDER BY "ProcessadoEmUtc"
-                LIMIT 1000
-            )
-            DELETE FROM "OutboxViagens" o USING antigos a WHERE o.ctid=a.ctid
-            """);
-        command.Parameters.AddWithValue("retencao", ProcessedRetention);
-        return await command.ExecuteNonQueryAsync(ct);
+        var batchSize = Math.Clamp(_options.CleanupBatchSize, 1, 10_000);
+        var maxBatches = Math.Clamp(_options.CleanupMaxBatchesPerRun, 1, 100);
+        var total = 0;
+        for (var batch = 0; batch < maxBatches; batch++)
+        {
+            await using var command = source.CreateCommand("""
+                WITH antigos AS (
+                    SELECT ctid FROM "OutboxViagens"
+                    WHERE "ProcessadoEmUtc" < now() - @retencao
+                    ORDER BY "ProcessadoEmUtc"
+                    LIMIT @limite
+                )
+                DELETE FROM "OutboxViagens" o USING antigos a WHERE o.ctid=a.ctid
+                """);
+            command.Parameters.AddWithValue("retencao", ProcessedRetention);
+            command.Parameters.AddWithValue("limite", batchSize);
+            var removidos = await command.ExecuteNonQueryAsync(ct);
+            total += removidos;
+            if (removidos < batchSize) break;
+        }
+        return total;
     }
 
     private void LogMetricsIfDue()
@@ -241,4 +252,7 @@ public sealed class ViagemOutboxOptions
 {
     public int BatchSize { get; set; } = 100;
     public int DelayEntreBatchesMs { get; set; } = 250;
+    public int CleanupBatchSize { get; set; } = 1000;
+    public int CleanupMaxBatchesPerRun { get; set; } = 2;
+    public int CleanupIntervalMinutes { get; set; } = 10;
 }
