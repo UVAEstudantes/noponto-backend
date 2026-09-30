@@ -96,5 +96,8 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="2-Application/Resources/Trem/trem-estrutura-v2.json" />
+  </ItemGroup>
 
 </Project>
