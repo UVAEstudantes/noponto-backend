@@ -19,12 +19,19 @@ using StackExchange.Redis;
 using System.Net.Sockets;
 using NoPonto.Application.GTFS;
 using System.Reflection;
+using NoPonto.Application.TremV2;
 
 Env.NoClobber().Load();
 
 if (StructuralImportCommand.IsRequested(args))
 {
     Environment.ExitCode = await StructuralImportCommand.ExecuteAsync(args);
+    return;
+}
+
+if (TremStructuralImportCommand.IsRequested(args))
+{
+    Environment.ExitCode = await TremStructuralImportCommand.ExecuteAsync(args);
     return;
 }
 
