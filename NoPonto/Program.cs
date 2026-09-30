@@ -464,6 +464,9 @@ builder.Services.AddSingleton(new HistoricoStreamOptions(redisConnection));
 builder.Services.AddHostedService<ViagemOutboxWorker>();
 
 builder.Services.AddSingleton<TelemetriaMlMetrics>();
+builder.Services.Configure<TelemetriaMlSamplingOptions>(
+    builder.Configuration.GetSection(TelemetriaMlSamplingOptions.Secao));
+builder.Services.AddSingleton<ITelemetriaMlSamplingPolicy, TelemetriaMlSamplingPolicy>();
 builder.Services.AddSingleton<TelemetriaMlBackpressureState>();
 builder.Services.AddHostedService<TelemetriaMlMetricsReporter>();
 builder.Services.AddSingleton<TelemetriaMlStreamPublisher>();

@@ -48,9 +48,28 @@ public sealed class ViagemObservadaServiceTests
     private static ViagemObservadaService Service(Repository repo) =>
         new(repo, NullLogger<ViagemObservadaService>.Instance);
 
-    private static GpsPollingService Polling(PositionCache cache, Repository repo, ITelemetriaMlIngress? telemetria = null) =>
+    private static GpsPollingService Polling(PositionCache cache, Repository repo,
+        ITelemetriaMlIngress? telemetria = null, ITelemetriaMlSamplingPolicy? sampling = null,
+        TelemetriaMlMetrics? metrics = null) =>
         new(null!, null!, null!, NullLogger<GpsPollingService>.Instance, null!, null!,
-            null!, null!, null!, cache, Service(repo), telemetria);
+            null!, null!, new SourceResolver(), cache, Service(repo), telemetria,
+            telemetriaMlSampling: sampling, telemetriaMlMetrics: metrics);
+
+    private sealed class SourceResolver : IGpsSourceResolver
+    {
+        private readonly IGpsSource _source = new StatusSource();
+        public IGpsSource GetPrimary(string modal) => _source;
+        public IReadOnlyList<IGpsSource> GetShadows(string modal) => [];
+    }
+
+    private sealed class StatusSource : IStatusGpsSource
+    {
+        public string Name => "TEST";
+        public Task<IReadOnlyList<GpsObservation>> GetPositionsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<GpsObservation>>([]);
+        public Task<GpsSourceReadResult> GetResultAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new GpsSourceReadResult(StatusFonteGps.Sucesso, [], TimeSpan.Zero));
+    }
 
     private sealed class Telemetria : ITelemetriaMlIngress
     {
@@ -61,6 +80,17 @@ public sealed class ViagemObservadaServiceTests
             if (Falhar) throw new InvalidOperationException("telemetria indisponível");
             Eventos.Add(evento);
             return true;
+        }
+    }
+
+    private sealed class Sampling(bool selected, bool throwOnCall = false) : ITelemetriaMlSamplingPolicy
+    {
+        public int Calls { get; private set; }
+        public bool ShouldCollect(PosicaoVeiculoDto position, DateTimeOffset now)
+        {
+            Calls++;
+            if (throwOnCall) throw new InvalidOperationException("sampling indisponivel");
+            return selected;
         }
     }
 
@@ -152,6 +182,69 @@ public sealed class ViagemObservadaServiceTests
                 Position(), TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
         Assert.True(resultado.Aceito);
         Assert.Single(repo.Calls);
+    }
+
+    [Fact]
+    public async Task SamplingSelecionado_PublicaEventoSemAlterarIdentidade()
+    {
+        var position = Position();
+        var telemetry = new Telemetria();
+        var sampling = new Sampling(true);
+        var metrics = new TelemetriaMlMetrics();
+
+        var result = await Polling(new(PosicaoVeiculoCacheStatus.Accepted), new(), telemetry,
+            sampling, metrics).ConfirmarPosicaoAsync(position,
+            TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
+
+        Assert.True(result.Aceito);
+        var evento = Assert.Single(telemetry.Eventos);
+        Assert.Equal(TelemetriaMlContrato.ObservacaoId(position.ModalFonte,
+            position.ProvedorFonte, position.Ordem, position.TimestampGps), evento.ObservacaoId);
+        Assert.Equal(1, sampling.Calls);
+        Assert.Equal(1, metrics.SamplingCandidates);
+        Assert.Equal(1, metrics.SamplingSelected);
+        Assert.Equal(0, metrics.SamplingSkipped);
+    }
+
+    [Fact]
+    public async Task SamplingNaoSelecionado_PreservaCommitEViagemSemPublicarMl()
+    {
+        var cache = new PositionCache(PosicaoVeiculoCacheStatus.Accepted);
+        var repository = new Repository();
+        var telemetry = new Telemetria();
+        var metrics = new TelemetriaMlMetrics();
+
+        var result = await Polling(cache, repository, telemetry, new Sampling(false), metrics)
+            .ConfirmarPosicaoAsync(Position(), TimeSpan.FromSeconds(40),
+                TimeSpan.FromSeconds(180), default);
+
+        Assert.True(result.Aceito);
+        Assert.True(cache.Confirmed);
+        Assert.Single(repository.Calls);
+        Assert.Empty(telemetry.Eventos);
+        Assert.Equal(1, metrics.SamplingCandidates);
+        Assert.Equal(0, metrics.SamplingSelected);
+        Assert.Equal(1, metrics.SamplingSkipped);
+    }
+
+    [Fact]
+    public async Task SamplingComExcecao_FailOpenPreservaGpsViagemETelemetria()
+    {
+        var repository = new Repository();
+        var telemetry = new Telemetria();
+        var metrics = new TelemetriaMlMetrics();
+
+        var result = await Polling(new(PosicaoVeiculoCacheStatus.Accepted), repository,
+            telemetry, new Sampling(false, true), metrics).ConfirmarPosicaoAsync(Position(),
+                TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
+
+        Assert.True(result.Aceito);
+        Assert.Single(repository.Calls);
+        Assert.Single(telemetry.Eventos);
+        Assert.Equal(1, metrics.SamplingCandidates);
+        Assert.Equal(1, metrics.SamplingSelected);
+        Assert.Equal(0, metrics.SamplingSkipped);
+        Assert.Equal(1, metrics.SamplingFailOpen);
     }
 
     [Fact]

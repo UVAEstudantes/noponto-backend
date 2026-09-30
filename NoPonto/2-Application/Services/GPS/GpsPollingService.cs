@@ -39,6 +39,9 @@ public sealed class GpsPollingService : BackgroundService
     private readonly IGpsStructuralHintResolver? _structuralHintResolver;
     private readonly GpsStructuralHintMetrics? _structuralHintMetrics;
     private readonly EtaV2ShadowService? _etaV2Shadow;
+    private readonly ITelemetriaMlSamplingPolicy? _telemetriaMlSampling;
+    private readonly TelemetriaMlMetrics? _telemetriaMlMetrics;
+    private long _ultimoErroSamplingLogUnixMinute = long.MinValue;
 
     public GpsPollingService(
         GpsSppoSnapshotStore snapshotSppo,
@@ -58,7 +61,9 @@ public sealed class GpsPollingService : BackgroundService
         IOptionsMonitor<CorrecaoTemporalPosicaoOptions>? shadowOptions = null,
         IGpsStructuralHintResolver? structuralHintResolver = null,
         GpsStructuralHintMetrics? structuralHintMetrics = null,
-        EtaV2ShadowService? etaV2Shadow = null)
+        EtaV2ShadowService? etaV2Shadow = null,
+        ITelemetriaMlSamplingPolicy? telemetriaMlSampling = null,
+        TelemetriaMlMetrics? telemetriaMlMetrics = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -80,6 +85,8 @@ public sealed class GpsPollingService : BackgroundService
         _structuralHintResolver = structuralHintResolver;
         _structuralHintMetrics = structuralHintMetrics;
         _etaV2Shadow = etaV2Shadow;
+        _telemetriaMlSampling = telemetriaMlSampling;
+        _telemetriaMlMetrics = telemetriaMlMetrics;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -1095,21 +1102,50 @@ public sealed class GpsPollingService : BackgroundService
             _etaV2Shadow?.TryRecord(enriquecimento, viagem);
             if (_telemetriaMl is not null)
             {
+                var coletar = true;
+                _telemetriaMlMetrics?.RegistrarSamplingCandidate();
                 try
                 {
-                    var evento = EventoTelemetriaMlFactory.Criar(posicao, viagem, DateTimeOffset.UtcNow);
-                    _telemetriaMl.TentarPublicar(evento);
+                    coletar = _telemetriaMlSampling?.ShouldCollect(posicao, DateTimeOffset.UtcNow) ?? true;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex,
-                        "Falha ao produzir telemetria ML de {ordem}; GPS e viagem permanecem aceitos.",
-                        posicao.Ordem);
+                    coletar = true;
+                    _telemetriaMlMetrics?.RegistrarSamplingFailOpen();
+                    LogSamplingFailOpenRateLimited(ex);
+                }
+
+                if (coletar)
+                {
+                    _telemetriaMlMetrics?.RegistrarSamplingSelected();
+                    try
+                    {
+                        var evento = EventoTelemetriaMlFactory.Criar(posicao, viagem, DateTimeOffset.UtcNow);
+                        _telemetriaMl.TentarPublicar(evento);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex,
+                            "Falha ao produzir telemetria ML de {ordem}; GPS e viagem permanecem aceitos.",
+                            posicao.Ordem);
+                    }
+                }
+                else
+                {
+                    _telemetriaMlMetrics?.RegistrarSamplingSkipped();
                 }
             }
         }
 
         return resultado;
+    }
+
+    private void LogSamplingFailOpenRateLimited(Exception ex)
+    {
+        var minute = DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 60;
+        if (Interlocked.Exchange(ref _ultimoErroSamplingLogUnixMinute, minute) == minute) return;
+        _logger.LogWarning(ex,
+            "Falha na amostragem da Telemetria ML; fail-open ativo e coleta integral preservada.");
     }
 
     private static PosicaoVeiculoDto MontarComHistorico(

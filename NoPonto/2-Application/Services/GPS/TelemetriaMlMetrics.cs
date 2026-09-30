@@ -4,6 +4,7 @@ using NoPonto.Application.Services.BackgroundServices;
 
 public sealed class TelemetriaMlMetrics
 {
+    private static readonly TelemetriaMlSamplingMetricsSnapshot InitialSampling = new(false, -1, 10, 60);
     private long _produzidos, _falhasPublicacao, _consumidos, _persistidos, _duplicados;
     private long _invalidos, _retries, _deadLetter, _batches, _itensBatch, _persistenciaTicks;
     private long _publisherRecebidos, _publisherMicrobatches, _publisherItens, _publisherMaiorLote;
@@ -14,6 +15,8 @@ public sealed class TelemetriaMlMetrics
     private long _channelOcupacao, _channelOcupacaoMaxima;
     private long _workerLeituraTicks, _workerDesserializacaoTicks, _workerPostgresTicks;
     private long _workerAckTicks, _workerCleanupTicks;
+    private long _samplingCandidates, _samplingSelected, _samplingSkipped, _samplingFailOpen;
+    private TelemetriaMlSamplingMetricsSnapshot _sampling = InitialSampling;
 
     public long Produzidos => Interlocked.Read(ref _produzidos);
     public long FalhasPublicacao => Interlocked.Read(ref _falhasPublicacao);
@@ -47,6 +50,14 @@ public sealed class TelemetriaMlMetrics
     public double WorkerPostgresMs => TicksEmMs(_workerPostgresTicks);
     public double WorkerAckMs => TicksEmMs(_workerAckTicks);
     public double WorkerCleanupMs => TicksEmMs(_workerCleanupTicks);
+    public long SamplingCandidates => Interlocked.Read(ref _samplingCandidates);
+    public long SamplingSelected => Interlocked.Read(ref _samplingSelected);
+    public long SamplingSkipped => Interlocked.Read(ref _samplingSkipped);
+    public long SamplingFailOpen => Interlocked.Read(ref _samplingFailOpen);
+    public double SamplingEffectivePercentage => SamplingCandidates == 0
+        ? 0
+        : (double)SamplingSelected / SamplingCandidates * 100;
+    public TelemetriaMlSamplingMetricsSnapshot CaptureSamplingState() => Volatile.Read(ref _sampling);
 
     public void RegistrarProduzido() => Interlocked.Increment(ref _produzidos);
     public void RegistrarFalhaPublicacao() => Interlocked.Increment(ref _falhasPublicacao);
@@ -105,8 +116,17 @@ public sealed class TelemetriaMlMetrics
     public void RegistrarWorkerPostgres(TimeSpan duracao) => Interlocked.Add(ref _workerPostgresTicks, duracao.Ticks);
     public void RegistrarWorkerAck(TimeSpan duracao) => Interlocked.Add(ref _workerAckTicks, duracao.Ticks);
     public void RegistrarWorkerCleanup(TimeSpan duracao) => Interlocked.Add(ref _workerCleanupTicks, duracao.Ticks);
+    public void RegistrarSamplingCandidate() => Interlocked.Increment(ref _samplingCandidates);
+    public void RegistrarSamplingSelected() => Interlocked.Increment(ref _samplingSelected);
+    public void RegistrarSamplingSkipped() => Interlocked.Increment(ref _samplingSkipped);
+    public void RegistrarSamplingFailOpen() => Interlocked.Increment(ref _samplingFailOpen);
+    public void ObserveSamplingState(TelemetriaMlSamplingMetricsSnapshot snapshot) =>
+        Interlocked.Exchange(ref _sampling, snapshot);
     private static double TicksEmMs(long ticks) => TimeSpan.FromTicks(Interlocked.Read(ref ticks)).TotalMilliseconds;
 }
+
+public sealed record TelemetriaMlSamplingMetricsSnapshot(
+    bool Enabled, long BlockId, int Percentage, int BlockMinutes);
 
 public sealed class TelemetriaMlMetricsReporter(
     TelemetriaMlMetrics metrics,
@@ -121,6 +141,7 @@ public sealed class TelemetriaMlMetricsReporter(
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 var backlog = backpressure.CaptureSnapshot();
+                var sampling = metrics.CaptureSamplingState();
                 logger.LogInformation(
                     "Telemetria ML: produzidos={produzidos}, falhas_publicacao={falhas}, " +
                     "consumidos={consumidos}, persistidos={persistidos}, duplicados={duplicados}, " +
@@ -138,7 +159,12 @@ public sealed class TelemetriaMlMetricsReporter(
                     "telemetria_stream_length={streamLength}, " +
                     "channel_ocupacao={channelAtual}, channel_ocupacao_max={channelMax}, channel_capacidade={channelCapacidade}, " +
                     "worker_leitura_ms={workerLeitura:F1}, worker_desserializacao_ms={workerDesserializacao:F1}, " +
-                    "worker_postgres_ms={workerPostgres:F1}, worker_ack_ms={workerAck:F1}, worker_cleanup_ms={workerCleanup:F1}",
+                    "worker_postgres_ms={workerPostgres:F1}, worker_ack_ms={workerAck:F1}, worker_cleanup_ms={workerCleanup:F1}, " +
+                    "ml_sampling_candidates={samplingCandidates}, ml_sampling_selected={samplingSelected}, " +
+                    "ml_sampling_skipped={samplingSkipped}, ml_sampling_fail_open={samplingFailOpen}, " +
+                    "ml_sampling_enabled={samplingEnabled}, ml_sampling_block_id={samplingBlockId}, " +
+                    "ml_sampling_percentage_configured={samplingPercentage}, " +
+                    "ml_sampling_effective_percentage={samplingEffective:F2}",
                     metrics.Produzidos, metrics.FalhasPublicacao, metrics.Consumidos,
                     metrics.Persistidos, metrics.Duplicados, metrics.Invalidos,
                     metrics.Retries, metrics.DeadLetter, metrics.Batches,
@@ -154,7 +180,10 @@ public sealed class TelemetriaMlMetricsReporter(
                     metrics.ChannelOcupacao, metrics.ChannelOcupacaoMaxima,
                     TelemetriaMlStreamPublisher.Capacidade,
                     metrics.WorkerLeituraMs, metrics.WorkerDesserializacaoMs,
-                    metrics.WorkerPostgresMs, metrics.WorkerAckMs, metrics.WorkerCleanupMs);
+                    metrics.WorkerPostgresMs, metrics.WorkerAckMs, metrics.WorkerCleanupMs,
+                    metrics.SamplingCandidates, metrics.SamplingSelected, metrics.SamplingSkipped,
+                    metrics.SamplingFailOpen, sampling.Enabled, sampling.BlockId, sampling.Percentage,
+                    metrics.SamplingEffectivePercentage);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }

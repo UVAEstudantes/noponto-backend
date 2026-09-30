@@ -96,6 +96,10 @@ services:
       EtaV2__ShutdownDrainSeconds: ${EtaV2__ShutdownDrainSeconds:-10}
       EtaV2__ExpirationBatchSize: ${EtaV2__ExpirationBatchSize:-5000}
       EtaV2__PendingCountIntervalMinutes: ${EtaV2__PendingCountIntervalMinutes:-5}
+      TelemetriaMlSampling__Enabled: ${TelemetriaMlSampling__Enabled:-false}
+      TelemetriaMlSampling__LinePercentage: ${TelemetriaMlSampling__LinePercentage:-10}
+      TelemetriaMlSampling__BlockMinutes: ${TelemetriaMlSampling__BlockMinutes:-60}
+      TelemetriaMlSampling__Seed: ${TelemetriaMlSampling__Seed:-NOPONTO_ML_V1}
 
       ARCGIS__BRT__ESTACOES__BASE_URL: ${ARCGIS__BRT__ESTACOES__BASE_URL}
       ARCGIS__BRT__ESTACOES__PAGE_SIZE: ${ARCGIS__BRT__ESTACOES__PAGE_SIZE}
