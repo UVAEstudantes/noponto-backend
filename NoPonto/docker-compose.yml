@@ -96,6 +96,18 @@ services:
       EtaV2__ShutdownDrainSeconds: ${EtaV2__ShutdownDrainSeconds:-10}
       EtaV2__ExpirationBatchSize: ${EtaV2__ExpirationBatchSize:-5000}
       EtaV2__PendingCountIntervalMinutes: ${EtaV2__PendingCountIntervalMinutes:-5}
+      TremRealtime__Enabled: ${TremRealtime__Enabled:-false}
+      TremRealtime__MaxRequestsPerMinute: ${TremRealtime__MaxRequestsPerMinute:-1}
+      TremRealtime__MaxConcurrency: ${TremRealtime__MaxConcurrency:-1}
+      TremRealtime__RequestTimeoutSeconds: ${TremRealtime__RequestTimeoutSeconds:-8}
+      TremRealtime__ShadowHistoricalEnabled: ${TremRealtime__ShadowHistoricalEnabled:-false}
+      TremRealtime__Canary__Enabled: ${TremRealtime__Canary__Enabled:-false}
+      TremRealtime__Canary__MaxRequestsPerMinute: ${TremRealtime__Canary__MaxRequestsPerMinute:-1}
+      TremRealtime__Canary__MaxConcurrency: ${TremRealtime__Canary__MaxConcurrency:-1}
+      TremRealtime__Canary__PollSeconds: ${TremRealtime__Canary__PollSeconds:-60}
+      TremRealtime__Canary__MaxRequestsPerRun: ${TremRealtime__Canary__MaxRequestsPerRun:-5}
+      TremRealtime__Canary__AllowedSentinelIds__0: ${TremRealtime__Canary__AllowedSentinelIds__0:-TRUNK_OUT}
+      TremRealtime__Canary__AllowedSentinelIds__1: ${TremRealtime__Canary__AllowedSentinelIds__1:-TRUNK_IN}
       TelemetriaMlSampling__Enabled: ${TelemetriaMlSampling__Enabled:-false}
       TelemetriaMlSampling__LinePercentage: ${TelemetriaMlSampling__LinePercentage:-10}
       TelemetriaMlSampling__BlockMinutes: ${TelemetriaMlSampling__BlockMinutes:-60}
