@@ -261,7 +261,16 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
     {
         await using var command = source.CreateCommand(OldestProcessedSql);
         var value = await command.ExecuteScalarAsync(ct);
-        return value is null or DBNull ? null : (DateTimeOffset)value;
+        return value switch
+        {
+            null or DBNull => null,
+            DateTimeOffset timestamp => timestamp.ToUniversalTime(),
+            DateTime { Kind: DateTimeKind.Utc } timestamp => new DateTimeOffset(timestamp),
+            DateTime timestamp => throw new InvalidDataException(
+                $"ProcessadoEmUtc foi materializado como DateTime {timestamp.Kind}; UTC era esperado."),
+            _ => throw new InvalidDataException(
+                $"ProcessadoEmUtc foi materializado como {value.GetType().FullName}; timestamp UTC era esperado.")
+        };
     }
 
     private void LogMetricsIfDue()

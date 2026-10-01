@@ -263,6 +263,24 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
     }
 
     [Fact]
+    public async Task Cleanup_OldestProcessedPreservaInstanteUtcMaterializadoPeloPostgres()
+    {
+        await DeleteProcessedOutbox();
+        var eventId = "cleanup-oldest-utc-" + Guid.NewGuid().ToString("N");
+        var expected = DateTimeOffset.UtcNow.AddHours(-1);
+        expected = expected.AddTicks(-(expected.Ticks % 10));
+        await InsertOutboxForCleanup(eventId, expected);
+
+        var result = await Worker(cleanupBatchSize: 10, cleanupMaxBatches: 1)
+            .LimparProcessadosAsync(default);
+
+        Assert.Equal(0, result.Deleted);
+        Assert.Equal(expected, result.OldestProcessedUtc);
+        Assert.Equal(TimeSpan.Zero, result.OldestProcessedUtc!.Value.Offset);
+        await DeleteOutboxIds([eventId]);
+    }
+
+    [Fact]
     public async Task CleanupFalha_ContabilizaENaoImpedeClaimNormal()
     {
         var evento = StartEvent(999);
@@ -447,6 +465,13 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         await using var command = db.Source.CreateCommand(
             "DELETE FROM \"OutboxViagens\" WHERE \"EventId\"=ANY(@ids)");
         command.Parameters.AddWithValue("ids", eventIds.ToArray());
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private async Task DeleteProcessedOutbox()
+    {
+        await using var command = db.Source.CreateCommand(
+            "DELETE FROM \"OutboxViagens\" WHERE \"ProcessadoEmUtc\" IS NOT NULL");
         await command.ExecuteNonQueryAsync();
     }
 }
