@@ -13,7 +13,7 @@ public sealed class EstruturaLeituraV2ControllerTests
     {
         var repo = Scenario();
         var linhas = new EstruturaLinhasController(repo);
-        var pagina = Assert.IsType<OkObjectResult>(await linhas.Listar("006", 1, 20)).Value;
+        var pagina = Assert.IsType<OkObjectResult>(await linhas.Listar("006", null, 1, 20)).Value;
         Assert.Equal("006", Assert.Single(Assert.IsType<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>>(pagina).Itens).Codigo);
         var sentidos = Assert.IsAssignableFrom<IReadOnlyList<SentidoEstruturalResumoDto>>(
             Assert.IsType<OkObjectResult>(await linhas.Sentidos("006", default)).Value);
@@ -98,7 +98,7 @@ public sealed class EstruturaLeituraV2ControllerTests
         private LinhaEstruturalResumoDto Linha => new(LinhaId, "006", "Castelo - Silvestre",
             "regular", null, Guid.NewGuid(), "Ônibus");
         public Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
-            string? codigo, int pagina, int tamanhoPagina, CancellationToken ct)
+            string? codigo, string? nome, int pagina, int tamanhoPagina, CancellationToken ct)
             => Task.FromResult(new PaginacaoRespostaDTO<LinhaEstruturalResumoDto>
             { Pagina = pagina, TamanhoPagina = tamanhoPagina, TotalRegistros = 1,
                 TotalPaginas = 1, Itens = [Linha] });

@@ -31,7 +31,7 @@ public sealed record ItinerarioPadraoVersaoDto(
 public interface IEstruturaLeituraV2Repository
 {
     Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
-        string? codigo, int pagina, int tamanhoPagina, CancellationToken ct);
+        string? codigo, string? nome, int pagina, int tamanhoPagina, CancellationToken ct);
     Task<LinhaEstruturalResumoDto?> BuscarLinhaPorCodigoAsync(string codigo, CancellationToken ct);
     Task<IReadOnlyList<SentidoEstruturalResumoDto>?> ListarSentidosAsync(string codigoLinha, CancellationToken ct);
     Task<IReadOnlyList<PadraoOperacionalResumoDto>?> ListarPadroesAsync(Guid sentidoId, CancellationToken ct);

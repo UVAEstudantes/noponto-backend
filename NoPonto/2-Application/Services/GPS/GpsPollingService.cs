@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NoPonto.API.Hubs;
+using NoPonto.Application.LegacyCompatibility.DTOs;
 using NoPonto.Data.Repositories;
 
 namespace NoPonto.Application.GPS;
@@ -622,7 +623,9 @@ public sealed class GpsPollingService : BackgroundService
                     broadcastTasks.Add(
                         _hubContext.Clients
                             .Group(GpsHub.GrupoLinha(linha))
-                            .SendAsync("PosicaoAtualizada", veiculosDaLinha, ct));
+                            // TEMPORARY FRONTEND COMPATIBILITY: output-only alias; no GPS decision changes.
+                            .SendAsync("PosicaoAtualizada",
+                                veiculosDaLinha.Select(FrontendLegacyPosicaoSignalRDto.From).ToArray(), ct));
                 }
             }
 
