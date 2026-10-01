@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using NoPonto.Application.DTOs.Compartilhado;
 using NoPonto.Application.DTOs.EstruturaV2;
+using NoPonto.Application.LegacyCompatibility.DTOs;
 
 namespace NoPonto.Data.Repositories;
 
@@ -8,7 +9,7 @@ public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
     : IEstruturaLeituraV2Repository
 {
     public async Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
-        string? codigo, int pagina, int tamanhoPagina, CancellationToken ct)
+        string? codigo, string? nome, int pagina, int tamanhoPagina, CancellationToken ct)
     {
         var query = db.Linhas.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(codigo))
@@ -16,12 +17,21 @@ public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
             var filtro = codigo.Trim();
             query = query.Where(x => EF.Functions.ILike(x.Codigo, $"%{filtro}%"));
         }
+        if (!string.IsNullOrWhiteSpace(nome))
+        {
+            var filtro = nome.Trim();
+            query = query.Where(x => EF.Functions.ILike(x.Codigo, $"%{filtro}%")
+                || EF.Functions.ILike(x.Nome, $"%{filtro}%"));
+        }
 
         var total = await query.CountAsync(ct);
         var itens = await query.OrderBy(x => x.Codigo).ThenBy(x => x.Id)
             .Skip((pagina - 1) * tamanhoPagina).Take(tamanhoPagina)
             .Select(x => new LinhaEstruturalResumoDto(x.Id, x.Codigo, x.Nome,
-                x.TipoRota, x.Consorcio, x.ModalId, x.Modal.Nome))
+                x.TipoRota, x.Consorcio,
+                // TEMPORARY FRONTEND COMPATIBILITY: virtual HTTP identity, never persisted.
+                x.TipoRota == "brt" ? FrontendLegacyModalIds.Brt : x.ModalId,
+                x.TipoRota == "brt" ? "BRT" : x.Modal.Nome))
             .ToListAsync(ct);
         return new PaginacaoRespostaDTO<LinhaEstruturalResumoDto>
         {

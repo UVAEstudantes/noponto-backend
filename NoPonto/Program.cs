@@ -447,6 +447,9 @@ builder.Services.AddHostedService<GpsStructuralHintMetricsReporter>();
 
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 builder.Services.AddScoped<IEstruturaLeituraV2Repository, EstruturaLeituraV2Repository>();
+// TEMPORARY FRONTEND COMPATIBILITY: removable adapter for the current APK.
+builder.Services.AddScoped<NoPonto.Application.LegacyCompatibility.Services.IFrontendLegacyMapaService,
+    NoPonto.Application.LegacyCompatibility.Services.FrontendLegacyMapaService>();
 
 builder.Services.Configure<ViagemOutboxOptions>(builder.Configuration.GetSection("ViagemOutbox"));
 builder.Services.AddOptions<EtaV2Options>().Bind(builder.Configuration.GetSection("EtaV2"))

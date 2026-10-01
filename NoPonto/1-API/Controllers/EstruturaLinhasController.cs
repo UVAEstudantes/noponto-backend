@@ -10,12 +10,14 @@ public sealed class EstruturaLinhasController(IEstruturaLeituraV2Repository repo
 {
     [HttpGet]
     [ProducesResponseType(typeof(PaginacaoRespostaDTO<LinhaEstruturalResumoDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Listar([FromQuery] string? codigo, [FromQuery] int page = 1,
+    public async Task<IActionResult> Listar([FromQuery] string? codigo, [FromQuery] string? nome,
+        [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50, CancellationToken ct = default)
     {
         if (page < 1 || pageSize is < 1 or > 100)
             return BadRequest(new { mensagem = "page deve ser >= 1 e pageSize deve estar entre 1 e 100." });
-        return Ok(await repository.ListarLinhasAsync(codigo, page, pageSize, ct));
+        // TEMPORARY FRONTEND COMPATIBILITY: the current APK sends the search as `nome`.
+        return Ok(await repository.ListarLinhasAsync(codigo, nome, page, pageSize, ct));
     }
 
     [HttpGet("{codigo}")]
