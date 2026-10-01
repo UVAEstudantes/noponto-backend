@@ -7,6 +7,7 @@ using NoPonto.Application.TremRealtime.Normalization;
 using NoPonto.Application.TremRealtime.Options;
 using NoPonto.Application.TremRealtime.Provider;
 using NoPonto.Application.TremRealtime.Scheduling;
+using NoPonto.Application.TremRealtime.Tracking;
 using Xunit;
 
 namespace NoPonto.Tests.TremRealtime;
@@ -141,7 +142,7 @@ public sealed class TremRealtimePhase2BTests
         var state = new TremRealtimeCanaryState(canary, clock);
         var metrics = new TremRealtimeCanaryMetrics();
         var client = new FakeClient(results ?? []);
-        var cycle = new TremRealtimeCanaryCycle(runtime, canary, new FakeCatalog(), new TremSentinelSchedulerEngine(runtime), new TremDemandRegistry(runtime), client, normalizer ?? new FakeNormalizer([]), state, metrics, clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
+        var cycle = new TremRealtimeCanaryCycle(runtime, canary, new FakeCatalog(), new TremSentinelSchedulerEngine(runtime), new TremDemandRegistry(runtime), client, normalizer ?? new FakeNormalizer([]), state, metrics, new NoopTracker(), new TremRealtimeTrackerMetrics(), clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
         return new(cycle, client, state, metrics, clock);
     }
 
@@ -184,6 +185,13 @@ public sealed class TremRealtimePhase2BTests
     private sealed class NoopCycle : ITremRealtimeCanaryCycle
     {
         public Task RunOnceAsync(CancellationToken ct) { if (!ct.IsCancellationRequested) { } return Task.CompletedTask; }
+    }
+
+    private sealed class NoopTracker : ITremRealtimeTracker
+    {
+        public void ObserveBatch(string provider, string sentinelId, IReadOnlyList<TremRealtimeObservation> observations) { }
+        public void Cleanup() { }
+        public TremRealtimeTrackerSnapshot CaptureSnapshot() => new(TestClock.Start, []);
     }
 
     private sealed class TestClock : TimeProvider
