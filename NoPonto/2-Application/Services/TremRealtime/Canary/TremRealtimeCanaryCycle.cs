@@ -4,6 +4,7 @@ using NoPonto.Application.TremRealtime.Normalization;
 using NoPonto.Application.TremRealtime.Options;
 using NoPonto.Application.TremRealtime.Provider;
 using NoPonto.Application.TremRealtime.Scheduling;
+using NoPonto.Application.TremRealtime.Tracking;
 
 namespace NoPonto.Application.TremRealtime.Canary;
 
@@ -19,6 +20,8 @@ public sealed class TremRealtimeCanaryCycle(
     ITremRealtimeNormalizer normalizer,
     TremRealtimeCanaryState state,
     TremRealtimeCanaryMetrics metrics,
+    ITremRealtimeTracker tracker,
+    TremRealtimeTrackerMetrics trackerMetrics,
     TimeProvider clock,
     ILogger<TremRealtimeCanaryCycle> logger) : ITremRealtimeCanaryCycle
 {
@@ -64,6 +67,21 @@ public sealed class TremRealtimeCanaryCycle(
                 ? await normalizer.NormalizeAsync(result.Value, item.Query.PairKey, now, ct)
                 : [];
             metrics.Departures(observations.Count);
+            try
+            {
+                tracker.ObserveBatch("TRENS_RJ", item.Query.Id, observations);
+                var trackerSnapshot = tracker.CaptureSnapshot();
+                var trackerCounters = trackerMetrics.Capture();
+                logger.LogInformation(
+                    "TremTrackerSummary active={Active} stale={Stale} tracked={Tracked} new_total={NewTotal} repeated_total={RepeatedTotal} untrackable_total={UntrackableTotal}",
+                    trackerSnapshot.Active, trackerSnapshot.Stale, trackerSnapshot.Trains.Length,
+                    trackerCounters.NewTrains, trackerCounters.RepeatedTrains, trackerCounters.UntrackableMissingCode);
+            }
+            catch (Exception ex)
+            {
+                trackerMetrics.Failure();
+                logger.LogError(ex, "Trem realtime tracker failed open for sentinel={SentinelId}", item.Query.Id);
+            }
             foreach (var observation in observations)
                 if (observation.ProviderLinhaId is { } linha && !item.Query.ObservedProviderLinhaIds.Contains(linha) && state.MarkNewProviderLine(item.Query.Id, linha)) metrics.NewProviderLine();
 
