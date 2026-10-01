@@ -213,13 +213,13 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         var expired = "cleanup-expired-" + Guid.NewGuid().ToString("N");
         var ids = new[] { pending, recent, expired };
         await InsertOutboxForCleanup(pending, null);
-        await InsertOutboxForCleanup(recent, DateTimeOffset.UtcNow.AddDays(-6));
+        await InsertOutboxForCleanup(recent, DateTimeOffset.UtcNow.AddDays(-7).AddHours(1));
         await InsertOutboxForCleanup(expired, DateTimeOffset.UtcNow.AddDays(-8));
 
         var removed = await Worker(cleanupBatchSize: 10, cleanupMaxBatches: 1)
             .LimparProcessadosAsync(default);
 
-        Assert.Equal(1, removed);
+        Assert.Equal(1, removed.Deleted);
         Assert.Equal(1, await CountOutbox(pending));
         Assert.Equal(1, await CountOutbox(recent));
         Assert.Equal(0, await CountOutbox(expired));
@@ -236,7 +236,7 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         var removed = await Worker(cleanupBatchSize: 2, cleanupMaxBatches: 1)
             .LimparProcessadosAsync(default);
 
-        Assert.Equal(2, removed);
+        Assert.Equal(2, removed.Deleted);
         Assert.Equal(1, await CountOutbox(ids));
         await DeleteOutboxIds(ids);
     }
@@ -249,17 +249,57 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         foreach (var id in ids) await InsertOutboxForCleanup(id, DateTimeOffset.UtcNow.AddDays(-8));
         var worker = Worker(cleanupBatchSize: 2, cleanupMaxBatches: 2);
 
-        Assert.Equal(4, await worker.LimparProcessadosAsync(default));
+        Assert.Equal(4, (await worker.LimparProcessadosAsync(default)).Deleted);
         Assert.Equal(1, await CountOutbox(ids));
-        Assert.Equal(1, await worker.LimparProcessadosAsync(default));
+        Assert.Equal(1, (await worker.LimparProcessadosAsync(default)).Deleted);
         Assert.Equal(0, await CountOutbox(ids));
     }
 
     [Fact]
     public async Task Cleanup_SemItensExpirados_EhSeguro()
     {
-        Assert.Equal(0, await Worker(cleanupBatchSize: 10, cleanupMaxBatches: 2)
-            .LimparProcessadosAsync(default));
+        Assert.Equal(0, (await Worker(cleanupBatchSize: 10, cleanupMaxBatches: 2)
+            .LimparProcessadosAsync(default)).Deleted);
+    }
+
+    [Fact]
+    public async Task Cleanup_OldestProcessedPreservaInstanteUtcMaterializadoPeloPostgres()
+    {
+        await DeleteProcessedOutbox();
+        var eventId = "cleanup-oldest-utc-" + Guid.NewGuid().ToString("N");
+        var expected = DateTimeOffset.UtcNow.AddHours(-1);
+        expected = expected.AddTicks(-(expected.Ticks % 10));
+        await InsertOutboxForCleanup(eventId, expected);
+
+        var result = await Worker(cleanupBatchSize: 10, cleanupMaxBatches: 1)
+            .LimparProcessadosAsync(default);
+
+        Assert.Equal(0, result.Deleted);
+        Assert.Equal(expected, result.OldestProcessedUtc);
+        Assert.Equal(TimeSpan.Zero, result.OldestProcessedUtc!.Value.Offset);
+        await DeleteOutboxIds([eventId]);
+    }
+
+    [Fact]
+    public async Task CleanupFalha_ContabilizaENaoImpedeClaimNormal()
+    {
+        var evento = StartEvent(999);
+        await Enqueue([evento]);
+        var metrics = new OutboxCleanupMetrics();
+        var worker = new ViagemOutboxWorker(db.Source, new HistoricoEventoRepository(db.Source),
+            NullLogger<ViagemOutboxWorker>.Instance,
+            Options.Create(new ViagemOutboxOptions { CleanupDelayBetweenBatchesMs = 0 }),
+            cleanupMetrics: metrics)
+        {
+            DeleteCleanupBatchOverride = (_, _, _) => throw new InvalidOperationException("cleanup fixture")
+        };
+
+        Assert.Null(await worker.ExecutarCleanupSeguroAsync(default));
+        var snapshot = metrics.Capture();
+        Assert.Equal(1, snapshot.Runs);
+        Assert.Equal(1, snapshot.Failures);
+        Assert.Contains(await worker.ClaimAsync(default), x => x.EventId == evento.EventId);
+        await DeleteOutbox([evento]);
     }
 
     private ViagemOutboxWorker Worker(int batchSize = 100, int cleanupBatchSize = 1000,
@@ -270,7 +310,8 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
             BatchSize = batchSize,
             DelayEntreBatchesMs = 1,
             CleanupBatchSize = cleanupBatchSize,
-            CleanupMaxBatchesPerRun = cleanupMaxBatches
+            CleanupMaxBatchesPerRun = cleanupMaxBatches,
+            CleanupDelayBetweenBatchesMs = 0
         }));
 
     private EventoViagem StartEvent(int index)
@@ -424,6 +465,13 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         await using var command = db.Source.CreateCommand(
             "DELETE FROM \"OutboxViagens\" WHERE \"EventId\"=ANY(@ids)");
         command.Parameters.AddWithValue("ids", eventIds.ToArray());
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private async Task DeleteProcessedOutbox()
+    {
+        await using var command = db.Source.CreateCommand(
+            "DELETE FROM \"OutboxViagens\" WHERE \"ProcessadoEmUtc\" IS NOT NULL");
         await command.ExecuteNonQueryAsync();
     }
 }

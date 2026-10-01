@@ -451,7 +451,11 @@ builder.Services.AddScoped<IEstruturaLeituraV2Repository, EstruturaLeituraV2Repo
 builder.Services.AddScoped<NoPonto.Application.LegacyCompatibility.Services.IFrontendLegacyMapaService,
     NoPonto.Application.LegacyCompatibility.Services.FrontendLegacyMapaService>();
 
-builder.Services.Configure<ViagemOutboxOptions>(builder.Configuration.GetSection("ViagemOutbox"));
+builder.Services.AddOptions<ViagemOutboxOptions>()
+    .Bind(builder.Configuration.GetSection("ViagemOutbox"))
+    .Validate(x => x.Valid(), "Configuracao ViagemOutbox invalida.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<OutboxCleanupMetrics>();
 builder.Services.AddOptions<EtaV2Options>().Bind(builder.Configuration.GetSection("EtaV2"))
     .Validate(x => !x.Enabled || x.Valid(), "Configuração EtaV2 inválida.")
     .ValidateOnStart();
