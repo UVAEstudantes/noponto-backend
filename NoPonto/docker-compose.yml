@@ -106,8 +106,7 @@ services:
       TremRealtime__Canary__MaxConcurrency: ${TremRealtime__Canary__MaxConcurrency:-1}
       TremRealtime__Canary__PollSeconds: ${TremRealtime__Canary__PollSeconds:-60}
       TremRealtime__Canary__MaxRequestsPerRun: ${TremRealtime__Canary__MaxRequestsPerRun:-5}
-      TremRealtime__Canary__AllowedSentinelIds__0: ${TremRealtime__Canary__AllowedSentinelIds__0:-TRUNK_OUT}
-      TremRealtime__Canary__AllowedSentinelIds__1: ${TremRealtime__Canary__AllowedSentinelIds__1:-TRUNK_IN}
+      
       TelemetriaMlSampling__Enabled: ${TelemetriaMlSampling__Enabled:-false}
       TelemetriaMlSampling__LinePercentage: ${TelemetriaMlSampling__LinePercentage:-10}
       TelemetriaMlSampling__BlockMinutes: ${TelemetriaMlSampling__BlockMinutes:-60}
