@@ -20,6 +20,12 @@ using System.Net.Sockets;
 using NoPonto.Application.GTFS;
 using System.Reflection;
 using NoPonto.Application.TremV2;
+using NoPonto.Application.TremRealtime.Normalization;
+using NoPonto.Application.TremRealtime.Options;
+using NoPonto.Application.TremRealtime.Provider;
+using NoPonto.Application.TremRealtime.Structural;
+using NoPonto.Application.TremRealtime.Scheduling;
+using NoPonto.Application.TremRealtime.Canary;
 
 Env.NoClobber().Load();
 
@@ -154,6 +160,42 @@ var connectionString = new NpgsqlConnectionStringBuilder
 }.ConnectionString;
 
 builder.Services.AdicionarPostgresCompartilhado(connectionString);
+
+builder.Services.AddSingleton<IValidateOptions<TremRealtimeOptions>, TremRealtimeOptionsValidator>();
+builder.Services.AddOptions<TremRealtimeOptions>()
+    .Bind(builder.Configuration.GetSection(TremRealtimeOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddOptions<TremRealtimeCanaryOptions>()
+    .Bind(builder.Configuration.GetSection(TremRealtimeCanaryOptions.SectionName));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ITrensRjRequestBudget, ProcessLocalTrensRjRequestBudget>();
+builder.Services.AddSingleton<TremRealtimeMetrics>();
+builder.Services.AddSingleton<ITremPairSingleFlight, TremPairSingleFlight>();
+builder.Services.AddSingleton<ITremStructuralLookupSource, EfTremStructuralLookupSource>();
+builder.Services.AddSingleton<ITremStructuralLookup, TremStructuralLookup>();
+builder.Services.AddScoped<ITremRealtimeNormalizer, TremRealtimeNormalizer>();
+builder.Services.AddSingleton<ITremDemandRegistry, TremDemandRegistry>();
+builder.Services.AddSingleton<ITremScheduleCache, TremScheduleCache>();
+builder.Services.AddSingleton<ITremSentinelCatalog, TremSentinelCatalog>();
+builder.Services.AddSingleton<ITremSentinelSchedulerEngine, TremSentinelSchedulerEngine>();
+builder.Services.AddSingleton<TremRealtimeCanaryState>();
+builder.Services.AddSingleton<TremRealtimeCanaryMetrics>();
+builder.Services.AddScoped<ITremRealtimeCanaryCycle, TremRealtimeCanaryCycle>();
+builder.Services.AddHostedService<TremRealtimeCanaryWorker>();
+builder.Services.AddHttpClient<ITrensRjRealtimeClient, TrensRjRealtimeClient>((services, client) =>
+{
+    var options = services.GetRequiredService<IOptions<TremRealtimeOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("NoPonto-TremRealtime/1.0");
+});
+builder.Services.AddHttpClient<ITrensRjPlanClient, TrensRjPlanClient>((services, client) =>
+{
+    var options = services.GetRequiredService<IOptions<TremRealtimeOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("NoPonto-TremRealtime/1.0");
+});
 
 // --------------------------------------------------------------------
 // HTTP CLIENTS
