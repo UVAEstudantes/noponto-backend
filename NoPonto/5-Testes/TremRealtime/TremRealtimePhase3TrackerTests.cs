@@ -7,6 +7,8 @@ using NoPonto.Application.TremRealtime.Options;
 using NoPonto.Application.TremRealtime.Provider;
 using NoPonto.Application.TremRealtime.Scheduling;
 using NoPonto.Application.TremRealtime.Tracking;
+using NoPonto.Application.TremRealtime.Topology;
+using NoPonto.Application.TremRealtime.Correlation;
 using Xunit;
 
 namespace NoPonto.Tests.TremRealtime;
@@ -237,7 +239,7 @@ public sealed class TremRealtimePhase3TrackerTests
         var client = new FakeClient();
         var cycle = new TremRealtimeCanaryCycle(runtime, canary, new FakeCatalog(), new TremSentinelSchedulerEngine(runtime),
             new TremDemandRegistry(runtime), client, new FakeNormalizer([Observation("A", 4)]), state, cycleMetrics,
-            new ThrowingTracker(), trackerMetrics, clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
+            new ThrowingTracker(), trackerMetrics, new NoopTopologyCache(), new NoopCrossObserver(), new TremCrossSentinelMetrics(), clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
 
         await cycle.RunOnceAsync(default);
 
@@ -280,9 +282,19 @@ public sealed class TremRealtimePhase3TrackerTests
 
     private sealed class ThrowingTracker : ITremRealtimeTracker
     {
-        public void ObserveBatch(string provider, string sentinelId, IReadOnlyList<TremRealtimeObservation> observations) => throw new InvalidOperationException("diagnostic failure");
+        public System.Collections.Immutable.ImmutableArray<TrackedObservationAcceptance> ObserveBatch(string provider, string sentinelId, IReadOnlyList<TremRealtimeObservation> observations) => throw new InvalidOperationException("diagnostic failure");
         public void Cleanup() => throw new InvalidOperationException();
         public TremRealtimeTrackerSnapshot CaptureSnapshot() => throw new InvalidOperationException();
+    }
+    private sealed class NoopTopologyCache : ITremPublishedTopologyCache
+    {
+        public Task<TremPublishedTopologySnapshot> GetAsync(CancellationToken ct = default) => Task.FromResult(TremPublishedTopologySnapshot.Empty);
+        public Task<TremPublishedTopologySnapshot> ReloadAsync(CancellationToken ct = default) => Task.FromResult(TremPublishedTopologySnapshot.Empty);
+    }
+    private sealed class NoopCrossObserver : ITremCrossSentinelObserver
+    {
+        public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc, IReadOnlySet<Guid> liveTrackerIds) { }
+        public TremCrossSentinelSnapshot CaptureSnapshot() => new(System.Collections.Immutable.ImmutableDictionary<Guid, System.Collections.Immutable.ImmutableArray<TremSpatialObservationEvidence>>.Empty);
     }
 
     private sealed class FakeCatalog : ITremSentinelCatalog

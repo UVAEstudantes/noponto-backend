@@ -6,7 +6,7 @@ namespace NoPonto.Application.TremRealtime.Tracking;
 
 public interface ITremRealtimeTracker
 {
-    void ObserveBatch(string provider, string sentinelId, IReadOnlyList<TremRealtimeObservation> observations);
+    ImmutableArray<TrackedObservationAcceptance> ObserveBatch(string provider, string sentinelId, IReadOnlyList<TremRealtimeObservation> observations);
     void Cleanup();
     TremRealtimeTrackerSnapshot CaptureSnapshot();
 }
@@ -49,7 +49,7 @@ public sealed class TremRealtimeTracker : ITremRealtimeTracker
         _metrics = metrics;
     }
 
-    public void ObserveBatch(string provider, string sentinelId, IReadOnlyList<TremRealtimeObservation> observations)
+    public ImmutableArray<TrackedObservationAcceptance> ObserveBatch(string provider, string sentinelId, IReadOnlyList<TremRealtimeObservation> observations)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(provider);
         ArgumentException.ThrowIfNullOrWhiteSpace(sentinelId);
@@ -58,8 +58,11 @@ public sealed class TremRealtimeTracker : ITremRealtimeTracker
         lock (_gate)
         {
             CleanupCore(now, force: false);
-            foreach (var observation in observations) Observe(provider, sentinelId, observation, now);
+            var accepted = ImmutableArray.CreateBuilder<TrackedObservationAcceptance>(observations.Count);
+            foreach (var observation in observations)
+                if (Observe(provider, sentinelId, observation, now) is { } value) accepted.Add(value);
             UpdateStateCounts();
+            return accepted.ToImmutable();
         }
     }
 
@@ -83,22 +86,22 @@ public sealed class TremRealtimeTracker : ITremRealtimeTracker
         }
     }
 
-    private void Observe(string provider, string sentinelId, TremRealtimeObservation observation, DateTimeOffset now)
+    private TrackedObservationAcceptance? Observe(string provider, string sentinelId, TremRealtimeObservation observation, DateTimeOffset now)
     {
         _metrics.Observation();
         var trainCode = observation.TrainCode?.Trim();
-        if (string.IsNullOrEmpty(trainCode)) { _metrics.Untrackable(); return; }
+        if (string.IsNullOrEmpty(trainCode)) { _metrics.Untrackable(); return null; }
         var trackingDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(observation.ObservedAtUtc, TrackingTimeZone).DateTime);
         var key = new TrainKey(provider, trackingDate, trainCode);
         if (!_entries.TryGetValue(key, out var entry))
         {
-            if (!EnsureCapacity(now)) { _metrics.CapacityRejected(); return; }
+            if (!EnsureCapacity(now)) { _metrics.CapacityRejected(); return null; }
             var first = new TrackedTrainObservation(sentinelId, observation, TremEtaEvolution.None);
             entry = new(Guid.NewGuid(), key, observation.ObservedAtUtc, first);
             entry.Recent.Enqueue(first);
             _entries.Add(key, entry);
             _metrics.NewTrain();
-            return;
+            return new(entry.TrackerId, key.TrackingDate, entry.State, observation);
         }
 
         var wasStale = entry.State == TrackedTrainState.Stale;
@@ -121,6 +124,7 @@ public sealed class TremRealtimeTracker : ITremRealtimeTracker
         while (entry.Recent.Count > _options.MaxObservationsPerTrain) entry.Recent.Dequeue();
         _metrics.Repeated();
         if (wasStale) _metrics.Reappeared();
+        return new(entry.TrackerId, key.TrackingDate, entry.State, observation);
     }
 
     private bool EnsureCapacity(DateTimeOffset now)

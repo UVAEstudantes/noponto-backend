@@ -11,6 +11,12 @@ public sealed record TrackedTrainObservation(
     TremRealtimeObservation Observation,
     TremEtaEvolution EtaEvolution);
 
+public sealed record TrackedObservationAcceptance(
+    Guid TrackerId,
+    DateOnly TrackingDate,
+    TrackedTrainState State,
+    TremRealtimeObservation Observation);
+
 public sealed record TrackedTrainSnapshot(
     Guid TrackerId,
     string Provider,
