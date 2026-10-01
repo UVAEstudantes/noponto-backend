@@ -11,15 +11,21 @@ namespace NoPonto.Application.Services.BackgroundServices;
 /// <summary>Consome o outbox PostgreSQL; Redis nao participa de claim, retry ou confirmacao.</summary>
 public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEventoRepository historico,
     ILogger<ViagemOutboxWorker> logger, IOptions<ViagemOutboxOptions>? configured = null,
-    EtaV2Metrics? etaV2Metrics = null) : BackgroundService
+    EtaV2Metrics? etaV2Metrics = null, OutboxCleanupMetrics? cleanupMetrics = null) : BackgroundService
 {
+    internal const string OldestProcessedSql = """
+        SELECT "ProcessadoEmUtc" FROM "OutboxViagens"
+        WHERE "ProcessadoEmUtc" IS NOT NULL
+        ORDER BY "ProcessadoEmUtc"
+        LIMIT 1
+        """;
     internal const int BatchSize = 100;
     internal static readonly TimeSpan Lease = TimeSpan.FromMinutes(2);
-    internal static readonly TimeSpan ProcessedRetention = TimeSpan.FromDays(7);
     internal string Consumer { get; } = $"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}";
     private DateTimeOffset _nextCleanupUtc = DateTimeOffset.MinValue;
     private DateTimeOffset _nextMetricsUtc = DateTimeOffset.MinValue;
     private readonly ViagemOutboxOptions _options = configured?.Value ?? new();
+    private readonly OutboxCleanupMetrics _cleanupMetrics = cleanupMetrics ?? new();
     private long _claimed, _processed, _batches, _batchFailures, _batchSizeTotal,
         _batchSizeMax, _eventInserts, _historyInserts, _completed;
 
@@ -30,6 +36,11 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
     internal long EventosBatchInserts => Interlocked.Read(ref _eventInserts);
     internal long HistoricoBatchInserts => Interlocked.Read(ref _historyInserts);
     internal long BatchCompleted => Interlocked.Read(ref _completed);
+    internal OutboxCleanupMetricsSnapshot CleanupMetrics => _cleanupMetrics.Capture();
+    internal Func<DateTimeOffset> UtcNow { get; init; } = () => DateTimeOffset.UtcNow;
+    internal Func<DateTimeOffset, int, CancellationToken, Task<int>>? DeleteCleanupBatchOverride { get; init; }
+    internal Func<CancellationToken, Task<DateTimeOffset?>>? FindOldestProcessedOverride { get; init; }
+    internal Func<TimeSpan, CancellationToken, Task>? CleanupDelayOverride { get; init; }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -46,9 +57,9 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
                 }
                 if (DateTimeOffset.UtcNow >= _nextCleanupUtc)
                 {
-                    await LimparProcessadosAsync(stoppingToken);
+                    await ExecutarCleanupSeguroAsync(stoppingToken);
                     _nextCleanupUtc = DateTimeOffset.UtcNow.AddMinutes(
-                        Math.Clamp(_options.CleanupIntervalMinutes, 1, 1440));
+                        _options.CleanupIntervalMinutes);
                 }
                 if (items.Count == 0) await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
                 LogMetricsIfDue();
@@ -191,29 +202,66 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
         await command.ExecuteNonQueryAsync(ct);
     }
 
-    internal async Task<int> LimparProcessadosAsync(CancellationToken ct)
+    internal async Task<OutboxCleanupResult> LimparProcessadosAsync(CancellationToken ct)
     {
-        var batchSize = Math.Clamp(_options.CleanupBatchSize, 1, 10_000);
-        var maxBatches = Math.Clamp(_options.CleanupMaxBatchesPerRun, 1, 100);
-        var total = 0;
-        for (var batch = 0; batch < maxBatches; batch++)
+        _cleanupMetrics.RunStarted();
+        var result = await ViagemOutboxCleanupPolicy.ExecuteAsync(UtcNow(), _options,
+            DeleteCleanupBatchOverride ?? DeleteCleanupBatchAsync,
+            FindOldestProcessedOverride ?? FindOldestProcessedAsync,
+            CleanupDelayOverride ?? ((delay, token) => Task.Delay(delay, token)), ct);
+        _cleanupMetrics.Completed(result);
+        if (result.Saturated || result.RetentionBacklogPresent)
         {
-            await using var command = source.CreateCommand("""
-                WITH antigos AS (
-                    SELECT ctid FROM "OutboxViagens"
-                    WHERE "ProcessadoEmUtc" < now() - @retencao
-                    ORDER BY "ProcessadoEmUtc"
-                    LIMIT @limite
-                )
-                DELETE FROM "OutboxViagens" o USING antigos a WHERE o.ctid=a.ctid
-                """);
-            command.Parameters.AddWithValue("retencao", ProcessedRetention);
-            command.Parameters.AddWithValue("limite", batchSize);
-            var removidos = await command.ExecuteNonQueryAsync(ct);
-            total += removidos;
-            if (removidos < batchSize) break;
+            logger.LogWarning(
+                "Outbox cleanup: deleted={Deleted} batches={Batches} duration_ms={DurationMs} saturated={Saturated} oldest_processed_utc={OldestProcessedUtc} retention_backlog={RetentionBacklog}",
+                result.Deleted, result.Batches, result.DurationMilliseconds, result.Saturated,
+                result.OldestProcessedUtc, result.RetentionBacklogPresent);
         }
-        return total;
+        else if (result.Deleted > 0)
+        {
+            logger.LogInformation(
+                "Outbox cleanup: deleted={Deleted} batches={Batches} duration_ms={DurationMs} saturated=false oldest_processed_utc={OldestProcessedUtc} retention_backlog=false",
+                result.Deleted, result.Batches, result.DurationMilliseconds, result.OldestProcessedUtc);
+        }
+        else
+            logger.LogDebug("Outbox cleanup completed without expired rows in {DurationMs} ms.", result.DurationMilliseconds);
+        return result;
+    }
+
+    internal async Task<OutboxCleanupResult?> ExecutarCleanupSeguroAsync(CancellationToken ct)
+    {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        try { return await LimparProcessadosAsync(ct); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _cleanupMetrics.Failed((long)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            logger.LogWarning(ex, "Cleanup do Outbox falhou; processamento principal continuara e a manutencao sera tentada novamente.");
+            return null;
+        }
+    }
+
+    private async Task<int> DeleteCleanupBatchAsync(DateTimeOffset cutoff, int batchSize, CancellationToken ct)
+    {
+        await using var command = source.CreateCommand("""
+            WITH antigos AS (
+                SELECT ctid FROM "OutboxViagens"
+                WHERE "ProcessadoEmUtc" < @cutoff
+                ORDER BY "ProcessadoEmUtc"
+                LIMIT @limite
+            )
+            DELETE FROM "OutboxViagens" o USING antigos a WHERE o.ctid=a.ctid
+            """);
+        command.Parameters.AddWithValue("cutoff", cutoff);
+        command.Parameters.AddWithValue("limite", batchSize);
+        return await command.ExecuteNonQueryAsync(ct);
+    }
+
+    private async Task<DateTimeOffset?> FindOldestProcessedAsync(CancellationToken ct)
+    {
+        await using var command = source.CreateCommand(OldestProcessedSql);
+        var value = await command.ExecuteScalarAsync(ct);
+        return value is null or DBNull ? null : (DateTimeOffset)value;
     }
 
     private void LogMetricsIfDue()
@@ -223,14 +271,19 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
         _nextMetricsUtc = now.AddMinutes(1);
         var batches = Interlocked.Read(ref _batches);
         var total = Interlocked.Read(ref _batchSizeTotal);
+        var cleanup = _cleanupMetrics.Capture();
         logger.LogInformation(
             "Outbox batch: outbox_batch_claimed={Claimed} outbox_batch_processed={Processed} " +
             "outbox_batches={Batches} outbox_batch_size_avg={Average:F1} outbox_batch_size_max={Max} " +
             "outbox_batch_failures={Failures} eventos_viagem_batch_inserts={Events} " +
-            "historico_passagens_batch_inserts={History} outbox_batch_completed={Completed}",
+            "historico_passagens_batch_inserts={History} outbox_batch_completed={Completed} " +
+            "outbox_cleanup_runs={CleanupRuns} outbox_cleanup_deleted={CleanupDeleted} " +
+            "outbox_cleanup_batches={CleanupBatches} outbox_cleanup_duration_ms={CleanupDurationMs} " +
+            "outbox_cleanup_failures={CleanupFailures} outbox_cleanup_saturated={CleanupSaturated}",
             BatchClaimed, BatchProcessed, batches, batches == 0 ? 0 : (double)total / batches,
             Interlocked.Read(ref _batchSizeMax), BatchFailures, EventosBatchInserts,
-            HistoricoBatchInserts, BatchCompleted);
+            HistoricoBatchInserts, BatchCompleted, cleanup.Runs, cleanup.Deleted, cleanup.Batches,
+            cleanup.DurationMilliseconds, cleanup.Failures, cleanup.Saturated);
     }
 
     private static void UpdateMax(ref long target, long value)
@@ -253,6 +306,14 @@ public sealed class ViagemOutboxOptions
     public int BatchSize { get; set; } = 100;
     public int DelayEntreBatchesMs { get; set; } = 250;
     public int CleanupBatchSize { get; set; } = 1000;
-    public int CleanupMaxBatchesPerRun { get; set; } = 2;
+    public int CleanupMaxBatchesPerRun { get; set; } = 10;
     public int CleanupIntervalMinutes { get; set; } = 10;
+    public int CleanupDelayBetweenBatchesMs { get; set; } = 100;
+    public int RetentionDays { get; set; } = 7;
+
+    public bool Valid() => RetentionDays is > 0 and <= 365
+        && CleanupIntervalMinutes is > 0 and <= 1440
+        && CleanupBatchSize is > 0 and <= 10_000
+        && CleanupMaxBatchesPerRun is > 0 and <= 100
+        && CleanupDelayBetweenBatchesMs is >= 0 and <= 60_000;
 }
