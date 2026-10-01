@@ -5,6 +5,9 @@ using NoPonto.Application.TremRealtime.Options;
 using NoPonto.Application.TremRealtime.Provider;
 using NoPonto.Application.TremRealtime.Scheduling;
 using NoPonto.Application.TremRealtime.Tracking;
+using NoPonto.Application.TremRealtime.Topology;
+using NoPonto.Application.TremRealtime.Correlation;
+using System.Collections.Immutable;
 
 namespace NoPonto.Application.TremRealtime.Canary;
 
@@ -22,6 +25,9 @@ public sealed class TremRealtimeCanaryCycle(
     TremRealtimeCanaryMetrics metrics,
     ITremRealtimeTracker tracker,
     TremRealtimeTrackerMetrics trackerMetrics,
+    ITremPublishedTopologyCache topologyCache,
+    ITremCrossSentinelObserver crossSentinelObserver,
+    TremCrossSentinelMetrics crossSentinelMetrics,
     TimeProvider clock,
     ILogger<TremRealtimeCanaryCycle> logger) : ITremRealtimeCanaryCycle
 {
@@ -61,16 +67,20 @@ public sealed class TremRealtimeCanaryCycle(
             if (permit == TremCanaryPermitStatus.RateLimited) { metrics.Result(TrensRjClientStatus.RateLimited); return; }
 
             metrics.Request();
+            var requestStartedAtUtc = clock.GetUtcNow();
             var result = await client.GetNextAsync(item.Query.PairKey, ct);
             metrics.Result(result.Status);
             var observations = result.Status == TrensRjClientStatus.Success && result.Value is not null
-                ? await normalizer.NormalizeAsync(result.Value, item.Query.PairKey, now, ct)
+                ? await normalizer.NormalizeAsync(result.Value, item.Query.PairKey, requestStartedAtUtc, ct)
                 : [];
             metrics.Departures(observations.Count);
+            var receivedAtUtc = clock.GetUtcNow();
+            ImmutableArray<TrackedObservationAcceptance> accepted = [];
+            TremRealtimeTrackerSnapshot? trackerSnapshot = null;
             try
             {
-                tracker.ObserveBatch("TRENS_RJ", item.Query.Id, observations);
-                var trackerSnapshot = tracker.CaptureSnapshot();
+                accepted = tracker.ObserveBatch("TRENS_RJ", item.Query.Id, observations);
+                trackerSnapshot = tracker.CaptureSnapshot();
                 var trackerCounters = trackerMetrics.Capture();
                 logger.LogInformation(
                     "TremTrackerSummary active={Active} stale={Stale} tracked={Tracked} new_total={NewTotal} repeated_total={RepeatedTotal} untrackable_total={UntrackableTotal}",
@@ -81,6 +91,27 @@ public sealed class TremRealtimeCanaryCycle(
             {
                 trackerMetrics.Failure();
                 logger.LogError(ex, "Trem realtime tracker failed open for sentinel={SentinelId}", item.Query.Id);
+            }
+            if (accepted.Length > 0 && trackerSnapshot is not null)
+            {
+                try
+                {
+                    var topology = await topologyCache.GetAsync(ct);
+                    crossSentinelObserver.Observe(item.Query, accepted, topology, requestStartedAtUtc, receivedAtUtc,
+                        trackerSnapshot.Trains.Select(x => x.TrackerId).ToHashSet());
+                    var evidence = crossSentinelObserver.CaptureSnapshot();
+                    var counters = crossSentinelMetrics.Capture();
+                    logger.LogInformation(
+                        "TremSpatialEvidenceSummary tracked={Tracked} evidence={Evidence} correlated={Correlated} compatible={Compatible} unresolved={Unresolved} no_common_pattern={NoCommonPattern} ambiguous={Ambiguous} conflicts={Conflicts}",
+                        evidence.Trackers, evidence.Count, counters.Correlated, counters.Compatible,
+                        counters.UnresolvedTopology, counters.NoCommonPublishedPattern, counters.Ambiguous, counters.Conflicts);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    crossSentinelMetrics.Failure();
+                    logger.LogError(ex, "Trem cross-sentinel observer failed open for sentinel={SentinelId}", item.Query.Id);
+                }
             }
             foreach (var observation in observations)
                 if (observation.ProviderLinhaId is { } linha && !item.Query.ObservedProviderLinhaIds.Contains(linha) && state.MarkNewProviderLine(item.Query.Id, linha)) metrics.NewProviderLine();
