@@ -29,6 +29,7 @@ using NoPonto.Application.TremRealtime.Canary;
 using NoPonto.Application.TremRealtime.Tracking;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremRealtime.Correlation;
+using NoPonto.Application.TremRealtime.RailRuntime;
 
 Env.NoClobber().Load();
 
@@ -174,6 +175,8 @@ builder.Services.AddOptions<TremRealtimeTrackerOptions>()
     .Bind(builder.Configuration.GetSection(TremRealtimeTrackerOptions.SectionName));
 builder.Services.AddOptions<TremCrossSentinelOptions>()
     .Bind(builder.Configuration.GetSection(TremCrossSentinelOptions.SectionName));
+builder.Services.AddOptions<RailRealtimeOptions>()
+    .Bind(builder.Configuration.GetSection(RailRealtimeOptions.SectionName));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ITrensRjRequestBudget, ProcessLocalTrensRjRequestBudget>();
 builder.Services.AddSingleton<TremRealtimeMetrics>();
@@ -194,6 +197,7 @@ builder.Services.AddSingleton<ITremPublishedTopologySource, EfTremPublishedTopol
 builder.Services.AddSingleton<ITremPublishedTopologyCache, TremPublishedTopologyCache>();
 builder.Services.AddSingleton<TremCrossSentinelMetrics>();
 builder.Services.AddSingleton<ITremCrossSentinelObserver, TremCrossSentinelObserver>();
+builder.Services.AddSingleton<IRailRealtimeEngine, RailRealtimeEngine>();
 builder.Services.AddScoped<ITremRealtimeCanaryCycle, TremRealtimeCanaryCycle>();
 builder.Services.AddHostedService<TremRealtimeCanaryWorker>();
 builder.Services.AddHttpClient<ITrensRjRealtimeClient, TrensRjRealtimeClient>((services, client) =>

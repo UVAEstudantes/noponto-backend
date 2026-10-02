@@ -10,6 +10,7 @@ using NoPonto.Application.TremRealtime.Scheduling;
 using NoPonto.Application.TremRealtime.Tracking;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremRealtime.Correlation;
+using NoPonto.Application.TremRealtime.RailRuntime;
 using Xunit;
 
 namespace NoPonto.Tests.TremRealtime;
@@ -144,7 +145,7 @@ public sealed class TremRealtimePhase2BTests
         var state = new TremRealtimeCanaryState(canary, clock);
         var metrics = new TremRealtimeCanaryMetrics();
         var client = new FakeClient(results ?? []);
-        var cycle = new TremRealtimeCanaryCycle(runtime, canary, new FakeCatalog(), new TremSentinelSchedulerEngine(runtime), new TremDemandRegistry(runtime), client, normalizer ?? new FakeNormalizer([]), state, metrics, new NoopTracker(), new TremRealtimeTrackerMetrics(), new NoopTopologyCache(), new NoopCrossObserver(), new TremCrossSentinelMetrics(), clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
+        var cycle = new TremRealtimeCanaryCycle(runtime, canary, new FakeCatalog(), new TremSentinelSchedulerEngine(runtime), new TremDemandRegistry(runtime), client, normalizer ?? new FakeNormalizer([]), state, metrics, new NoopTracker(), new TremRealtimeTrackerMetrics(), new NoopTopologyCache(), new NoopCrossObserver(), new TremCrossSentinelMetrics(), new NoopRailEngine(), clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
         return new(cycle, client, state, metrics, clock);
     }
 
@@ -205,6 +206,11 @@ public sealed class TremRealtimePhase2BTests
     {
         public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc, IReadOnlySet<Guid> liveTrackerIds) { }
         public TremCrossSentinelSnapshot CaptureSnapshot() => new(System.Collections.Immutable.ImmutableDictionary<Guid, System.Collections.Immutable.ImmutableArray<TremSpatialObservationEvidence>>.Empty);
+    }
+    private sealed class NoopRailEngine : IRailRealtimeEngine
+    {
+        public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc) { }
+        public RailRealtimeSnapshot CaptureSnapshot() => RailRealtimeSnapshot.Empty(TestClock.Start);
     }
 
     private sealed class TestClock : TimeProvider

@@ -1,6 +1,6 @@
 namespace NoPonto.Application.TremRealtime.Scheduling;
 
-public enum TremSentinelPurpose { Discovery, Branch, Localization, Terminal }
+public enum TremSentinelPurpose { Discovery, Core, Branch, Localization, Terminal, Dynamic }
 public enum TremSentinelState { Dormant, Due, InFlight, Active, NoService, Backoff, Cooldown }
 public enum TremSentinelReason { NoDemand, OutsideServiceWindow, WaitingForSchedule, Warmup, ActiveTracking, CanaryObservation, NoServiceCooldown, ErrorBackoff, RateBudgetDeferred, Due }
 public enum TremSchedulingMode { Normal, CanaryObservation }
@@ -19,10 +19,24 @@ public sealed record TremSentinelQuery(
     TremSentinelState State, DateTimeOffset? NextDueUtc = null, DateTimeOffset? LastPollUtc = null,
     DateTimeOffset? LastSuccessUtc = null, DateTimeOffset? LastNoServiceUtc = null,
     int ConsecutiveFailures = 0, DateTimeOffset? CooldownUntilUtc = null,
-    IReadOnlySet<string>? ActiveTrainKeys = null, TremTemporalCoverage? TemporalCoverage = null);
+    IReadOnlySet<string>? ActiveTrainKeys = null, TremTemporalCoverage? TemporalCoverage = null)
+{
+    public IReadOnlySet<string> DownstreamSatelliteIds { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+}
 
 public sealed record TremPriorityBreakdown(double BaseWeight, double DemandBoost, double ScheduleUrgency, double ActiveTrackingBoost, double CoverageValue, double FailurePenalty, double RedundancyPenalty)
 {
+    public double CoreCoverageBoost { get; init; }
+    public double ExpectedTrainBoost { get; init; }
+    public double BranchResolutionBoost { get; init; }
+    public double TimeSinceLastPollBoost { get; init; }
+    public double TerminalTransitionBoost { get; init; }
+    public double EmptyPenalty { get; init; }
+    public double NoServicePenalty { get; init; }
+    public double SatelliteTotal => BaseWeight + CoreCoverageBoost + ExpectedTrainBoost
+        + BranchResolutionBoost + TimeSinceLastPollBoost + TerminalTransitionBoost
+        - EmptyPenalty - NoServicePenalty - FailurePenalty - CooldownPenalty;
+    public double CooldownPenalty { get; init; }
     public double Total => Math.Max(0, BaseWeight + DemandBoost + ScheduleUrgency + ActiveTrackingBoost + CoverageValue - FailurePenalty - RedundancyPenalty);
 }
 public sealed record TremSentinelDecision(bool ShouldPoll, DateTimeOffset? NextDueUtc, TremSentinelState NewState, TremSentinelReason Reason, double Priority, TremPriorityBreakdown Breakdown);

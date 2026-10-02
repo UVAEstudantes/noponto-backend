@@ -7,6 +7,7 @@ using NoPonto.Application.TremRealtime.Scheduling;
 using NoPonto.Application.TremRealtime.Tracking;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremRealtime.Correlation;
+using NoPonto.Application.TremRealtime.RailRuntime;
 using System.Collections.Immutable;
 
 namespace NoPonto.Application.TremRealtime.Canary;
@@ -28,6 +29,7 @@ public sealed class TremRealtimeCanaryCycle(
     ITremPublishedTopologyCache topologyCache,
     ITremCrossSentinelObserver crossSentinelObserver,
     TremCrossSentinelMetrics crossSentinelMetrics,
+    IRailRealtimeEngine railRealtimeEngine,
     TimeProvider clock,
     ILogger<TremRealtimeCanaryCycle> logger) : ITremRealtimeCanaryCycle
 {
@@ -40,6 +42,11 @@ public sealed class TremRealtimeCanaryCycle(
 
         metrics.Cycle();
         var now = clock.GetUtcNow();
+        if (!scheduler.IsWithinOperationalWindow(now))
+        {
+            logger.LogInformation("Trem satellite acquisition skipped outside operational service window.");
+            return;
+        }
         if (state.IsPaused(now)) return;
         if (state.RequestCount >= canary.MaxRequestsPerRun)
         {
@@ -48,7 +55,8 @@ public sealed class TremRealtimeCanaryCycle(
         }
 
         var allowed = canary.AllowedSentinelIds.ToHashSet(StringComparer.Ordinal);
-        var candidates = (await catalog.GetAsync(ct))
+        var catalogQueries = await catalog.GetAsync(ct);
+        var candidates = catalogQueries
             .Where(x => allowed.Contains(x.Id))
             .Select(x => state.Query(x))
             .Select(x => (Query: x, Decision: scheduler.Evaluate(now, x, demand, [], TremSchedulingMode.CanaryObservation, TimeSpan.FromSeconds(canary.PollSeconds))))
@@ -75,6 +83,7 @@ public sealed class TremRealtimeCanaryCycle(
                 : [];
             metrics.Departures(observations.Count);
             var receivedAtUtc = clock.GetUtcNow();
+            scheduler.ObserveResult(receivedAtUtc, item.Query, observations, result.Status, catalogQueries);
             ImmutableArray<TrackedObservationAcceptance> accepted = [];
             TremRealtimeTrackerSnapshot? trackerSnapshot = null;
             try
@@ -97,20 +106,32 @@ public sealed class TremRealtimeCanaryCycle(
                 try
                 {
                     var topology = await topologyCache.GetAsync(ct);
-                    crossSentinelObserver.Observe(item.Query, accepted, topology, requestStartedAtUtc, receivedAtUtc,
-                        trackerSnapshot.Trains.Select(x => x.TrackerId).ToHashSet());
-                    var evidence = crossSentinelObserver.CaptureSnapshot();
-                    var counters = crossSentinelMetrics.Capture();
-                    logger.LogInformation(
-                        "TremSpatialEvidenceSummary tracked={Tracked} evidence={Evidence} correlated={Correlated} compatible={Compatible} unresolved={Unresolved} no_common_pattern={NoCommonPattern} ambiguous={Ambiguous} conflicts={Conflicts}",
-                        evidence.Trackers, evidence.Count, counters.Correlated, counters.Compatible,
-                        counters.UnresolvedTopology, counters.NoCommonPublishedPattern, counters.Ambiguous, counters.Conflicts);
+                    try
+                    {
+                        crossSentinelObserver.Observe(item.Query, accepted, topology, requestStartedAtUtc, receivedAtUtc,
+                            trackerSnapshot.Trains.Select(x => x.TrackerId).ToHashSet());
+                        var evidence = crossSentinelObserver.CaptureSnapshot();
+                        var counters = crossSentinelMetrics.Capture();
+                        logger.LogInformation(
+                            "TremSpatialEvidenceSummary tracked={Tracked} evidence={Evidence} correlated={Correlated} compatible={Compatible} unresolved={Unresolved} no_common_pattern={NoCommonPattern} ambiguous={Ambiguous} conflicts={Conflicts}",
+                            evidence.Trackers, evidence.Count, counters.Correlated, counters.Compatible,
+                            counters.UnresolvedTopology, counters.NoCommonPublishedPattern, counters.Ambiguous, counters.Conflicts);
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                    catch (Exception ex)
+                    {
+                        crossSentinelMetrics.Failure();
+                        logger.LogError(ex, "Trem cross-sentinel observer failed open for sentinel={SentinelId}", item.Query.Id);
+                    }
+                    try { railRealtimeEngine.Observe(item.Query, accepted, topology, requestStartedAtUtc, receivedAtUtc); }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                    catch (Exception ex) { logger.LogError(ex, "Rail realtime estimator failed open for sentinel={SentinelId}", item.Query.Id); }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                 catch (Exception ex)
                 {
                     crossSentinelMetrics.Failure();
-                    logger.LogError(ex, "Trem cross-sentinel observer failed open for sentinel={SentinelId}", item.Query.Id);
+                    logger.LogError(ex, "Trem published topology failed open for sentinel={SentinelId}", item.Query.Id);
                 }
             }
             foreach (var observation in observations)
@@ -123,6 +144,20 @@ public sealed class TremRealtimeCanaryCycle(
                 state.RequestCount, canary.MaxRequestsPerRun, result.Metadata?.Date, result.Metadata?.RetryAfter?.TotalSeconds,
                 result.Metadata?.ETag, result.Metadata?.LastModified, result.Metadata?.CfCacheStatus,
                 observations.Select(x => new { x.ObservedAtUtc, SentinelId = item.Query.Id, x.OriginExternalStationId, x.DestinationExternalStationId, x.TrainCode, x.ProviderExternalLineId, x.ProviderLinhaId, x.ExternalDirection, x.DirectionResolution, x.SentidoId, x.TrainType, x.Confidence, x.MinutesUntil, DepartureTime = x.DepartureLocalTime, x.Platform, x.TrackLine, x.PlatformLabel, ProviderDirectionLabel = x.DirectionLabel }).ToArray());
+            var satellite = scheduler.CaptureSatelliteMetrics();
+            var rail = railRealtimeEngine.CaptureMetrics();
+            logger.LogInformation(
+                "TremSatelliteSummary satellite={SentinelId} score={Score} base={Base} core={Core} expected={Expected} branch={Branch} elapsed={Elapsed} terminal={Terminal} empty_penalty={EmptyPenalty} no_service_penalty={NoServicePenalty} polls={Polls} useful={Useful} empty={Empty} dynamic_created={DynamicCreated} dynamic_expired={DynamicExpired}",
+                item.Query.Id, item.Decision.Priority, item.Decision.Breakdown.BaseWeight,
+                item.Decision.Breakdown.CoreCoverageBoost, item.Decision.Breakdown.ExpectedTrainBoost,
+                item.Decision.Breakdown.BranchResolutionBoost, item.Decision.Breakdown.TimeSinceLastPollBoost,
+                item.Decision.Breakdown.TerminalTransitionBoost, item.Decision.Breakdown.EmptyPenalty,
+                item.Decision.Breakdown.NoServicePenalty, satellite.SatellitePollTotal,
+                satellite.SatelliteUsefulTotal, satellite.SatelliteEmptyTotal,
+                satellite.DynamicFollowupCreated, satellite.DynamicFollowupExpired);
+            logger.LogInformation(
+                "RailRealtimeSummary train_multi_satellite_total={MultiSatellite} rail_anchor_created={Anchors} rail_run_resolved={Runs} rail_position_available={Positions}",
+                rail.TrainMultiSatelliteTotal, rail.RailAnchorCreated, rail.RailRunResolved, rail.RailPositionAvailable);
         }
     }
 

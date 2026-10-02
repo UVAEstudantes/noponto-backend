@@ -4,9 +4,15 @@ using NoPonto.Application.TremRealtime.Scheduling;
 
 namespace NoPonto.Application.TremRealtime.Topology;
 
-public sealed record TremTopologyOccurrence(Guid OccurrenceId, int Order, Guid ParadaId);
+public sealed record TremTopologyOccurrence(Guid OccurrenceId, int Order, Guid ParadaId)
+{
+    public double DistanceAlongPatternMetres { get; init; }
+}
 public sealed record TremPatternTopology(Guid PadraoOperacionalId, Guid PadraoVersaoId, Guid LinhaId,
-    Guid SentidoId, ImmutableArray<TremTopologyOccurrence> Occurrences);
+    Guid SentidoId, ImmutableArray<TremTopologyOccurrence> Occurrences)
+{
+    public double LengthMetres { get; init; }
+}
 public sealed record TremPublishedTopologySnapshot(DateTimeOffset LoadedAtUtc, ImmutableArray<TremPatternTopology> Patterns)
 {
     public static readonly TremPublishedTopologySnapshot Empty = new(DateTimeOffset.MinValue, []);
@@ -38,14 +44,21 @@ public sealed class EfTremPublishedTopologySource(IServiceScopeFactory scopeFact
                 && x.PadraoVersao.PadraoOperacional.Sentido.Linha.Modal.Nome == "Trem")
             .Select(x => new
             {
-                x.Id, x.Ordem, x.ParadaId, x.PadraoVersaoId,
+                x.Id, x.Ordem, x.ParadaId, x.PadraoVersaoId, x.DistanciaAcumuladaMetros,
+                x.PadraoVersao.ComprimentoMetros,
                 x.PadraoVersao.PadraoOperacionalId,
                 x.PadraoVersao.PadraoOperacional.SentidoId,
                 LinhaId = x.PadraoVersao.PadraoOperacional.Sentido.LinhaId
             }).ToArrayAsync(ct);
         var patterns = rows.GroupBy(x => new { x.PadraoOperacionalId, x.PadraoVersaoId, x.LinhaId, x.SentidoId })
             .Select(x => new TremPatternTopology(x.Key.PadraoOperacionalId, x.Key.PadraoVersaoId, x.Key.LinhaId,
-                x.Key.SentidoId, x.OrderBy(y => y.Ordem).Select(y => new TremTopologyOccurrence(y.Id, y.Ordem, y.ParadaId)).ToImmutableArray()))
+                x.Key.SentidoId, x.OrderBy(y => y.Ordem).Select(y => new TremTopologyOccurrence(y.Id, y.Ordem, y.ParadaId)
+                {
+                    DistanceAlongPatternMetres = y.DistanciaAcumuladaMetros
+                }).ToImmutableArray())
+            {
+                LengthMetres = x.First().ComprimentoMetros
+            })
             .OrderBy(x => x.PadraoVersaoId).ToImmutableArray();
         return new(clock.GetUtcNow(), patterns);
     }
