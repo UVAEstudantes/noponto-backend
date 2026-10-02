@@ -16,7 +16,9 @@ public sealed record RailAdaptiveDirective(RailAdaptiveCallKind Kind, DateTimeOf
 public sealed record RailAdaptiveTrackingSnapshot(long DiscoveryPolls, long AcquisitionPolls,
     long TrackedRefreshPolls, long ReacquisitionPolls, long ToAcquisition, long ToTracked,
     long ToReacquisition, long DistantPursuitDeferred, long RefreshBeforeFreshness,
-    long ReacquisitionSuccess, long TemporalProfileGaps,
+    long ReacquisitionSuccess, long TemporalProfileGaps, long TemporalFallbackEvents,
+    long ReacquisitionScheduled, long ReacquisitionCancelledByEvidence,
+    long ReacquisitionExpiredBeforePoll, long ReacquisitionNoProbe, long ReacquisitionFailed,
     ImmutableDictionary<RailReacquisitionReason, long> ReacquisitionReasons,
     ImmutableDictionary<Guid, RailAdaptiveTrackingState> RunStates,
     ImmutableDictionary<Guid, DateTimeOffset> NextUsefulObservationUtc,
@@ -35,7 +37,8 @@ public interface IRailAdaptiveTrackingCoordinator
     RailAdaptiveTrackingSnapshot CaptureSnapshot();
 }
 
-public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions> options)
+public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions> options,
+    ILogger<RailAdaptiveTrackingCoordinator>? logger = null)
     : IRailAdaptiveTrackingCoordinator
 {
     private sealed class Entry(Guid runId, Guid trackerId, Guid versionId, string trainCode,
@@ -49,6 +52,7 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
         public int ConsecutiveRefreshMisses { get; set; }
         public DateTimeOffset? NextUsefulObservationUtc { get; set; }
         public DateTimeOffset? RefreshDeadlineUtc { get; set; }
+        public string? ScheduledProbeId { get; set; }
     }
     private sealed record Pending(Guid RunId, RailAdaptiveDirective Directive);
     private readonly object _gate = new();
@@ -57,7 +61,9 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
     private readonly Dictionary<string, List<Pending>> _directives = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Pending> _selected = new(StringComparer.Ordinal);
     private long _discovery, _acquisition, _refresh, _reacquisition, _toAcquisition, _toTracked,
-        _toReacquisition, _deferred, _freshness, _reacquisitionSuccess, _gaps;
+        _toReacquisition, _deferred, _freshness, _reacquisitionSuccess, _gaps, _fallbackEvents,
+        _reacquisitionScheduled, _reacquisitionCancelled, _reacquisitionExpired,
+        _reacquisitionNoProbe, _reacquisitionFailed;
     private readonly Dictionary<RailReacquisitionReason, long> _reacquisitionReasons = [];
 
     public RailAdaptiveDirective? GetDirective(string probeId, DateTimeOffset now)
@@ -99,6 +105,14 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
                 case RailAdaptiveCallKind.TrackedRefresh: Interlocked.Increment(ref _refresh); break;
                 case RailAdaptiveCallKind.Reacquisition: Interlocked.Increment(ref _reacquisition); break;
             }
+            if (pending.Directive.Kind == RailAdaptiveCallKind.TrackedRefresh
+                && _entries.TryGetValue(pending.RunId, out var refreshEntry))
+            {
+                if (refreshEntry.RefreshDeadlineUtc is { } deadline && now <= deadline)
+                    Interlocked.Increment(ref _freshness);
+                logger?.LogInformation("RailTrackedRefreshExecuted rail_run_id={RailRunId} probe={Probe} executed_at={ExecutedAt} refresh_deadline={RefreshDeadline}",
+                    refreshEntry.RunId, query.Id, now, refreshEntry.RefreshDeadlineUtc);
+            }
             _directives[query.Id].Remove(pending);
         }
     }
@@ -138,6 +152,8 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
                 if (created) { _entries.Add(run.RailRunId, entry); Interlocked.Increment(ref _toAcquisition); }
                 entry.LastEvidenceUtc = now;
                 entry.ConsecutiveRefreshMisses = 0;
+                if (entry.State == RailAdaptiveTrackingState.Reacquisition)
+                    Interlocked.Increment(ref _reacquisitionCancelled);
                 var publicPosition = snapshot.PublicVehicles.FirstOrDefault(x => x.RailRunId == run.RailRunId);
                 var coherentAnchors = run.Anchors.Select(x => x.OccurrenceId).Distinct().Count();
                 if (coherentAnchors >= 2 && publicPosition is not null)
@@ -167,7 +183,10 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
             Interlocked.Read(ref _toAcquisition), Interlocked.Read(ref _toTracked),
             Interlocked.Read(ref _toReacquisition), Interlocked.Read(ref _deferred),
             Interlocked.Read(ref _freshness), Interlocked.Read(ref _reacquisitionSuccess),
-            Interlocked.Read(ref _gaps), _reacquisitionReasons.ToImmutableDictionary(),
+            Interlocked.Read(ref _gaps), Interlocked.Read(ref _fallbackEvents),
+            Interlocked.Read(ref _reacquisitionScheduled), Interlocked.Read(ref _reacquisitionCancelled),
+            Interlocked.Read(ref _reacquisitionExpired), Interlocked.Read(ref _reacquisitionNoProbe),
+            Interlocked.Read(ref _reacquisitionFailed), _reacquisitionReasons.ToImmutableDictionary(),
             _entries.ToImmutableDictionary(x => x.Key, x => x.Value.State),
             _entries.Where(x => x.Value.NextUsefulObservationUtc is not null)
                 .ToImmutableDictionary(x => x.Key, x => x.Value.NextUsefulObservationUtc!.Value),
@@ -196,11 +215,11 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
             var nextNominal = profile.Occurrences.Where(x => x.DistanceMetres + .01 >= position.DistanceAtReferenceMetres)
                 .OrderBy(x => x.DistanceMetres).FirstOrDefault();
             if (nextNominal is not null) expectedOccurrence = nextNominal.OccurrenceId;
-            else Interlocked.Increment(ref _gaps);
+            else Interlocked.Increment(ref _fallbackEvents);
         }
         var target = directional.FirstOrDefault(x => x.OriginOccurrenceId == expectedOccurrence
             || x.DestinationOccurrenceId == expectedOccurrence);
-        if (target is null) { Interlocked.Increment(ref _gaps); return; }
+        if (target is null) { Interlocked.Increment(ref _fallbackEvents); return; }
         var predicted = position.TargetTimeUtc.AddMinutes(-options.Value.Scanner.TrackedRefreshWakeLeadMinutes);
         var freshness = position.FreshUntilUtc.AddSeconds(-options.Value.Scanner.FreshnessRefreshLeadSeconds);
         var due = predicted <= freshness ? predicted : freshness;
@@ -209,18 +228,24 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
         if (due < now) due = now;
         if (due > now.AddSeconds(options.Value.Scanner.PursuitInitialDelaySeconds))
             Interlocked.Increment(ref _deferred);
-        if (due == freshness) Interlocked.Increment(ref _freshness);
         entry.NextUsefulObservationUtc = due;
         entry.RefreshDeadlineUtc = freshness;
+        entry.ScheduledProbeId = target.Id;
         Add(target.Id, entry, RailAdaptiveCallKind.TrackedRefresh, due,
             position.FreshUntilUtc.AddMinutes(options.Value.Scanner.ReacquisitionTtlMinutes));
+        logger?.LogInformation("RailTrackedRefreshScheduled rail_run_id={RailRunId} direction={Direction} probe={Probe} next_useful={NextUseful} refresh_deadline={RefreshDeadline} effective_next_poll={EffectiveNextPoll} fresh_until={FreshUntil}",
+            entry.RunId, entry.Direction, target.Id, predicted, freshness, due, position.FreshUntilUtc);
     }
 
     private void BeginReacquisition(Entry entry, TremSentinelQuery failed,
         IReadOnlyList<TremSentinelQuery> catalog, DateTimeOffset now, RailReacquisitionReason reason)
     {
         RemoveDirectives(entry.RunId);
-        if (entry.ReacquisitionAttempts >= options.Value.Scanner.MaxReacquisitionAttempts) return;
+        if (entry.ReacquisitionAttempts >= options.Value.Scanner.MaxReacquisitionAttempts)
+        {
+            Interlocked.Increment(ref _reacquisitionFailed);
+            return;
+        }
         if (entry.State != RailAdaptiveTrackingState.Reacquisition)
         {
             Interlocked.Increment(ref _toReacquisition);
@@ -232,8 +257,11 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
                 && Math.Abs((x.ScannerSequenceIndex ?? int.MaxValue) - (failed.ScannerSequenceIndex ?? 0)) <= 1)
             .OrderBy(x => Math.Abs((x.ScannerSequenceIndex ?? 0) - (failed.ScannerSequenceIndex ?? 0)))
             .Skip(Math.Min(entry.ReacquisitionAttempts - 1, 2)).Take(1);
-        foreach (var probe in neighbours) Add(probe.Id, entry, RailAdaptiveCallKind.Reacquisition,
+        var probe = neighbours.FirstOrDefault();
+        if (probe is null) { Interlocked.Increment(ref _reacquisitionNoProbe); return; }
+        Add(probe.Id, entry, RailAdaptiveCallKind.Reacquisition,
             now, now.AddMinutes(options.Value.Scanner.ReacquisitionTtlMinutes));
+        Interlocked.Increment(ref _reacquisitionScheduled);
     }
 
     private void HandleRefreshMiss(Entry entry, TremSentinelQuery failed,
@@ -290,7 +318,8 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
     {
         foreach (var key in _directives.Keys.ToArray())
         {
-            _directives[key].RemoveAll(x => x.Directive.ExpiresUtc < now);
+            var expired = _directives[key].RemoveAll(x => x.Directive.ExpiresUtc < now
+                && CountExpired(x.Directive));
             if (_directives[key].Count == 0) _directives.Remove(key);
         }
         var retention = TimeSpan.FromMinutes(Math.Max(options.Value.Scanner.PursuitTtlMinutes,
@@ -300,6 +329,15 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
         {
             _entries.Remove(stale); RemoveDirectives(stale);
         }
+    }
+    private bool CountExpired(RailAdaptiveDirective directive)
+    {
+        if (directive.Kind == RailAdaptiveCallKind.Reacquisition)
+        {
+            Interlocked.Increment(ref _reacquisitionExpired);
+            Interlocked.Increment(ref _reacquisitionFailed);
+        }
+        return true;
     }
     private void EnsureProfiles(TremPublishedTopologySnapshot topology)
     {

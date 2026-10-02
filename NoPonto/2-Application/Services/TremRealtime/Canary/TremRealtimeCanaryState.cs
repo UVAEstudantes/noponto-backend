@@ -19,6 +19,18 @@ public sealed class TremRealtimeCanaryState(IOptions<TremRealtimeCanaryOptions> 
     private DateTimeOffset? _circuitOpenUntilUtc;
 
     public int RequestCount { get { lock (_gate) return _requestCount; } }
+    public TimeSpan DelayUntilNextPermit()
+    {
+        lock (_gate)
+        {
+            var now = clock.GetUtcNow();
+            while (_requests.TryPeek(out var value) && value <= now.AddMinutes(-1)) _requests.Dequeue();
+            if (_requests.Count < options.Value.MaxRequestsPerMinute) return TimeSpan.Zero;
+            // Small guard also lets the provider-level process-local window expire.
+            var delay = _requests.Peek().AddMinutes(1).AddMilliseconds(100) - now;
+            return delay > TimeSpan.Zero ? delay : TimeSpan.Zero;
+        }
+    }
 
     public TremCanaryPermitStatus TryAcquireRequest()
     {

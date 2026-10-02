@@ -7,7 +7,8 @@ public sealed class TremRealtimeCanaryWorker(
     IServiceScopeFactory scopeFactory,
     IOptions<TremRealtimeCanaryOptions> options,
     TimeProvider clock,
-    ILogger<TremRealtimeCanaryWorker> logger) : BackgroundService
+    ILogger<TremRealtimeCanaryWorker> logger,
+    TremRealtimeCanaryState? state = null) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -22,6 +23,9 @@ public sealed class TremRealtimeCanaryWorker(
                 var seconds = options.Value.IsValid(out _) ? options.Value.PollSeconds : 60;
                 var remaining = ComputeStartToStartDelay(cycleStartedAtUtc, clock.GetUtcNow(),
                     TimeSpan.FromSeconds(seconds));
+                var limiterDelay = state?.DelayUntilNextPermit() ?? TimeSpan.Zero;
+                if (limiterDelay > TimeSpan.Zero && limiterDelay < remaining)
+                    remaining = limiterDelay;
                 if (remaining > TimeSpan.Zero)
                     await Task.Delay(remaining, clock, stoppingToken);
             }

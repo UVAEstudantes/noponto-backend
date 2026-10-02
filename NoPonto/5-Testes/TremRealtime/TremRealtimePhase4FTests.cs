@@ -149,6 +149,30 @@ public sealed class TremRealtimePhase4FTests
     }
 
     [Fact]
+    public void CadenciaComLimiter_QuaseNoTokenEsperaDisponibilidadeSemPerderSlot()
+    {
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026,10,2,12,0,0,TimeSpan.Zero));
+        var state = new TremRealtimeCanaryState(Options.Create(new TremRealtimeCanaryOptions
+            { MaxRequestsPerMinute=4, MaxRequestsPerRun=40, PollSeconds=15, MaxConcurrency=1 }), clock);
+        var starts = new List<DateTimeOffset>();
+        for (var i=0; i<4; i++)
+        {
+            starts.Add(clock.GetUtcNow());
+            Assert.Equal(TremCanaryPermitStatus.Allowed, state.TryAcquireRequest());
+            clock.Advance(TimeSpan.FromSeconds(15));
+        }
+        clock.Advance(TimeSpan.FromMilliseconds(-50));
+        var wait = state.DelayUntilNextPermit();
+        Assert.InRange(wait.TotalMilliseconds, 100, 200);
+        clock.Advance(wait);
+        starts.Add(clock.GetUtcNow());
+        Assert.Equal(TremCanaryPermitStatus.Allowed, state.TryAcquireRequest());
+        Assert.Equal([0d,15d,30d,45d,60.1d], starts.Select(x => Math.Round((x-starts[0]).TotalSeconds,1)));
+        Assert.Equal(TimeSpan.Zero, TremRealtimeCanaryWorker.ComputeStartToStartDelay(
+            starts[^1], starts[^1].AddSeconds(20), TimeSpan.FromSeconds(15)));
+    }
+
+    [Fact]
     public void UmAnchor_EntraAcquisition_DoisAnchorsPublicaveis_EntramTrackedEDiferemPursuitDistante()
     {
         var setup = AdaptiveSetup(); var coordinator = setup.Coordinator;
@@ -180,6 +204,9 @@ public sealed class TremRealtimePhase4FTests
             setup.Now.AddSeconds(59)) is not null);
         Assert.Contains(setup.Probes, x => setup.Coordinator.GetDirective(x.Id,
             setup.Now.AddMinutes(1)) is not null);
+        var due = setup.Coordinator.CaptureSnapshot().NextUsefulObservationUtc[setup.RunId];
+        var probe = setup.Probes.First(x => setup.Coordinator.GetDirective(x.Id, due) is not null);
+        setup.Coordinator.MarkSelected(probe, due);
         Assert.Equal(1, setup.Coordinator.CaptureSnapshot().RefreshBeforeFreshness);
     }
 
@@ -609,7 +636,7 @@ public sealed class TremRealtimePhase4FTests
             RailRealtimeSnapshot snapshot, TremPublishedTopologySnapshot topology,
             IReadOnlyList<TremSentinelQuery> catalog, DateTimeOffset now,
             TrensRjClientStatus status = TrensRjClientStatus.Success, int providerObservationCount = 0) { }
-        public RailAdaptiveTrackingSnapshot CaptureSnapshot() => new(0,0,0,0,0,0,0,0,0,0,0,
+        public RailAdaptiveTrackingSnapshot CaptureSnapshot() => new(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             ImmutableDictionary<RailReacquisitionReason,long>.Empty,
             ImmutableDictionary<Guid,RailAdaptiveTrackingState>.Empty,
             ImmutableDictionary<Guid,DateTimeOffset>.Empty,

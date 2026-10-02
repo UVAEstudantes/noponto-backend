@@ -202,12 +202,15 @@ public sealed class TremRealtimeCanaryCycle(
                 {
                     var adaptive = adaptiveTracking.CaptureSnapshot();
                     logger.LogInformation(
-                        "RailAdaptiveTracking discovery_polls={Discovery} acquisition_polls={Acquisition} tracked_refresh_polls={Refresh} reacquisition_polls={Reacquisition} transition_to_acquisition={ToAcquisition} transition_to_tracked={ToTracked} transition_to_reacquisition={ToReacquisition} distant_pursuit_deferred={Deferred} refresh_before_freshness={Freshness} reacquisition_success={ReacquisitionSuccess} temporal_profile_gap={ProfileGaps}",
+                        "RailAdaptiveTracking discovery_polls={Discovery} acquisition_polls={Acquisition} tracked_refresh_polls={Refresh} reacquisition_polls={Reacquisition} transition_to_acquisition={ToAcquisition} transition_to_tracked={ToTracked} transition_to_reacquisition={ToReacquisition} distant_pursuit_deferred={Deferred} refresh_before_freshness={Freshness} reacquisition_success={ReacquisitionSuccess} temporal_profile_static_gaps={ProfileGaps} temporal_profile_fallback_events={FallbackEvents} reacquisition_scheduled={ReacquisitionScheduled} reacquisition_cancelled_by_evidence={ReacquisitionCancelled} reacquisition_expired_before_poll={ReacquisitionExpired} reacquisition_no_probe={ReacquisitionNoProbe} reacquisition_failed={ReacquisitionFailed}",
                         adaptive.DiscoveryPolls, adaptive.AcquisitionPolls, adaptive.TrackedRefreshPolls,
                         adaptive.ReacquisitionPolls, adaptive.ToAcquisition, adaptive.ToTracked,
                         adaptive.ToReacquisition, adaptive.DistantPursuitDeferred,
                         adaptive.RefreshBeforeFreshness, adaptive.ReacquisitionSuccess,
-                        adaptive.TemporalProfileGaps);
+                        adaptive.TemporalProfileGaps, adaptive.TemporalFallbackEvents,
+                        adaptive.ReacquisitionScheduled, adaptive.ReacquisitionCancelledByEvidence,
+                        adaptive.ReacquisitionExpiredBeforePoll, adaptive.ReacquisitionNoProbe,
+                        adaptive.ReacquisitionFailed);
                 }
             }
             logger.LogInformation(

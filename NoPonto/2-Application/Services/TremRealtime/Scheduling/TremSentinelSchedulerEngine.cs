@@ -337,7 +337,7 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
                 {
                     RailAdaptiveCallKind.TrackedRefresh => options.Value.Scanner.ActivePursuitBoost + 30,
                     RailAdaptiveCallKind.Acquisition => options.Value.Scanner.ActivePursuitBoost + 20,
-                    RailAdaptiveCallKind.Reacquisition => options.Value.Scanner.ActivePursuitBoost + 10,
+                    RailAdaptiveCallKind.Reacquisition => options.Value.Scanner.ActivePursuitBoost + 25,
                     _ => 0
                 }
             ,HeadwayCooldownPenalty = q.IsScannerProbe && satellite.NextDiscoveryDueUtc > now && !pursuitDue
