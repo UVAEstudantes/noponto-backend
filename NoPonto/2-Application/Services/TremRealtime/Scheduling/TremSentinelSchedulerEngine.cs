@@ -54,6 +54,10 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
     {
         lock (_gate)
         {
+            var providerDepartureCount = observations.Count;
+            observations = TremScannerObservationFilter.ForAdaptiveState(query, observations);
+            if (query.IsScannerProbe)
+                _metrics.ScannerDepartures(providerDepartureCount, observations.Count);
             CleanupPursuits(now);
             _metrics.Poll();
             var current = GetState(query.Id);
@@ -324,6 +328,9 @@ public sealed record TremSatelliteMetricsSnapshot(long SatellitePollTotal, long 
 {
     public long ScannerProbeCount { get; init; }
     public long ScannerActivePursuits { get; init; }
+    public long ScannerProviderDeparturesTotal { get; init; }
+    public long ScannerTargetDeparturesTotal { get; init; }
+    public long ScannerOffTargetDeparturesTotal { get; init; }
 }
 public sealed class TremSatelliteMetrics
 {
@@ -331,6 +338,7 @@ public sealed class TremSatelliteMetrics
     private long _scannerDiscovery, _scannerPursuitPoll, _scannerPursuitCreated, _scannerPursuitMatched,
         _scannerPursuitMissed, _scannerPursuitExpired, _scannerHeadwaySuppressed, _scannerWoken, _scannerUseful;
     private long _scannerProbeCount;
+    private long _scannerProviderDepartures, _scannerTargetDepartures, _scannerOffTargetDepartures;
     public void Poll() => Interlocked.Increment(ref _poll);
     public void Useful(int count) => Interlocked.Add(ref _useful, count);
     public void Empty() => Interlocked.Increment(ref _empty);
@@ -346,6 +354,12 @@ public sealed class TremSatelliteMetrics
     public void ScannerHeadwaySuppressed() => Interlocked.Increment(ref _scannerHeadwaySuppressed);
     public void ScannerWokenByPursuit() => Interlocked.Increment(ref _scannerWoken);
     public void ScannerUseful(int count) => Interlocked.Add(ref _scannerUseful, count);
+    public void ScannerDepartures(int provider, int target)
+    {
+        Interlocked.Add(ref _scannerProviderDepartures, provider);
+        Interlocked.Add(ref _scannerTargetDepartures, target);
+        Interlocked.Add(ref _scannerOffTargetDepartures, provider - target);
+    }
     public void SetScannerProbeCount(int count) => Interlocked.Exchange(ref _scannerProbeCount, count);
     public TremSatelliteMetricsSnapshot Capture() => new(Interlocked.Read(ref _poll), Interlocked.Read(ref _useful),
         Interlocked.Read(ref _empty), Interlocked.Read(ref _noService), Interlocked.Read(ref _created), Interlocked.Read(ref _expired),
@@ -353,5 +367,11 @@ public sealed class TremSatelliteMetrics
         Interlocked.Read(ref _scannerPursuitCreated), Interlocked.Read(ref _scannerPursuitMatched),
         Interlocked.Read(ref _scannerPursuitMissed), Interlocked.Read(ref _scannerPursuitExpired),
         Interlocked.Read(ref _scannerHeadwaySuppressed), Interlocked.Read(ref _scannerWoken),
-        Interlocked.Read(ref _scannerUseful)) { ScannerProbeCount = Interlocked.Read(ref _scannerProbeCount) };
+        Interlocked.Read(ref _scannerUseful))
+    {
+        ScannerProbeCount = Interlocked.Read(ref _scannerProbeCount),
+        ScannerProviderDeparturesTotal = Interlocked.Read(ref _scannerProviderDepartures),
+        ScannerTargetDeparturesTotal = Interlocked.Read(ref _scannerTargetDepartures),
+        ScannerOffTargetDeparturesTotal = Interlocked.Read(ref _scannerOffTargetDepartures)
+    };
 }

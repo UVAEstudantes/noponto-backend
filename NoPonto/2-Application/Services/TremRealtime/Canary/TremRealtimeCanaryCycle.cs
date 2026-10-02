@@ -125,7 +125,13 @@ public sealed class TremRealtimeCanaryCycle(
                         crossSentinelMetrics.Failure();
                         logger.LogError(ex, "Trem cross-sentinel observer failed open for sentinel={SentinelId}", item.Query.Id);
                     }
-                    try { railRealtimeEngine.Observe(item.Query, accepted, topology, requestStartedAtUtc, receivedAtUtc); }
+                    try
+                    {
+                        IReadOnlyList<TrackedObservationAcceptance> railAccepted = item.Query.IsScannerProbe
+                            ? accepted.Where(x => TremScannerObservationFilter.IsTarget(item.Query, x.Observation)).ToArray()
+                            : accepted;
+                        railRealtimeEngine.Observe(item.Query, railAccepted, topology, requestStartedAtUtc, receivedAtUtc);
+                    }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                     catch (Exception ex) { logger.LogError(ex, "Rail realtime estimator failed open for sentinel={SentinelId}", item.Query.Id); }
                 }
@@ -161,15 +167,21 @@ public sealed class TremRealtimeCanaryCycle(
                 "RailRealtimeSummary train_multi_satellite_total={MultiSatellite} rail_anchor_created={Anchors} rail_run_resolved={Runs} rail_position_available={Positions}",
                 rail.TrainMultiSatelliteTotal, rail.RailAnchorCreated, rail.RailRunResolved, rail.RailPositionAvailable);
             if (item.Query.IsScannerProbe)
+            {
+                var targetDepartures = observations.Count(x =>
+                    TremScannerObservationFilter.IsTarget(item.Query, x));
                 logger.LogInformation(
-                    "RailScannerRequest probe={ProbeId} purpose={Purpose} origin={Origin} destination={Destination} score={Score} discovery_due={DiscoveryDue} pursuit_target={PursuitTarget} result={Result} departures={Departures} next_due={NextDue}",
-                    item.Query.Id, item.Query.Purpose, item.Query.OriginExternalStationId,
-                    item.Query.DestinationExternalStationId, item.Decision.Priority,
+                    "RailScannerRequest probe={ProbeId} purpose={Purpose} target_line={TargetLine} origin={Origin} destination={Destination} score={Score} discovery_due={DiscoveryDue} pursuit_target={PursuitTarget} result={Result} provider_departures={ProviderDepartures} target_departures={TargetDepartures} off_target_departures={OffTargetDepartures} next_due={NextDue}",
+                    item.Query.Id, item.Query.Purpose, item.Query.ScannerExternalLineId,
+                    item.Query.OriginExternalStationId, item.Query.DestinationExternalStationId,
+                    item.Decision.Priority,
                     item.Decision.Breakdown.DiscoveryDueBoost > 0,
                     item.Decision.Breakdown.ActivePursuitBoost > 0, result.Status,
-                    observations.Count, item.Decision.NextDueUtc);
+                    observations.Count, targetDepartures, observations.Count - targetDepartures,
+                    item.Decision.NextDueUtc);
+            }
             logger.LogInformation(
-                "RailScannerSummary probes={Probes} active_pursuits={ActivePursuits} discovery_due={DiscoveryDue} pursuit_due={PursuitDue} calls_used={CallsUsed} call_budget={CallBudget} discovery_polls={DiscoveryPolls} pursuit_polls={PursuitPolls} pursuit_created={PursuitCreated} pursuit_matched={PursuitMatched} pursuit_missed={PursuitMissed} pursuit_expired={PursuitExpired} headway_suppressed={HeadwaySuppressed} woken_by_pursuit={WokenByPursuit} useful={Useful}",
+                "RailScannerSummary probes={Probes} active_pursuits={ActivePursuits} discovery_due={DiscoveryDue} pursuit_due={PursuitDue} calls_used={CallsUsed} call_budget={CallBudget} discovery_polls={DiscoveryPolls} pursuit_polls={PursuitPolls} pursuit_created={PursuitCreated} pursuit_matched={PursuitMatched} pursuit_missed={PursuitMissed} pursuit_expired={PursuitExpired} headway_suppressed={HeadwaySuppressed} woken_by_pursuit={WokenByPursuit} useful={Useful} scanner_provider_departures_total={ProviderDepartures} scanner_target_departures_total={TargetDepartures} scanner_off_target_departures_total={OffTargetDepartures}",
                 satellite.ScannerProbeCount, satellite.ScannerActivePursuits,
                 candidates.Count(x => x.Query.IsScannerProbe && x.Decision.Breakdown.DiscoveryDueBoost > 0),
                 candidates.Count(x => x.Query.IsScannerProbe && x.Decision.Breakdown.ActivePursuitBoost > 0),
@@ -178,7 +190,8 @@ public sealed class TremRealtimeCanaryCycle(
                 satellite.ScannerPursuitCreated, satellite.ScannerPursuitMatched,
                 satellite.ScannerPursuitMissed, satellite.ScannerPursuitExpired,
                 satellite.ScannerHeadwaySuppressed, satellite.ScannerWokenByPursuit,
-                satellite.ScannerUsefulTotal);
+                satellite.ScannerUsefulTotal, satellite.ScannerProviderDeparturesTotal,
+                satellite.ScannerTargetDeparturesTotal, satellite.ScannerOffTargetDeparturesTotal);
         }
     }
 
