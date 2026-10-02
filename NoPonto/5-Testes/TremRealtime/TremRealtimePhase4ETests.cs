@@ -4,6 +4,7 @@ using NoPonto.Application.TremRealtime.Contracts;
 using NoPonto.Application.TremRealtime.Options;
 using NoPonto.Application.TremRealtime.RailRuntime;
 using NoPonto.Application.TremRealtime.Scheduling;
+using NoPonto.Application.TremRealtime.Structural;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremRealtime.Tracking;
 using Xunit;
@@ -13,6 +14,54 @@ namespace NoPonto.Tests.TremRealtime;
 public sealed class TremRealtimePhase4ETests
 {
     private static readonly DateTimeOffset T0 = new(2026, 10, 2, 12, 0, 0, TimeSpan.Zero);
+    private const string SantaCruz = "cmprnz4bb0006ow2h1apjp25v";
+
+    [Theory]
+    [InlineData(true, true, 17, 17)]
+    [InlineData(true, false, 17, 0)]
+    [InlineData(false, true, 0, 17)]
+    [InlineData(false, false, 0, 0)]
+    public async Task Catalog_RespectsDirectionFlagsAndSelectsBaseAmongMultiplePublishedPatterns(
+        bool outboundEnabled, bool inboundEnabled, int expectedOutbound, int expectedInbound)
+    {
+        var fixture = CatalogFixture(outboundEnabled, inboundEnabled);
+        var queries = (await fixture.Catalog.GetAsync()).Where(x => x.IsScannerProbe).ToArray();
+
+        Assert.Equal(expectedOutbound, queries.Count(x => x.ScannerDirection == "OUTBOUND"));
+        Assert.Equal(expectedInbound, queries.Count(x => x.ScannerDirection == "INBOUND"));
+        Assert.Equal(expectedOutbound + expectedInbound, queries.Length);
+        Assert.DoesNotContain(queries, x => x.ScannerPadraoVersaoId == fixture.InboundSpecial.PadraoVersaoId);
+    }
+
+    [Fact]
+    public async Task Catalog_BidirectionalProbesPreserveDistinctPublishedTopologyIdentity()
+    {
+        var fixture = CatalogFixture(true, true);
+        var queries = (await fixture.Catalog.GetAsync()).Where(x => x.IsScannerProbe).ToArray();
+        var outbound = queries.First(x => x.ScannerDirection == "OUTBOUND");
+        var inbound = queries.First(x => x.ScannerDirection == "INBOUND");
+
+        Assert.Equal(34, queries.Length);
+        Assert.NotEqual(outbound.StructurallyCoveredSentidoIds.Single(), inbound.StructurallyCoveredSentidoIds.Single());
+        Assert.Equal(fixture.OutboundBase.PadraoVersaoId, outbound.ScannerPadraoVersaoId);
+        Assert.Equal(fixture.InboundBase.PadraoVersaoId, inbound.ScannerPadraoVersaoId);
+        Assert.Equal(fixture.OutboundBase.PadraoOperacionalId,
+            outbound.StructuralCandidatePadraoOperacionalIds.Single());
+        Assert.Equal(fixture.InboundBase.PadraoOperacionalId,
+            inbound.StructuralCandidatePadraoOperacionalIds.Single());
+        Assert.Equal(fixture.OutboundBase.Occurrences[0].OccurrenceId, outbound.OriginOccurrenceId);
+        Assert.Equal(fixture.InboundBase.Occurrences[0].OccurrenceId, inbound.OriginOccurrenceId);
+        Assert.NotEqual(outbound.OriginOccurrenceId, inbound.OriginOccurrenceId);
+
+        var scheduler = Scheduler();
+        scheduler.SetScannerProbeCount(queries.Length);
+        var evaluated = queries.Select(q => (q, Evaluate(scheduler, q, T0))).ToArray();
+        Assert.Equal(17, evaluated.Count(x => x.q.ScannerDirection == "OUTBOUND"
+            && x.Item2.Breakdown.DiscoveryDueBoost > 0));
+        Assert.Equal(17, evaluated.Count(x => x.q.ScannerDirection == "INBOUND"
+            && x.Item2.Breakdown.DiscoveryDueBoost > 0));
+        Assert.Equal(34, scheduler.CaptureSatelliteMetrics().ScannerProbeCount);
+    }
 
     [Fact]
     public void RepeatedOffTarget_UsesExponentialTemporalBackoffAndCap()
@@ -304,6 +353,40 @@ public sealed class TremRealtimePhase4ETests
         { LengthMetres = 1_000 };
     }
 
+    private static CatalogTestFixture CatalogFixture(bool includeOutbound, bool includeInbound)
+    {
+        var lineId = Guid.NewGuid();
+        var outboundDirectionId = Guid.NewGuid();
+        var inboundDirectionId = Guid.NewGuid();
+        var outboundPatternId = Guid.NewGuid();
+        var inboundPatternId = Guid.NewGuid();
+        var lookup = new CatalogLookup(lineId, outboundDirectionId, inboundDirectionId,
+            outboundPatternId, inboundPatternId);
+        var outbound = TopologyPattern(lineId, outboundDirectionId, outboundPatternId, "OUT");
+        var inbound = TopologyPattern(lineId, inboundDirectionId, inboundPatternId, "IN");
+        var inboundSpecial = TopologyPattern(lineId, inboundDirectionId, Guid.NewGuid(), "SPECIAL");
+        var topology = new TremPublishedTopologySnapshot(T0, [outbound, inbound, inboundSpecial]);
+        var options = Runtime();
+        options.Scanner.TargetExternalLineId = SantaCruz;
+        options.Scanner.IncludeOutbound = includeOutbound;
+        options.Scanner.IncludeInbound = includeInbound;
+        var catalog = new TremSentinelCatalog(lookup, new CatalogTopologyCache(topology), Options.Create(options));
+        return new(catalog, outbound, inbound, inboundSpecial);
+    }
+
+    private static TremPatternTopology TopologyPattern(Guid lineId, Guid directionId,
+        Guid patternId, string prefix)
+    {
+        var occurrences = Enumerable.Range(0, 35).Select(index =>
+            new TremTopologyOccurrence(Guid.NewGuid(), index + 1, Guid.NewGuid())
+            {
+                ExternalStationId = $"{prefix}-{index}",
+                DistanceAlongPatternMetres = index * 1_000
+            }).ToImmutableArray();
+        return new(patternId, Guid.NewGuid(), lineId, directionId, occurrences)
+        { LengthMetres = 34_000 };
+    }
+
     private static TremRealtimeObservation Observation(string trainCode, int minutes, string line) => new(
         T0, "O", "D", trainCode, line, null, null, TremDirectionResolution.Resolved, null,
         "parador", null, minutes, null, null, null, null, null);
@@ -323,5 +406,49 @@ public sealed class TremRealtimePhase4ETests
     {
         public DateTimeOffset Now { get; set; } = now;
         public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    private sealed record CatalogTestFixture(TremSentinelCatalog Catalog,
+        TremPatternTopology OutboundBase, TremPatternTopology InboundBase,
+        TremPatternTopology InboundSpecial);
+
+    private sealed class CatalogTopologyCache(TremPublishedTopologySnapshot snapshot)
+        : ITremPublishedTopologyCache
+    {
+        public Task<TremPublishedTopologySnapshot> GetAsync(CancellationToken ct = default) =>
+            Task.FromResult(snapshot);
+        public Task<TremPublishedTopologySnapshot> ReloadAsync(CancellationToken ct = default) =>
+            Task.FromResult(snapshot);
+    }
+
+    private sealed class CatalogLookup(Guid lineId, Guid outboundDirectionId, Guid inboundDirectionId,
+        Guid outboundPatternId, Guid inboundPatternId) : ITremStructuralLookup
+    {
+        public Task ReloadAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task<TremLookupResult> ResolveLineAsync(string externalId, CancellationToken ct = default) =>
+            Task.FromResult(externalId == SantaCruz
+                ? new TremLookupResult(TremLookupStatus.Resolved, lineId)
+                : new TremLookupResult(TremLookupStatus.Unknown));
+        public Task<TremLookupResult> ResolveStationAsync(string externalId, CancellationToken ct = default) =>
+            Task.FromResult(new TremLookupResult(TremLookupStatus.Unknown));
+        public Task<TremLookupResult> ResolvePatternAsync(string externalKey, CancellationToken ct = default) =>
+            Task.FromResult(externalKey switch
+            {
+                SantaCruz + ":FORWARD:BASE" => new TremLookupResult(TremLookupStatus.Resolved, outboundPatternId),
+                SantaCruz + ":REVERSE:BASE" => new TremLookupResult(TremLookupStatus.Resolved, inboundPatternId),
+                _ => new TremLookupResult(TremLookupStatus.Unknown)
+            });
+        public Task<TremDirectionLookupResult> ResolveDirectionAsync(string externalLineId,
+            string? externalDirection, CancellationToken ct = default) => Task.FromResult(
+            externalLineId != SantaCruz
+                ? new TremDirectionLookupResult(TremDirectionResolution.Unknown)
+                : externalDirection switch
+                {
+                    "outbound" => new TremDirectionLookupResult(TremDirectionResolution.Resolved,
+                        outboundDirectionId, "FORWARD"),
+                    "inbound" => new TremDirectionLookupResult(TremDirectionResolution.Resolved,
+                        inboundDirectionId, "REVERSE"),
+                    _ => new TremDirectionLookupResult(TremDirectionResolution.Unknown)
+                });
     }
 }

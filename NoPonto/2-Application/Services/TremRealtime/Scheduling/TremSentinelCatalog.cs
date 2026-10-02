@@ -67,16 +67,21 @@ public sealed class TremSentinelCatalog(
                 {
                     var topology = await topologyCache.GetAsync(ct);
                     var staticPairs = list.Select(x => x.PairKey).ToHashSet();
-                    await AddScannerDirection("outbound", "OUTBOUND", scanner.IncludeOutbound);
-                    await AddScannerDirection("inbound", "INBOUND", scanner.IncludeInbound);
+                    await AddScannerDirection("outbound", "FORWARD", "OUTBOUND", scanner.IncludeOutbound);
+                    await AddScannerDirection("inbound", "REVERSE", "INBOUND", scanner.IncludeInbound);
 
-                    async Task AddScannerDirection(string lookupDirection, string scannerDirection, bool enabled)
+                    async Task AddScannerDirection(string lookupDirection, string structuralDirection,
+                        string scannerDirection, bool enabled)
                     {
                         if (!enabled) return;
                         var direction = await lookup.ResolveDirectionAsync(scanner.TargetExternalLineId, lookupDirection, ct);
                         if (direction.Resolution != TremDirectionResolution.Resolved) return;
+                        var basePattern = await lookup.ResolvePatternAsync(
+                            $"{scanner.TargetExternalLineId}:{structuralDirection}:BASE", ct);
+                        if (basePattern.Status != TremLookupStatus.Resolved) return;
                         var patterns = topology.Patterns.Where(x => x.LinhaId == line.InternalId
-                            && x.SentidoId == direction.SentidoId).ToArray();
+                            && x.SentidoId == direction.SentidoId
+                            && x.PadraoOperacionalId == basePattern.InternalId).ToArray();
                         if (patterns.Length != 1) return;
                         list.AddRange(TremAdaptiveScannerProbeFactory.Create(patterns[0],
                             scanner.TargetExternalLineId, scannerDirection, scanner, staticPairs));
