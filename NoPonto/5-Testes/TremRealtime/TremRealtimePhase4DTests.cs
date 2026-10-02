@@ -126,10 +126,10 @@ public sealed class TremRealtimePhase4DTests
         }), clock);
         var topology = new TremPublishedTopologySnapshot(T0, [pattern]);
 
-        var first = tracker.ObserveBatch("TRENS_RJ", probes[0].Id, [Observation("US155", 3)]);
+        var first = tracker.ObserveBatch("TRENS_RJ", probes[0].Id, [Observation("US165", 3)]);
         engine.Observe(probes[0], first, topology, T0, T0);
         clock.Now = T0.AddMinutes(1);
-        var second = tracker.ObserveBatch("TRENS_RJ", probes[1].Id, [Observation("US155", 9)]);
+        var second = tracker.ObserveBatch("TRENS_RJ", probes[1].Id, [Observation("US165", 10)]);
         engine.Observe(probes[1], second, topology, clock.Now, clock.Now);
 
         Assert.Equal(first.Single().TrackerId, second.Single().TrackerId);
@@ -422,6 +422,115 @@ public sealed class TremRealtimePhase4DTests
         }
     }
 
+    [Fact]
+    public void ScannerMixedLines_UsesOnlyTargetForUsefulPursuitAndHeadway()
+    {
+        var runtime = Runtime();
+        var scheduler = new TremSentinelSchedulerEngine(Options.Create(runtime));
+        var probes = Mesh(2);
+        var observations = new[]
+        {
+            Observation("UC141", 0, "deodoro"),
+            Observation("UP169", 5, "japeri"),
+            Observation("US169", 15, "line")
+        };
+
+        scheduler.ObserveResult(T0, probes[0], observations, TrensRjClientStatus.Success, probes, T0);
+
+        var metrics = scheduler.CaptureSatelliteMetrics();
+        Assert.Equal(3, metrics.ScannerProviderDeparturesTotal);
+        Assert.Equal(1, metrics.ScannerTargetDeparturesTotal);
+        Assert.Equal(2, metrics.ScannerOffTargetDeparturesTotal);
+        Assert.Equal(1, metrics.ScannerUsefulTotal);
+        Assert.Equal(1, metrics.ScannerPursuitCreated);
+        Assert.Equal(1, metrics.ScannerActivePursuits);
+        var stillInTargetHeadway = scheduler.Evaluate(T0.AddMinutes(14), probes[0], new Demand(), [],
+            TremSchedulingMode.CanaryObservation, TimeSpan.FromSeconds(15));
+        Assert.False(stillInTargetHeadway.ShouldPoll);
+    }
+
+    [Fact]
+    public void ScannerPursuit_IsMatchedOnlyByTargetLineAndIsNotStolen()
+    {
+        var scheduler = new TremSentinelSchedulerEngine(Options.Create(Runtime()));
+        var probes = Mesh(3);
+        scheduler.ObserveResult(T0, probes[0], [Observation("US169", 3, "line")],
+            TrensRjClientStatus.Success, probes, T0);
+
+        scheduler.ObserveResult(T0.AddSeconds(16), probes[1],
+            [Observation("UC141", 0, "deodoro"), Observation("US169", 10, "line")],
+            TrensRjClientStatus.Success, probes, T0.AddSeconds(16));
+
+        var metrics = scheduler.CaptureSatelliteMetrics();
+        Assert.Equal(1, metrics.ScannerPursuitMatched);
+        Assert.Equal(2, metrics.ScannerPursuitCreated);
+        Assert.Equal(1, metrics.ScannerActivePursuits);
+        Assert.Equal(2, metrics.ScannerUsefulTotal);
+        Assert.Equal(3, metrics.ScannerProviderDeparturesTotal);
+        Assert.Equal(2, metrics.ScannerTargetDeparturesTotal);
+        Assert.Equal(1, metrics.ScannerOffTargetDeparturesTotal);
+    }
+
+    [Fact]
+    public void ScannerOnlyOffTarget_IsAdaptiveEmptyWithoutCreatingOrMatchingPursuit()
+    {
+        var scheduler = new TremSentinelSchedulerEngine(Options.Create(Runtime()));
+        var probes = Mesh(2);
+
+        scheduler.ObserveResult(T0, probes[0],
+            [Observation("UC141", 0, "deodoro"), Observation("UP169", 5, "japeri")],
+            TrensRjClientStatus.Success, probes, T0);
+
+        var metrics = scheduler.CaptureSatelliteMetrics();
+        Assert.Equal(2, metrics.ScannerProviderDeparturesTotal);
+        Assert.Equal(0, metrics.ScannerTargetDeparturesTotal);
+        Assert.Equal(2, metrics.ScannerOffTargetDeparturesTotal);
+        Assert.Equal(0, metrics.ScannerUsefulTotal);
+        Assert.Equal(1, metrics.SatelliteEmptyTotal);
+        Assert.Equal(0, metrics.ScannerPursuitCreated);
+        Assert.Equal(0, metrics.ScannerPursuitMatched);
+        Assert.Equal(0, metrics.ScannerActivePursuits);
+    }
+
+    [Fact]
+    public void StaticSatellite_MixedLinesPreservesPreviousUnfilteredSemantics()
+    {
+        var scheduler = new TremSentinelSchedulerEngine(Options.Create(Runtime()));
+        var staticQuery = Probe("STATIC", 0, 1) with { IsScannerProbe = false };
+
+        scheduler.ObserveResult(T0, staticQuery,
+            [Observation("UC141", 0, "deodoro"), Observation("UP169", 5, "japeri")],
+            TrensRjClientStatus.Success, [staticQuery], T0);
+
+        var metrics = scheduler.CaptureSatelliteMetrics();
+        Assert.Equal(2, metrics.SatelliteUsefulTotal);
+        Assert.Equal(0, metrics.ScannerProviderDeparturesTotal);
+        Assert.Equal(0, metrics.ScannerTargetDeparturesTotal);
+        Assert.Equal(0, metrics.ScannerOffTargetDeparturesTotal);
+    }
+
+    [Fact]
+    public void MixedLinesAcrossScannerResponses_DoNotEnterBoundedPursuitState()
+    {
+        var scheduler = new TremSentinelSchedulerEngine(Options.Create(Runtime()));
+        var probes = Mesh(3);
+
+        scheduler.ObserveResult(T0, probes[0],
+            [Observation("UC141", 0, "deodoro"), Observation("UP169", 5, "japeri"),
+                Observation("US165", 3, "line")], TrensRjClientStatus.Success, probes, T0);
+        scheduler.ObserveResult(T0.AddSeconds(16), probes[1],
+            [Observation("UC141", 1, "deodoro"), Observation("UP169", 6, "japeri"),
+                Observation("US165", 10, "line")], TrensRjClientStatus.Success, probes, T0.AddSeconds(16));
+
+        var metrics = scheduler.CaptureSatelliteMetrics();
+        Assert.Equal(2, metrics.ScannerPursuitCreated);
+        Assert.Equal(1, metrics.ScannerPursuitMatched);
+        Assert.Equal(1, metrics.ScannerActivePursuits);
+        Assert.Equal(6, metrics.ScannerProviderDeparturesTotal);
+        Assert.Equal(2, metrics.ScannerTargetDeparturesTotal);
+        Assert.Equal(4, metrics.ScannerOffTargetDeparturesTotal);
+    }
+
     private static TremRealtimeOptions Runtime() => new()
     {
         Enabled = true,
@@ -495,7 +604,11 @@ public sealed class TremRealtimePhase4DTests
     };
 
     private static TremRealtimeObservation Observation(string trainCode, int minutes) => new(
-        T0, "O", "D", trainCode, null, null, null, TremDirectionResolution.Resolved, null,
+        T0, "O", "D", trainCode, "line", null, null, TremDirectionResolution.Resolved, null,
+        "parador", null, minutes, null, null, null, null, null);
+
+    private static TremRealtimeObservation Observation(string trainCode, int minutes, string providerLine) => new(
+        T0, "O", "D", trainCode, providerLine, null, null, TremDirectionResolution.Resolved, null,
         "parador", null, minutes, null, null, null, null, null);
 
     private sealed class Demand : ITremDemandRegistry
