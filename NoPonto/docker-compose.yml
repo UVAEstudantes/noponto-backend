@@ -123,6 +123,12 @@ services:
       TremRealtime__Scanner__PursuitRetrySeconds: ${TremRealtime__Scanner__PursuitRetrySeconds:-30}
       TremRealtime__Scanner__MaxPursuitAttemptsPerProbe: ${TremRealtime__Scanner__MaxPursuitAttemptsPerProbe:-2}
       TremRealtime__Scanner__PursuitTtlMinutes: ${TremRealtime__Scanner__PursuitTtlMinutes:-30}
+      TremRealtime__Scanner__DiscoveryBaseIntervalSeconds: ${TremRealtime__Scanner__DiscoveryBaseIntervalSeconds:-60}
+      TremRealtime__Scanner__OffTargetBackoffMultiplier: ${TremRealtime__Scanner__OffTargetBackoffMultiplier:-2}
+      TremRealtime__Scanner__EmptyBackoffMultiplier: ${TremRealtime__Scanner__EmptyBackoffMultiplier:-2}
+      TremRealtime__Scanner__NoServiceBackoffMultiplier: ${TremRealtime__Scanner__NoServiceBackoffMultiplier:-2}
+      TremRealtime__Scanner__MaxDiscoveryBackoffMinutes: ${TremRealtime__Scanner__MaxDiscoveryBackoffMinutes:-15}
+      TremRealtime__Scanner__TargetHitResetBackoff: ${TremRealtime__Scanner__TargetHitResetBackoff:-true}
 
       TelemetriaMlSampling__Enabled: ${TelemetriaMlSampling__Enabled:-false}
       TelemetriaMlSampling__LinePercentage: ${TelemetriaMlSampling__LinePercentage:-10}

@@ -21,7 +21,9 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
     private sealed record ExpectedWindow(DateTimeOffset Start, DateTimeOffset Center, DateTimeOffset End, string? TrainCode);
     private sealed record SatelliteState(int EmptyCount, int NoServiceCount, ExpectedWindow? Expected,
         DateTimeOffset? FirstEvaluatedUtc, DateTimeOffset? LastUsefulObservationUtc,
-        DateTimeOffset? NextDiscoveryDueUtc);
+        DateTimeOffset? NextDiscoveryDueUtc, long TargetHitCount = 0, long TargetMissCount = 0,
+        int TargetMissStreak = 0, DateTimeOffset? LastTargetHitUtc = null,
+        TimeSpan? CurrentDiscoveryBackoff = null);
     private sealed record PursuitState(string TargetProbeId, string TrainCode, DateTimeOffset DueUtc,
         DateTimeOffset ExpiresUtc, int Attempts);
     private readonly object _gate = new();
@@ -72,20 +74,43 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
             if (observations.Count == 0)
             {
                 if (status == TrensRjClientStatus.NoService) _metrics.NoService(); else _metrics.Empty();
-                var emptyDelaySeconds = Math.Min(options.Value.BackoffMaxMinutes * 60d,
-                    options.Value.BackoffInitialSeconds * Math.Pow(2, Math.Min(current.EmptyCount, 20)));
+                var emptyDelaySeconds = query.IsScannerProbe
+                    ? EconomicBackoffSeconds(current.TargetMissStreak + 1,
+                        status == TrensRjClientStatus.NoService
+                            ? options.Value.Scanner.NoServiceBackoffMultiplier
+                            : providerDepartureCount > 0
+                                ? options.Value.Scanner.OffTargetBackoffMultiplier
+                                : options.Value.Scanner.EmptyBackoffMultiplier)
+                    : Math.Min(options.Value.BackoffMaxMinutes * 60d,
+                        options.Value.BackoffInitialSeconds * Math.Pow(2, Math.Min(current.EmptyCount, 20)));
+                if (query.IsScannerProbe)
+                {
+                    _metrics.ScannerTargetMiss();
+                    _metrics.ScannerBackoffApplied(emptyDelaySeconds >=
+                        options.Value.Scanner.MaxDiscoveryBackoffMinutes * 60d);
+                }
                 _satellites[query.Id] = current with
                 {
                     EmptyCount = current.EmptyCount + 1,
                     NoServiceCount = status == TrensRjClientStatus.NoService ? current.NoServiceCount + 1 : current.NoServiceCount,
                     NextDiscoveryDueUtc = query.IsScannerProbe
-                        ? now.AddSeconds(emptyDelaySeconds) : current.NextDiscoveryDueUtc
+                        ? now.AddSeconds(emptyDelaySeconds) : current.NextDiscoveryDueUtc,
+                    TargetMissCount = query.IsScannerProbe ? current.TargetMissCount + 1 : current.TargetMissCount,
+                    TargetMissStreak = query.IsScannerProbe ? current.TargetMissStreak + 1 : current.TargetMissStreak,
+                    CurrentDiscoveryBackoff = query.IsScannerProbe
+                        ? TimeSpan.FromSeconds(emptyDelaySeconds) : current.CurrentDiscoveryBackoff
                 };
                 RetryOrDropPursuits(pursuitKeys, now);
                 return;
             }
             _metrics.Useful(observations.Count);
-            if (query.IsScannerProbe) _metrics.ScannerUseful(observations.Count);
+            if (query.IsScannerProbe)
+            {
+                _metrics.ScannerUseful(observations.Count);
+                _metrics.ScannerTargetHit();
+                if (current.TargetMissStreak > 0 && options.Value.Scanner.TargetHitResetBackoff)
+                    _metrics.ScannerBackoffReset();
+            }
             var requestAt = requestStartedAtUtc ?? now;
             var minimumEta = observations.Where(x => x.MinutesUntil is >= 0)
                 .Select(x => x.MinutesUntil!.Value).DefaultIfEmpty(0).Min();
@@ -97,7 +122,13 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
             {
                 EmptyCount = 0, NoServiceCount = 0,
                 LastUsefulObservationUtc = now,
-                NextDiscoveryDueUtc = nextDiscovery
+                NextDiscoveryDueUtc = nextDiscovery,
+                TargetHitCount = query.IsScannerProbe ? current.TargetHitCount + 1 : current.TargetHitCount,
+                TargetMissStreak = query.IsScannerProbe && options.Value.Scanner.TargetHitResetBackoff
+                    ? 0 : current.TargetMissStreak,
+                LastTargetHitUtc = query.IsScannerProbe ? now : current.LastTargetHitUtc,
+                CurrentDiscoveryBackoff = query.IsScannerProbe && options.Value.Scanner.TargetHitResetBackoff
+                    ? null : current.CurrentDiscoveryBackoff
             };
             foreach (var key in pursuitKeys)
             {
@@ -148,7 +179,13 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
         var demanded = mode == TremSchedulingMode.CanaryObservation || options.Value.ShadowHistoricalEnabled || demandedLines > 0;
         if (!demanded) return Decision(false, null, TremSentinelState.Dormant, TremSentinelReason.NoDemand, q, 0, 0, 0, 0, now);
 
-        if (q.CooldownUntilUtc is { } cooldown && cooldown > now)
+        bool scannerPursuitDue;
+        lock (_gate)
+        {
+            CleanupPursuits(now);
+            scannerPursuitDue = q.IsScannerProbe && HasDuePursuit(q.Id, now);
+        }
+        if (!scannerPursuitDue && q.CooldownUntilUtc is { } cooldown && cooldown > now)
             return Decision(false, cooldown, TremSentinelState.Cooldown, TremSentinelReason.NoServiceCooldown, q, demandedLines, 0, 0, 0, now);
         if (q.ConsecutiveFailures > 0 && q.LastPollUtc is { } failedAt)
         {
@@ -156,7 +193,7 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
             var until = failedAt.AddSeconds(seconds);
             if (until > now) return Decision(false, until, TremSentinelState.Backoff, TremSentinelReason.ErrorBackoff, q, demandedLines, 0, 0, q.ConsecutiveFailures * 5, now);
         }
-        if (q.LastNoServiceUtc is { } noService)
+        if (!scannerPursuitDue && q.LastNoServiceUtc is { } noService)
         {
             var until = noService.AddMinutes(options.Value.NoServiceCooldownMinutes);
             if (until > now) return Decision(false, until, TremSentinelState.NoService, TremSentinelReason.NoServiceCooldown, q, demandedLines, 0, 0, 0, now);
@@ -268,6 +305,13 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
     private SatelliteState GetState(string id) => _satellites.TryGetValue(id, out var value)
         ? value : new(0, 0, null, null, null, null);
 
+    private double EconomicBackoffSeconds(int streak, double multiplier)
+    {
+        var scanner = options.Value.Scanner;
+        return Math.Min(scanner.MaxDiscoveryBackoffMinutes * 60d,
+            scanner.DiscoveryBaseIntervalSeconds * Math.Pow(multiplier, Math.Min(streak - 1, 20)));
+    }
+
     private bool HasDuePursuit(string probeId, DateTimeOffset now) => _pursuits.Values.Any(x =>
         x.TargetProbeId == probeId && x.DueUtc <= now && x.ExpiresUtc >= now);
 
@@ -331,6 +375,11 @@ public sealed record TremSatelliteMetricsSnapshot(long SatellitePollTotal, long 
     public long ScannerProviderDeparturesTotal { get; init; }
     public long ScannerTargetDeparturesTotal { get; init; }
     public long ScannerOffTargetDeparturesTotal { get; init; }
+    public long ScannerTargetHitTotal { get; init; }
+    public long ScannerTargetMissTotal { get; init; }
+    public long ScannerBackoffAppliedTotal { get; init; }
+    public long ScannerBackoffResetTotal { get; init; }
+    public long ScannerMaxBackoffReachedTotal { get; init; }
 }
 public sealed class TremSatelliteMetrics
 {
@@ -339,6 +388,8 @@ public sealed class TremSatelliteMetrics
         _scannerPursuitMissed, _scannerPursuitExpired, _scannerHeadwaySuppressed, _scannerWoken, _scannerUseful;
     private long _scannerProbeCount;
     private long _scannerProviderDepartures, _scannerTargetDepartures, _scannerOffTargetDepartures;
+    private long _scannerTargetHits, _scannerTargetMisses, _scannerBackoffApplied,
+        _scannerBackoffReset, _scannerMaxBackoffReached;
     public void Poll() => Interlocked.Increment(ref _poll);
     public void Useful(int count) => Interlocked.Add(ref _useful, count);
     public void Empty() => Interlocked.Increment(ref _empty);
@@ -360,6 +411,14 @@ public sealed class TremSatelliteMetrics
         Interlocked.Add(ref _scannerTargetDepartures, target);
         Interlocked.Add(ref _scannerOffTargetDepartures, provider - target);
     }
+    public void ScannerTargetHit() => Interlocked.Increment(ref _scannerTargetHits);
+    public void ScannerTargetMiss() => Interlocked.Increment(ref _scannerTargetMisses);
+    public void ScannerBackoffApplied(bool reachedMaximum)
+    {
+        Interlocked.Increment(ref _scannerBackoffApplied);
+        if (reachedMaximum) Interlocked.Increment(ref _scannerMaxBackoffReached);
+    }
+    public void ScannerBackoffReset() => Interlocked.Increment(ref _scannerBackoffReset);
     public void SetScannerProbeCount(int count) => Interlocked.Exchange(ref _scannerProbeCount, count);
     public TremSatelliteMetricsSnapshot Capture() => new(Interlocked.Read(ref _poll), Interlocked.Read(ref _useful),
         Interlocked.Read(ref _empty), Interlocked.Read(ref _noService), Interlocked.Read(ref _created), Interlocked.Read(ref _expired),
@@ -372,6 +431,11 @@ public sealed class TremSatelliteMetrics
         ScannerProbeCount = Interlocked.Read(ref _scannerProbeCount),
         ScannerProviderDeparturesTotal = Interlocked.Read(ref _scannerProviderDepartures),
         ScannerTargetDeparturesTotal = Interlocked.Read(ref _scannerTargetDepartures),
-        ScannerOffTargetDeparturesTotal = Interlocked.Read(ref _scannerOffTargetDepartures)
+        ScannerOffTargetDeparturesTotal = Interlocked.Read(ref _scannerOffTargetDepartures),
+        ScannerTargetHitTotal = Interlocked.Read(ref _scannerTargetHits),
+        ScannerTargetMissTotal = Interlocked.Read(ref _scannerTargetMisses),
+        ScannerBackoffAppliedTotal = Interlocked.Read(ref _scannerBackoffApplied),
+        ScannerBackoffResetTotal = Interlocked.Read(ref _scannerBackoffReset),
+        ScannerMaxBackoffReachedTotal = Interlocked.Read(ref _scannerMaxBackoffReached)
     };
 }

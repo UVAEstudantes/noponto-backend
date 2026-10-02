@@ -107,8 +107,12 @@ public sealed class TremRealtimeTracker : ITremRealtimeTracker
         var wasStale = entry.State == TrackedTrainState.Stale;
         var evolution = ClassifyEta(entry.Last.Observation.MinutesUntil, observation.MinutesUntil);
         var current = new TrackedTrainObservation(sentinelId, observation, evolution);
-        if (Changed(entry.Last.Observation.ProviderExternalLineId, observation.ProviderExternalLineId)
-            || Changed(entry.Last.Observation.ProviderLinhaId, observation.ProviderLinhaId)) _metrics.LineChanged();
+        if (Changed(entry.Last.Observation.ProviderExternalLineId, observation.ProviderExternalLineId))
+        {
+            _metrics.LineChanged();
+            _metrics.ExternalLineTransition();
+        }
+        else if (Changed(entry.Last.Observation.ProviderLinhaId, observation.ProviderLinhaId)) _metrics.LineChanged();
         if (Changed(entry.Last.Observation.ExternalDirection, observation.ExternalDirection)
             || Changed(entry.Last.Observation.DirectionLabel, observation.DirectionLabel)
             || Changed(entry.Last.Observation.SentidoId, observation.SentidoId)) _metrics.DirectionChanged();

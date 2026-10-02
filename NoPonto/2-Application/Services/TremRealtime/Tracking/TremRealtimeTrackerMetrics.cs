@@ -17,7 +17,10 @@ public sealed record TremRealtimeTrackerMetricsSnapshot(
     long EtaProgressions,
     long EtaRegressions,
     long EtaZeroObserved,
-    long Failures);
+    long Failures)
+{
+    public long TrainCodeExternalLineTransitionTotal { get; init; }
+}
 
 public sealed class TremRealtimeTrackerMetrics
 {
@@ -25,6 +28,7 @@ public sealed class TremRealtimeTrackerMetrics
     private long _observations, _untrackable, _newTrains, _repeated, _active, _stale,
         _reappeared, _expired, _capacityEvicted, _capacityRejected, _lineChanges, _directionChanges,
         _sentinelChanges, _etaProgressions, _etaRegressions, _etaZero, _failures;
+    private long _externalLineTransitions;
 
     internal void Observation() { lock (_gate) _observations++; }
     internal void Untrackable() { lock (_gate) _untrackable++; }
@@ -35,6 +39,7 @@ public sealed class TremRealtimeTrackerMetrics
     internal void CapacityEvicted() { lock (_gate) _capacityEvicted++; }
     internal void CapacityRejected() { lock (_gate) _capacityRejected++; }
     internal void LineChanged() { lock (_gate) _lineChanges++; }
+    internal void ExternalLineTransition() { lock (_gate) _externalLineTransitions++; }
     internal void DirectionChanged() { lock (_gate) _directionChanges++; }
     internal void SentinelChanged() { lock (_gate) _sentinelChanges++; }
     internal void EtaProgressed() { lock (_gate) _etaProgressions++; }
@@ -48,6 +53,7 @@ public sealed class TremRealtimeTrackerMetrics
         lock (_gate)
             return new(_observations, _untrackable, _newTrains, _repeated, _active, _stale,
                 _reappeared, _expired, _capacityEvicted, _capacityRejected, _lineChanges, _directionChanges,
-                _sentinelChanges, _etaProgressions, _etaRegressions, _etaZero, _failures);
+                _sentinelChanges, _etaProgressions, _etaRegressions, _etaZero, _failures)
+            { TrainCodeExternalLineTransitionTotal = _externalLineTransitions };
     }
 }

@@ -47,6 +47,12 @@ public sealed class TremScannerOptions
     public double ActivePursuitBoost { get; set; } = 100;
     public double HeadwayCooldownPenalty { get; set; } = 100;
     public double RecentPollPenalty { get; set; } = 10;
+    public int DiscoveryBaseIntervalSeconds { get; set; } = 60;
+    public double OffTargetBackoffMultiplier { get; set; } = 2;
+    public double EmptyBackoffMultiplier { get; set; } = 2;
+    public double NoServiceBackoffMultiplier { get; set; } = 2;
+    public int MaxDiscoveryBackoffMinutes { get; set; } = 15;
+    public bool TargetHitResetBackoff { get; set; } = true;
 }
 
 public sealed class TremSatelliteOptions
@@ -142,7 +148,10 @@ public sealed class TremRealtimeOptionsValidator : IValidateOptions<TremRealtime
             || scanner.HeadwayWakeLeadMinutes < 0 || scanner.HeadwayWakeLeadMinutes >= scanner.FixedHeadwayMinutes
             || scanner.MaxDownstreamPursuitProbes is < 0 or > 2
             || scanner.PursuitInitialDelaySeconds < 0 || scanner.PursuitRetrySeconds <= 0
-            || scanner.MaxPursuitAttemptsPerProbe <= 0 || scanner.PursuitTtlMinutes <= 0)
+            || scanner.MaxPursuitAttemptsPerProbe <= 0 || scanner.PursuitTtlMinutes <= 0
+            || scanner.DiscoveryBaseIntervalSeconds <= 0 || scanner.OffTargetBackoffMultiplier < 1
+            || scanner.EmptyBackoffMultiplier < 1 || scanner.NoServiceBackoffMultiplier < 1
+            || scanner.MaxDiscoveryBackoffMinutes <= 0)
             errors.Add("Adaptive scanner options are invalid.");
         return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
     }
