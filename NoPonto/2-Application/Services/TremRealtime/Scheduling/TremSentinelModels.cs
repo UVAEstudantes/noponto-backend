@@ -22,6 +22,13 @@ public sealed record TremSentinelQuery(
     IReadOnlySet<string>? ActiveTrainKeys = null, TremTemporalCoverage? TemporalCoverage = null)
 {
     public IReadOnlySet<string> DownstreamSatelliteIds { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+    public bool IsScannerProbe { get; init; }
+    public string? ScannerExternalLineId { get; init; }
+    public string? ScannerDirection { get; init; }
+    public Guid? OriginOccurrenceId { get; init; }
+    public Guid? DestinationOccurrenceId { get; init; }
+    public Guid? ScannerPadraoVersaoId { get; init; }
+    public int? ScannerSequenceIndex { get; init; }
 }
 
 public sealed record TremPriorityBreakdown(double BaseWeight, double DemandBoost, double ScheduleUrgency, double ActiveTrackingBoost, double CoverageValue, double FailurePenalty, double RedundancyPenalty)
@@ -33,9 +40,16 @@ public sealed record TremPriorityBreakdown(double BaseWeight, double DemandBoost
     public double TerminalTransitionBoost { get; init; }
     public double EmptyPenalty { get; init; }
     public double NoServicePenalty { get; init; }
+    public double DiscoveryDueBoost { get; init; }
+    public double CoverageAgeBoost { get; init; }
+    public double ActivePursuitBoost { get; init; }
+    public double HeadwayCooldownPenalty { get; init; }
+    public double RecentPollPenalty { get; init; }
     public double SatelliteTotal => BaseWeight + CoreCoverageBoost + ExpectedTrainBoost
         + BranchResolutionBoost + TimeSinceLastPollBoost + TerminalTransitionBoost
-        - EmptyPenalty - NoServicePenalty - FailurePenalty - CooldownPenalty;
+        + DiscoveryDueBoost + CoverageAgeBoost + ActivePursuitBoost
+        - EmptyPenalty - NoServicePenalty - FailurePenalty - CooldownPenalty
+        - HeadwayCooldownPenalty - RecentPollPenalty;
     public double CooldownPenalty { get; init; }
     public double Total => Math.Max(0, BaseWeight + DemandBoost + ScheduleUrgency + ActiveTrackingBoost + CoverageValue - FailurePenalty - RedundancyPenalty);
 }

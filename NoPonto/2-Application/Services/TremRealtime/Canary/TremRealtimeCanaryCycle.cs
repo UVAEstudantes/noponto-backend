@@ -56,8 +56,13 @@ public sealed class TremRealtimeCanaryCycle(
 
         var allowed = canary.AllowedSentinelIds.ToHashSet(StringComparer.Ordinal);
         var catalogQueries = await catalog.GetAsync(ct);
+        scheduler.SetScannerProbeCount(catalogQueries.Count(x => x.IsScannerProbe));
         var candidates = catalogQueries
-            .Where(x => allowed.Contains(x.Id))
+            .Where(x => x.IsScannerProbe
+                ? runtime.Scanner.Enabled
+                    && string.Equals(x.ScannerExternalLineId, runtime.Scanner.TargetExternalLineId, StringComparison.Ordinal)
+                    && (x.ScannerDirection == "OUTBOUND" ? runtime.Scanner.IncludeOutbound : runtime.Scanner.IncludeInbound)
+                : allowed.Contains(x.Id))
             .Select(x => state.Query(x))
             .Select(x => (Query: x, Decision: scheduler.Evaluate(now, x, demand, [], TremSchedulingMode.CanaryObservation, TimeSpan.FromSeconds(canary.PollSeconds))))
             .ToArray();
@@ -83,7 +88,8 @@ public sealed class TremRealtimeCanaryCycle(
                 : [];
             metrics.Departures(observations.Count);
             var receivedAtUtc = clock.GetUtcNow();
-            scheduler.ObserveResult(receivedAtUtc, item.Query, observations, result.Status, catalogQueries);
+            scheduler.ObserveResult(receivedAtUtc, item.Query, observations, result.Status, catalogQueries,
+                requestStartedAtUtc);
             ImmutableArray<TrackedObservationAcceptance> accepted = [];
             TremRealtimeTrackerSnapshot? trackerSnapshot = null;
             try
@@ -158,6 +164,25 @@ public sealed class TremRealtimeCanaryCycle(
             logger.LogInformation(
                 "RailRealtimeSummary train_multi_satellite_total={MultiSatellite} rail_anchor_created={Anchors} rail_run_resolved={Runs} rail_position_available={Positions}",
                 rail.TrainMultiSatelliteTotal, rail.RailAnchorCreated, rail.RailRunResolved, rail.RailPositionAvailable);
+            if (item.Query.IsScannerProbe)
+                logger.LogInformation(
+                    "RailScannerRequest probe={ProbeId} purpose={Purpose} origin={Origin} destination={Destination} score={Score} discovery_due={DiscoveryDue} pursuit_target={PursuitTarget} result={Result} departures={Departures} next_due={NextDue}",
+                    item.Query.Id, item.Query.Purpose, item.Query.OriginExternalStationId,
+                    item.Query.DestinationExternalStationId, item.Decision.Priority,
+                    item.Decision.Breakdown.DiscoveryDueBoost > 0,
+                    item.Decision.Breakdown.ActivePursuitBoost > 0, result.Status,
+                    observations.Count, item.Decision.NextDueUtc);
+            logger.LogInformation(
+                "RailScannerSummary probes={Probes} active_pursuits={ActivePursuits} discovery_due={DiscoveryDue} pursuit_due={PursuitDue} calls_used={CallsUsed} call_budget={CallBudget} discovery_polls={DiscoveryPolls} pursuit_polls={PursuitPolls} pursuit_created={PursuitCreated} pursuit_matched={PursuitMatched} pursuit_missed={PursuitMissed} pursuit_expired={PursuitExpired} headway_suppressed={HeadwaySuppressed} woken_by_pursuit={WokenByPursuit} useful={Useful}",
+                satellite.ScannerProbeCount, satellite.ScannerActivePursuits,
+                candidates.Count(x => x.Query.IsScannerProbe && x.Decision.Breakdown.DiscoveryDueBoost > 0),
+                candidates.Count(x => x.Query.IsScannerProbe && x.Decision.Breakdown.ActivePursuitBoost > 0),
+                state.RequestCount, canary.MaxRequestsPerRun,
+                satellite.ScannerDiscoveryPollTotal, satellite.ScannerPursuitPollTotal,
+                satellite.ScannerPursuitCreated, satellite.ScannerPursuitMatched,
+                satellite.ScannerPursuitMissed, satellite.ScannerPursuitExpired,
+                satellite.ScannerHeadwaySuppressed, satellite.ScannerWokenByPursuit,
+                satellite.ScannerUsefulTotal);
         }
     }
 

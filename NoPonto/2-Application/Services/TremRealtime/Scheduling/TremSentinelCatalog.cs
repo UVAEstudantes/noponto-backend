@@ -1,11 +1,17 @@
 using NoPonto.Application.TremRealtime.Contracts;
 using NoPonto.Application.TremRealtime.Structural;
 using NoPonto.Application.TremV2;
+using NoPonto.Application.TremRealtime.Options;
+using NoPonto.Application.TremRealtime.Topology;
+using Microsoft.Extensions.Options;
 
 namespace NoPonto.Application.TremRealtime.Scheduling;
 
 public interface ITremSentinelCatalog { Task<IReadOnlyList<TremSentinelQuery>> GetAsync(CancellationToken ct = default); Task ReloadAsync(CancellationToken ct = default); }
-public sealed class TremSentinelCatalog(ITremStructuralLookup lookup) : ITremSentinelCatalog
+public sealed class TremSentinelCatalog(
+    ITremStructuralLookup lookup,
+    ITremPublishedTopologyCache? topologyCache = null,
+    IOptions<TremRealtimeOptions>? runtimeOptions = null) : ITremSentinelCatalog
 {
     private sealed record Definition(string Id, string Origin, string Destination, string Direction, TremSentinelPurpose Purpose, double Weight, string[] Lines, string[] ObservedProviderLines, string Why);
     private readonly SemaphoreSlim _gate = new(1, 1); private TremSentinelQuery[]? _cache;
@@ -52,6 +58,30 @@ public sealed class TremSentinelCatalog(ITremStructuralLookup lookup) : ITremSen
                 {
                     DownstreamSatelliteIds = Downstream(d.Id)
                 });
+            }
+            var scanner = runtimeOptions?.Value.Scanner;
+            if (scanner?.Enabled == true && topologyCache is not null)
+            {
+                var line = await lookup.ResolveLineAsync(scanner.TargetExternalLineId, ct);
+                if (line.Status == TremLookupStatus.Resolved)
+                {
+                    var topology = await topologyCache.GetAsync(ct);
+                    var staticPairs = list.Select(x => x.PairKey).ToHashSet();
+                    await AddScannerDirection("outbound", "OUTBOUND", scanner.IncludeOutbound);
+                    await AddScannerDirection("inbound", "INBOUND", scanner.IncludeInbound);
+
+                    async Task AddScannerDirection(string lookupDirection, string scannerDirection, bool enabled)
+                    {
+                        if (!enabled) return;
+                        var direction = await lookup.ResolveDirectionAsync(scanner.TargetExternalLineId, lookupDirection, ct);
+                        if (direction.Resolution != TremDirectionResolution.Resolved) return;
+                        var patterns = topology.Patterns.Where(x => x.LinhaId == line.InternalId
+                            && x.SentidoId == direction.SentidoId).ToArray();
+                        if (patterns.Length != 1) return;
+                        list.AddRange(TremAdaptiveScannerProbeFactory.Create(patterns[0],
+                            scanner.TargetExternalLineId, scannerDirection, scanner, staticPairs));
+                    }
+                }
             }
             Volatile.Write(ref _cache, list.GroupBy(x => x.PairKey).Select(x => x.Single()).ToArray());
         }

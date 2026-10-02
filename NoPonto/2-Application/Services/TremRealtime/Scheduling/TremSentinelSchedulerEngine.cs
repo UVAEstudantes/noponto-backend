@@ -11,17 +11,22 @@ public interface ITremSentinelSchedulerEngine
     bool IsWithinOperationalWindow(DateTimeOffset now);
     void ObserveResult(DateTimeOffset now, TremSentinelQuery query,
         IReadOnlyList<TremRealtimeObservation> observations, TrensRjClientStatus status,
-        IReadOnlyList<TremSentinelQuery> catalog);
+        IReadOnlyList<TremSentinelQuery> catalog, DateTimeOffset? requestStartedAtUtc = null);
     TremSatelliteMetricsSnapshot CaptureSatelliteMetrics();
+    void SetScannerProbeCount(int count);
 }
 
 public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> options) : ITremSentinelSchedulerEngine
 {
     private sealed record ExpectedWindow(DateTimeOffset Start, DateTimeOffset Center, DateTimeOffset End, string? TrainCode);
     private sealed record SatelliteState(int EmptyCount, int NoServiceCount, ExpectedWindow? Expected,
-        DateTimeOffset? FirstEvaluatedUtc);
+        DateTimeOffset? FirstEvaluatedUtc, DateTimeOffset? LastUsefulObservationUtc,
+        DateTimeOffset? NextDiscoveryDueUtc);
+    private sealed record PursuitState(string TargetProbeId, string TrainCode, DateTimeOffset DueUtc,
+        DateTimeOffset ExpiresUtc, int Attempts);
     private readonly object _gate = new();
     private readonly Dictionary<string, SatelliteState> _satellites = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PursuitState> _pursuits = new(StringComparer.Ordinal);
     private readonly TremSatelliteMetrics _metrics = new();
 
     public bool IsWithinOperationalWindow(DateTimeOffset now)
@@ -37,28 +42,71 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
         return start <= stop ? local >= start && local <= stop : local >= start || local <= stop;
     }
 
-    public TremSatelliteMetricsSnapshot CaptureSatelliteMetrics() => _metrics.Capture();
+    public TremSatelliteMetricsSnapshot CaptureSatelliteMetrics()
+    {
+        lock (_gate) return _metrics.Capture() with { ScannerActivePursuits = _pursuits.Count };
+    }
+    public void SetScannerProbeCount(int count) => _metrics.SetScannerProbeCount(count);
 
     public void ObserveResult(DateTimeOffset now, TremSentinelQuery query,
         IReadOnlyList<TremRealtimeObservation> observations, TrensRjClientStatus status,
-        IReadOnlyList<TremSentinelQuery> catalog)
+        IReadOnlyList<TremSentinelQuery> catalog, DateTimeOffset? requestStartedAtUtc = null)
     {
         lock (_gate)
         {
+            CleanupPursuits(now);
             _metrics.Poll();
             var current = GetState(query.Id);
+            var pursuitKeys = _pursuits.Where(x => x.Value.TargetProbeId == query.Id
+                    && x.Value.DueUtc <= now && x.Value.ExpiresUtc >= now)
+                .Select(x => x.Key).ToArray();
+            if (query.IsScannerProbe)
+            {
+                if (pursuitKeys.Length > 0) _metrics.ScannerPursuitPoll();
+                else _metrics.ScannerDiscoveryPoll();
+            }
             if (observations.Count == 0)
             {
                 if (status == TrensRjClientStatus.NoService) _metrics.NoService(); else _metrics.Empty();
+                var emptyDelaySeconds = Math.Min(options.Value.BackoffMaxMinutes * 60d,
+                    options.Value.BackoffInitialSeconds * Math.Pow(2, Math.Min(current.EmptyCount, 20)));
                 _satellites[query.Id] = current with
                 {
                     EmptyCount = current.EmptyCount + 1,
-                    NoServiceCount = status == TrensRjClientStatus.NoService ? current.NoServiceCount + 1 : current.NoServiceCount
+                    NoServiceCount = status == TrensRjClientStatus.NoService ? current.NoServiceCount + 1 : current.NoServiceCount,
+                    NextDiscoveryDueUtc = query.IsScannerProbe
+                        ? now.AddSeconds(emptyDelaySeconds) : current.NextDiscoveryDueUtc
                 };
+                RetryOrDropPursuits(pursuitKeys, now);
                 return;
             }
             _metrics.Useful(observations.Count);
-            _satellites[query.Id] = current with { EmptyCount = 0, NoServiceCount = 0 };
+            if (query.IsScannerProbe) _metrics.ScannerUseful(observations.Count);
+            var requestAt = requestStartedAtUtc ?? now;
+            var minimumEta = observations.Where(x => x.MinutesUntil is >= 0)
+                .Select(x => x.MinutesUntil!.Value).DefaultIfEmpty(0).Min();
+            var nextDiscovery = query.IsScannerProbe
+                ? requestAt.AddMinutes(minimumEta + options.Value.Scanner.FixedHeadwayMinutes
+                    - options.Value.Scanner.HeadwayWakeLeadMinutes)
+                : current.NextDiscoveryDueUtc;
+            _satellites[query.Id] = current with
+            {
+                EmptyCount = 0, NoServiceCount = 0,
+                LastUsefulObservationUtc = now,
+                NextDiscoveryDueUtc = nextDiscovery
+            };
+            foreach (var key in pursuitKeys)
+            {
+                var pursuit = _pursuits[key];
+                if (observations.Any(x => string.Equals(x.TrainCode, pursuit.TrainCode, StringComparison.Ordinal)))
+                {
+                    _pursuits.Remove(key);
+                    _metrics.ScannerPursuitMatched();
+                }
+                else RetryOrDropPursuits([key], now);
+            }
+            if (query.IsScannerProbe)
+                CreatePursuits(now, query, observations, catalog);
             var max = options.Value.Satellites.MaxDynamicFollowUpsPerObservation;
             if (max == 0) return;
             var followups = catalog.Where(x => query.DownstreamSatelliteIds.Contains(x.Id)
@@ -114,6 +162,23 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
             var interval = canaryPollInterval.GetValueOrDefault(TimeSpan.FromSeconds(options.Value.MinPollSeconds));
             var due = q.LastPollUtc?.Add(interval) ?? q.NextDueUtc ?? now;
             var should = due <= now;
+            if (q.IsScannerProbe)
+            {
+                lock (_gate)
+                {
+                    CleanupPursuits(now);
+                    var scannerState = GetState(q.Id);
+                    var pursuitDue = HasDuePursuit(q.Id, now);
+                    var discoveryDue = scannerState.NextDiscoveryDueUtc is null
+                        || scannerState.NextDiscoveryDueUtc <= now;
+                    if (!discoveryDue && !pursuitDue)
+                    {
+                        should = false;
+                        _metrics.ScannerHeadwaySuppressed();
+                    }
+                    else if (!discoveryDue && pursuitDue) _metrics.ScannerWokenByPursuit();
+                }
+            }
             return Decision(should, should ? now : due, should ? TremSentinelState.Due : q.State, TremSentinelReason.CanaryObservation, q, 0, 0, 0, 0, now);
         }
         if (q.State == TremSentinelState.Active && q.LastSuccessUtc is { } success)
@@ -146,14 +211,17 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
     private TremSentinelDecision Decision(bool poll, DateTimeOffset? next, TremSentinelState state, TremSentinelReason reason, TremSentinelQuery q, int demandedLines, double urgency, double active, double failure, DateTimeOffset now)
     {
         SatelliteState satellite;
+        bool pursuitDue;
         lock (_gate)
         {
+            CleanupPursuits(now);
             satellite = GetState(q.Id);
             if (q.LastPollUtc is null && satellite.FirstEvaluatedUtc is null)
             {
                 satellite = satellite with { FirstEvaluatedUtc = now };
                 _satellites[q.Id] = satellite;
             }
+            pursuitDue = q.IsScannerProbe && HasDuePursuit(q.Id, now);
         }
         var config = options.Value.Satellites;
         var expected = satellite.Expected is { } window && now >= window.Start && now <= window.End;
@@ -172,29 +240,118 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
             TimeSinceLastPollBoost = minutes * config.TimeSinceLastPollBoostPerMinute,
             EmptyPenalty = satellite.EmptyCount * config.EmptyPenalty,
             NoServicePenalty = satellite.NoServiceCount * config.NoServicePenalty
+            ,DiscoveryDueBoost = q.IsScannerProbe && (satellite.NextDiscoveryDueUtc is null
+                || satellite.NextDiscoveryDueUtc <= now) ? options.Value.Scanner.DiscoveryDueBoost : 0
+            ,CoverageAgeBoost = q.IsScannerProbe
+                ? minutes * options.Value.Scanner.CoverageAgeBoostPerMinute : 0
+            ,ActivePursuitBoost = pursuitDue ? options.Value.Scanner.ActivePursuitBoost : 0
+            ,HeadwayCooldownPenalty = q.IsScannerProbe && satellite.NextDiscoveryDueUtc > now && !pursuitDue
+                ? options.Value.Scanner.HeadwayCooldownPenalty : 0
+            ,RecentPollPenalty = q.IsScannerProbe && q.LastPollUtc is { } recent
+                && now - recent < TimeSpan.FromSeconds(options.Value.MinPollSeconds)
+                ? options.Value.Scanner.RecentPollPenalty : 0
         };
         var satelliteAdjustment = breakdown.CoreCoverageBoost + breakdown.ExpectedTrainBoost
             + breakdown.BranchResolutionBoost + breakdown.TimeSinceLastPollBoost
-            + breakdown.TerminalTransitionBoost - breakdown.EmptyPenalty
+            + breakdown.TerminalTransitionBoost + breakdown.DiscoveryDueBoost
+            + breakdown.CoverageAgeBoost + breakdown.ActivePursuitBoost
+            - breakdown.EmptyPenalty
             - breakdown.NoServicePenalty - breakdown.CooldownPenalty;
+        satelliteAdjustment -= breakdown.HeadwayCooldownPenalty + breakdown.RecentPollPenalty;
         return new(poll, next, state, reason, poll ? Math.Max(0, breakdown.Total + satelliteAdjustment) : 0, breakdown);
     }
 
     private SatelliteState GetState(string id) => _satellites.TryGetValue(id, out var value)
-        ? value : new(0, 0, null, null);
+        ? value : new(0, 0, null, null, null, null);
+
+    private bool HasDuePursuit(string probeId, DateTimeOffset now) => _pursuits.Values.Any(x =>
+        x.TargetProbeId == probeId && x.DueUtc <= now && x.ExpiresUtc >= now);
+
+    private void CreatePursuits(DateTimeOffset now, TremSentinelQuery query,
+        IReadOnlyList<TremRealtimeObservation> observations, IReadOnlyList<TremSentinelQuery> catalog)
+    {
+        var scanner = options.Value.Scanner;
+        if (scanner.MaxDownstreamPursuitProbes == 0) return;
+        var targets = catalog.Where(x => query.DownstreamSatelliteIds.Contains(x.Id)
+                && x.IsScannerProbe && x.ScannerDirection == query.ScannerDirection)
+            .OrderBy(x => x.ScannerSequenceIndex).Take(scanner.MaxDownstreamPursuitProbes).ToArray();
+        foreach (var trainCode in observations.Select(x => x.TrainCode?.Trim())
+                     .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal))
+        foreach (var target in targets)
+        {
+            var key = target.Id + "\n" + trainCode;
+            if (_pursuits.ContainsKey(key)) continue;
+            _pursuits[key] = new(target.Id, trainCode!, now.AddSeconds(scanner.PursuitInitialDelaySeconds),
+                now.AddMinutes(scanner.PursuitTtlMinutes), 0);
+            _metrics.ScannerPursuitCreated();
+        }
+    }
+
+    private void RetryOrDropPursuits(IEnumerable<string> keys, DateTimeOffset now)
+    {
+        foreach (var key in keys)
+        {
+            if (!_pursuits.TryGetValue(key, out var pursuit)) continue;
+            var attempts = pursuit.Attempts + 1;
+            if (attempts >= options.Value.Scanner.MaxPursuitAttemptsPerProbe)
+            {
+                _pursuits.Remove(key);
+                _metrics.ScannerPursuitMissed();
+            }
+            else _pursuits[key] = pursuit with
+            {
+                Attempts = attempts,
+                DueUtc = now.AddSeconds(options.Value.Scanner.PursuitRetrySeconds)
+            };
+        }
+    }
+
+    private void CleanupPursuits(DateTimeOffset now)
+    {
+        foreach (var key in _pursuits.Where(x => x.Value.ExpiresUtc < now).Select(x => x.Key).ToArray())
+        {
+            _pursuits.Remove(key);
+            _metrics.ScannerPursuitExpired();
+        }
+    }
 }
 
 public sealed record TremSatelliteMetricsSnapshot(long SatellitePollTotal, long SatelliteUsefulTotal,
-    long SatelliteEmptyTotal, long SatelliteNoServiceTotal, long DynamicFollowupCreated, long DynamicFollowupExpired);
+    long SatelliteEmptyTotal, long SatelliteNoServiceTotal, long DynamicFollowupCreated, long DynamicFollowupExpired,
+    long ScannerDiscoveryPollTotal, long ScannerPursuitPollTotal, long ScannerPursuitCreated,
+    long ScannerPursuitMatched, long ScannerPursuitMissed, long ScannerPursuitExpired,
+    long ScannerHeadwaySuppressed, long ScannerWokenByPursuit, long ScannerUsefulTotal)
+{
+    public long ScannerProbeCount { get; init; }
+    public long ScannerActivePursuits { get; init; }
+}
 public sealed class TremSatelliteMetrics
 {
     private long _poll, _useful, _empty, _noService, _created, _expired;
+    private long _scannerDiscovery, _scannerPursuitPoll, _scannerPursuitCreated, _scannerPursuitMatched,
+        _scannerPursuitMissed, _scannerPursuitExpired, _scannerHeadwaySuppressed, _scannerWoken, _scannerUseful;
+    private long _scannerProbeCount;
     public void Poll() => Interlocked.Increment(ref _poll);
     public void Useful(int count) => Interlocked.Add(ref _useful, count);
     public void Empty() => Interlocked.Increment(ref _empty);
     public void NoService() => Interlocked.Increment(ref _noService);
     public void DynamicCreated() => Interlocked.Increment(ref _created);
     public void DynamicExpired() => Interlocked.Increment(ref _expired);
+    public void ScannerDiscoveryPoll() => Interlocked.Increment(ref _scannerDiscovery);
+    public void ScannerPursuitPoll() => Interlocked.Increment(ref _scannerPursuitPoll);
+    public void ScannerPursuitCreated() => Interlocked.Increment(ref _scannerPursuitCreated);
+    public void ScannerPursuitMatched() => Interlocked.Increment(ref _scannerPursuitMatched);
+    public void ScannerPursuitMissed() => Interlocked.Increment(ref _scannerPursuitMissed);
+    public void ScannerPursuitExpired() => Interlocked.Increment(ref _scannerPursuitExpired);
+    public void ScannerHeadwaySuppressed() => Interlocked.Increment(ref _scannerHeadwaySuppressed);
+    public void ScannerWokenByPursuit() => Interlocked.Increment(ref _scannerWoken);
+    public void ScannerUseful(int count) => Interlocked.Add(ref _scannerUseful, count);
+    public void SetScannerProbeCount(int count) => Interlocked.Exchange(ref _scannerProbeCount, count);
     public TremSatelliteMetricsSnapshot Capture() => new(Interlocked.Read(ref _poll), Interlocked.Read(ref _useful),
-        Interlocked.Read(ref _empty), Interlocked.Read(ref _noService), Interlocked.Read(ref _created), Interlocked.Read(ref _expired));
+        Interlocked.Read(ref _empty), Interlocked.Read(ref _noService), Interlocked.Read(ref _created), Interlocked.Read(ref _expired),
+        Interlocked.Read(ref _scannerDiscovery), Interlocked.Read(ref _scannerPursuitPoll),
+        Interlocked.Read(ref _scannerPursuitCreated), Interlocked.Read(ref _scannerPursuitMatched),
+        Interlocked.Read(ref _scannerPursuitMissed), Interlocked.Read(ref _scannerPursuitExpired),
+        Interlocked.Read(ref _scannerHeadwaySuppressed), Interlocked.Read(ref _scannerWoken),
+        Interlocked.Read(ref _scannerUseful)) { ScannerProbeCount = Interlocked.Read(ref _scannerProbeCount) };
 }
