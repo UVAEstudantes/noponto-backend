@@ -190,6 +190,7 @@ builder.Services.AddScoped<ITremRealtimeNormalizer, TremRealtimeNormalizer>();
 builder.Services.AddSingleton<ITremDemandRegistry, TremDemandRegistry>();
 builder.Services.AddSingleton<ITremScheduleCache, TremScheduleCache>();
 builder.Services.AddSingleton<ITremSentinelCatalog, TremSentinelCatalog>();
+builder.Services.AddSingleton<IRailAdaptiveTrackingCoordinator, RailAdaptiveTrackingCoordinator>();
 builder.Services.AddSingleton<ITremSentinelSchedulerEngine, TremSentinelSchedulerEngine>();
 builder.Services.AddSingleton<TremRealtimeCanaryState>();
 builder.Services.AddSingleton<TremRealtimeCanaryMetrics>();

@@ -31,7 +31,8 @@ public sealed class TremRealtimeCanaryCycle(
     TremCrossSentinelMetrics crossSentinelMetrics,
     IRailRealtimeEngine railRealtimeEngine,
     TimeProvider clock,
-    ILogger<TremRealtimeCanaryCycle> logger) : ITremRealtimeCanaryCycle
+    ILogger<TremRealtimeCanaryCycle> logger,
+    IRailAdaptiveTrackingCoordinator? adaptiveTracking = null) : ITremRealtimeCanaryCycle
 {
     public async Task RunOnceAsync(CancellationToken ct)
     {
@@ -143,6 +144,23 @@ public sealed class TremRealtimeCanaryCycle(
                     logger.LogError(ex, "Trem published topology failed open for sentinel={SentinelId}", item.Query.Id);
                 }
             }
+            if (item.Query.IsScannerProbe && adaptiveTracking is not null)
+            {
+                try
+                {
+                    var topology = await topologyCache.GetAsync(ct);
+                    var targetAccepted = accepted.Where(x =>
+                        TremScannerObservationFilter.IsTarget(item.Query, x.Observation)).ToArray();
+                    adaptiveTracking.Observe(item.Query, targetAccepted,
+                        railRealtimeEngine.CaptureSnapshot(), topology, catalogQueries, receivedAtUtc,
+                        result.Status, observations.Count);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Rail adaptive tracking failed open for sentinel={SentinelId}", item.Query.Id);
+                }
+            }
             foreach (var observation in observations)
                 if (observation.ProviderLinhaId is { } linha && !item.Query.ObservedProviderLinhaIds.Contains(linha) && state.MarkNewProviderLine(item.Query.Id, linha)) metrics.NewProviderLine();
 
@@ -180,6 +198,17 @@ public sealed class TremRealtimeCanaryCycle(
                     item.Decision.Breakdown.ActivePursuitBoost > 0, result.Status,
                     observations.Count, targetDepartures, observations.Count - targetDepartures,
                     item.Decision.NextDueUtc);
+                if (adaptiveTracking is not null)
+                {
+                    var adaptive = adaptiveTracking.CaptureSnapshot();
+                    logger.LogInformation(
+                        "RailAdaptiveTracking discovery_polls={Discovery} acquisition_polls={Acquisition} tracked_refresh_polls={Refresh} reacquisition_polls={Reacquisition} transition_to_acquisition={ToAcquisition} transition_to_tracked={ToTracked} transition_to_reacquisition={ToReacquisition} distant_pursuit_deferred={Deferred} refresh_before_freshness={Freshness} reacquisition_success={ReacquisitionSuccess} temporal_profile_gap={ProfileGaps}",
+                        adaptive.DiscoveryPolls, adaptive.AcquisitionPolls, adaptive.TrackedRefreshPolls,
+                        adaptive.ReacquisitionPolls, adaptive.ToAcquisition, adaptive.ToTracked,
+                        adaptive.ToReacquisition, adaptive.DistantPursuitDeferred,
+                        adaptive.RefreshBeforeFreshness, adaptive.ReacquisitionSuccess,
+                        adaptive.TemporalProfileGaps);
+                }
             }
             logger.LogInformation(
                 "RailScannerSummary probes={Probes} active_pursuits={ActivePursuits} discovery_due={DiscoveryDue} pursuit_due={PursuitDue} discovery_due_outbound={DiscoveryDueOutbound} discovery_due_inbound={DiscoveryDueInbound} calls_used={CallsUsed} call_budget={CallBudget} discovery_polls={DiscoveryPolls} pursuit_polls={PursuitPolls} pursuit_created={PursuitCreated} pursuit_matched={PursuitMatched} pursuit_missed={PursuitMissed} pursuit_expired={PursuitExpired} headway_suppressed={HeadwaySuppressed} woken_by_pursuit={WokenByPursuit} useful={Useful} scanner_provider_departures_total={ProviderDepartures} scanner_target_departures_total={TargetDepartures} scanner_off_target_departures_total={OffTargetDepartures} scanner_target_hit_total={TargetHits} scanner_target_miss_total={TargetMisses} scanner_backoff_applied_total={BackoffApplied} scanner_backoff_reset_total={BackoffReset} scanner_max_backoff_reached_total={MaxBackoffReached} positions_available={PositionsAvailable}",

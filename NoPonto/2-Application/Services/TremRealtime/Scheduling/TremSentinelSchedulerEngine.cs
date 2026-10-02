@@ -16,7 +16,8 @@ public interface ITremSentinelSchedulerEngine
     void SetScannerProbeCount(int count);
 }
 
-public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> options) : ITremSentinelSchedulerEngine
+public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> options,
+    IRailAdaptiveTrackingCoordinator? adaptiveTracking = null) : ITremSentinelSchedulerEngine
 {
     private const int MaxConsecutiveScannerPollsPerDirection = 2;
     private sealed record ExpectedWindow(DateTimeOffset Start, DateTimeOffset Center, DateTimeOffset End, string? TrainCode);
@@ -143,6 +144,21 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
                 CurrentDiscoveryBackoff = query.IsScannerProbe && options.Value.Scanner.TargetHitResetBackoff
                     ? null : current.CurrentDiscoveryBackoff
             };
+            if (adaptiveTracking is not null && query.IsScannerProbe && query.ScannerSequenceIndex is { } sequence)
+            {
+                // Headway is a prior, not an exclusion: suppress immediate rediscovery only in
+                // the observed local region; overdue probes elsewhere remain eligible.
+                foreach (var neighbour in catalog.Where(x => x.IsScannerProbe
+                             && x.ScannerDirection == query.ScannerDirection
+                             && x.ScannerPadraoVersaoId == query.ScannerPadraoVersaoId
+                             && x.ScannerSequenceIndex is { } index && Math.Abs(index - sequence) <= 1))
+                {
+                    var neighbourState = GetState(neighbour.Id);
+                    if (neighbourState.NextDiscoveryDueUtc is null
+                        || neighbourState.NextDiscoveryDueUtc < nextDiscovery)
+                        _satellites[neighbour.Id] = neighbourState with { NextDiscoveryDueUtc = nextDiscovery };
+                }
+            }
             foreach (var key in pursuitKeys)
             {
                 var pursuit = _pursuits[key];
@@ -232,6 +248,7 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
                     }
                     else if (!discoveryDue && pursuitDue) _metrics.ScannerWokenByPursuit();
                 }
+                if (adaptiveTracking?.GetDirective(q.Id, now) is not null) should = true;
             }
             return Decision(should, should ? now : due, should ? TremSentinelState.Due : q.State, TremSentinelReason.CanaryObservation, q, 0, 0, 0, 0, now);
         }
@@ -271,6 +288,9 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
             }
         }
         var selected = due.Take(Math.Max(0, availableBudget)).ToArray();
+        foreach (var item in selected) adaptiveTracking?.MarkSelected(item.Query, now,
+            item.Query.IsScannerProbe && HasDuePursuit(item.Query.Id, now)
+                ? RailAdaptiveCallKind.Acquisition : RailAdaptiveCallKind.Discovery);
         var deferred = due.Skip(selected.Length).Select(x => (x.Query, Decision(false, now.AddSeconds(options.Value.MinPollSeconds), TremSentinelState.Due, TremSentinelReason.RateBudgetDeferred, x.Query, 0, 0, 0, 0, now))).ToArray();
         return new(selected, deferred);
     }
@@ -291,6 +311,7 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
             pursuitDue = q.IsScannerProbe && HasDuePursuit(q.Id, now);
         }
         var config = options.Value.Satellites;
+        var adaptiveDirective = q.IsScannerProbe ? adaptiveTracking?.GetDirective(q.Id, now) : null;
         var expected = satellite.Expected is { } window && now >= window.Start && now <= window.End;
         if (satellite.Expected is { } expired && now > expired.End) { lock (_gate) _satellites[q.Id] = satellite with { Expected = null }; _metrics.DynamicExpired(); }
         var minutes = q.LastPollUtc is { } last
@@ -311,7 +332,14 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
                 || satellite.NextDiscoveryDueUtc <= now) ? options.Value.Scanner.DiscoveryDueBoost : 0
             ,CoverageAgeBoost = q.IsScannerProbe
                 ? minutes * options.Value.Scanner.CoverageAgeBoostPerMinute : 0
-            ,ActivePursuitBoost = pursuitDue ? options.Value.Scanner.ActivePursuitBoost : 0
+            ,ActivePursuitBoost = pursuitDue ? options.Value.Scanner.ActivePursuitBoost
+                : adaptiveDirective?.Kind switch
+                {
+                    RailAdaptiveCallKind.TrackedRefresh => options.Value.Scanner.ActivePursuitBoost + 30,
+                    RailAdaptiveCallKind.Acquisition => options.Value.Scanner.ActivePursuitBoost + 20,
+                    RailAdaptiveCallKind.Reacquisition => options.Value.Scanner.ActivePursuitBoost + 10,
+                    _ => 0
+                }
             ,HeadwayCooldownPenalty = q.IsScannerProbe && satellite.NextDiscoveryDueUtc > now && !pursuitDue
                 ? options.Value.Scanner.HeadwayCooldownPenalty : 0
             ,RecentPollPenalty = q.IsScannerProbe && q.LastPollUtc is { } recent
@@ -339,7 +367,8 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
     }
 
     private bool HasDuePursuit(string probeId, DateTimeOffset now) => _pursuits.Values.Any(x =>
-        x.TargetProbeId == probeId && x.DueUtc <= now && x.ExpiresUtc >= now);
+        x.TargetProbeId == probeId && x.DueUtc <= now && x.ExpiresUtc >= now
+        && adaptiveTracking?.ShouldCreateImmediatePursuit(null, x.TrainCode) != false);
 
     private void CreatePursuits(DateTimeOffset now, TremSentinelQuery query,
         IReadOnlyList<TremRealtimeObservation> observations, IReadOnlyList<TremSentinelQuery> catalog)
@@ -353,6 +382,8 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
                      .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal))
         foreach (var target in targets)
         {
+            if (adaptiveTracking?.ShouldCreateImmediatePursuit(query.ScannerPadraoVersaoId,
+                    trainCode!) == false) continue;
             var key = target.Id + "\n" + trainCode;
             if (_pursuits.ContainsKey(key)) continue;
             _pursuits[key] = new(target.Id, trainCode!, now.AddSeconds(scanner.PursuitInitialDelaySeconds),
@@ -382,7 +413,9 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
 
     private void CleanupPursuits(DateTimeOffset now)
     {
-        foreach (var key in _pursuits.Where(x => x.Value.ExpiresUtc < now).Select(x => x.Key).ToArray())
+        foreach (var key in _pursuits.Where(x => x.Value.ExpiresUtc < now
+                || adaptiveTracking?.ShouldCreateImmediatePursuit(null, x.Value.TrainCode) == false)
+            .Select(x => x.Key).ToArray())
         {
             _pursuits.Remove(key);
             _metrics.ScannerPursuitExpired();

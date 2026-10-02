@@ -14,12 +14,16 @@ public sealed class TremRealtimeCanaryWorker(
         logger.LogInformation("Trem realtime canary worker initialized; external activity remains gated by both kill switches.");
         while (!stoppingToken.IsCancellationRequested)
         {
+            var cycleStartedAtUtc = clock.GetUtcNow();
             try
             {
                 using var scope = scopeFactory.CreateScope();
                 await scope.ServiceProvider.GetRequiredService<ITremRealtimeCanaryCycle>().RunOnceAsync(stoppingToken);
                 var seconds = options.Value.IsValid(out _) ? options.Value.PollSeconds : 60;
-                await Task.Delay(TimeSpan.FromSeconds(seconds), clock, stoppingToken);
+                var remaining = ComputeStartToStartDelay(cycleStartedAtUtc, clock.GetUtcNow(),
+                    TimeSpan.FromSeconds(seconds));
+                if (remaining > TimeSpan.Zero)
+                    await Task.Delay(remaining, clock, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex)
@@ -29,4 +33,10 @@ public sealed class TremRealtimeCanaryWorker(
             }
         }
     }
+
+    internal static TimeSpan ComputeStartToStartDelay(DateTimeOffset startedAtUtc,
+        DateTimeOffset completedAtUtc, TimeSpan interval)
+        => completedAtUtc - startedAtUtc >= interval
+            ? TimeSpan.Zero
+            : interval - (completedAtUtc - startedAtUtc);
 }

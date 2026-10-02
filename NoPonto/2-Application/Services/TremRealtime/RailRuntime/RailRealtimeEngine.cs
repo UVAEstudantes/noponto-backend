@@ -179,8 +179,14 @@ public sealed class RailRealtimeEngine : IRailRealtimeEngine
 
     private void AddAnchor(RunEntry run, RailTemporalAnchor anchor)
     {
-        if (run.Anchors.Any(x => x.SentinelId == anchor.SentinelId && x.OccurrenceId == anchor.OccurrenceId
-            && x.PredictedEventUtc == anchor.PredictedEventUtc)) return;
+        // A provider ETA is a revision of the same temporal fact, not an additional fact.
+        // Retaining both lets a stale prediction continue to drive interpolation.
+        var retained = run.Anchors.Where(x => x.OccurrenceId != anchor.OccurrenceId).ToArray();
+        if (retained.Length != run.Anchors.Count)
+        {
+            run.Anchors.Clear();
+            foreach (var item in retained) run.Anchors.Enqueue(item);
+        }
         run.Anchors.Enqueue(anchor);
         Interlocked.Increment(ref _anchors);
         if (!run.MultiSatelliteCounted && run.Anchors.Select(x => x.SentinelId).Distinct(StringComparer.Ordinal).Count() > 1)
