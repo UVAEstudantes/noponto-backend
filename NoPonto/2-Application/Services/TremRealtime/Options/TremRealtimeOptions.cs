@@ -79,6 +79,7 @@ public sealed class TremRealtimeCanaryOptions
     public int PollSeconds { get; set; } = 60;
     public int MaxRequestsPerRun { get; set; } = 60;
     public string[] AllowedSentinelIds { get; set; } = [];
+    public bool AllowedSentinelIdsWereDefaulted { get; internal set; }
 
     public bool IsValid(out string diagnostic)
     {
@@ -110,6 +111,7 @@ public sealed class TremRealtimeCanaryOptionsDefaults : IPostConfigureOptions<Tr
         options.AllowedSentinelIds = configured.Length == 0
             ? [.. DefaultAllowedSentinelIds]
             : configured;
+        options.AllowedSentinelIdsWereDefaulted = configured.Length == 0;
     }
 }
 
