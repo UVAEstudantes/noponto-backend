@@ -58,11 +58,7 @@ public sealed class TremRealtimeCanaryCycle(
         var catalogQueries = await catalog.GetAsync(ct);
         scheduler.SetScannerProbeCount(catalogQueries.Count(x => x.IsScannerProbe));
         var candidates = catalogQueries
-            .Where(x => x.IsScannerProbe
-                ? runtime.Scanner.Enabled
-                    && string.Equals(x.ScannerExternalLineId, runtime.Scanner.TargetExternalLineId, StringComparison.Ordinal)
-                    && (x.ScannerDirection == "OUTBOUND" ? runtime.Scanner.IncludeOutbound : runtime.Scanner.IncludeInbound)
-                : allowed.Contains(x.Id))
+            .Where(x => IsCanaryCandidate(runtime, canary, allowed, x))
             .Select(x => state.Query(x))
             .Select(x => (Query: x, Decision: scheduler.Evaluate(now, x, demand, [], TremSchedulingMode.CanaryObservation, TimeSpan.FromSeconds(canary.PollSeconds))))
             .ToArray();
@@ -184,6 +180,20 @@ public sealed class TremRealtimeCanaryCycle(
                 satellite.ScannerHeadwaySuppressed, satellite.ScannerWokenByPursuit,
                 satellite.ScannerUsefulTotal);
         }
+    }
+
+    internal static bool IsCanaryCandidate(TremRealtimeOptions runtime, TremRealtimeCanaryOptions canary,
+        IReadOnlySet<string> allowed, TremSentinelQuery query)
+    {
+        if (query.IsScannerProbe)
+            return runtime.Scanner.Enabled
+                && string.Equals(query.ScannerExternalLineId, runtime.Scanner.TargetExternalLineId,
+                    StringComparison.Ordinal)
+                && (query.ScannerDirection == "OUTBOUND"
+                    ? runtime.Scanner.IncludeOutbound : runtime.Scanner.IncludeInbound);
+
+        return (!runtime.Scanner.Enabled || !canary.AllowedSentinelIdsWereDefaulted)
+            && allowed.Contains(query.Id);
     }
 
     private void UpdateState(TremSentinelQuery query, TrensRjClientResult<TrensRjNextEnvelope> result, DateTimeOffset now, TremRealtimeOptions runtime)

@@ -292,6 +292,136 @@ public sealed class TremRealtimePhase4DTests
         Console.WriteLine($"adaptive evaluations={evaluations} calls={calls} pursuit={pursuitCalls} discovery={discoveryCalls} round_robin_calls=120");
     }
 
+    [Fact]
+    public void ScannerEnabled_DefaultedAllowlist_AdmitsOnlyConfiguredScannerDirection()
+    {
+        var runtime = Runtime();
+        runtime.Scanner.IncludeOutbound = true;
+        runtime.Scanner.IncludeInbound = false;
+        var canary = CanaryOptions();
+        var allowed = canary.AllowedSentinelIds.ToHashSet(StringComparer.Ordinal);
+        var outbound = Probe("SCAN_OUT", 0, 2);
+        var inbound = Probe("SCAN_IN", 2, 4) with { ScannerDirection = "INBOUND" };
+        var trunkOut = Probe("TRUNK_OUT", 4, 6) with { IsScannerProbe = false };
+        var trunkIn = Probe("TRUNK_IN", 6, 8) with { IsScannerProbe = false };
+
+        Assert.True(canary.AllowedSentinelIdsWereDefaulted);
+        Assert.True(TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed, outbound));
+        Assert.False(TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed, inbound));
+        Assert.False(TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed, trunkOut));
+        Assert.False(TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed, trunkIn));
+    }
+
+    [Fact]
+    public void ScannerDisabled_DefaultedAllowlist_PreservesLegacyTrunks()
+    {
+        var runtime = Runtime();
+        runtime.Scanner.Enabled = false;
+        var canary = CanaryOptions();
+        var allowed = canary.AllowedSentinelIds.ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed,
+            Probe("TRUNK_OUT", 0, 1) with { IsScannerProbe = false }));
+        Assert.True(TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed,
+            Probe("TRUNK_IN", 1, 0) with { IsScannerProbe = false }));
+        Assert.False(TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed,
+            Probe("SCAN", 0, 2)));
+    }
+
+    [Fact]
+    public void ScannerEnabled_ExplicitStaticAllowlist_AddsOnlyThatStatic()
+    {
+        var runtime = Runtime();
+        var canary = new TremRealtimeCanaryOptions
+        { AllowedSentinelIds = ["SC_DEODORO_BANGU_OUT"] };
+        new TremRealtimeCanaryOptionsDefaults().PostConfigure(null, canary);
+        var allowed = canary.AllowedSentinelIds.ToHashSet(StringComparer.Ordinal);
+
+        Assert.False(canary.AllowedSentinelIdsWereDefaulted);
+        Assert.True(TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed,
+            Probe("SCAN", 0, 2)));
+        Assert.True(TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed,
+            Probe("SC_DEODORO_BANGU_OUT", 2, 4) with { IsScannerProbe = false }));
+        Assert.False(TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed,
+            Probe("TRUNK_OUT", 4, 6) with { IsScannerProbe = false }));
+    }
+
+    [Fact]
+    public void RealBlocker_FifteenDecisionsWithDefaultedAllowlist_AllReachDiscovery()
+    {
+        var runtime = Runtime();
+        runtime.Scanner.IncludeInbound = false;
+        var scheduler = new TremSentinelSchedulerEngine(Options.Create(runtime));
+        var canary = CanaryOptions();
+        var allowed = canary.AllowedSentinelIds.ToHashSet(StringComparer.Ordinal);
+        var probes = TremAdaptiveScannerProbeFactory.Create(Pattern(35, "OUT"),
+            runtime.Scanner.TargetExternalLineId, "OUTBOUND", runtime.Scanner,
+            new HashSet<TremSentinelPairKey>()).ToList();
+        probes.Add(Probe("TRUNK_OUT", 40, 41) with { IsScannerProbe = false, BaseWeight = 100 });
+        probes.Add(Probe("TRUNK_IN", 41, 40) with { IsScannerProbe = false, BaseWeight = 100 });
+        var demand = new Demand();
+        var selectedIds = new List<string>();
+
+        for (var tick = 0; tick < 15; tick++)
+        {
+            var now = T0.AddSeconds(tick * 15);
+            var candidates = probes
+                .Where(query => TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed, query))
+                .Select(query => (query, scheduler.Evaluate(now, query, demand, [],
+                    TremSchedulingMode.CanaryObservation, TimeSpan.FromSeconds(15)))).ToArray();
+            var selected = Assert.Single(scheduler.SelectDueQueries(now, candidates, 1).Selected);
+            Assert.True(selected.Query.IsScannerProbe);
+            selectedIds.Add(selected.Query.Id);
+            var index = probes.FindIndex(x => x.Id == selected.Query.Id);
+            probes[index] = selected.Query with { LastPollUtc = now };
+            scheduler.ObserveResult(now, selected.Query, [], TrensRjClientStatus.Success, probes, now);
+        }
+
+        Assert.Equal(15, scheduler.CaptureSatelliteMetrics().ScannerDiscoveryPollTotal);
+        Assert.DoesNotContain(selectedIds, id => id is "TRUNK_OUT" or "TRUNK_IN");
+        Assert.Equal([
+            "SCAN_SC_OUT_000_002", "SCAN_SC_OUT_002_004", "SCAN_SC_OUT_004_006",
+            "SCAN_SC_OUT_006_008", "SCAN_SC_OUT_008_010", "SCAN_SC_OUT_010_012",
+            "SCAN_SC_OUT_012_014", "SCAN_SC_OUT_014_016", "SCAN_SC_OUT_016_018",
+            "SCAN_SC_OUT_018_020"
+        ], selectedIds.Take(10));
+    }
+
+    [Fact]
+    public void ExplicitCoreMayWinFirst_ButScannerGetsNextTokenWithoutStarvation()
+    {
+        var runtime = Runtime();
+        var scheduler = new TremSentinelSchedulerEngine(Options.Create(runtime));
+        var canary = new TremRealtimeCanaryOptions
+        { AllowedSentinelIds = ["SC_DEODORO_BANGU_OUT"] };
+        new TremRealtimeCanaryOptionsDefaults().PostConfigure(null, canary);
+        var allowed = canary.AllowedSentinelIds.ToHashSet(StringComparer.Ordinal);
+        var scanner = Probe("SCAN_SC_OUT_000_002", 0, 2);
+        var core = Probe("SC_DEODORO_BANGU_OUT", 2, 4) with
+        { IsScannerProbe = false, Purpose = TremSentinelPurpose.Core, BaseWeight = 85 };
+        var candidates = new[] { scanner, core };
+        var demand = new Demand();
+
+        var first = Select(T0);
+        Assert.Equal(core.Id, first.Query.Id);
+        core = core with { LastPollUtc = T0 };
+        candidates = [scanner, core];
+        var second = Select(T0.AddSeconds(15));
+        Assert.Equal(scanner.Id, second.Query.Id);
+        scheduler.ObserveResult(T0.AddSeconds(15), second.Query, [], TrensRjClientStatus.Success,
+            candidates, T0.AddSeconds(15));
+        Assert.Equal(1, scheduler.CaptureSatelliteMetrics().ScannerDiscoveryPollTotal);
+
+        (TremSentinelQuery Query, TremSentinelDecision Decision) Select(DateTimeOffset now)
+        {
+            var evaluated = candidates
+                .Where(query => TremRealtimeCanaryCycle.IsCanaryCandidate(runtime, canary, allowed, query))
+                .Select(query => (query, scheduler.Evaluate(now, query, demand, [],
+                    TremSchedulingMode.CanaryObservation, TimeSpan.FromSeconds(15))));
+            return Assert.Single(scheduler.SelectDueQueries(now, evaluated, 1).Selected);
+        }
+    }
+
     private static TremRealtimeOptions Runtime() => new()
     {
         Enabled = true,
@@ -299,9 +429,17 @@ public sealed class TremRealtimePhase4DTests
         Scanner = Scanner()
     };
 
+    private static TremRealtimeCanaryOptions CanaryOptions()
+    {
+        var options = new TremRealtimeCanaryOptions();
+        new TremRealtimeCanaryOptionsDefaults().PostConfigure(null, options);
+        return options;
+    }
+
     private static TremScannerOptions Scanner() => new()
     {
         Enabled = true,
+        TargetExternalLineId = "line",
         DiscoveryStrideOccurrences = 2,
         PursuitInitialDelaySeconds = 15,
         PursuitRetrySeconds = 30,
