@@ -170,7 +170,10 @@ builder.Services.AddOptions<TremRealtimeOptions>()
     .Bind(builder.Configuration.GetSection(TremRealtimeOptions.SectionName))
     .ValidateOnStart();
 builder.Services.AddOptions<TremRealtimeCanaryOptions>()
-    .Bind(builder.Configuration.GetSection(TremRealtimeCanaryOptions.SectionName));
+    .Bind(builder.Configuration.GetSection(TremRealtimeCanaryOptions.SectionName))
+    .PostConfigure(options => new TremRealtimeCanaryOptionsDefaults().PostConfigure(null, options))
+    .Validate(options => options.IsValid(out _), "Trem realtime canary options are invalid.")
+    .ValidateOnStart();
 builder.Services.AddOptions<TremRealtimeTrackerOptions>()
     .Bind(builder.Configuration.GetSection(TremRealtimeTrackerOptions.SectionName));
 builder.Services.AddOptions<TremCrossSentinelOptions>()

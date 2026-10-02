@@ -232,7 +232,9 @@ public sealed class TremRealtimePhase3TrackerTests
     public async Task TrackerFailure_IsFailOpenAndDoesNotAddProviderCalls()
     {
         var runtime = Options.Create(new TremRealtimeOptions { Enabled = true });
-        var canary = Options.Create(new TremRealtimeCanaryOptions { Enabled = true, MaxRequestsPerMinute = 1, MaxConcurrency = 1, MaxRequestsPerRun = 5, PollSeconds = 60 });
+        var canaryValue = new TremRealtimeCanaryOptions { Enabled = true, MaxRequestsPerMinute = 1, MaxConcurrency = 1, MaxRequestsPerRun = 5, PollSeconds = 60 };
+        new TremRealtimeCanaryOptionsDefaults().PostConfigure(null, canaryValue);
+        var canary = Options.Create(canaryValue);
         var clock = new TestClock();
         var state = new TremRealtimeCanaryState(canary, clock);
         var cycleMetrics = new TremRealtimeCanaryMetrics();

@@ -56,7 +56,7 @@ public sealed class TremRealtimeCanaryOptions
     public int MaxConcurrency { get; set; } = 1;
     public int PollSeconds { get; set; } = 60;
     public int MaxRequestsPerRun { get; set; } = 60;
-    public string[] AllowedSentinelIds { get; set; } = ["TRUNK_OUT", "TRUNK_IN"];
+    public string[] AllowedSentinelIds { get; set; } = [];
 
     public bool IsValid(out string diagnostic)
     {
@@ -71,6 +71,23 @@ public sealed class TremRealtimeCanaryOptions
             errors.Add("AllowedSentinelIds must contain unique, non-empty values.");
         diagnostic = string.Join(' ', errors);
         return errors.Count == 0;
+    }
+}
+
+public sealed class TremRealtimeCanaryOptionsDefaults : IPostConfigureOptions<TremRealtimeCanaryOptions>
+{
+    private static readonly string[] DefaultAllowedSentinelIds = ["TRUNK_OUT", "TRUNK_IN"];
+
+    public void PostConfigure(string? name, TremRealtimeCanaryOptions options)
+    {
+        var configured = (options.AllowedSentinelIds ?? [])
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .ToArray();
+
+        options.AllowedSentinelIds = configured.Length == 0
+            ? [.. DefaultAllowedSentinelIds]
+            : configured;
     }
 }
 

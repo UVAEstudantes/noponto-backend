@@ -337,7 +337,9 @@ public sealed class TremRealtimePhase4ATests
         CancellationTokenSource? cancellationSource = null)
     {
         var runtime = Options.Create(new TremRealtimeOptions { Enabled = runtimeEnabled });
-        var canary = Options.Create(new TremRealtimeCanaryOptions { Enabled = canaryEnabled, MaxRequestsPerMinute = 1, MaxConcurrency = 1, MaxRequestsPerRun = 1 });
+        var canaryValue = new TremRealtimeCanaryOptions { Enabled = canaryEnabled, MaxRequestsPerMinute = 1, MaxConcurrency = 1, MaxRequestsPerRun = 1 };
+        new TremRealtimeCanaryOptionsDefaults().PostConfigure(null, canaryValue);
+        var canary = Options.Create(canaryValue);
         var clock = new ManualClock(); var state = new TremRealtimeCanaryState(canary, clock); var client = new FakeClient(status);
         var tracker = new TremRealtimeTracker(Options.Create(new TremRealtimeTrackerOptions()), clock, new());
         var cache = new CountingCache(throwingCache, canceledCache, cancellationSource);

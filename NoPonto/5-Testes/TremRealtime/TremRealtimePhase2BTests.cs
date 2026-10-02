@@ -27,6 +27,9 @@ public sealed class TremRealtimePhase2BTests
         var disabledRuntime = Harness(runtimeEnabled: false, canaryEnabled: true);
         await disabledRuntime.Cycle.RunOnceAsync(default);
         Assert.Equal(0, disabledRuntime.Client.Requests);
+        Assert.Equal(0, disabledRuntime.Catalog.Reads);
+        Assert.Equal(0, disabledRuntime.Tracker.Observations);
+        Assert.Equal(0, disabledRuntime.RailEngine.Observations);
     }
 
     [Fact]
@@ -140,13 +143,18 @@ public sealed class TremRealtimePhase2BTests
     private static TestHarness Harness(bool runtimeEnabled = true, bool canaryEnabled = true, int rpm = 1, int maxConcurrency = 1, int maxRequests = 60, int pollSeconds = 60, IReadOnlyList<TrensRjClientResult<TrensRjNextEnvelope>>? results = null, ITremRealtimeNormalizer? normalizer = null)
     {
         var runtime = Options.Create(new TremRealtimeOptions { Enabled = runtimeEnabled, NoServiceCooldownMinutes = 10, CircuitFailureThreshold = 2, CircuitWindowMinutes = 2, CircuitOpenMinutes = 5 });
-        var canary = Options.Create(new TremRealtimeCanaryOptions { Enabled = canaryEnabled, MaxRequestsPerMinute = rpm, MaxConcurrency = maxConcurrency, MaxRequestsPerRun = maxRequests, PollSeconds = pollSeconds });
+        var canaryValue = new TremRealtimeCanaryOptions { Enabled = canaryEnabled, MaxRequestsPerMinute = rpm, MaxConcurrency = maxConcurrency, MaxRequestsPerRun = maxRequests, PollSeconds = pollSeconds };
+        new TremRealtimeCanaryOptionsDefaults().PostConfigure(null, canaryValue);
+        var canary = Options.Create(canaryValue);
         var clock = new TestClock();
         var state = new TremRealtimeCanaryState(canary, clock);
         var metrics = new TremRealtimeCanaryMetrics();
         var client = new FakeClient(results ?? []);
-        var cycle = new TremRealtimeCanaryCycle(runtime, canary, new FakeCatalog(), new TremSentinelSchedulerEngine(runtime), new TremDemandRegistry(runtime), client, normalizer ?? new FakeNormalizer([]), state, metrics, new NoopTracker(), new TremRealtimeTrackerMetrics(), new NoopTopologyCache(), new NoopCrossObserver(), new TremCrossSentinelMetrics(), new NoopRailEngine(), clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
-        return new(cycle, client, state, metrics, clock);
+        var catalog = new FakeCatalog();
+        var tracker = new NoopTracker();
+        var railEngine = new NoopRailEngine();
+        var cycle = new TremRealtimeCanaryCycle(runtime, canary, catalog, new TremSentinelSchedulerEngine(runtime), new TremDemandRegistry(runtime), client, normalizer ?? new FakeNormalizer([]), state, metrics, tracker, new TremRealtimeTrackerMetrics(), new NoopTopologyCache(), new NoopCrossObserver(), new TremCrossSentinelMetrics(), railEngine, clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
+        return new(cycle, client, state, metrics, clock, catalog, tracker, railEngine);
     }
 
     private static TremSentinelQuery Query(string id, string origin, string destination) => new(
@@ -158,12 +166,13 @@ public sealed class TremRealtimePhase2BTests
         TestClock.Start, "central", "maracana", "US142", "Deodoro", providerLine, "inbound",
         TremDirectionResolution.Unknown, null, "expresso", "live", 4, "11:20", "2", "D", "2D", "Central");
 
-    private sealed record TestHarness(TremRealtimeCanaryCycle Cycle, FakeClient Client, TremRealtimeCanaryState State, TremRealtimeCanaryMetrics Metrics, TestClock Clock);
+    private sealed record TestHarness(TremRealtimeCanaryCycle Cycle, FakeClient Client, TremRealtimeCanaryState State, TremRealtimeCanaryMetrics Metrics, TestClock Clock, FakeCatalog Catalog, NoopTracker Tracker, NoopRailEngine RailEngine);
 
     private sealed class FakeCatalog : ITremSentinelCatalog
     {
+        public int Reads;
         private readonly TremSentinelQuery[] _queries = [Query("TRUNK_OUT", "central", "maracana"), Query("TRUNK_IN", "maracana", "central"), Query("WEST_SC_OUT", "deodoro", "campo-grande")];
-        public Task<IReadOnlyList<TremSentinelQuery>> GetAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<TremSentinelQuery>>(_queries);
+        public Task<IReadOnlyList<TremSentinelQuery>> GetAsync(CancellationToken ct = default) { Interlocked.Increment(ref Reads); return Task.FromResult<IReadOnlyList<TremSentinelQuery>>(_queries); }
         public Task ReloadAsync(CancellationToken ct = default) => Task.CompletedTask;
     }
 
@@ -192,7 +201,8 @@ public sealed class TremRealtimePhase2BTests
 
     private sealed class NoopTracker : ITremRealtimeTracker
     {
-        public System.Collections.Immutable.ImmutableArray<TrackedObservationAcceptance> ObserveBatch(string provider, string sentinelId, IReadOnlyList<TremRealtimeObservation> observations) => [];
+        public int Observations;
+        public System.Collections.Immutable.ImmutableArray<TrackedObservationAcceptance> ObserveBatch(string provider, string sentinelId, IReadOnlyList<TremRealtimeObservation> observations) { Interlocked.Increment(ref Observations); return []; }
         public void Cleanup() { }
         public TremRealtimeTrackerSnapshot CaptureSnapshot() => new(TestClock.Start, []);
     }
@@ -209,7 +219,8 @@ public sealed class TremRealtimePhase2BTests
     }
     private sealed class NoopRailEngine : IRailRealtimeEngine
     {
-        public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc) { }
+        public int Observations;
+        public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc) { Interlocked.Increment(ref Observations); }
         public RailRealtimeSnapshot CaptureSnapshot() => RailRealtimeSnapshot.Empty(TestClock.Start);
     }
 
