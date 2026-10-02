@@ -323,7 +323,12 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
                 && (q.LastPollUtc is null || minutes >= config.MinCoreRevisitSeconds / 60d)
                 ? config.CoreCoverageBoost : 0,
             ExpectedTrainBoost = expected ? config.ExpectedTrainBoost : 0,
-            BranchResolutionBoost = q.Purpose == TremSentinelPurpose.Branch ? config.BranchResolutionBoost : 0,
+            BranchResolutionBoost = q.IsScannerProbe ? q.ScannerDiscrimination switch
+                {
+                    TremProbeDiscrimination.Exclusive => 20,
+                    TremProbeDiscrimination.Discriminative => 10,
+                    _ => 0
+                } : q.Purpose == TremSentinelPurpose.Branch ? config.BranchResolutionBoost : 0,
             TerminalTransitionBoost = q.Purpose == TremSentinelPurpose.Terminal && expected ? config.TerminalTransitionBoost : 0,
             TimeSinceLastPollBoost = minutes * config.TimeSinceLastPollBoostPerMinute,
             EmptyPenalty = satellite.EmptyCount * config.EmptyPenalty,

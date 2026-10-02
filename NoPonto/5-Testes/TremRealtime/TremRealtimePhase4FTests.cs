@@ -9,6 +9,8 @@ using NoPonto.Application.TremRealtime.Options;
 using NoPonto.Application.TremRealtime.Tracking;
 using NoPonto.Application.TremRealtime.Contracts;
 using Xunit;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace NoPonto.Testes;
 
@@ -43,6 +45,29 @@ public sealed class TremRealtimePhase4FTests
         Assert.DoesNotContain(profiles.Diagnostics, x => x.Contains(olimpica, StringComparison.Ordinal));
         Assert.DoesNotContain(profiles.Diagnostics, x => x.Contains(mocidade, StringComparison.Ordinal));
         Assert.Contains(profiles.Diagnostics, x => x.Contains("Silva Freire", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CatalogoReal_ClassificaValorDiscriminativoDos34Probes()
+    {
+        var plan = new TremStructuralSnapshotLoader().Load();
+        static Guid Id(string value) => new(MD5.HashData(Encoding.UTF8.GetBytes(value)));
+        var topology = new TremPublishedTopologySnapshot(DateTimeOffset.UtcNow,
+            plan.Patterns.Select(p => new TremPatternTopology(Id(p.ExternalKey+":po"), Id(p.ExternalKey),
+                Id(p.Line.ExternalId), Id(p.ExternalKey+":direction"), p.Occurrences.Select((o,i) =>
+                    new TremTopologyOccurrence(Id(p.ExternalKey+":"+i),i+1,Id(o.StationId))
+                    { ExternalStationId=o.StationId, DistanceAlongPatternMetres=o.DistanceMetres })
+                    .ToImmutableArray()) { LengthMetres=p.LengthMetres }).ToImmutableArray());
+        var targetId=Id(SantaCruzTemporalProfileFactory.ExternalLineId);
+        var scanner=new TremScannerOptions { DiscoveryStrideOccurrences=2, MaxDownstreamPursuitProbes=1 };
+        var probes=topology.Patterns.Where(x=>x.LinhaId==targetId
+                && plan.Patterns.Single(p=>Id(p.ExternalKey)==x.PadraoVersaoId).ExternalKey.EndsWith(":BASE"))
+            .SelectMany(x=>TremAdaptiveScannerProbeFactory.Create(x,
+                SantaCruzTemporalProfileFactory.ExternalLineId,"SCAN",scanner,
+                new HashSet<TremSentinelPairKey>()))
+            .Select(x=>TremSentinelCatalog.ClassifyDiscrimination(x,topology,targetId)).ToArray();
+        Console.WriteLine($"probe_discrimination exclusive={probes.Count(x=>x==TremProbeDiscrimination.Exclusive)} discriminative={probes.Count(x=>x==TremProbeDiscrimination.Discriminative)} shared={probes.Count(x=>x==TremProbeDiscrimination.Shared)} total={probes.Length}");
+        Assert.Equal(34,probes.Length);
     }
 
     [Fact]
@@ -84,6 +109,113 @@ public sealed class TremRealtimePhase4FTests
         Assert.Equal(ids[2], inferred.NextOccurrenceId);
         Assert.Equal(12_000d, inferred.DistanceMetres, 3);
         Assert.True(inferred.IsEstimated);
+    }
+
+    [Fact]
+    public void SingleAnchorComPerfil_PublicaProvisionalESegundoAnchorElevaQualidadeNaMesmaRun()
+    {
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026,10,2,20,0,0,TimeSpan.Zero));
+        var engine = new RailRealtimeEngine(Options.Create(new RailRealtimeOptions
+            { SingleAnchorFreshnessSeconds = 120 }), clock);
+        var pattern = Pattern();
+        var profile = RailTemporalPredictor.Build(pattern.Occurrences.Select((x,i) =>
+            (x.OccurrenceId, x.DistanceAlongPatternMetres, new TimeOnly(4, i * 5))).ToArray());
+        engine.SetTemporalProfile(pattern.PadraoVersaoId, profile);
+        var tracker = Guid.NewGuid();
+        engine.ObserveResolvedAnchor(tracker, "US206", pattern,
+            Anchor(tracker, pattern.Occurrences[2], pattern, clock.GetUtcNow().AddMinutes(7))
+                with { RequestStartedAtUtc = clock.GetUtcNow(), ReceivedAtUtc = clock.GetUtcNow() }, clock.GetUtcNow());
+        var provisional = Assert.Single(engine.CaptureSnapshot().PublicVehicles);
+        Assert.Equal(RailPositionQuality.TemporalSingleAnchor, provisional.PositionQuality);
+        Assert.Equal(RailPositionSource.RealtimeEstimated, provisional.PositionSource);
+        Assert.Equal(clock.GetUtcNow().AddSeconds(120), provisional.FreshUntilUtc);
+        var runId = provisional.RailRunId;
+
+        clock.Advance(TimeSpan.FromMinutes(1));
+        engine.ObserveResolvedAnchor(tracker, "US206", pattern,
+            Anchor(tracker, pattern.Occurrences[1], pattern, clock.GetUtcNow().AddMinutes(-1))
+                with { SentinelId = "SCAN2", RequestStartedAtUtc = clock.GetUtcNow(),
+                    ReceivedAtUtc = clock.GetUtcNow() }, clock.GetUtcNow());
+        var confirmed = Assert.Single(engine.CaptureSnapshot().PublicVehicles);
+        Assert.Equal(runId, confirmed.RailRunId);
+        Assert.Equal(RailPositionQuality.MultiSatelliteAnchored, confirmed.PositionQuality);
+    }
+
+    [Fact]
+    public void SingleAnchorComGapTemporal_NaoInventaPosicao()
+    {
+        var ids = Enumerable.Range(0,3).Select(_ => Guid.NewGuid()).ToArray();
+        var profile = new RailTemporalProfile([
+            new(ids[0],1,0,TimeSpan.Zero), new(ids[1],2,1000,TimeSpan.FromMinutes(5)),
+            new(ids[2],3,2000,TimeSpan.FromMinutes(10))], [
+            new(ids[0],ids[1],1000,TimeSpan.FromMinutes(5),TimeSpan.FromMinutes(5))]);
+        Assert.Null(RailTemporalPredictor.InferBeforeOccurrence(profile, ids[2], TimeSpan.FromMinutes(2)));
+    }
+
+    [Fact]
+    public void OitoTrensSingleAnchor_FicamProvisoriamenteVisiveisEExpiramSemConfirmacao()
+    {
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026,10,2,20,0,0,TimeSpan.Zero));
+        var engine = new RailRealtimeEngine(Options.Create(new RailRealtimeOptions
+            { SingleAnchorFreshnessSeconds=120, MaxVehicles=16, MaxRuns=16 }), clock);
+        var pattern = Pattern();
+        engine.SetTemporalProfile(pattern.PadraoVersaoId, RailTemporalPredictor.Build(
+            pattern.Occurrences.Select((x,i) => (x.OccurrenceId,x.DistanceAlongPatternMetres,
+                new TimeOnly(4,i*5))).ToArray()));
+        foreach (var i in Enumerable.Range(0,8))
+        {
+            var anchor = Anchor(Guid.NewGuid(), pattern.Occurrences[2], pattern,
+                clock.GetUtcNow().AddMinutes(2+i)) with
+            { RequestStartedAtUtc=clock.GetUtcNow(), ReceivedAtUtc=clock.GetUtcNow() };
+            engine.ObserveResolvedAnchor(anchor.TrackerId, $"US{200+i}", pattern, anchor, clock.GetUtcNow());
+        }
+        var visible = engine.CaptureSnapshot().PublicVehicles;
+        Assert.Equal(8, visible.Length);
+        Assert.All(visible, x => Assert.Equal(RailPositionQuality.TemporalSingleAnchor, x.PositionQuality));
+        clock.Advance(TimeSpan.FromSeconds(121));
+        Assert.Empty(engine.CaptureSnapshot().PublicVehicles);
+    }
+
+    [Fact]
+    public void OffTargetEmProbeShared_NaoContaComoProvaForteDePerda()
+    {
+        var setup=AdaptiveSetup();
+        var snapshot=Snapshot(setup,2,PublicPosition(setup,setup.Now.AddMinutes(2),setup.Now.AddMinutes(3)));
+        setup.Coordinator.Observe(setup.Probes[0],[Acceptance(setup,2)],snapshot,
+            TremPublishedTopologySnapshot.Empty,setup.Probes,setup.Now);
+        var at=setup.Now.AddMinutes(1);
+        for(var i=0;i<2;i++)
+        {
+            var probe=setup.Probes.First(x=>setup.Coordinator.GetDirective(x.Id,at) is not null);
+            setup.Coordinator.MarkSelected(probe,at);
+            setup.Coordinator.Observe(probe,[],snapshot,TremPublishedTopologySnapshot.Empty,
+                setup.Probes,at,TrensRjClientStatus.Success,1);
+            at=at.AddMinutes(1);
+        }
+        Assert.Equal(RailAdaptiveTrackingState.Tracked,
+            setup.Coordinator.CaptureSnapshot().RunStates[setup.RunId]);
+    }
+
+    [Fact]
+    public void OffTargetEmProbeDiscriminativo_AtingeThresholdDeReacquisition()
+    {
+        var setup=AdaptiveSetup();
+        var probes=setup.Probes.Select(x=>x with
+            { ScannerDiscrimination=TremProbeDiscrimination.Discriminative }).ToArray();
+        var snapshot=Snapshot(setup,2,PublicPosition(setup,setup.Now.AddMinutes(2),setup.Now.AddMinutes(3)));
+        setup.Coordinator.Observe(probes[0],[Acceptance(setup,2)],snapshot,
+            TremPublishedTopologySnapshot.Empty,probes,setup.Now);
+        var at=setup.Now.AddMinutes(1);
+        for(var i=0;i<2;i++)
+        {
+            var probe=probes.First(x=>setup.Coordinator.GetDirective(x.Id,at) is not null);
+            setup.Coordinator.MarkSelected(probe,at);
+            setup.Coordinator.Observe(probe,[],snapshot,TremPublishedTopologySnapshot.Empty,
+                probes,at,TrensRjClientStatus.Success,1);
+            at=at.AddMinutes(1);
+        }
+        Assert.Equal(RailAdaptiveTrackingState.Reacquisition,
+            setup.Coordinator.CaptureSnapshot().RunStates[setup.RunId]);
     }
 
     [Fact]
@@ -206,6 +338,10 @@ public sealed class TremRealtimePhase4FTests
             setup.Now.AddMinutes(1)) is not null);
         var due = setup.Coordinator.CaptureSnapshot().NextUsefulObservationUtc[setup.RunId];
         var probe = setup.Probes.First(x => setup.Coordinator.GetDirective(x.Id, due) is not null);
+        var directive = setup.Coordinator.GetDirective(probe.Id, due);
+        Assert.NotNull(directive!.RefreshDeadlineUtc);
+        Assert.Equal(setup.Coordinator.CaptureSnapshot().RefreshDeadlineUtc[setup.RunId],
+            directive.RefreshDeadlineUtc);
         setup.Coordinator.MarkSelected(probe, due);
         Assert.Equal(1, setup.Coordinator.CaptureSnapshot().RefreshBeforeFreshness);
     }

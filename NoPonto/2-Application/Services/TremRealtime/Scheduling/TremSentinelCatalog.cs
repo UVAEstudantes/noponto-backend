@@ -83,14 +83,38 @@ public sealed class TremSentinelCatalog(
                             && x.SentidoId == direction.SentidoId
                             && x.PadraoOperacionalId == basePattern.InternalId).ToArray();
                         if (patterns.Length != 1) return;
-                        list.AddRange(TremAdaptiveScannerProbeFactory.Create(patterns[0],
-                            scanner.TargetExternalLineId, scannerDirection, scanner, staticPairs));
+                        var probes = TremAdaptiveScannerProbeFactory.Create(patterns[0],
+                            scanner.TargetExternalLineId, scannerDirection, scanner, staticPairs);
+                        list.AddRange(probes.Select(x => x with
+                        {
+                            ScannerDiscrimination = ClassifyDiscrimination(x, topology, line.InternalId!.Value)
+                        }));
                     }
                 }
             }
             Volatile.Write(ref _cache, list.GroupBy(x => x.PairKey).Select(x => x.Single()).ToArray());
         }
         finally { _gate.Release(); }
+    }
+
+    internal static TremProbeDiscrimination ClassifyDiscrimination(TremSentinelQuery probe,
+        TremPublishedTopologySnapshot topology, Guid targetLineId)
+    {
+        var compatibleLines = topology.Patterns.Where(pattern =>
+        {
+            var origin = pattern.Occurrences.FirstOrDefault(x =>
+                x.ExternalStationId == probe.OriginExternalStationId);
+            var destination = pattern.Occurrences.FirstOrDefault(x =>
+                x.ExternalStationId == probe.DestinationExternalStationId);
+            return origin is not null && destination is not null && origin.Order < destination.Order;
+        }).Select(x => x.LinhaId).Distinct().ToArray();
+        if (!compatibleLines.Contains(targetLineId)) return TremProbeDiscrimination.Shared;
+        return compatibleLines.Length switch
+        {
+            1 => TremProbeDiscrimination.Exclusive,
+            2 => TremProbeDiscrimination.Discriminative,
+            _ => TremProbeDiscrimination.Shared
+        };
     }
 
     private static IReadOnlySet<string> Downstream(string id) => id switch

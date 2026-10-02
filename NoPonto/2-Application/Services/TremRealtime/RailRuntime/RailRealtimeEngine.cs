@@ -40,6 +40,7 @@ public sealed class RailRealtimeEngine : IRailRealtimeEngine
     private readonly Dictionary<Guid, VehicleEntry> _vehicles = [];
     private readonly Dictionary<Guid, RunEntry> _runs = [];
     private readonly Dictionary<Guid, PendingReversal> _pendingReversals = [];
+    private readonly Dictionary<Guid, RailTemporalProfile> _temporalProfiles = [];
     private readonly RailRealtimeOptions _options;
     private readonly TimeProvider _clock;
     private long _multiSatellite, _anchors, _resolvedRuns, _positions;
@@ -57,6 +58,7 @@ public sealed class RailRealtimeEngine : IRailRealtimeEngine
     {
         lock (_gate)
         {
+            EnsureTemporalProfiles(topology);
             foreach (var item in accepted)
             {
                 var trainCode = item.Observation.TrainCode?.Trim();
@@ -94,6 +96,11 @@ public sealed class RailRealtimeEngine : IRailRealtimeEngine
             var vehicle = FindOrCreateVehicle(trackerId, trainCode, receivedAtUtc);
             if (vehicle is not null) ObserveResolvedAnchorUnsafe(vehicle, pattern, anchor, receivedAtUtc, null, null, null);
         }
+    }
+
+    internal void SetTemporalProfile(Guid padraoVersaoId, RailTemporalProfile profile)
+    {
+        lock (_gate) _temporalProfiles[padraoVersaoId] = profile;
     }
 
     public RailRealtimeSnapshot CaptureSnapshot()
@@ -200,9 +207,48 @@ public sealed class RailRealtimeEngine : IRailRealtimeEngine
     private void UpdateEstimate(RunEntry run, DateTimeOffset now)
     {
         var previous = run.Position;
-        run.Position = RailPositionEstimator.Estimate(run.Id, run.Pattern, run.Anchors.ToArray(), now, _options, previous);
+        if (run.Anchors.Count == 1
+            && _temporalProfiles.TryGetValue(run.Pattern.PadraoVersaoId, out var profile))
+            run.Position = now <= run.Anchors.Single().ReceivedAtUtc.AddSeconds(_options.SingleAnchorFreshnessSeconds)
+                ? EstimateSingleAnchor(run, profile, now, previous) : null;
+        else
+            run.Position = RailPositionEstimator.Estimate(run.Id, run.Pattern, run.Anchors.ToArray(), now, _options, previous);
         if (previous is null && run.Position is not null) Interlocked.Increment(ref _positions);
         run.State = run.Position?.State ?? RailRunState.Unresolved;
+    }
+
+    private RailPositionEstimate? EstimateSingleAnchor(RunEntry run, RailTemporalProfile profile,
+        DateTimeOffset now, RailPositionEstimate? previous)
+    {
+        var anchor = run.Anchors.Single();
+        if (anchor.PredictedEventUtc is not { } predicted || predicted < now) return null;
+        var inference = RailTemporalPredictor.InferBeforeOccurrence(profile, anchor.OccurrenceId,
+            predicted - now);
+        if (inference is null || !double.IsFinite(inference.DistanceMetres)
+            || inference.DistanceMetres < 0 || inference.DistanceMetres > run.Pattern.LengthMetres) return null;
+        var distance = previous is null ? inference.DistanceMetres
+            : Math.Max(previous.DistanceAtReferenceMetres, inference.DistanceMetres);
+        return new(run.Id, run.Pattern.PadraoVersaoId, RailRunState.InSegment,
+            inference.PreviousOccurrenceId, inference.NextOccurrenceId, distance, now,
+            anchor.DistanceAlongPatternMetres, predicted, RailPositionSource.RealtimeEstimated,
+            RailPositionQuality.TemporalSingleAnchor,
+            anchor.ReceivedAtUtc.AddSeconds(_options.SingleAnchorFreshnessSeconds), true,
+            distance != inference.DistanceMetres, null, RailCorrectionKind.None);
+    }
+
+    private void EnsureTemporalProfiles(TremPublishedTopologySnapshot topology)
+    {
+        if (_temporalProfiles.Count > 0 || topology.Patterns.IsDefaultOrEmpty) return;
+        var path = Path.Combine(AppContext.BaseDirectory, "horarios_supervia.txt");
+        if (!File.Exists(path)) return;
+        try
+        {
+            var loaded = SantaCruzTemporalProfileFactory.Load(topology, File.ReadAllText(path));
+            _temporalProfiles[loaded.ForwardPadraoVersaoId] = loaded.Forward;
+            _temporalProfiles[loaded.ReversePadraoVersaoId] = loaded.Reverse;
+        }
+        catch (InvalidDataException) { }
+        catch (InvalidOperationException) { }
     }
 
     private static TremTopologyOccurrence? SelectOccurrence(TremPatternTopology pattern, Guid[] ids, double? minimumDistance)

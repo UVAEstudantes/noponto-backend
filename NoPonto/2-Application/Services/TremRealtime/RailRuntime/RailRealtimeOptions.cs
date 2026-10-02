@@ -6,6 +6,7 @@ public sealed class RailRealtimeOptions
     public int DefaultStationDwellSeconds { get; set; } = 30;
     public int DefaultTerminalHoldSeconds { get; set; } = 300;
     public int RealtimeFreshnessSeconds { get; set; } = 180;
+    public int SingleAnchorFreshnessSeconds { get; set; } = 180;
     public int FallbackHorizonSeconds { get; set; } = 180;
     public int FirstRunToleranceMinutes { get; set; } = 5;
     public int MaxVehicles { get; set; } = 1024;
@@ -15,6 +16,7 @@ public sealed class RailRealtimeOptions
     public bool IsValid() => DefaultStationDwellSeconds >= 0
         && DefaultTerminalHoldSeconds >= 0
         && RealtimeFreshnessSeconds > 0
+        && SingleAnchorFreshnessSeconds > 0
         && FallbackHorizonSeconds >= 0
         && FirstRunToleranceMinutes >= 0
         && MaxVehicles > 0 && MaxRuns > 0 && MaxAnchorsPerRun >= 2;

@@ -12,7 +12,8 @@ public enum RailAdaptiveTrackingState { Discovery, Acquisition, Tracked, Reacqui
 public enum RailAdaptiveCallKind { Discovery, Acquisition, TrackedRefresh, Reacquisition }
 public enum RailReacquisitionReason { NoService, TargetAbsent, OffTargetOnly, StrongContradiction, FreshnessDeadline, Other }
 public sealed record RailAdaptiveDirective(RailAdaptiveCallKind Kind, DateTimeOffset DueUtc,
-    DateTimeOffset ExpiresUtc, Guid? RailRunId, string TrainCode);
+    DateTimeOffset ExpiresUtc, Guid? RailRunId, string TrainCode,
+    DateTimeOffset? RefreshDeadlineUtc = null, DateTimeOffset? ScheduledAtUtc = null);
 public sealed record RailAdaptiveTrackingSnapshot(long DiscoveryPolls, long AcquisitionPolls,
     long TrackedRefreshPolls, long ReacquisitionPolls, long ToAcquisition, long ToTracked,
     long ToReacquisition, long DistantPursuitDeferred, long RefreshBeforeFreshness,
@@ -108,10 +109,10 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
             if (pending.Directive.Kind == RailAdaptiveCallKind.TrackedRefresh
                 && _entries.TryGetValue(pending.RunId, out var refreshEntry))
             {
-                if (refreshEntry.RefreshDeadlineUtc is { } deadline && now <= deadline)
+                if (pending.Directive.RefreshDeadlineUtc is { } deadline && now <= deadline)
                     Interlocked.Increment(ref _freshness);
                 logger?.LogInformation("RailTrackedRefreshExecuted rail_run_id={RailRunId} probe={Probe} executed_at={ExecutedAt} refresh_deadline={RefreshDeadline}",
-                    refreshEntry.RunId, query.Id, now, refreshEntry.RefreshDeadlineUtc);
+                    refreshEntry.RunId, query.Id, now, pending.Directive.RefreshDeadlineUtc);
             }
             _directives[query.Id].Remove(pending);
         }
@@ -201,7 +202,7 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
                 && source.DownstreamSatelliteIds.Contains(x.Id)).OrderBy(x => x.ScannerSequenceIndex).FirstOrDefault();
         if (target is not null) Add(target.Id, entry, RailAdaptiveCallKind.Acquisition,
             now.AddSeconds(options.Value.Scanner.PursuitInitialDelaySeconds),
-            now.AddMinutes(options.Value.Scanner.PursuitTtlMinutes));
+            now.AddMinutes(options.Value.Scanner.PursuitTtlMinutes), now);
     }
 
     private void ScheduleRefresh(Entry entry, RailVehiclePublicSnapshot position,
@@ -232,7 +233,7 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
         entry.RefreshDeadlineUtc = freshness;
         entry.ScheduledProbeId = target.Id;
         Add(target.Id, entry, RailAdaptiveCallKind.TrackedRefresh, due,
-            position.FreshUntilUtc.AddMinutes(options.Value.Scanner.ReacquisitionTtlMinutes));
+            position.FreshUntilUtc.AddMinutes(options.Value.Scanner.ReacquisitionTtlMinutes), now, freshness);
         logger?.LogInformation("RailTrackedRefreshScheduled rail_run_id={RailRunId} direction={Direction} probe={Probe} next_useful={NextUseful} refresh_deadline={RefreshDeadline} effective_next_poll={EffectiveNextPoll} fresh_until={FreshUntil}",
             entry.RunId, entry.Direction, target.Id, predicted, freshness, due, position.FreshUntilUtc);
     }
@@ -260,8 +261,11 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
         var probe = neighbours.FirstOrDefault();
         if (probe is null) { Interlocked.Increment(ref _reacquisitionNoProbe); return; }
         Add(probe.Id, entry, RailAdaptiveCallKind.Reacquisition,
-            now, now.AddMinutes(options.Value.Scanner.ReacquisitionTtlMinutes));
+            now, now.AddMinutes(options.Value.Scanner.ReacquisitionTtlMinutes), now);
         Interlocked.Increment(ref _reacquisitionScheduled);
+        logger?.LogInformation("RailReacquisitionScheduled rail_run_id={RailRunId} train_code={TrainCode} probe={Probe} scheduled_at={ScheduledAt} due_at={DueAt} expires_at={ExpiresAt} reason={Reason}",
+            entry.RunId, entry.TrainCode, probe.Id, now, now,
+            now.AddMinutes(options.Value.Scanner.ReacquisitionTtlMinutes), reason);
     }
 
     private void HandleRefreshMiss(Entry entry, TremSentinelQuery failed,
@@ -281,6 +285,12 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
             : providerObservationCount > 0
                 ? RailReacquisitionReason.OffTargetOnly
                 : RailReacquisitionReason.TargetAbsent;
+        if (reason == RailReacquisitionReason.OffTargetOnly
+            && failed.ScannerDiscrimination == TremProbeDiscrimination.Shared)
+        {
+            ScheduleConfirmation(entry, failed, now);
+            return;
+        }
         entry.ConsecutiveRefreshMisses++;
         if (entry.ConsecutiveRefreshMisses < 2)
         {
@@ -295,16 +305,18 @@ public sealed class RailAdaptiveTrackingCoordinator(IOptions<TremRealtimeOptions
         RemoveDirectives(entry.RunId);
         var due = now.AddSeconds(options.Value.Scanner.TrackedRefreshMinimumSeconds);
         Add(failed.Id, entry, RailAdaptiveCallKind.TrackedRefresh, due,
-            now.AddMinutes(options.Value.Scanner.ReacquisitionTtlMinutes));
+            now.AddMinutes(options.Value.Scanner.ReacquisitionTtlMinutes), now, entry.RefreshDeadlineUtc);
         entry.NextUsefulObservationUtc = due;
     }
 
-    private void Add(string probeId, Entry entry, RailAdaptiveCallKind kind, DateTimeOffset due, DateTimeOffset expires)
+    private void Add(string probeId, Entry entry, RailAdaptiveCallKind kind, DateTimeOffset due,
+        DateTimeOffset expires, DateTimeOffset scheduledAt, DateTimeOffset? refreshDeadline = null)
     {
         var list = _directives.GetValueOrDefault(probeId);
         if (list is null) _directives.Add(probeId, list = []);
         list.RemoveAll(x => x.RunId == entry.RunId && x.Directive.Kind == kind);
-        list.Add(new(entry.RunId, new(kind, due, expires, entry.RunId, entry.TrainCode)));
+        list.Add(new(entry.RunId, new(kind, due, expires, entry.RunId, entry.TrainCode,
+            refreshDeadline, scheduledAt)));
     }
     private void RemoveDirectives(Guid runId)
     {

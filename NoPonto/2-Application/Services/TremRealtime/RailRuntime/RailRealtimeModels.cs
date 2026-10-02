@@ -5,7 +5,7 @@ namespace NoPonto.Application.TremRealtime.RailRuntime;
 public enum RailRunState { Unresolved, AwaitingDeparture, Dwell, InSegment, TerminalHold, Ended }
 public enum RailTemporalAnchorKind { PredictedPassageAtStation, ArrivalAtStation, DepartureFromTerminal, ScheduledPassage, ObservedPresence, Unknown }
 public enum RailPositionSource { RealtimeEstimated, ScheduleEstimated, HistoricalEstimated, Unknown }
-public enum RailPositionQuality { MultiSatelliteAnchored, RealtimeAnchored, ScheduleAnchored, HistoricalFallback, StalePrediction, Unknown }
+public enum RailPositionQuality { MultiSatelliteAnchored, RealtimeAnchored, TemporalSingleAnchor, ScheduleAnchored, HistoricalFallback, StalePrediction, Unknown }
 public enum RailCorrectionKind { None, RecalculatedTarget, StrongAnchorSnap, RunReset }
 public enum RailFirstRunClassification { NotCandidate, FirstRunCandidate }
 public enum RailDayType { Weekday, Saturday, Sunday, Holiday }

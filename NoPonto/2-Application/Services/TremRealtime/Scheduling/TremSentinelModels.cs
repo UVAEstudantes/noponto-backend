@@ -1,5 +1,7 @@
 namespace NoPonto.Application.TremRealtime.Scheduling;
 
+public enum TremProbeDiscrimination { Shared, Discriminative, Exclusive }
+
 public enum TremSentinelPurpose { Discovery, Core, Branch, Localization, Terminal, Dynamic }
 public enum TremSentinelState { Dormant, Due, InFlight, Active, NoService, Backoff, Cooldown }
 public enum TremSentinelReason { NoDemand, OutsideServiceWindow, WaitingForSchedule, Warmup, ActiveTracking, CanaryObservation, NoServiceCooldown, ErrorBackoff, RateBudgetDeferred, Due }
@@ -29,6 +31,7 @@ public sealed record TremSentinelQuery(
     public Guid? DestinationOccurrenceId { get; init; }
     public Guid? ScannerPadraoVersaoId { get; init; }
     public int? ScannerSequenceIndex { get; init; }
+    public TremProbeDiscrimination ScannerDiscrimination { get; init; } = TremProbeDiscrimination.Shared;
 }
 
 public sealed record TremPriorityBreakdown(double BaseWeight, double DemandBoost, double ScheduleUrgency, double ActiveTrackingBoost, double CoverageValue, double FailurePenalty, double RedundancyPenalty)
