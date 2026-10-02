@@ -24,6 +24,28 @@ public sealed class TremRealtimeOptions
     public int? RealtimeHorizonMinutes { get; set; }
     public bool ShadowHistoricalEnabled { get; set; }
     public int GracePeriodSeconds { get; set; } = 180;
+    public TremSatelliteOptions Satellites { get; set; } = new();
+}
+
+public sealed class TremSatelliteOptions
+{
+    public TimeSpan FirstServiceLocalTime { get; set; } = TimeSpan.FromHours(4);
+    public TimeSpan PollStartLeadTime { get; set; } = TimeSpan.FromMinutes(15);
+    public TimeSpan? LastServiceLocalTime { get; set; }
+    public TimeSpan OperationalPollingStopLocalTime { get; set; } = TimeSpan.FromHours(1);
+    public TimeSpan PollStopGraceTime { get; set; } = TimeSpan.FromMinutes(15);
+    public int MinCoreRevisitSeconds { get; set; } = 300;
+    public int MaxDynamicFollowUpsPerObservation { get; set; } = 1;
+    public int DynamicExpectedTravelMinutes { get; set; } = 8;
+    public int DynamicWindowBeforeMinutes { get; set; } = 3;
+    public int DynamicWindowAfterMinutes { get; set; } = 5;
+    public double CoreCoverageBoost { get; set; } = 25;
+    public double ExpectedTrainBoost { get; set; } = 50;
+    public double BranchResolutionBoost { get; set; } = 15;
+    public double TerminalTransitionBoost { get; set; } = 20;
+    public double TimeSinceLastPollBoostPerMinute { get; set; } = 1;
+    public double EmptyPenalty { get; set; } = 8;
+    public double NoServicePenalty { get; set; } = 20;
 }
 
 public sealed class TremRealtimeCanaryOptions
@@ -67,6 +89,12 @@ public sealed class TremRealtimeOptionsValidator : IValidateOptions<TremRealtime
         if (o.JitterPercent is < 0 or > 100) errors.Add("JitterPercent must be between 0 and 100.");
         if (o.RealtimeHorizonMinutes is <= 0) errors.Add("RealtimeHorizonMinutes, when supplied, must be positive.");
         if (o.GracePeriodSeconds < 0) errors.Add("GracePeriodSeconds cannot be negative.");
+        var s = o.Satellites;
+        if (s.MinCoreRevisitSeconds <= 0 || s.MaxDynamicFollowUpsPerObservation is < 0 or > 2
+            || s.DynamicExpectedTravelMinutes <= 0 || s.DynamicWindowBeforeMinutes < 0
+            || s.DynamicWindowAfterMinutes < 0 || s.PollStartLeadTime < TimeSpan.Zero
+            || s.PollStopGraceTime < TimeSpan.Zero)
+            errors.Add("Satellite acquisition options are invalid.");
         return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
     }
 }

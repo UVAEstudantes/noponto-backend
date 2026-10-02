@@ -9,6 +9,7 @@ using NoPonto.Application.TremRealtime.Scheduling;
 using NoPonto.Application.TremRealtime.Tracking;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremRealtime.Correlation;
+using NoPonto.Application.TremRealtime.RailRuntime;
 using Xunit;
 
 namespace NoPonto.Tests.TremRealtime;
@@ -239,7 +240,7 @@ public sealed class TremRealtimePhase3TrackerTests
         var client = new FakeClient();
         var cycle = new TremRealtimeCanaryCycle(runtime, canary, new FakeCatalog(), new TremSentinelSchedulerEngine(runtime),
             new TremDemandRegistry(runtime), client, new FakeNormalizer([Observation("A", 4)]), state, cycleMetrics,
-            new ThrowingTracker(), trackerMetrics, new NoopTopologyCache(), new NoopCrossObserver(), new TremCrossSentinelMetrics(), clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
+            new ThrowingTracker(), trackerMetrics, new NoopTopologyCache(), new NoopCrossObserver(), new TremCrossSentinelMetrics(), new NoopRailEngine(), clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
 
         await cycle.RunOnceAsync(default);
 
@@ -295,6 +296,11 @@ public sealed class TremRealtimePhase3TrackerTests
     {
         public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc, IReadOnlySet<Guid> liveTrackerIds) { }
         public TremCrossSentinelSnapshot CaptureSnapshot() => new(System.Collections.Immutable.ImmutableDictionary<Guid, System.Collections.Immutable.ImmutableArray<TremSpatialObservationEvidence>>.Empty);
+    }
+    private sealed class NoopRailEngine : IRailRealtimeEngine
+    {
+        public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc) { }
+        public RailRealtimeSnapshot CaptureSnapshot() => RailRealtimeSnapshot.Empty(DateTimeOffset.MinValue);
     }
 
     private sealed class FakeCatalog : ITremSentinelCatalog

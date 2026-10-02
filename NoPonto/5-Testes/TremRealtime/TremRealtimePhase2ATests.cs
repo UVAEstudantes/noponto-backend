@@ -37,12 +37,14 @@ public sealed class TremRealtimePhase2ATests
     }
 
     [Fact]
-    public async Task Catalog_HasOnlyValidRadialUniquePairs_AndNoExtensions()
+    public async Task Catalog_HasValidRadialAndLocalizationUniquePairs_AndNoExtensions()
     {
         var catalog = new TremSentinelCatalog(new DeterministicLookup()); var queries = await catalog.GetAsync();
-        Assert.Equal(10, queries.Count); Assert.Equal(queries.Count, queries.Select(x => x.PairKey).Distinct().Count());
+        Assert.Equal(15, queries.Count); Assert.Equal(queries.Count, queries.Select(x => x.PairKey).Distinct().Count());
         var trunk = Assert.Single(queries, x => x.Id == "TRUNK_OUT"); Assert.True(trunk.Shared); Assert.Equal(5, trunk.StructurallyCoveredLinhaIds.Count); Assert.Equal(3, trunk.ObservedProviderLinhaIds.Count);
         Assert.All(queries, x => { Assert.NotEqual(x.OriginExternalStationId, x.DestinationExternalStationId); Assert.NotEmpty(x.StructurallyCoveredSentidoIds); });
+        Assert.Contains(queries, x => x.Id == "SC_DEODORO_BANGU_OUT" && x.Purpose == TremSentinelPurpose.Core);
+        Assert.Contains(queries, x => x.Id == "SC_CAMPO_TERMINAL_OUT" && x.Purpose == TremSentinelPurpose.Terminal);
         var extensions = new[] { Id("cmprnz4ay0003ow2hvve12oc9"), Id("cmprnz4b60005ow2hcs9xi05b"), Id("cmprnz4bl0008ow2h7f5uh64o") };
         Assert.DoesNotContain(queries.SelectMany(x => x.StructurallyCoveredLinhaIds), extensions.Contains);
     }

@@ -10,6 +10,7 @@ using NoPonto.Application.TremRealtime.Provider;
 using NoPonto.Application.TremRealtime.Scheduling;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremRealtime.Tracking;
+using NoPonto.Application.TremRealtime.RailRuntime;
 using Xunit;
 
 namespace NoPonto.Tests.TremRealtime;
@@ -341,12 +342,13 @@ public sealed class TremRealtimePhase4ATests
         var tracker = new TremRealtimeTracker(Options.Create(new TremRealtimeTrackerOptions()), clock, new());
         var cache = new CountingCache(throwingCache, canceledCache, cancellationSource);
         var observer = new CountingObserver(throwingObserver); var crossMetrics = new TremCrossSentinelMetrics(); var canaryMetrics = new TremRealtimeCanaryMetrics();
-        var cycle = new TremRealtimeCanaryCycle(runtime, canary, new FakeCatalog(), new TremSentinelSchedulerEngine(runtime), new TremDemandRegistry(runtime), client, new FakeNormalizer(), state, canaryMetrics, tracker, new(), cache, observer, crossMetrics, clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
+        var cycle = new TremRealtimeCanaryCycle(runtime, canary, new FakeCatalog(), new TremSentinelSchedulerEngine(runtime), new TremDemandRegistry(runtime), client, new FakeNormalizer(), state, canaryMetrics, tracker, new(), cache, observer, crossMetrics, new NoopRailEngine(), clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
         return new(cycle, client, cache, observer, tracker, crossMetrics, canaryMetrics);
     }
     private sealed record CycleFixture(TremRealtimeCanaryCycle Cycle, FakeClient Client, CountingCache Cache, CountingObserver Observer, TremRealtimeTracker Tracker, TremCrossSentinelMetrics CrossMetrics, TremRealtimeCanaryMetrics CanaryMetrics);
     private sealed class CountingCache(bool throws = false, bool canceled = false, CancellationTokenSource? cancellationSource = null) : ITremPublishedTopologyCache { public int Loads; public Task<TremPublishedTopologySnapshot> GetAsync(CancellationToken ct = default) { Loads++; if (canceled) { cancellationSource!.Cancel(); return Task.FromCanceled<TremPublishedTopologySnapshot>(ct); } return throws ? Task.FromException<TremPublishedTopologySnapshot>(new InvalidOperationException("topology")) : Task.FromResult(TremPublishedTopologySnapshot.Empty); } public Task<TremPublishedTopologySnapshot> ReloadAsync(CancellationToken ct = default) => GetAsync(ct); }
     private sealed class CountingObserver(bool throws) : ITremCrossSentinelObserver { public int Calls; public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc, IReadOnlySet<Guid> liveTrackerIds) { Calls++; if (throws) throw new InvalidOperationException("observer"); } public TremCrossSentinelSnapshot CaptureSnapshot() => new(ImmutableDictionary<Guid, ImmutableArray<TremSpatialObservationEvidence>>.Empty); }
+    private sealed class NoopRailEngine : IRailRealtimeEngine { public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc) { } public RailRealtimeSnapshot CaptureSnapshot() => RailRealtimeSnapshot.Empty(T0); }
     private sealed class FakeClient(TrensRjClientStatus status) : ITrensRjRealtimeClient { public int Requests; public Task<TrensRjClientResult<TrensRjNextEnvelope>> GetNextAsync(TremSentinelPairKey pair, CancellationToken cancellationToken = default) { Requests++; return Task.FromResult(new TrensRjClientResult<TrensRjNextEnvelope>(status, status == TrensRjClientStatus.Success ? new([], null, null, null, null, null, null, null, null, false) : null)); } }
     private sealed class FakeNormalizer : ITremRealtimeNormalizer { public Task<IReadOnlyList<TremRealtimeObservation>> NormalizeAsync(TrensRjNextEnvelope envelope, TremSentinelPairKey pair, DateTimeOffset observedAtUtc, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<TremRealtimeObservation>>([Observation("T", null, null, null)]); }
     private sealed class FakeCatalog : ITremSentinelCatalog { public Task<IReadOnlyList<TremSentinelQuery>> GetAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<TremSentinelQuery>>([Query("TRUNK_OUT", Guid.NewGuid(), Guid.NewGuid())]); public Task ReloadAsync(CancellationToken ct = default) => Task.CompletedTask; }
