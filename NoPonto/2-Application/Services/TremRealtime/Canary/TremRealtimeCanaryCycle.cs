@@ -94,9 +94,10 @@ public sealed class TremRealtimeCanaryCycle(
                 trackerSnapshot = tracker.CaptureSnapshot();
                 var trackerCounters = trackerMetrics.Capture();
                 logger.LogInformation(
-                    "TremTrackerSummary active={Active} stale={Stale} tracked={Tracked} new_total={NewTotal} repeated_total={RepeatedTotal} untrackable_total={UntrackableTotal}",
+                    "TremTrackerSummary active={Active} stale={Stale} tracked={Tracked} new_total={NewTotal} repeated_total={RepeatedTotal} untrackable_total={UntrackableTotal} train_code_external_line_transition_total={ExternalLineTransitions}",
                     trackerSnapshot.Active, trackerSnapshot.Stale, trackerSnapshot.Trains.Length,
-                    trackerCounters.NewTrains, trackerCounters.RepeatedTrains, trackerCounters.UntrackableMissingCode);
+                    trackerCounters.NewTrains, trackerCounters.RepeatedTrains, trackerCounters.UntrackableMissingCode,
+                    trackerCounters.TrainCodeExternalLineTransitionTotal);
             }
             catch (Exception ex)
             {
@@ -181,17 +182,24 @@ public sealed class TremRealtimeCanaryCycle(
                     item.Decision.NextDueUtc);
             }
             logger.LogInformation(
-                "RailScannerSummary probes={Probes} active_pursuits={ActivePursuits} discovery_due={DiscoveryDue} pursuit_due={PursuitDue} calls_used={CallsUsed} call_budget={CallBudget} discovery_polls={DiscoveryPolls} pursuit_polls={PursuitPolls} pursuit_created={PursuitCreated} pursuit_matched={PursuitMatched} pursuit_missed={PursuitMissed} pursuit_expired={PursuitExpired} headway_suppressed={HeadwaySuppressed} woken_by_pursuit={WokenByPursuit} useful={Useful} scanner_provider_departures_total={ProviderDepartures} scanner_target_departures_total={TargetDepartures} scanner_off_target_departures_total={OffTargetDepartures}",
+                "RailScannerSummary probes={Probes} active_pursuits={ActivePursuits} discovery_due={DiscoveryDue} pursuit_due={PursuitDue} discovery_due_outbound={DiscoveryDueOutbound} discovery_due_inbound={DiscoveryDueInbound} calls_used={CallsUsed} call_budget={CallBudget} discovery_polls={DiscoveryPolls} pursuit_polls={PursuitPolls} pursuit_created={PursuitCreated} pursuit_matched={PursuitMatched} pursuit_missed={PursuitMissed} pursuit_expired={PursuitExpired} headway_suppressed={HeadwaySuppressed} woken_by_pursuit={WokenByPursuit} useful={Useful} scanner_provider_departures_total={ProviderDepartures} scanner_target_departures_total={TargetDepartures} scanner_off_target_departures_total={OffTargetDepartures} scanner_target_hit_total={TargetHits} scanner_target_miss_total={TargetMisses} scanner_backoff_applied_total={BackoffApplied} scanner_backoff_reset_total={BackoffReset} scanner_max_backoff_reached_total={MaxBackoffReached} positions_available={PositionsAvailable}",
                 satellite.ScannerProbeCount, satellite.ScannerActivePursuits,
                 candidates.Count(x => x.Query.IsScannerProbe && x.Decision.Breakdown.DiscoveryDueBoost > 0),
                 candidates.Count(x => x.Query.IsScannerProbe && x.Decision.Breakdown.ActivePursuitBoost > 0),
+                candidates.Count(x => x.Query.IsScannerProbe && x.Query.ScannerDirection == "OUTBOUND"
+                    && x.Decision.Breakdown.DiscoveryDueBoost > 0),
+                candidates.Count(x => x.Query.IsScannerProbe && x.Query.ScannerDirection == "INBOUND"
+                    && x.Decision.Breakdown.DiscoveryDueBoost > 0),
                 state.RequestCount, canary.MaxRequestsPerRun,
                 satellite.ScannerDiscoveryPollTotal, satellite.ScannerPursuitPollTotal,
                 satellite.ScannerPursuitCreated, satellite.ScannerPursuitMatched,
                 satellite.ScannerPursuitMissed, satellite.ScannerPursuitExpired,
                 satellite.ScannerHeadwaySuppressed, satellite.ScannerWokenByPursuit,
                 satellite.ScannerUsefulTotal, satellite.ScannerProviderDeparturesTotal,
-                satellite.ScannerTargetDeparturesTotal, satellite.ScannerOffTargetDeparturesTotal);
+                satellite.ScannerTargetDeparturesTotal, satellite.ScannerOffTargetDeparturesTotal,
+                satellite.ScannerTargetHitTotal, satellite.ScannerTargetMissTotal,
+                satellite.ScannerBackoffAppliedTotal, satellite.ScannerBackoffResetTotal,
+                satellite.ScannerMaxBackoffReachedTotal, rail.RailPositionAvailable);
         }
     }
 
