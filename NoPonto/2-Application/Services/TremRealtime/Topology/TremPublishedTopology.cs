@@ -157,7 +157,10 @@ public static class TremSentinelTopologyResolver
 {
     public static TremSentinelTopology Resolve(TremPublishedTopologySnapshot snapshot, TremSentinelQuery sentinel)
     {
-        var anchors = snapshot.Patterns.SelectMany(pattern =>
+        var patterns = sentinel.IsScannerProbe && sentinel.ScannerPadraoVersaoId is { } pinnedVersion
+            ? snapshot.Patterns.Where(x => x.PadraoVersaoId == pinnedVersion)
+            : snapshot.Patterns;
+        var anchors = patterns.SelectMany(pattern =>
             pattern.Occurrences.Where(x => x.ParadaId == sentinel.OriginParadaId)
                 .SelectMany(origin => pattern.Occurrences.Where(x => x.ParadaId == sentinel.DestinationParadaId && x.Order > origin.Order)
                     .Select(destination => new TremSentinelPatternAnchor(pattern.PadraoVersaoId, origin.OccurrenceId,

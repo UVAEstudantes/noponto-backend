@@ -18,6 +18,7 @@ public interface ITremSentinelSchedulerEngine
 
 public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> options) : ITremSentinelSchedulerEngine
 {
+    private const int MaxConsecutiveScannerPollsPerDirection = 2;
     private sealed record ExpectedWindow(DateTimeOffset Start, DateTimeOffset Center, DateTimeOffset End, string? TrainCode);
     private sealed record SatelliteState(int EmptyCount, int NoServiceCount, ExpectedWindow? Expected,
         DateTimeOffset? FirstEvaluatedUtc, DateTimeOffset? LastUsefulObservationUtc,
@@ -30,6 +31,8 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
     private readonly Dictionary<string, SatelliteState> _satellites = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PursuitState> _pursuits = new(StringComparer.Ordinal);
     private readonly TremSatelliteMetrics _metrics = new();
+    private string? _lastScannerPollDirection;
+    private int _consecutiveScannerDirectionPolls;
 
     public bool IsWithinOperationalWindow(DateTimeOffset now)
     {
@@ -62,6 +65,16 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
                 _metrics.ScannerDepartures(providerDepartureCount, observations.Count);
             CleanupPursuits(now);
             _metrics.Poll();
+            if (query.IsScannerProbe)
+            {
+                if (string.Equals(_lastScannerPollDirection, query.ScannerDirection, StringComparison.Ordinal))
+                    _consecutiveScannerDirectionPolls++;
+                else
+                {
+                    _lastScannerPollDirection = query.ScannerDirection;
+                    _consecutiveScannerDirectionPolls = 1;
+                }
+            }
             var current = GetState(query.Id);
             var pursuitKeys = _pursuits.Where(x => x.Value.TargetProbeId == query.Id
                     && x.Value.DueUtc <= now && x.Value.ExpiresUtc >= now)
@@ -244,6 +257,19 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
     public TremDueSelection SelectDueQueries(DateTimeOffset now, IEnumerable<(TremSentinelQuery Query, TremSentinelDecision Decision)> candidates, int availableBudget)
     {
         var due = candidates.Where(x => x.Decision.ShouldPoll).OrderByDescending(x => x.Decision.Priority).ThenBy(x => x.Query.Id, StringComparer.Ordinal).ToArray();
+        lock (_gate)
+        {
+            if (due.Length > 1 && _consecutiveScannerDirectionPolls >= MaxConsecutiveScannerPollsPerDirection
+                && _lastScannerPollDirection is not null && due[0].Query.IsScannerProbe
+                && string.Equals(due[0].Query.ScannerDirection, _lastScannerPollDirection, StringComparison.Ordinal))
+            {
+                var oppositeIndex = Array.FindIndex(due, x => x.Query.IsScannerProbe
+                    && !string.Equals(x.Query.ScannerDirection, _lastScannerPollDirection,
+                        StringComparison.Ordinal));
+                if (oppositeIndex > 0)
+                    (due[0], due[oppositeIndex]) = (due[oppositeIndex], due[0]);
+            }
+        }
         var selected = due.Take(Math.Max(0, availableBudget)).ToArray();
         var deferred = due.Skip(selected.Length).Select(x => (x.Query, Decision(false, now.AddSeconds(options.Value.MinPollSeconds), TremSentinelState.Due, TremSentinelReason.RateBudgetDeferred, x.Query, 0, 0, 0, 0, now))).ToArray();
         return new(selected, deferred);

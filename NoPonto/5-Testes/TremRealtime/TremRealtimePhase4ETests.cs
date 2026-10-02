@@ -192,6 +192,90 @@ public sealed class TremRealtimePhase4ETests
     }
 
     [Fact]
+    public void BidirectionalFairness_WithContinuousInboundPursuitsBoundsOutboundStarvation()
+    {
+        var scheduler = Scheduler();
+        var inbound = Mesh("IN", "INBOUND", 17);
+        var outbound = Mesh("OUT", "OUTBOUND", 17);
+        var probes = inbound.Concat(outbound).ToList();
+        scheduler.ObserveResult(T0, inbound[0], [Observation("US182", 1, "line")],
+            TrensRjClientStatus.Success, probes, T0);
+        var clock = new ManualClock(T0);
+        var limiter = new NoPonto.Application.TremRealtime.Canary.TremRealtimeCanaryState(
+            Options.Create(new TremRealtimeCanaryOptions
+            { MaxRequestsPerMinute = 4, MaxConcurrency = 1, MaxRequestsPerRun = 100 }), clock);
+        var directions = new List<string>();
+
+        for (var tick = 1; directions.Count < 20; tick++)
+        {
+            var now = T0.AddSeconds(tick * 15);
+            clock.Now = now;
+            var selected = scheduler.SelectDueQueries(now,
+                probes.Select(q => (q, Evaluate(scheduler, q, now))), 1).Selected;
+            if (selected.Count == 0 || limiter.TryAcquireRequest() !=
+                NoPonto.Application.TremRealtime.Canary.TremCanaryPermitStatus.Allowed) continue;
+            var query = selected[0].Query;
+            directions.Add(query.ScannerDirection!);
+            IReadOnlyList<TremRealtimeObservation> observations = query.ScannerDirection == "INBOUND"
+                ? new[] { Observation("US182", 2 + directions.Count, "line") }
+                : [];
+            scheduler.ObserveResult(now, query, observations, TrensRjClientStatus.Success, probes, now);
+            var index = probes.FindIndex(x => x.Id == query.Id);
+            probes[index] = query with { LastPollUtc = now };
+        }
+
+        Assert.True(directions.Count(x => x == "INBOUND") > directions.Count(x => x == "OUTBOUND"));
+        Assert.True(directions.Count(x => x == "OUTBOUND") > 0);
+        Assert.True(MaxConsecutive(directions) <= 2);
+        Assert.Equal(20, directions.Count);
+    }
+
+    [Fact]
+    public void InboundScannerPinnedBase_IgnoresCompatibleSpecialPatternAndCreatesThreeAnchors()
+    {
+        var clock = new ManualClock(T0);
+        var tracker = new TremRealtimeTracker(Options.Create(new TremRealtimeTrackerOptions()), clock,
+            new TremRealtimeTrackerMetrics());
+        var lineId = Guid.NewGuid();
+        var sentidoId = Guid.NewGuid();
+        var basePattern = LinearPattern(lineId, sentidoId, Guid.NewGuid(), "IN", 4);
+        var specialPattern = new TremPatternTopology(Guid.NewGuid(), Guid.NewGuid(), lineId, sentidoId,
+            basePattern.Occurrences.Select(x => new TremTopologyOccurrence(Guid.NewGuid(), x.Order, x.ParadaId)
+            {
+                ExternalStationId = x.ExternalStationId,
+                DistanceAlongPatternMetres = x.DistanceAlongPatternMetres
+            }).ToImmutableArray()) { LengthMetres = basePattern.LengthMetres };
+        var topology = new TremPublishedTopologySnapshot(T0, [basePattern, specialPattern]);
+        var probes = Enumerable.Range(0, 3).Select(index => ProbeForPattern(
+            $"SCAN_SC_IN_{index:D3}_{index + 1:D3}", "INBOUND", basePattern, index)).ToArray();
+        var engine = new RailRealtimeEngine(Options.Create(new RailRealtimeOptions
+        {
+            DefaultStationDwellSeconds = 0, RealtimeFreshnessSeconds = 1_800,
+            MaxVehicles = 8, MaxRuns = 8, MaxAnchorsPerRun = 16
+        }), clock);
+        Guid? trackerId = null;
+
+        for (var index = 0; index < probes.Length; index++)
+        {
+            clock.Now = T0.AddMinutes(index);
+            var accepted = tracker.ObserveBatch("TRENS_RJ", probes[index].Id,
+                [Observation("US182", 3 + index * 5, "line")]);
+            trackerId ??= accepted.Single().TrackerId;
+            Assert.Equal(trackerId, accepted.Single().TrackerId);
+            engine.Observe(probes[index], accepted, topology, clock.Now, clock.Now);
+        }
+
+        var snapshot = engine.CaptureSnapshot();
+        Assert.Single(snapshot.Vehicles);
+        var run = Assert.Single(snapshot.Runs);
+        Assert.Equal(basePattern.PadraoVersaoId, run.PadraoVersaoId);
+        Assert.Equal(3, run.Anchors.Length);
+        Assert.NotNull(run.Position);
+        Assert.Single(snapshot.PublicVehicles);
+        Assert.Equal(1, engine.CaptureMetrics().TrainMultiSatelliteTotal);
+    }
+
+    [Fact]
     public void OppositeDirectionsKeepIndependentPursuitsAndTrackerIdentities()
     {
         var scheduler = Scheduler();
@@ -385,6 +469,51 @@ public sealed class TremRealtimePhase4ETests
             }).ToImmutableArray();
         return new(patternId, Guid.NewGuid(), lineId, directionId, occurrences)
         { LengthMetres = 34_000 };
+    }
+
+    private static TremPatternTopology LinearPattern(Guid lineId, Guid sentidoId,
+        Guid padraoOperacionalId, string prefix, int count)
+    {
+        var occurrences = Enumerable.Range(0, count).Select(index =>
+            new TremTopologyOccurrence(Guid.NewGuid(), index + 1, Guid.NewGuid())
+            {
+                ExternalStationId = $"{prefix}-{index}",
+                DistanceAlongPatternMetres = index * 1_000
+            }).ToImmutableArray();
+        return new(padraoOperacionalId, Guid.NewGuid(), lineId, sentidoId, occurrences)
+        { LengthMetres = (count - 1) * 1_000 };
+    }
+
+    private static TremSentinelQuery ProbeForPattern(string id, string direction,
+        TremPatternTopology pattern, int originIndex)
+    {
+        var origin = pattern.Occurrences[originIndex];
+        var destination = pattern.Occurrences[originIndex + 1];
+        return new(id, new(origin.ExternalStationId!, destination.ExternalStationId!),
+            origin.ExternalStationId!, destination.ExternalStationId!, origin.ParadaId, destination.ParadaId,
+            new HashSet<Guid> { pattern.LinhaId }, new HashSet<Guid> { pattern.SentidoId },
+            new HashSet<Guid> { pattern.PadraoOperacionalId }, new HashSet<Guid>(),
+            TremSentinelPurpose.Dynamic, 40, "test", false, TremSentinelState.Dormant)
+        {
+            IsScannerProbe = true, ScannerExternalLineId = "line", ScannerDirection = direction,
+            ScannerPadraoVersaoId = pattern.PadraoVersaoId,
+            OriginOccurrenceId = origin.OccurrenceId, DestinationOccurrenceId = destination.OccurrenceId,
+            ScannerSequenceIndex = originIndex
+        };
+    }
+
+    private static int MaxConsecutive(IReadOnlyList<string> values)
+    {
+        var maximum = 0;
+        var current = 0;
+        string? previous = null;
+        foreach (var value in values)
+        {
+            current = string.Equals(previous, value, StringComparison.Ordinal) ? current + 1 : 1;
+            maximum = Math.Max(maximum, current);
+            previous = value;
+        }
+        return maximum;
     }
 
     private static TremRealtimeObservation Observation(string trainCode, int minutes, string line) => new(
