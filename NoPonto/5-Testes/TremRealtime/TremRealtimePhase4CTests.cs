@@ -76,6 +76,68 @@ public sealed class TremRealtimePhase4CTests
     }
 
     [Fact]
+    public void RealCanarySequence_RepeatedUpstreamEvidenceCannotStarveDownstreamFollowup()
+    {
+        var scheduler = Scheduler();
+        var demand = new Demand();
+        var line = Guid.NewGuid();
+        var upstream = Query("SC_DEODORO_BANGU_OUT", line, TremSentinelPurpose.Core, 85) with
+        {
+            DownstreamSatelliteIds = new HashSet<string>(["SC_BANGU_CAMPO_OUT"], StringComparer.Ordinal)
+        };
+        var downstream = Query("SC_BANGU_CAMPO_OUT", line, TremSentinelPurpose.Localization, 80);
+        var terminal = Query("SC_CAMPO_TERMINAL_OUT", line, TremSentinelPurpose.Terminal, 90);
+        var catalog = new[] { upstream, downstream, terminal };
+        var selected = new List<(DateTimeOffset At, string Id, double ExpectedBoost)>();
+
+        for (var minute = 0; minute <= 11; minute++)
+        {
+            var now = Inside.AddMinutes(minute);
+            var candidates = catalog.Select(query =>
+                (query, scheduler.Evaluate(now, query, demand, [], TremSchedulingMode.CanaryObservation,
+                    TimeSpan.FromMinutes(1)))).ToArray();
+            var choice = Assert.Single(scheduler.SelectDueQueries(now, candidates, availableBudget: 1).Selected);
+            selected.Add((now, choice.Query.Id, choice.Decision.Breakdown.ExpectedTrainBoost));
+            Assert.Single(scheduler.SelectDueQueries(now, candidates, availableBudget: 1).Selected);
+
+            catalog[Array.FindIndex(catalog, x => x.Id == choice.Query.Id)] = choice.Query with
+            {
+                LastPollUtc = now,
+                LastSuccessUtc = now,
+                State = TremSentinelState.Active
+            };
+
+            if (minute == 0)
+                scheduler.ObserveResult(now, choice.Query, [Observation(7, "US151")],
+                    TrensRjClientStatus.Success, catalog);
+            else if (minute == 5)
+                scheduler.ObserveResult(now, choice.Query, [Observation(1, "US151")],
+                    TrensRjClientStatus.Success, catalog);
+            else
+                scheduler.ObserveResult(now, choice.Query, [Observation(2, "US149")],
+                    TrensRjClientStatus.Success, catalog);
+        }
+
+        Assert.Equal("SC_DEODORO_BANGU_OUT", selected[0].Id);
+        Assert.Contains(selected.Skip(1).Take(4), item => item.Id == "SC_CAMPO_TERMINAL_OUT");
+        Assert.Equal("SC_DEODORO_BANGU_OUT", selected[5].Id);
+        var downstreamSelection = Assert.Single(selected, item => item.Id == "SC_BANGU_CAMPO_OUT");
+        Assert.Equal(Inside.AddMinutes(11), downstreamSelection.At);
+        Assert.Equal(50, downstreamSelection.ExpectedBoost);
+        Assert.All(selected.GroupBy(item => item.At), group => Assert.Single(group));
+
+        var createdBeforeWorseEvidence = scheduler.CaptureSatelliteMetrics().DynamicFollowupCreated;
+        for (var i = 0; i < 100; i++)
+            scheduler.ObserveResult(Inside.AddMinutes(6), catalog[0], [Observation(7, "US151")],
+                TrensRjClientStatus.Success, catalog);
+        Assert.Equal(createdBeforeWorseEvidence, scheduler.CaptureSatelliteMetrics().DynamicFollowupCreated);
+
+        var expired = scheduler.Evaluate(Inside.AddMinutes(20), catalog[1], demand, [],
+            TremSchedulingMode.CanaryObservation, TimeSpan.FromMinutes(1));
+        Assert.Equal(0, expired.Breakdown.ExpectedTrainBoost);
+    }
+
+    [Fact]
     public void FirstServiceAnchor_ClassifiesCandidateButNeverCreatesPhysicalTrain()
     {
         var line = Guid.NewGuid(); var direction = Guid.NewGuid(); var pattern = Guid.NewGuid();
@@ -148,7 +210,7 @@ public sealed class TremRealtimePhase4CTests
         new HashSet<Guid> { line }, new HashSet<Guid> { Guid.NewGuid() }, new HashSet<Guid> { Guid.NewGuid() },
         new HashSet<Guid>(), purpose, weight, "test", false, TremSentinelState.Dormant);
 
-    private static TremRealtimeObservation Observation(int minutes) => new(Inside, "O", "D", "US195", null,
+    private static TremRealtimeObservation Observation(int minutes, string trainCode = "US195") => new(Inside, "O", "D", trainCode, null,
         null, null, TremDirectionResolution.Resolved, null, "expresso", null, minutes, null, null, null, null, null);
 
     private static RailTemporalAnchor Anchor(Guid tracker, string sentinel, TremPatternTopology pattern,
