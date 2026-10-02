@@ -25,6 +25,28 @@ public sealed class TremRealtimeOptions
     public bool ShadowHistoricalEnabled { get; set; }
     public int GracePeriodSeconds { get; set; } = 180;
     public TremSatelliteOptions Satellites { get; set; } = new();
+    public TremScannerOptions Scanner { get; set; } = new();
+}
+
+public sealed class TremScannerOptions
+{
+    public bool Enabled { get; set; }
+    public string TargetExternalLineId { get; set; } = "cmprnz4bb0006ow2h1apjp25v";
+    public bool IncludeOutbound { get; set; } = true;
+    public bool IncludeInbound { get; set; } = true;
+    public int DiscoveryStrideOccurrences { get; set; } = 2;
+    public int FixedHeadwayMinutes { get; set; } = 18;
+    public int HeadwayWakeLeadMinutes { get; set; } = 5;
+    public int MaxDownstreamPursuitProbes { get; set; } = 1;
+    public int PursuitInitialDelaySeconds { get; set; } = 15;
+    public int PursuitRetrySeconds { get; set; } = 30;
+    public int MaxPursuitAttemptsPerProbe { get; set; } = 2;
+    public int PursuitTtlMinutes { get; set; } = 30;
+    public double DiscoveryDueBoost { get; set; } = 60;
+    public double CoverageAgeBoostPerMinute { get; set; } = 1;
+    public double ActivePursuitBoost { get; set; } = 100;
+    public double HeadwayCooldownPenalty { get; set; } = 100;
+    public double RecentPollPenalty { get; set; } = 10;
 }
 
 public sealed class TremSatelliteOptions
@@ -112,6 +134,14 @@ public sealed class TremRealtimeOptionsValidator : IValidateOptions<TremRealtime
             || s.DynamicWindowAfterMinutes < 0 || s.PollStartLeadTime < TimeSpan.Zero
             || s.PollStopGraceTime < TimeSpan.Zero)
             errors.Add("Satellite acquisition options are invalid.");
+        var scanner = o.Scanner;
+        if (string.IsNullOrWhiteSpace(scanner.TargetExternalLineId)
+            || scanner.DiscoveryStrideOccurrences <= 0 || scanner.FixedHeadwayMinutes <= 0
+            || scanner.HeadwayWakeLeadMinutes < 0 || scanner.HeadwayWakeLeadMinutes >= scanner.FixedHeadwayMinutes
+            || scanner.MaxDownstreamPursuitProbes is < 0 or > 2
+            || scanner.PursuitInitialDelaySeconds < 0 || scanner.PursuitRetrySeconds <= 0
+            || scanner.MaxPursuitAttemptsPerProbe <= 0 || scanner.PursuitTtlMinutes <= 0)
+            errors.Add("Adaptive scanner options are invalid.");
         return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
     }
 }

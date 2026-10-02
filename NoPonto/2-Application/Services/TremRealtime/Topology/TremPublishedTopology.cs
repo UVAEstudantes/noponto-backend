@@ -1,12 +1,14 @@
 using System.Collections.Immutable;
 using Microsoft.EntityFrameworkCore;
 using NoPonto.Application.TremRealtime.Scheduling;
+using NoPonto.Application.TremV2;
 
 namespace NoPonto.Application.TremRealtime.Topology;
 
 public sealed record TremTopologyOccurrence(Guid OccurrenceId, int Order, Guid ParadaId)
 {
     public double DistanceAlongPatternMetres { get; init; }
+    public string? ExternalStationId { get; init; }
 }
 public sealed record TremPatternTopology(Guid PadraoOperacionalId, Guid PadraoVersaoId, Guid LinhaId,
     Guid SentidoId, ImmutableArray<TremTopologyOccurrence> Occurrences)
@@ -39,6 +41,11 @@ public sealed class EfTremPublishedTopologySource(IServiceScopeFactory scopeFact
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
+        var externalStations = await db.ParadasIdentidadesExternas.AsNoTracking()
+            .Where(x => x.FonteEstrutural.Codigo == TremStructuralImportService.SourceCode && x.Tipo == "STATION_ID")
+            .Select(x => new { x.ParadaId, x.ExternalId }).ToArrayAsync(ct);
+        var externalByStop = externalStations.GroupBy(x => x.ParadaId)
+            .ToDictionary(x => x.Key, x => x.Select(y => y.ExternalId).Distinct(StringComparer.Ordinal).Single());
         var rows = await db.OcorrenciasParadasPadroes.AsNoTracking()
             .Where(x => x.PadraoVersao.PadraoOperacional.VersaoAtualId == x.PadraoVersaoId
                 && x.PadraoVersao.PadraoOperacional.Sentido.Linha.Modal.Nome == "Trem")
@@ -54,7 +61,8 @@ public sealed class EfTremPublishedTopologySource(IServiceScopeFactory scopeFact
             .Select(x => new TremPatternTopology(x.Key.PadraoOperacionalId, x.Key.PadraoVersaoId, x.Key.LinhaId,
                 x.Key.SentidoId, x.OrderBy(y => y.Ordem).Select(y => new TremTopologyOccurrence(y.Id, y.Ordem, y.ParadaId)
                 {
-                    DistanceAlongPatternMetres = y.DistanciaAcumuladaMetros
+                    DistanceAlongPatternMetres = y.DistanciaAcumuladaMetros,
+                    ExternalStationId = externalByStop.GetValueOrDefault(y.ParadaId)
                 }).ToImmutableArray())
             {
                 LengthMetres = x.First().ComprimentoMetros

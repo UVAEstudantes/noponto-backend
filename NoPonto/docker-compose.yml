@@ -111,6 +111,18 @@ services:
       TremRealtime__Canary__AllowedSentinelIds__2: ${TremRealtime__Canary__AllowedSentinelIds__2:-}
       TremRealtime__Canary__AllowedSentinelIds__3: ${TremRealtime__Canary__AllowedSentinelIds__3:-}
       TremRealtime__Canary__AllowedSentinelIds__4: ${TremRealtime__Canary__AllowedSentinelIds__4:-}
+      TremRealtime__Scanner__Enabled: ${TremRealtime__Scanner__Enabled:-false}
+      TremRealtime__Scanner__TargetExternalLineId: ${TremRealtime__Scanner__TargetExternalLineId:-cmprnz4bb0006ow2h1apjp25v}
+      TremRealtime__Scanner__IncludeOutbound: ${TremRealtime__Scanner__IncludeOutbound:-true}
+      TremRealtime__Scanner__IncludeInbound: ${TremRealtime__Scanner__IncludeInbound:-true}
+      TremRealtime__Scanner__DiscoveryStrideOccurrences: ${TremRealtime__Scanner__DiscoveryStrideOccurrences:-2}
+      TremRealtime__Scanner__FixedHeadwayMinutes: ${TremRealtime__Scanner__FixedHeadwayMinutes:-18}
+      TremRealtime__Scanner__HeadwayWakeLeadMinutes: ${TremRealtime__Scanner__HeadwayWakeLeadMinutes:-5}
+      TremRealtime__Scanner__MaxDownstreamPursuitProbes: ${TremRealtime__Scanner__MaxDownstreamPursuitProbes:-1}
+      TremRealtime__Scanner__PursuitInitialDelaySeconds: ${TremRealtime__Scanner__PursuitInitialDelaySeconds:-15}
+      TremRealtime__Scanner__PursuitRetrySeconds: ${TremRealtime__Scanner__PursuitRetrySeconds:-30}
+      TremRealtime__Scanner__MaxPursuitAttemptsPerProbe: ${TremRealtime__Scanner__MaxPursuitAttemptsPerProbe:-2}
+      TremRealtime__Scanner__PursuitTtlMinutes: ${TremRealtime__Scanner__PursuitTtlMinutes:-30}
 
       TelemetriaMlSampling__Enabled: ${TelemetriaMlSampling__Enabled:-false}
       TelemetriaMlSampling__LinePercentage: ${TelemetriaMlSampling__LinePercentage:-10}
