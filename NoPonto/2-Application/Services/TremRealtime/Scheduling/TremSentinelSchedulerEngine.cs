@@ -17,8 +17,9 @@ public interface ITremSentinelSchedulerEngine
 
 public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> options) : ITremSentinelSchedulerEngine
 {
-    private sealed record ExpectedWindow(DateTimeOffset Start, DateTimeOffset End);
-    private sealed record SatelliteState(int EmptyCount, int NoServiceCount, ExpectedWindow? Expected);
+    private sealed record ExpectedWindow(DateTimeOffset Start, DateTimeOffset Center, DateTimeOffset End, string? TrainCode);
+    private sealed record SatelliteState(int EmptyCount, int NoServiceCount, ExpectedWindow? Expected,
+        DateTimeOffset? FirstEvaluatedUtc);
     private readonly object _gate = new();
     private readonly Dictionary<string, SatelliteState> _satellites = new(StringComparer.Ordinal);
     private readonly TremSatelliteMetrics _metrics = new();
@@ -67,14 +68,23 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
                 .Take(max).ToArray();
             foreach (var followup in followups)
             {
-                var eta = observations.Where(x => x.MinutesUntil is >= 0).Select(x => x.MinutesUntil!.Value)
-                    .DefaultIfEmpty(0).Min();
+                var anchor = observations.Where(x => x.MinutesUntil is >= 0)
+                    .OrderBy(x => x.MinutesUntil).FirstOrDefault();
+                var eta = anchor?.MinutesUntil ?? 0;
                 var center = now.AddMinutes(eta + options.Value.Satellites.DynamicExpectedTravelMinutes);
                 var state = GetState(followup.Id);
-                _satellites[followup.Id] = state with { Expected = new(
+                var proposed = new ExpectedWindow(
                     center.AddMinutes(-options.Value.Satellites.DynamicWindowBeforeMinutes),
-                    center.AddMinutes(options.Value.Satellites.DynamicWindowAfterMinutes)) };
-                _metrics.DynamicCreated();
+                    center,
+                    center.AddMinutes(options.Value.Satellites.DynamicWindowAfterMinutes),
+                    anchor?.TrainCode);
+                // Keep the earliest coherent opportunity. Repeated upstream observations may
+                // improve it, but cannot indefinitely push an unpolled downstream satellite away.
+                if (state.Expected is null || now > state.Expected.End || proposed.Center < state.Expected.Center)
+                {
+                    _satellites[followup.Id] = state with { Expected = proposed };
+                    _metrics.DynamicCreated();
+                }
             }
         }
     }
@@ -136,14 +146,26 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
     private TremSentinelDecision Decision(bool poll, DateTimeOffset? next, TremSentinelState state, TremSentinelReason reason, TremSentinelQuery q, int demandedLines, double urgency, double active, double failure, DateTimeOffset now)
     {
         SatelliteState satellite;
-        lock (_gate) satellite = GetState(q.Id);
+        lock (_gate)
+        {
+            satellite = GetState(q.Id);
+            if (q.LastPollUtc is null && satellite.FirstEvaluatedUtc is null)
+            {
+                satellite = satellite with { FirstEvaluatedUtc = now };
+                _satellites[q.Id] = satellite;
+            }
+        }
         var config = options.Value.Satellites;
         var expected = satellite.Expected is { } window && now >= window.Start && now <= window.End;
         if (satellite.Expected is { } expired && now > expired.End) { lock (_gate) _satellites[q.Id] = satellite with { Expected = null }; _metrics.DynamicExpired(); }
-        var minutes = q.LastPollUtc is { } last ? Math.Max(0, (now - last).TotalMinutes) : config.MinCoreRevisitSeconds / 60d;
+        var minutes = q.LastPollUtc is { } last
+            ? Math.Max(0, (now - last).TotalMinutes)
+            : Math.Max(0, (now - satellite.FirstEvaluatedUtc!.Value).TotalMinutes);
         var breakdown = new TremPriorityBreakdown(q.BaseWeight, demandedLines * 15, urgency, active, q.StructurallyCoveredLinhaIds.Count * 5, failure, 0)
         {
-            CoreCoverageBoost = q.Purpose == TremSentinelPurpose.Core && minutes >= config.MinCoreRevisitSeconds / 60d ? config.CoreCoverageBoost : 0,
+            CoreCoverageBoost = q.Purpose == TremSentinelPurpose.Core
+                && (q.LastPollUtc is null || minutes >= config.MinCoreRevisitSeconds / 60d)
+                ? config.CoreCoverageBoost : 0,
             ExpectedTrainBoost = expected ? config.ExpectedTrainBoost : 0,
             BranchResolutionBoost = q.Purpose == TremSentinelPurpose.Branch ? config.BranchResolutionBoost : 0,
             TerminalTransitionBoost = q.Purpose == TremSentinelPurpose.Terminal && expected ? config.TerminalTransitionBoost : 0,
@@ -158,7 +180,8 @@ public sealed class TremSentinelSchedulerEngine(IOptions<TremRealtimeOptions> op
         return new(poll, next, state, reason, poll ? Math.Max(0, breakdown.Total + satelliteAdjustment) : 0, breakdown);
     }
 
-    private SatelliteState GetState(string id) => _satellites.TryGetValue(id, out var value) ? value : new(0, 0, null);
+    private SatelliteState GetState(string id) => _satellites.TryGetValue(id, out var value)
+        ? value : new(0, 0, null, null);
 }
 
 public sealed record TremSatelliteMetricsSnapshot(long SatellitePollTotal, long SatelliteUsefulTotal,
