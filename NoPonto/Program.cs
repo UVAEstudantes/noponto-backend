@@ -30,6 +30,7 @@ using NoPonto.Application.TremRealtime.Tracking;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremRealtime.Correlation;
 using NoPonto.Application.TremRealtime.RailRuntime;
+using NoPonto.Application.TremSchedule;
 
 Env.NoClobber().Load();
 
@@ -42,6 +43,12 @@ if (StructuralImportCommand.IsRequested(args))
 if (TremStructuralImportCommand.IsRequested(args))
 {
     Environment.ExitCode = await TremStructuralImportCommand.ExecuteAsync(args);
+    return;
+}
+
+if (RailScheduleImportCommand.IsRequested(args))
+{
+    Environment.ExitCode = await RailScheduleImportCommand.ExecuteAsync(args);
     return;
 }
 
@@ -515,6 +522,7 @@ builder.Services.AddHostedService<GpsStructuralHintMetricsReporter>();
 
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 builder.Services.AddScoped<IEstruturaLeituraV2Repository, EstruturaLeituraV2Repository>();
+builder.Services.AddScoped<RailScheduleRepository>();
 // TEMPORARY FRONTEND COMPATIBILITY: removable adapter for the current APK.
 builder.Services.AddScoped<NoPonto.Application.LegacyCompatibility.Services.IFrontendLegacyMapaService,
     NoPonto.Application.LegacyCompatibility.Services.FrontendLegacyMapaService>();
