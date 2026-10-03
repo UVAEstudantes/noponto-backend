@@ -203,6 +203,145 @@ public sealed class GpsSppoCollectorTests
         Assert.Same(lote, snapshot.Ler());
     }
 
+    [Fact]
+    public async Task SemWatermark_UsaSomenteJanelaInicial()
+    {
+        var agora = DateTimeOffset.Parse("2026-10-03T12:00:00Z");
+        var requisicoes = new List<Uri>();
+        var collector = NovoColetor(request =>
+        {
+            requisicoes.Add(request.RequestUri!);
+            return Task.FromResult(Resposta(HttpStatusCode.OK, "[]"));
+        }, out _);
+
+        await collector.ColetarUmaVezAsync(agora);
+
+        AssertJanela(requisicoes.Single(), agora.AddSeconds(-20), agora);
+        Assert.Null(collector.WatermarkConfirmado);
+    }
+
+    [Fact]
+    public async Task WatermarkRecente_UsaOverlapAteAgora()
+    {
+        var watermark = DateTimeOffset.Parse("2026-10-03T12:00:00Z");
+        var requisicoes = new List<Uri>();
+        var collector = NovoColetor(request =>
+        {
+            requisicoes.Add(request.RequestUri!);
+            return Task.FromResult(Resposta(HttpStatusCode.OK, Json(watermark)));
+        }, out var snapshot);
+        await collector.ColetarUmaVezAsync(watermark.AddSeconds(20));
+        snapshot.Confirmar(snapshot.Ler()!.Geracao);
+
+        await collector.ColetarUmaVezAsync(watermark.AddSeconds(30));
+
+        AssertJanela(requisicoes[1], watermark.AddSeconds(-10), watermark.AddSeconds(30));
+    }
+
+    [Fact]
+    public async Task LagRecuperavel_AvancaEmChunksLimitadosComOverlap()
+    {
+        var watermark = DateTimeOffset.Parse("2026-10-03T12:00:00Z");
+        var requisicoes = new List<Uri>();
+        var chamada = 0;
+        var collector = NovoColetor(request =>
+        {
+            requisicoes.Add(request.RequestUri!);
+            var servidor = chamada++ == 0 ? watermark : watermark.AddSeconds(60);
+            return Task.FromResult(Resposta(HttpStatusCode.OK, Json(servidor)));
+        }, out var snapshot);
+        await collector.ColetarUmaVezAsync(watermark.AddSeconds(20));
+        snapshot.Confirmar(snapshot.Ler()!.Geracao);
+
+        await collector.ColetarUmaVezAsync(watermark.AddMinutes(3));
+
+        AssertJanela(requisicoes[1], watermark.AddSeconds(-10), watermark.AddSeconds(60));
+        Assert.Equal(watermark.AddSeconds(60), collector.WatermarkConfirmado);
+    }
+
+    [Fact]
+    public async Task LagExcessivo_FazFastForwardComJanelaCurtaPertoDoAgora()
+    {
+        var watermark = DateTimeOffset.Parse("2026-10-03T10:00:00Z");
+        var agora = watermark.AddHours(2);
+        var requisicoes = new List<Uri>();
+        var chamada = 0;
+        var collector = NovoColetor(request =>
+        {
+            requisicoes.Add(request.RequestUri!);
+            var servidor = chamada++ == 0 ? watermark : agora.AddSeconds(-1);
+            return Task.FromResult(Resposta(HttpStatusCode.OK, Json(servidor)));
+        }, out var snapshot);
+        await collector.ColetarUmaVezAsync(watermark.AddSeconds(20));
+        snapshot.Confirmar(snapshot.Ler()!.Geracao);
+
+        await collector.ColetarUmaVezAsync(agora);
+
+        AssertJanela(requisicoes[1], agora.AddSeconds(-20), agora);
+        Assert.Equal(agora.AddSeconds(-1), collector.WatermarkConfirmado);
+    }
+
+    [Theory]
+    [InlineData(20)]
+    [InlineData(180)]
+    [InlineData(7200)]
+    public async Task TimeoutEmNormalCatchupOuFastForward_NaoAvancaWatermark(int lagSegundos)
+    {
+        var watermark = DateTimeOffset.Parse("2026-10-03T10:00:00Z");
+        var chamada = 0;
+        var collector = NovoColetor(async (_, ct) =>
+        {
+            if (chamada++ == 0) return Resposta(HttpStatusCode.OK, Json(watermark));
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return new HttpResponseMessage();
+        }, out var snapshot, new GpsSppoCollectorOptions { TimeoutSegundos = 1 });
+        await collector.ColetarUmaVezAsync(watermark.AddSeconds(20));
+        snapshot.Confirmar(snapshot.Ler()!.Geracao);
+
+        var resultado = await collector.ColetarUmaVezAsync(watermark.AddSeconds(lagSegundos));
+
+        Assert.Equal("timeout_coletor", resultado.MotivoFalha);
+        Assert.Equal(watermark, collector.WatermarkConfirmado);
+        Assert.Null(snapshot.Ler());
+    }
+
+    [Fact]
+    public async Task FastForwardComSucesso_AvancaPeloServidorEVoltaAoModoNormal()
+    {
+        var antigo = DateTimeOffset.Parse("2026-10-03T10:00:00Z");
+        var agora = antigo.AddHours(2);
+        var requisicoes = new List<Uri>();
+        var respostas = new Queue<DateTimeOffset>([antigo, agora.AddSeconds(-2), agora.AddSeconds(3)]);
+        var collector = NovoColetor(request =>
+        {
+            requisicoes.Add(request.RequestUri!);
+            return Task.FromResult(Resposta(HttpStatusCode.OK, Json(respostas.Dequeue())));
+        }, out var snapshot);
+        await collector.ColetarUmaVezAsync(antigo.AddSeconds(20));
+        snapshot.Confirmar(snapshot.Ler()!.Geracao);
+        await collector.ColetarUmaVezAsync(agora);
+        snapshot.Confirmar(snapshot.Ler()!.Geracao);
+
+        await collector.ColetarUmaVezAsync(agora.AddSeconds(5));
+
+        AssertJanela(requisicoes[2], agora.AddSeconds(-12), agora.AddSeconds(5));
+        Assert.Equal(agora.AddSeconds(3), collector.WatermarkConfirmado);
+    }
+
+    [Fact]
+    public void Planejamento_GaranteLimiteMaximoDeChunkMaisOverlap()
+    {
+        var opcoes = new GpsSppoCollectorOptions();
+        var agora = DateTimeOffset.Parse("2026-10-03T12:03:00Z");
+
+        var janela = GpsSppoCollectorService.PlanejarJanela(
+            agora, agora.AddMinutes(-3), opcoes);
+
+        Assert.Equal(GpsSppoCatchupMode.Catchup, janela.Modo);
+        Assert.Equal(opcoes.CatchupChunkSegundos + opcoes.OverlapSegundos,
+            (janela.Fim - janela.Inicio).TotalSeconds);
+    }
+
     private static GpsSppoCollectorService NovoColetor(
         Func<HttpRequestMessage, Task<HttpResponseMessage>> enviar,
         out GpsSppoSnapshotStore snapshot,
@@ -239,6 +378,13 @@ public sealed class GpsSppoCollectorTests
 
     private static HttpResponseMessage Resposta(HttpStatusCode status, string corpo)
         => new(status) { Content = new StringContent(corpo, Encoding.UTF8, "application/json") };
+
+    private static void AssertJanela(Uri uri, DateTimeOffset inicio, DateTimeOffset fim)
+    {
+        var query = Uri.UnescapeDataString(uri.Query);
+        Assert.Contains($"dataInicial={inicio:yyyy-MM-ddTHH:mm:ssZ}", query);
+        Assert.Contains($"dataFinal={fim:yyyy-MM-ddTHH:mm:ssZ}", query);
+    }
 
     private static async Task EsperarAsync(Func<bool> condicao)
     {

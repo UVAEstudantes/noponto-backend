@@ -11,6 +11,7 @@ public sealed class GpsSppoCollectorService : BackgroundService
     private readonly GpsSppoSnapshotStore _snapshot;
     private readonly IOptionsMonitor<GpsSppoCollectorOptions> _opcoesMonitor;
     private readonly ILogger<GpsSppoCollectorService> _logger;
+    private readonly GpsSppoCollectorMetrics _metrics;
     private readonly SemaphoreSlim _coletaEmAndamento = new(1, 1);
     private DateTimeOffset? _watermarkConfirmado;
 
@@ -18,7 +19,8 @@ public sealed class GpsSppoCollectorService : BackgroundService
         IGpsSourceResolver sourceResolver,
         GpsSppoSnapshotStore snapshot,
         IOptionsMonitor<GpsSppoCollectorOptions> opcoesMonitor,
-        ILogger<GpsSppoCollectorService> logger)
+        ILogger<GpsSppoCollectorService> logger,
+        GpsSppoCollectorMetrics? metrics = null)
     {
         _source = sourceResolver.GetPrimary(GpsModalNames.Bus) as IWindowedGpsSource
             ?? throw new InvalidOperationException(
@@ -26,6 +28,7 @@ public sealed class GpsSppoCollectorService : BackgroundService
         _snapshot = snapshot;
         _opcoesMonitor = opcoesMonitor;
         _logger = logger;
+        _metrics = metrics ?? new GpsSppoCollectorMetrics();
     }
 
     internal DateTimeOffset? WatermarkConfirmado => _watermarkConfirmado;
@@ -35,9 +38,10 @@ public sealed class GpsSppoCollectorService : BackgroundService
         var iniciais = _opcoesMonitor.CurrentValue;
         _logger.LogInformation(
             "GpsSppoCollectorService iniciado: timeout {timeout}s, janela inicial {janela}s, " +
-            "overlap {overlap}s, intervalo {intervalo}s.",
+            "overlap {overlap}s, chunk catch-up {chunk}s, lag recuperavel {lag}s, intervalo {intervalo}s.",
             iniciais.TimeoutSegundos, iniciais.JanelaInicialSegundos,
-            iniciais.OverlapSegundos, iniciais.IntervaloEntreColetasSegundos);
+            iniciais.OverlapSegundos, iniciais.CatchupChunkSegundos,
+            iniciais.MaxLagRecuperavelSegundos, iniciais.IntervaloEntreColetasSegundos);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -78,10 +82,20 @@ public sealed class GpsSppoCollectorService : BackgroundService
         {
             var opcoes = _opcoesMonitor.CurrentValue;
             var watermarkAnterior = _watermarkConfirmado;
-            var janelaFim = referencia.ToUniversalTime();
-            var janelaInicio = watermarkAnterior.HasValue
-                ? watermarkAnterior.Value.AddSeconds(-opcoes.OverlapSegundos)
-                : janelaFim.AddSeconds(-opcoes.JanelaInicialSegundos);
+            var agora = referencia.ToUniversalTime();
+            var plano = PlanejarJanela(agora, watermarkAnterior, opcoes);
+            var janelaInicio = plano.Inicio;
+            var janelaFim = plano.Fim;
+            _metrics.Query(plano.LagSegundos, (janelaFim - janelaInicio).TotalSeconds, plano.Modo);
+            if (plano.Modo == GpsSppoCatchupMode.FastForward)
+            {
+                _logger.LogWarning(
+                    "SPPO fast-forward por lag de {lag:F0}s acima do limite {limite}s; " +
+                    "intervalo historico [{ignoradoInicio}, {ignoradoFim}] ({ignorado:F0}s) somente sera " +
+                    "descartado apos resposta com DataHoraServidor valida; watermark permanece {watermark}.",
+                    plano.LagSegundos, opcoes.MaxLagRecuperavelSegundos, watermarkAnterior,
+                    janelaInicio, plano.IntervaloIgnoradoSegundos, watermarkAnterior);
+            }
             var coletaIniciada = DateTimeOffset.UtcNow;
             var cronometro = Stopwatch.StartNew();
 
@@ -101,6 +115,7 @@ public sealed class GpsSppoCollectorService : BackgroundService
             catch (OperationCanceledException) when (timeout.IsCancellationRequested)
             {
                 cronometro.Stop();
+                _metrics.Timeout();
                 _logger.LogWarning(
                     "Coleta SPPO excedeu timeout proprio de {timeout}s para janela [{inicio}, {fim}]; " +
                     "watermark {watermark}; nenhum lote publicado.",
@@ -117,6 +132,7 @@ public sealed class GpsSppoCollectorService : BackgroundService
                 leitura.SourceWatermark);
             if (resultado.Status == StatusFonteGps.Falha)
             {
+                _metrics.Failure();
                 _logger.LogWarning(
                     "Coleta SPPO falhou para janela [{inicio}, {fim}] em {duracao:F0}ms: {motivo}; " +
                     "watermark permanece {watermark}; nenhum lote publicado.",
@@ -134,7 +150,33 @@ public sealed class GpsSppoCollectorService : BackgroundService
 
             _watermarkConfirmado = watermarkNovo;
             var coletaConcluida = DateTimeOffset.UtcNow;
+            if (plano.Modo == GpsSppoCatchupMode.FastForward
+                && watermarkAnterior.HasValue
+                && watermarkNovo > watermarkAnterior)
+            {
+                _metrics.FastForwardApplied(plano.IntervaloIgnoradoSegundos);
+                _logger.LogWarning(
+                    "SPPO fast-forward confirmado por DataHoraServidor: intervalo historico " +
+                    "[{ignoradoInicio}, {ignoradoFim}] ({ignorado:F0}s) nao foi recuperado pelo pipeline " +
+                    "operacional; watermark avancou de {anterior} para {novo}.",
+                    watermarkAnterior, janelaInicio, plano.IntervaloIgnoradoSegundos,
+                    watermarkAnterior, watermarkNovo);
+            }
+            _metrics.Success(coletaConcluida);
             var lag = watermarkNovo.HasValue ? coletaConcluida - watermarkNovo.Value : (TimeSpan?)null;
+            var metricas = _metrics.Capture(coletaConcluida);
+
+            _logger.LogInformation(
+                "SPPO metrics: sppo_watermark_lag_seconds={watermarkLag} " +
+                "sppo_query_window_seconds={queryWindow} sppo_catchup_mode={catchupMode} " +
+                "sppo_catchup_chunks_total={catchupChunks} sppo_fast_forward_total={fastForward} " +
+                "sppo_fast_forward_seconds_total={fastForwardSeconds} " +
+                "sppo_collection_timeouts_total={timeouts} sppo_collection_failures_total={failures} " +
+                "sppo_last_success_age_seconds={lastSuccessAge}.",
+                metricas.WatermarkLagSeconds, metricas.QueryWindowSeconds, metricas.CatchupMode,
+                metricas.CatchupChunksTotal, metricas.FastForwardTotal,
+                metricas.FastForwardSecondsTotal, metricas.CollectionTimeoutsTotal,
+                metricas.CollectionFailuresTotal, metricas.LastSuccessAgeSeconds);
 
             if (resultado.Posicoes.Count == 0)
             {
@@ -177,4 +219,30 @@ public sealed class GpsSppoCollectorService : BackgroundService
             _coletaEmAndamento.Release();
         }
     }
+
+    internal static GpsSppoQueryWindow PlanejarJanela(DateTimeOffset agora,
+        DateTimeOffset? watermarkConfirmado, GpsSppoCollectorOptions opcoes)
+    {
+        if (!watermarkConfirmado.HasValue)
+            return new(agora.AddSeconds(-opcoes.JanelaInicialSegundos), agora,
+                GpsSppoCatchupMode.Initial, null, 0);
+
+        var watermark = watermarkConfirmado.Value.ToUniversalTime();
+        var lagSegundos = Math.Max(0, (agora - watermark).TotalSeconds);
+        if (lagSegundos > opcoes.MaxLagRecuperavelSegundos)
+        {
+            var inicio = agora.AddSeconds(-opcoes.JanelaInicialSegundos);
+            return new(inicio, agora, GpsSppoCatchupMode.FastForward, lagSegundos,
+                Math.Max(0, (inicio - watermark).TotalSeconds));
+        }
+
+        var fim = watermark.AddSeconds(opcoes.CatchupChunkSegundos);
+        if (fim > agora) fim = agora;
+        var inicioNormal = watermark.AddSeconds(-opcoes.OverlapSegundos);
+        var modo = fim < agora ? GpsSppoCatchupMode.Catchup : GpsSppoCatchupMode.Normal;
+        return new(inicioNormal, fim, modo, lagSegundos, 0);
+    }
 }
+
+internal sealed record GpsSppoQueryWindow(DateTimeOffset Inicio, DateTimeOffset Fim,
+    GpsSppoCatchupMode Modo, double? LagSegundos, double IntervaloIgnoradoSegundos);

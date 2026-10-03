@@ -132,6 +132,8 @@ public sealed class GpsPollingFontesTests
             ["GpsSppoCollector:TimeoutSegundos"] = "90",
             ["GpsSppoCollector:JanelaInicialSegundos"] = "20",
             ["GpsSppoCollector:OverlapSegundos"] = "10",
+            ["GpsSppoCollector:CatchupChunkSegundos"] = "60",
+            ["GpsSppoCollector:MaxLagRecuperavelSegundos"] = "300",
             ["GpsSppoCollector:IntervaloEntreColetasSegundos"] = "10",
         }).Build();
 
@@ -140,6 +142,8 @@ public sealed class GpsPollingFontesTests
         Assert.Equal(90, opcoes!.TimeoutSegundos);
         Assert.Equal(20, opcoes.JanelaInicialSegundos);
         Assert.Equal(10, opcoes.OverlapSegundos);
+        Assert.Equal(60, opcoes.CatchupChunkSegundos);
+        Assert.Equal(300, opcoes.MaxLagRecuperavelSegundos);
         Assert.Equal(10, opcoes.IntervaloEntreColetasSegundos);
     }
 

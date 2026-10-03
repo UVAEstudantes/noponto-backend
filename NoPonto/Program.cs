@@ -440,6 +440,10 @@ builder.Services
         "GpsSppoCollector:JanelaInicialSegundos deve ser > 0")
     .Validate(o => o.OverlapSegundos >= 0,
         "GpsSppoCollector:OverlapSegundos deve ser >= 0")
+    .Validate(o => o.CatchupChunkSegundos > 0,
+        "GpsSppoCollector:CatchupChunkSegundos deve ser > 0")
+    .Validate(o => o.MaxLagRecuperavelSegundos >= o.CatchupChunkSegundos,
+        "GpsSppoCollector:MaxLagRecuperavelSegundos deve ser >= CatchupChunkSegundos")
     .Validate(o => o.IntervaloEntreColetasSegundos > 0,
         "GpsSppoCollector:IntervaloEntreColetasSegundos deve ser > 0")
     .ValidateOnStart();
@@ -553,6 +557,7 @@ builder.Services.AddHostedService<TelemetriaMlRetentionService>();
 builder.Services.AddSignalR();
 
 builder.Services.AddSingleton<GpsSppoSnapshotStore>();
+builder.Services.AddSingleton<GpsSppoCollectorMetrics>();
 builder.Services.AddHostedService<GpsSppoCollectorService>();
 builder.Services.AddHostedService<GpsPollingService>();
 

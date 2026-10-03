@@ -163,6 +163,8 @@ services:
       GpsSppoCollector__TimeoutSegundos: ${GpsSppoCollector__TimeoutSegundos:-90}
       GpsSppoCollector__JanelaInicialSegundos: ${GpsSppoCollector__JanelaInicialSegundos:-20}
       GpsSppoCollector__OverlapSegundos: ${GpsSppoCollector__OverlapSegundos:-10}
+      GpsSppoCollector__CatchupChunkSegundos: ${GpsSppoCollector__CatchupChunkSegundos:-60}
+      GpsSppoCollector__MaxLagRecuperavelSegundos: ${GpsSppoCollector__MaxLagRecuperavelSegundos:-300}
       GpsSppoCollector__IntervaloEntreColetasSegundos: ${GpsSppoCollector__IntervaloEntreColetasSegundos:-10}
       GpsPolling__GrauParalelismoEnriquecimento: ${GpsPolling__GrauParalelismoEnriquecimento}
       GpsPolling__MaxIdadeGpsSegundos: ${GpsPolling__MaxIdadeGpsSegundos}
