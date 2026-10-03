@@ -525,6 +525,9 @@ builder.Services.AddScoped<IEstruturaLeituraV2Repository, EstruturaLeituraV2Repo
 builder.Services.AddScoped<RailScheduleRepository>();
 builder.Services.AddSingleton<ExpectedRunCache>();
 builder.Services.AddScoped<IExpectedRunService, ExpectedRunService>();
+builder.Services.AddSingleton<ExpectedRunBindingState>();
+builder.Services.AddSingleton<ExpectedRunBindingMetrics>();
+builder.Services.AddScoped<IExpectedRunBindingService, ExpectedRunBindingService>();
 // TEMPORARY FRONTEND COMPATIBILITY: removable adapter for the current APK.
 builder.Services.AddScoped<NoPonto.Application.LegacyCompatibility.Services.IFrontendLegacyMapaService,
     NoPonto.Application.LegacyCompatibility.Services.FrontendLegacyMapaService>();

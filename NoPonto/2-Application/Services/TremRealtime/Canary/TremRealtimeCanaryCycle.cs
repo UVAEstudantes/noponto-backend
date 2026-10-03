@@ -8,6 +8,7 @@ using NoPonto.Application.TremRealtime.Tracking;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremRealtime.Correlation;
 using NoPonto.Application.TremRealtime.RailRuntime;
+using NoPonto.Application.TremSchedule;
 using System.Collections.Immutable;
 
 namespace NoPonto.Application.TremRealtime.Canary;
@@ -32,7 +33,9 @@ public sealed class TremRealtimeCanaryCycle(
     IRailRealtimeEngine railRealtimeEngine,
     TimeProvider clock,
     ILogger<TremRealtimeCanaryCycle> logger,
-    IRailAdaptiveTrackingCoordinator? adaptiveTracking = null) : ITremRealtimeCanaryCycle
+    IRailAdaptiveTrackingCoordinator? adaptiveTracking = null,
+    IExpectedRunBindingService? expectedRunBinding = null,
+    ExpectedRunBindingMetrics? expectedRunBindingMetrics = null) : ITremRealtimeCanaryCycle
 {
     public async Task RunOnceAsync(CancellationToken ct)
     {
@@ -84,6 +87,7 @@ public sealed class TremRealtimeCanaryCycle(
                 ? await normalizer.NormalizeAsync(result.Value, item.Query.PairKey, requestStartedAtUtc, ct)
                 : [];
             metrics.Departures(observations.Count);
+            expectedRunBindingMetrics?.ObserveIngress(observations);
             var receivedAtUtc = clock.GetUtcNow();
             scheduler.ObserveResult(receivedAtUtc, item.Query, observations, result.Status, catalogQueries,
                 requestStartedAtUtc);
@@ -107,6 +111,30 @@ public sealed class TremRealtimeCanaryCycle(
             }
             if (accepted.Length > 0 && trackerSnapshot is not null)
             {
+                if (expectedRunBinding is not null)
+                {
+                    try
+                    {
+                        await expectedRunBinding.ObserveBatchAsync("TRENS_RJ", item.Query, accepted, ct);
+                        if (expectedRunBindingMetrics is not null)
+                        {
+                            var binding = expectedRunBindingMetrics.Capture();
+                            logger.LogInformation(
+                                "RailBindingSummary observations={Observations} trackable={Trackable} no_candidate={NoCandidate} single_candidate={SingleCandidate} ambiguous={Ambiguous} provisional={Provisional} confirmed={Confirmed} rejected_temporal={RejectedTemporal} cross_midnight={CrossMidnight} short_start={ShortStart} failures={Failures}",
+                                binding.Observations, binding.Trackable, binding.NoCandidate,
+                                binding.SingleCandidate, binding.Ambiguous, binding.Provisional,
+                                binding.Confirmed, binding.RejectedTemporal, binding.CrossMidnight,
+                                binding.ShortStart, binding.Failures);
+                        }
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                    catch (Exception ex)
+                    {
+                        expectedRunBindingMetrics?.Failure();
+                        logger.LogError(ex,
+                            "ExpectedRun binding failed open for sentinel={SentinelId}", item.Query.Id);
+                    }
+                }
                 try
                 {
                     var topology = await topologyCache.GetAsync(ct);
