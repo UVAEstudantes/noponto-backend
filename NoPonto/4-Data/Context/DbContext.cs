@@ -36,10 +36,15 @@ public class TransporteDbContext : DbContext
     public DbSet<PadraoVersaoImportacao> PadroesVersoesImportacoes => Set<PadraoVersaoImportacao>();
     public DbSet<OcorrenciaParadaPadrao> OcorrenciasParadasPadroes => Set<OcorrenciaParadaPadrao>();
     public DbSet<OverrideOcorrenciaPadrao> OverridesOcorrenciasPadroes => Set<OverrideOcorrenciaPadrao>();
+    public DbSet<RailScheduleVersion> RailScheduleVersions => Set<RailScheduleVersion>();
+    public DbSet<RailSchedulePattern> RailSchedulePatterns => Set<RailSchedulePattern>();
+    public DbSet<RailScheduledRun> RailScheduledRuns => Set<RailScheduledRun>();
+    public DbSet<RailScheduledStop> RailScheduledStops => Set<RailScheduledStop>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarEstruturaTransporteV21(modelBuilder);
+        ConfigurarRailSchedule(modelBuilder);
 
         modelBuilder.Entity<PositionCorrectionShadowOrigin>(e =>
         {
@@ -207,6 +212,82 @@ public class TransporteDbContext : DbContext
             e.HasOne<PadraoOperacional>().WithMany().HasForeignKey(x => x.PadraoOperacionalId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<PadraoVersao>().WithMany().HasForeignKey(x => x.PadraoVersaoId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<OcorrenciaParadaPadrao>().WithMany().HasForeignKey(x => x.OcorrenciaParadaPadraoId).OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+
+    private static void ConfigurarRailSchedule(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RailScheduleVersion>(e =>
+        {
+            e.ToTable("RailScheduleVersions", t => t.HasCheckConstraint(
+                "CK_RailScheduleVersions_SchemaVersion", "\"SchemaVersion\" > 0"));
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Provider).HasMaxLength(80).IsRequired();
+            e.Property(x => x.SourceName).HasMaxLength(240).IsRequired();
+            e.Property(x => x.BuilderVersion).HasMaxLength(80).IsRequired();
+            e.Property(x => x.ContentHash).HasMaxLength(64).IsRequired();
+            e.Property(x => x.MetadataJson).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.LineId, x.ContentHash }).IsUnique();
+            e.HasIndex(x => new { x.LineId, x.IsActive });
+            e.HasIndex(x => x.LineId).IsUnique().HasFilter("\"IsActive\" = TRUE");
+            e.HasOne<Linha>().WithMany().HasForeignKey(x => x.LineId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<RailSchedulePattern>(e =>
+        {
+            e.ToTable("RailSchedulePatterns", t => t.HasCheckConstraint(
+                "CK_RailSchedulePatterns_MappingStatus",
+                "\"MappingStatus\" IN ('EXACT','SUBSET_COMPATIBLE','UNRESOLVED','CONFLICT')"));
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ExternalPatternId).HasMaxLength(120).IsRequired();
+            e.Property(x => x.SignatureHash).HasMaxLength(64).IsRequired();
+            e.Property(x => x.MappingStatus).HasMaxLength(24).IsRequired();
+            e.Property(x => x.MetadataJson).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.ScheduleVersionId, x.ExternalPatternId }).IsUnique();
+            e.HasIndex(x => new { x.ScheduleVersionId, x.MappingStatus });
+            e.HasOne<RailScheduleVersion>().WithMany().HasForeignKey(x => x.ScheduleVersionId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Linha>().WithMany().HasForeignKey(x => x.LineId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Sentido>().WithMany().HasForeignKey(x => x.SentidoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<PadraoVersao>().WithMany().HasForeignKey(x => x.MappedPadraoVersaoId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<RailScheduledRun>(e =>
+        {
+            e.ToTable("RailScheduledRuns", t =>
+            {
+                t.HasCheckConstraint("CK_RailScheduledRuns_CalendarType",
+                    "\"CalendarType\" IN ('WEEKDAY','SATURDAY','SUNDAY')");
+                t.HasCheckConstraint("CK_RailScheduledRuns_DayOffsets",
+                    "\"DepartureDayOffset\" >= 0 AND \"TerminalArrivalDayOffset\" >= \"DepartureDayOffset\"");
+            });
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ExternalScheduledRunId).HasMaxLength(120).IsRequired();
+            e.Property(x => x.CalendarType).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Confidence).HasMaxLength(24).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(24).IsRequired();
+            e.Property(x => x.MetadataJson).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.ScheduleVersionId, x.ExternalScheduledRunId }).IsUnique();
+            e.HasIndex(x => new { x.ScheduleVersionId, x.CalendarType, x.SentidoId });
+            e.HasIndex(x => new { x.CalendarType, x.DepartureTime });
+            e.HasOne<RailScheduleVersion>().WithMany().HasForeignKey(x => x.ScheduleVersionId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<RailSchedulePattern>().WithMany().HasForeignKey(x => x.SchedulePatternId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Linha>().WithMany().HasForeignKey(x => x.LineId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Sentido>().WithMany().HasForeignKey(x => x.SentidoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Parada>().WithMany().HasForeignKey(x => x.FirstStationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Parada>().WithMany().HasForeignKey(x => x.TerminalStationId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<RailScheduledStop>(e =>
+        {
+            e.ToTable("RailScheduledStops", t => t.HasCheckConstraint(
+                "CK_RailScheduledStops_Time",
+                "\"StopSequence\" > 0 AND \"StationOrder\" > 0 AND \"DayOffset\" >= 0 AND " +
+                "\"AbsoluteMinute\" = EXTRACT(HOUR FROM \"ScheduledTime\")::int * 60 + " +
+                "EXTRACT(MINUTE FROM \"ScheduledTime\")::int + \"DayOffset\" * 1440"));
+            e.HasKey(x => x.Id);
+            e.Property(x => x.SourceRequestId).HasMaxLength(120);
+            e.Property(x => x.MetadataJson).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.ScheduledRunId, x.StopSequence }).IsUnique();
+            e.HasIndex(x => new { x.ScheduledRunId, x.ParadaId }).IsUnique();
+            e.HasOne<RailScheduledRun>().WithMany().HasForeignKey(x => x.ScheduledRunId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Parada>().WithMany().HasForeignKey(x => x.ParadaId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 

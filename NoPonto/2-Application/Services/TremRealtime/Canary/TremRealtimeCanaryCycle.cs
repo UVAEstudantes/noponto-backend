@@ -8,6 +8,7 @@ using NoPonto.Application.TremRealtime.Tracking;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremRealtime.Correlation;
 using NoPonto.Application.TremRealtime.RailRuntime;
+using NoPonto.Application.TremSchedule;
 using System.Collections.Immutable;
 
 namespace NoPonto.Application.TremRealtime.Canary;
@@ -32,7 +33,14 @@ public sealed class TremRealtimeCanaryCycle(
     IRailRealtimeEngine railRealtimeEngine,
     TimeProvider clock,
     ILogger<TremRealtimeCanaryCycle> logger,
-    IRailAdaptiveTrackingCoordinator? adaptiveTracking = null) : ITremRealtimeCanaryCycle
+    IRailAdaptiveTrackingCoordinator? adaptiveTracking = null,
+    IExpectedRunBindingService? expectedRunBinding = null,
+    ExpectedRunBindingMetrics? expectedRunBindingMetrics = null,
+    IOptions<RailScheduleRuntimeOptions>? scheduleRuntimeOptions = null,
+    IRailScheduleProbePlanner? scheduleProbePlanner = null,
+    IRailScheduleEstimator? scheduleEstimator = null,
+    RailScheduleEstimateState? scheduleEstimateState = null,
+    RailScheduleRuntimeMetrics? scheduleMetrics = null) : ITremRealtimeCanaryCycle
 {
     public async Task RunOnceAsync(CancellationToken ct)
     {
@@ -58,15 +66,32 @@ public sealed class TremRealtimeCanaryCycle(
         var allowed = canary.AllowedSentinelIds.ToHashSet(StringComparer.Ordinal);
         var catalogQueries = await catalog.GetAsync(ct);
         scheduler.SetScannerProbeCount(catalogQueries.Count(x => x.IsScannerProbe));
+        var scheduleOptions = scheduleRuntimeOptions?.Value ?? new RailScheduleRuntimeOptions();
+        var schedulePlan = scheduleOptions.Enabled && scheduleOptions.ScheduleAwareProbesEnabled
+            && scheduleProbePlanner is not null
+                ? await scheduleProbePlanner.PlanAsync(catalogQueries, now, ct)
+                : new RailScheduleProbePlan(ImmutableHashSet<string>.Empty, 0, 0, 0, TimeSpan.Zero);
         var candidates = catalogQueries
             .Where(x => IsCanaryCandidate(runtime, canary, allowed, x))
             .Select(x => state.Query(x))
             .Select(x => (Query: x, Decision: scheduler.Evaluate(now, x, demand, [], TremSchedulingMode.CanaryObservation, TimeSpan.FromSeconds(canary.PollSeconds))))
+            .Select(x => schedulePlan.RecommendedProbeIds.Contains(x.Query.Id)
+                ? (Query: x.Query, Decision: x.Decision with
+                {
+                    Priority = x.Decision.Priority + scheduleOptions.ProbePriorityBoost,
+                    Breakdown = x.Decision.Breakdown with
+                    {
+                        ScheduleUrgency = x.Decision.Breakdown.ScheduleUrgency
+                            + scheduleOptions.ProbePriorityBoost
+                    }
+                }) : x)
             .ToArray();
         var remaining = Math.Max(0, canary.MaxRequestsPerRun - state.RequestCount);
         var selection = scheduler.SelectDueQueries(now, candidates, Math.Min(canary.MaxConcurrency, remaining));
         foreach (var item in selection.Selected)
         {
+            if (scheduleOptions.Enabled && scheduleOptions.ScheduleAwareProbesEnabled)
+                scheduleMetrics?.Executed(schedulePlan.RecommendedProbeIds.Contains(item.Query.Id));
             ct.ThrowIfCancellationRequested();
             var permit = state.TryAcquireRequest();
             if (permit == TremCanaryPermitStatus.BudgetExhausted)
@@ -84,6 +109,7 @@ public sealed class TremRealtimeCanaryCycle(
                 ? await normalizer.NormalizeAsync(result.Value, item.Query.PairKey, requestStartedAtUtc, ct)
                 : [];
             metrics.Departures(observations.Count);
+            if (scheduleOptions.Enabled) expectedRunBindingMetrics?.ObserveIngress(observations);
             var receivedAtUtc = clock.GetUtcNow();
             scheduler.ObserveResult(receivedAtUtc, item.Query, observations, result.Status, catalogQueries,
                 requestStartedAtUtc);
@@ -107,9 +133,57 @@ public sealed class TremRealtimeCanaryCycle(
             }
             if (accepted.Length > 0 && trackerSnapshot is not null)
             {
+                IReadOnlyList<ExpectedRunBindingResult> bindingResults = [];
+                if (scheduleOptions.Enabled && expectedRunBinding is not null)
+                {
+                    try
+                    {
+                        bindingResults = await expectedRunBinding.ObserveBatchAsync("TRENS_RJ", item.Query, accepted, ct);
+                        if (expectedRunBindingMetrics is not null)
+                        {
+                            var binding = expectedRunBindingMetrics.Capture();
+                            logger.LogInformation(
+                                "RailBindingSummary observations={Observations} trackable={Trackable} no_candidate={NoCandidate} single_candidate={SingleCandidate} ambiguous={Ambiguous} provisional={Provisional} confirmed={Confirmed} rejected_temporal={RejectedTemporal} cross_midnight={CrossMidnight} short_start={ShortStart} failures={Failures}",
+                                binding.Observations, binding.Trackable, binding.NoCandidate,
+                                binding.SingleCandidate, binding.Ambiguous, binding.Provisional,
+                                binding.Confirmed, binding.RejectedTemporal, binding.CrossMidnight,
+                                binding.ShortStart, binding.Failures);
+                        }
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                    catch (Exception ex)
+                    {
+                        expectedRunBindingMetrics?.Failure();
+                        logger.LogError(ex,
+                            "ExpectedRun binding failed open for sentinel={SentinelId}", item.Query.Id);
+                    }
+                }
                 try
                 {
                     var topology = await topologyCache.GetAsync(ct);
+                    if (scheduleEstimator is not null && scheduleEstimateState is not null)
+                        foreach (var bindingResult in bindingResults.Where(x =>
+                                     x.Binding?.Status == ExpectedRunBindingStatus.Confirmed))
+                        {
+                            var run = bindingResult.Candidates.Select(x => x.ExpectedRun)
+                                .FirstOrDefault(x => x.ExpectedRunId == bindingResult.Binding!.ExpectedRunId);
+                            if (run is not null)
+                            {
+                                var estimate = scheduleEstimator.Estimate(run,
+                                    bindingResult.Binding!, topology, receivedAtUtc);
+                                if (scheduleEstimateState.Set(estimate))
+                                    logger.LogInformation(
+                                        "RailScheduleEstimate train_code={TrainCode} expected_run_id={ExpectedRunId} binding_state={BindingState} anchors={Anchors} delay_seconds={DelaySeconds} previous_stop={PreviousStop} next_stop={NextStop} segment_progress={SegmentProgress} mapping={Mapping} spatial={Spatial} evidence_age_seconds={EvidenceAgeSeconds} is_estimated=true origin=SCHEDULE_REALTIME_ESTIMATE",
+                                        estimate.TrainCode, estimate.ExpectedRunId,
+                                        bindingResult.Binding!.Status,
+                                        bindingResult.Binding.Anchors.Length, estimate.DelaySeconds,
+                                        estimate.PreviousScheduledStop?.ParadaId,
+                                        estimate.NextScheduledStop?.ParadaId,
+                                        estimate.SegmentProgress, estimate.ScheduleMappingStatus,
+                                        estimate.SpatialPosition is not null,
+                                        estimate.EvidenceAge.TotalSeconds);
+                            }
+                        }
                     try
                     {
                         crossSentinelObserver.Observe(item.Query, accepted, topology, requestStartedAtUtc, receivedAtUtc,
@@ -185,6 +259,19 @@ public sealed class TremRealtimeCanaryCycle(
             logger.LogInformation(
                 "RailRealtimeSummary train_multi_satellite_total={MultiSatellite} rail_anchor_created={Anchors} rail_run_resolved={Runs} rail_position_available={Positions}",
                 rail.TrainMultiSatelliteTotal, rail.RailAnchorCreated, rail.RailRunResolved, rail.RailPositionAvailable);
+            if (scheduleMetrics is not null && scheduleOptions.Enabled)
+            {
+                var schedule = scheduleMetrics.Capture();
+                logger.LogInformation(
+                    "RailScheduleRuntimeSummary expected_runs_active={ExpectedRuns} bindings_provisional={Provisional} bindings_confirmed={Confirmed} delay_calculable={Delay} temporal_positions={Temporal} spatial_positions={Spatial} unresolved={Unresolved} stale={Stale} probes_suggested={Suggested} probes_deduplicated={Deduplicated} probes_executed={Executed} discovery_fallback={Fallback} planner_ms={PlannerMs} estimator_ms={EstimatorMs}",
+                    schedulePlan.ActiveExpectedRuns, expectedRunBindingMetrics?.Capture().Provisional ?? 0,
+                    expectedRunBindingMetrics?.Capture().Confirmed ?? 0, schedule.DelayCalculable,
+                    schedule.TemporalPositions, schedule.SpatialPositions, schedule.Unresolved,
+                    schedule.Stale, schedule.SuggestedProbes, schedule.DeduplicatedProbes,
+                    schedule.ExecutedSuggestedProbes, schedule.DiscoveryFallback,
+                    TimeSpan.FromTicks(schedule.PlannerTicks).TotalMilliseconds,
+                    TimeSpan.FromTicks(schedule.EstimatorTicks).TotalMilliseconds);
+            }
             if (item.Query.IsScannerProbe)
             {
                 var targetDepartures = observations.Count(x =>

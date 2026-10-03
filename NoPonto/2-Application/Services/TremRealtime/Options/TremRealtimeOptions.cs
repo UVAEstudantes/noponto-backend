@@ -28,6 +28,24 @@ public sealed class TremRealtimeOptions
     public TremScannerOptions Scanner { get; set; } = new();
 }
 
+public sealed class RailScheduleRuntimeOptions
+{
+    public const string SectionName = "RailScheduleRuntime";
+    public bool Enabled { get; set; }
+    public bool ScheduleAwareProbesEnabled { get; set; }
+    public bool SpatialEstimationEnabled { get; set; }
+    public int StaleAfterSeconds { get; set; } = 300;
+    public int UnavailableAfterSeconds { get; set; } = 900;
+    public int RecentAnchorCount { get; set; } = 5;
+    public int DelayOutlierSeconds { get; set; } = 600;
+    public int ProbeWindowMinutes { get; set; } = 10;
+    public double ProbePriorityBoost { get; set; } = 40;
+
+    public bool IsValid() => StaleAfterSeconds > 0
+        && UnavailableAfterSeconds > StaleAfterSeconds && RecentAnchorCount is > 0 and <= 16
+        && DelayOutlierSeconds > 0 && ProbeWindowMinutes > 0 && ProbePriorityBoost >= 0;
+}
+
 public sealed class TremScannerOptions
 {
     public bool Enabled { get; set; }
