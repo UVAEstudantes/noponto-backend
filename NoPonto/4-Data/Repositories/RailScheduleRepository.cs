@@ -30,4 +30,22 @@ public sealed class RailScheduleRepository(TransporteDbContext db)
     public Task<RailSchedulePattern[]> PatternsAsync(Guid scheduleVersionId, CancellationToken ct = default) =>
         db.RailSchedulePatterns.AsNoTracking().Where(x => x.ScheduleVersionId == scheduleVersionId)
             .OrderBy(x => x.ExternalPatternId).ToArrayAsync(ct);
+
+    public async Task<RailScheduleMaterializationSource> MaterializationSourceAsync(
+        RailScheduleVersion version, string calendarType, CancellationToken ct = default)
+    {
+        var patterns = await db.RailSchedulePatterns.AsNoTracking()
+            .Where(x => x.ScheduleVersionId == version.Id).ToArrayAsync(ct);
+        var runs = await db.RailScheduledRuns.AsNoTracking()
+            .Where(x => x.ScheduleVersionId == version.Id && x.CalendarType == calendarType)
+            .OrderBy(x => x.DepartureDayOffset).ThenBy(x => x.DepartureTime).ToArrayAsync(ct);
+        var runIds = runs.Select(x => x.Id).ToArray();
+        var stops = await db.RailScheduledStops.AsNoTracking().Where(x => runIds.Contains(x.ScheduledRunId))
+            .OrderBy(x => x.ScheduledRunId).ThenBy(x => x.StopSequence).ToArrayAsync(ct);
+        return new(version, patterns, runs, stops);
+    }
 }
+
+public sealed record RailScheduleMaterializationSource(RailScheduleVersion Version,
+    IReadOnlyList<RailSchedulePattern> Patterns, IReadOnlyList<RailScheduledRun> Runs,
+    IReadOnlyList<RailScheduledStop> Stops);

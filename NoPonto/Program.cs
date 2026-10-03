@@ -523,6 +523,8 @@ builder.Services.AddHostedService<GpsStructuralHintMetricsReporter>();
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 builder.Services.AddScoped<IEstruturaLeituraV2Repository, EstruturaLeituraV2Repository>();
 builder.Services.AddScoped<RailScheduleRepository>();
+builder.Services.AddSingleton<ExpectedRunCache>();
+builder.Services.AddScoped<IExpectedRunService, ExpectedRunService>();
 // TEMPORARY FRONTEND COMPATIBILITY: removable adapter for the current APK.
 builder.Services.AddScoped<NoPonto.Application.LegacyCompatibility.Services.IFrontendLegacyMapaService,
     NoPonto.Application.LegacyCompatibility.Services.FrontendLegacyMapaService>();

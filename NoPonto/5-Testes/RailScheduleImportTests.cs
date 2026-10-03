@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using NoPonto.Application.TremSchedule;
 using NoPonto.Application.TremV2;
@@ -7,11 +8,54 @@ using NoPonto.Data.Configuration;
 using NoPonto.Data.Repositories;
 using NoPonto.Domain.Entities;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace NoPonto.Tests;
 
 public sealed class RailScheduleDatasetTests
 {
+    [Theory]
+    [InlineData(2026, 10, 5, "WEEKDAY")]
+    [InlineData(2026, 10, 10, "SATURDAY")]
+    [InlineData(2026, 10, 11, "SUNDAY")]
+    public void CalendarType_UsaDiaCivilDeSaoPaulo(int year, int month, int day, string expected) =>
+        Assert.Equal(expected, ExpectedRunService.ResolveCalendarType(new DateOnly(year, month, day)));
+
+    [Fact]
+    public void IdentidadeExpectedRun_EhDeterministicaEIncluiServiceDate()
+    {
+        var version = Guid.NewGuid(); var run = Guid.NewGuid(); var date = new DateOnly(2026, 10, 5);
+        Assert.Equal(ExpectedRunService.CreateId(version, run, date), ExpectedRunService.CreateId(version, run, date));
+        Assert.NotEqual(ExpectedRunService.CreateId(version, run, date), ExpectedRunService.CreateId(version, run, date.AddDays(1)));
+    }
+
+    [Fact]
+    public void Timezone_CrossMidnightPreservaDiaDeServico()
+    {
+        var serviceDate = new DateOnly(2026, 10, 5);
+        var departure = ExpectedRunService.ToInstant(serviceDate, new TimeOnly(22, 46), 0);
+        var arrival = ExpectedRunService.ToInstant(serviceDate, new TimeOnly(0, 17), 1);
+        Assert.Equal(new DateOnly(2026, 10, 5), DateOnly.FromDateTime(departure.DateTime));
+        Assert.Equal(new DateOnly(2026, 10, 6), DateOnly.FromDateTime(arrival.DateTime));
+        Assert.True(arrival > departure);
+        Assert.Equal(TimeZoneInfo.FindSystemTimeZoneById(ExpectedRunService.TimeZoneId).GetUtcOffset(departure.DateTime), departure.Offset);
+    }
+
+    [Fact]
+    public void Cache_TrocaDeVersaoAtivaRemoveMaterializacoesAnterioresDaLinha()
+    {
+        var cache = new ExpectedRunCache(); var line = Guid.NewGuid(); var oldVersion = Guid.NewGuid();
+        var date = new DateOnly(2026, 10, 5);
+        cache.ObserveActiveVersion(line, oldVersion);
+        cache.Set(new(oldVersion, date), new(oldVersion, line, date, "WEEKDAY", [], [], TimeSpan.Zero, false));
+        cache.Set(new(oldVersion, date.AddDays(1)), new(oldVersion, line, date.AddDays(1), "WEEKDAY", [], [], TimeSpan.Zero, false));
+        Assert.Equal(2, cache.Count);
+
+        cache.ObserveActiveVersion(line, Guid.NewGuid());
+
+        Assert.Equal(0, cache.Count);
+    }
+
     [Fact]
     public async Task SantaCruzV1_ValidaCardinalidadesTemposESemantica()
     {
@@ -38,7 +82,7 @@ public sealed class RailScheduleDatasetTests
     }
 }
 
-public sealed class RailScheduleImportPostgisTests
+public sealed class RailScheduleImportPostgisTests(ITestOutputHelper output)
 {
     [Fact]
     public async Task ImportaMapeiaAtivaConsultaERepeteSemDuplicar_QuandoConfigurado()
@@ -82,6 +126,58 @@ public sealed class RailScheduleImportPostgisTests
             midnight.SentidoId, 22 * 60, 23 * 60)), x => x.Id == midnight.Id);
         Assert.DoesNotContain(db.Model.GetEntityTypes(), x => x.ClrType.Name.Contains("TrainCode", StringComparison.Ordinal));
 
+        var expectedCache = new ExpectedRunCache();
+        var expectedService = new ExpectedRunService(repository, expectedCache,
+            NullLogger<ExpectedRunService>.Instance);
+        var weekday = (await expectedService.MaterializeServiceDayAsync(midnight.LineId, new DateOnly(2026, 10, 5)))!;
+        var saturday = (await expectedService.MaterializeServiceDayAsync(midnight.LineId, new DateOnly(2026, 10, 10)))!;
+        var sunday = (await expectedService.MaterializeServiceDayAsync(midnight.LineId, new DateOnly(2026, 10, 11)))!;
+        var directionIds = await db.SentidosIdentidadesExternas.Where(x => x.Tipo == "DIRECTION"
+            && x.ExternalId.StartsWith(plan.LineExternalId + ":"))
+            .ToDictionaryAsync(x => x.ExternalId, x => x.SentidoId);
+        Assert.Equal(65, weekday.Runs.Count(x => x.SentidoId == directionIds[$"{plan.LineExternalId}:FORWARD"]));
+        Assert.Equal(66, weekday.Runs.Count(x => x.SentidoId == directionIds[$"{plan.LineExternalId}:REVERSE"]));
+        Assert.Equal(34, saturday.Runs.Count(x => x.SentidoId == directionIds[$"{plan.LineExternalId}:FORWARD"]));
+        Assert.Equal(35, saturday.Runs.Count(x => x.SentidoId == directionIds[$"{plan.LineExternalId}:REVERSE"]));
+        Assert.Equal(22, sunday.Runs.Count(x => x.SentidoId == directionIds[$"{plan.LineExternalId}:FORWARD"]));
+        Assert.Equal(24, sunday.Runs.Count(x => x.SentidoId == directionIds[$"{plan.LineExternalId}:REVERSE"]));
+        var cached = (await expectedService.MaterializeServiceDayAsync(midnight.LineId, new DateOnly(2026, 10, 5)))!;
+        Assert.True(cached.CacheHit); Assert.Equal(weekday.Runs.Select(x => x.ExpectedRunId), cached.Runs.Select(x => x.ExpectedRunId));
+        output.WriteLine($"ExpectedRun WEEKDAY: runs={weekday.Runs.Count}; stops={weekday.Runs.Sum(x => x.Stops.Count)}; first_ms={weekday.Duration.TotalMilliseconds:F2}; cache_ms={cached.Duration.TotalMilliseconds:F2}");
+        Assert.True(weekday.Duration < TimeSpan.FromSeconds(5));
+        var expectedMidnight = weekday.Runs.Single(x => x.ScheduledRunId == midnight.Id);
+        Assert.Equal(new DateOnly(2026, 10, 5), expectedMidnight.ServiceDate);
+        Assert.Equal(new DateOnly(2026, 10, 6), DateOnly.FromDateTime(expectedMidnight.ExpectedArrivalAt.DateTime));
+        Assert.All(expectedMidnight.Stops.Zip(expectedMidnight.Stops.Skip(1)),
+            pair => Assert.True(pair.First.ExpectedAt <= pair.Second.ExpectedAt));
+        var activeAt0005 = await expectedService.ActiveAtAsync(midnight.LineId,
+            ExpectedRunService.ToInstant(new DateOnly(2026, 10, 6), new TimeOnly(0, 5), 0));
+        Assert.Contains(activeAt0005, x => x.ScheduledRunId == midnight.Id && x.ServiceDate == new DateOnly(2026, 10, 5));
+        var campoGrandeId = await db.ParadasIdentidadesExternas.Where(x => x.ExternalId == "4620aef3-f46e-40e9-8aa4-165f0db6f728")
+            .Select(x => x.ParadaId).SingleAsync();
+        Assert.Equal(6, weekday.Runs.Count(x => x.ShortStartCandidate && x.FirstStationId == campoGrandeId));
+        Assert.All(weekday.Runs.Where(x => x.ScheduleMappingStatus is RailScheduleMappingStatuses.Exact
+            or RailScheduleMappingStatuses.SubsetCompatible), x => Assert.NotNull(x.MappedPadraoVersaoId));
+        Assert.All(weekday.Runs.Where(x => x.ScheduleMappingStatus == RailScheduleMappingStatuses.Unresolved),
+            x => Assert.Null(x.MappedPadraoVersaoId));
+        Assert.DoesNotContain(typeof(ExpectedRun).GetProperties(), x => x.Name.Contains("TrainCode", StringComparison.Ordinal));
+
+        const string conflictPattern = "PATTERN_OUTBOUND_001";
+        var originalPattern = await db.RailSchedulePatterns.AsNoTracking().SingleAsync(x =>
+            x.ScheduleVersionId == first.ScheduleVersionId && x.ExternalPatternId == conflictPattern);
+        await db.RailSchedulePatterns.Where(x => x.ScheduleVersionId == first.ScheduleVersionId
+            && x.ExternalPatternId == conflictPattern).ExecuteUpdateAsync(x => x
+                .SetProperty(p => p.MappingStatus, RailScheduleMappingStatuses.Conflict)
+                .SetProperty(p => p.MappedPadraoVersaoId, (Guid?)null));
+        var conflictService = new ExpectedRunService(repository, new ExpectedRunCache(), NullLogger<ExpectedRunService>.Instance);
+        var withConflict = (await conflictService.MaterializeServiceDayAsync(midnight.LineId, new DateOnly(2026, 10, 5)))!;
+        Assert.Contains(conflictPattern, withConflict.ConflictPatternIds);
+        Assert.DoesNotContain(withConflict.Runs, x => x.SchedulePatternId == originalPattern.Id);
+        await db.RailSchedulePatterns.Where(x => x.ScheduleVersionId == first.ScheduleVersionId
+            && x.ExternalPatternId == conflictPattern).ExecuteUpdateAsync(x => x
+                .SetProperty(p => p.MappingStatus, originalPattern.MappingStatus)
+                .SetProperty(p => p.MappedPadraoVersaoId, originalPattern.MappedPadraoVersaoId));
+
         var secondPlan = plan with { ContentHash = new string('b', 64) };
         var coexist = await service.ImportAsync(secondPlan, activate: false); db.ChangeTracker.Clear();
         Assert.NotEqual(first.ScheduleVersionId, coexist.ScheduleVersionId);
@@ -89,8 +185,13 @@ public sealed class RailScheduleImportPostgisTests
         Assert.Equal(first.ScheduleVersionId, (await repository.ActiveVersionAsync(midnight.LineId))!.Id);
         await service.ActivateAsync(coexist.ScheduleVersionId); db.ChangeTracker.Clear();
         Assert.Equal(coexist.ScheduleVersionId, (await repository.ActiveVersionAsync(midnight.LineId))!.Id);
+        var afterVersionChange = (await expectedService.MaterializeServiceDayAsync(midnight.LineId, new DateOnly(2026, 10, 5)))!;
+        Assert.Equal(coexist.ScheduleVersionId, afterVersionChange.ScheduleVersionId);
+        Assert.False(afterVersionChange.CacheHit);
+        Assert.Equal(1, expectedCache.Count);
         Assert.False(await db.RailScheduleVersions.Where(x => x.Id == first.ScheduleVersionId).Select(x => x.IsActive).SingleAsync());
         await service.ActivateAsync(first.ScheduleVersionId); db.ChangeTracker.Clear();
         Assert.Equal(first.ScheduleVersionId, (await repository.ActiveVersionAsync(midnight.LineId))!.Id);
     }
+
 }
