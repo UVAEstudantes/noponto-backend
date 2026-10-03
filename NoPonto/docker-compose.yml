@@ -129,6 +129,15 @@ services:
       TremRealtime__Scanner__NoServiceBackoffMultiplier: ${TremRealtime__Scanner__NoServiceBackoffMultiplier:-2}
       TremRealtime__Scanner__MaxDiscoveryBackoffMinutes: ${TremRealtime__Scanner__MaxDiscoveryBackoffMinutes:-15}
       TremRealtime__Scanner__TargetHitResetBackoff: ${TremRealtime__Scanner__TargetHitResetBackoff:-true}
+      RailScheduleRuntime__Enabled: ${RailScheduleRuntime__Enabled:-false}
+      RailScheduleRuntime__ScheduleAwareProbesEnabled: ${RailScheduleRuntime__ScheduleAwareProbesEnabled:-false}
+      RailScheduleRuntime__SpatialEstimationEnabled: ${RailScheduleRuntime__SpatialEstimationEnabled:-false}
+      RailScheduleRuntime__StaleAfterSeconds: ${RailScheduleRuntime__StaleAfterSeconds:-300}
+      RailScheduleRuntime__UnavailableAfterSeconds: ${RailScheduleRuntime__UnavailableAfterSeconds:-900}
+      RailScheduleRuntime__RecentAnchorCount: ${RailScheduleRuntime__RecentAnchorCount:-5}
+      RailScheduleRuntime__DelayOutlierSeconds: ${RailScheduleRuntime__DelayOutlierSeconds:-600}
+      RailScheduleRuntime__ProbeWindowMinutes: ${RailScheduleRuntime__ProbeWindowMinutes:-10}
+      RailScheduleRuntime__ProbePriorityBoost: ${RailScheduleRuntime__ProbePriorityBoost:-40}
 
       TelemetriaMlSampling__Enabled: ${TelemetriaMlSampling__Enabled:-false}
       TelemetriaMlSampling__LinePercentage: ${TelemetriaMlSampling__LinePercentage:-10}

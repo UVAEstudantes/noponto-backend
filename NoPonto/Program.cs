@@ -528,6 +528,14 @@ builder.Services.AddScoped<IExpectedRunService, ExpectedRunService>();
 builder.Services.AddSingleton<ExpectedRunBindingState>();
 builder.Services.AddSingleton<ExpectedRunBindingMetrics>();
 builder.Services.AddScoped<IExpectedRunBindingService, ExpectedRunBindingService>();
+builder.Services.AddOptions<RailScheduleRuntimeOptions>()
+    .Bind(builder.Configuration.GetSection(RailScheduleRuntimeOptions.SectionName))
+    .Validate(x => x.IsValid(), "RailScheduleRuntime contains invalid values.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<RailScheduleRuntimeMetrics>();
+builder.Services.AddSingleton<RailScheduleEstimateState>();
+builder.Services.AddSingleton<IRailScheduleEstimator, RailScheduleEstimator>();
+builder.Services.AddScoped<IRailScheduleProbePlanner, RailScheduleProbePlanner>();
 // TEMPORARY FRONTEND COMPATIBILITY: removable adapter for the current APK.
 builder.Services.AddScoped<NoPonto.Application.LegacyCompatibility.Services.IFrontendLegacyMapaService,
     NoPonto.Application.LegacyCompatibility.Services.FrontendLegacyMapaService>();
