@@ -6,6 +6,19 @@ public static class TiposEventoParada
     public const string Departure = "DEPARTURE";
 }
 
+public static class PapeisEstacaoEvento
+{
+    public const string Origin = "Origin";
+    public const string Intermediate = "Intermediate";
+    public const string Destination = "Destination";
+}
+
+public static class ModosProximosVeiculos
+{
+    public const string Departures = "Departures";
+    public const string Arrivals = "Arrivals";
+}
+
 public sealed record EventoParadaDto(
     string EventId,
     string EventType,
@@ -30,7 +43,9 @@ public sealed record EventoParadaDto(
     string Quality,
     DateTimeOffset? LastRealtimeEvidenceUtc,
     bool IsEstimated,
-    double? DistanciaRestanteMetros = null);
+    double? DistanciaRestanteMetros = null,
+    string StationRole = PapeisEstacaoEvento.Intermediate,
+    string NextVehiclesMode = ModosProximosVeiculos.Arrivals);
 
 public interface IEventosParadaService
 {

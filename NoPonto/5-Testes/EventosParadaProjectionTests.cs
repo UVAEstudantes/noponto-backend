@@ -123,6 +123,26 @@ public sealed class EventosParadaProjectionTests
         Assert.Equal("veiculo:D86238:recente", GpsPollingService.ChaveVeiculoRecente("D86238"));
     }
 
+    [Theory]
+    [InlineData(1, 20, PapeisEstacaoEvento.Origin, ModosProximosVeiculos.Departures)]
+    [InlineData(10, 20, PapeisEstacaoEvento.Intermediate, ModosProximosVeiculos.Arrivals)]
+    [InlineData(20, 20, PapeisEstacaoEvento.Destination, ModosProximosVeiculos.Arrivals)]
+    public void PapelDaEstacaoEhRelativoASequenciaDoExpectedRun(int sequence, int last,
+        string expectedRole, string expectedMode)
+    {
+        var role = EventosParadaService.ResolveStationRole(sequence, last);
+        Assert.Equal(expectedRole, role);
+        Assert.Equal(expectedMode, role == PapeisEstacaoEvento.Origin
+            ? ModosProximosVeiculos.Departures : ModosProximosVeiculos.Arrivals);
+    }
+
+    [Fact]
+    public void ShortStartUsaSuaPrimeiraOcorrenciaComoOrigem()
+    {
+        Assert.Equal(PapeisEstacaoEvento.Origin,
+            EventosParadaService.ResolveStationRole(1, 8));
+    }
+
     private static EventosParadaService.StopContext Context(Guid id, int order) => new(id,
         Guid.NewGuid(), order, .5, 500, Guid.NewGuid(), 1000, Guid.NewGuid(), Guid.NewGuid(),
         Guid.NewGuid(), "1", "Ônibus", "regular");

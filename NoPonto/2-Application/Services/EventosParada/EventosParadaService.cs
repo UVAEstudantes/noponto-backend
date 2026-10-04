@@ -66,7 +66,9 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                 stop.LinhaId, stop.CodigoLinha, "onibus", routeType, stop.SentidoId, stop.PadraoOperacionalId,
                 stop.PadraoVersaoId, stop.ParadaId, stop.Id, position.Ordem, null, null, position.Ordem, null,
                 null, estimated, seconds is null ? null : (long?)Math.Round(seconds.Value), "RealtimeEstimated",
-                position.EtaConfianca ?? "OperationalEstimate", position.TimestampGps, true, remaining));
+                position.EtaConfianca ?? "OperationalEstimate", position.TimestampGps, true, remaining,
+                stop.Ordem == 1 ? PapeisEstacaoEvento.Origin : PapeisEstacaoEvento.Intermediate,
+                stop.Ordem == 1 ? ModosProximosVeiculos.Departures : ModosProximosVeiculos.Arrivals));
         }
         return events;
     }
@@ -101,6 +103,8 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                 var quality = snapshot?.PositionQuality.ToString() ?? "ScheduleOnly";
                 var evidence = snapshot is null || snapshot.LastRealtimeEvidenceUtc == DateTimeOffset.MinValue
                     ? null : (DateTimeOffset?)snapshot.LastRealtimeEvidenceUtc;
+                var stationRole = ResolveStationRole(scheduledStop.StopSequence,
+                    run.Stops.Max(x => x.StopSequence));
                 events.Add(new($"rail:{run.ExpectedRunId:D}:{scheduledStop.ScheduledStopId:D}",
                     scheduledStop.StopSequence == 1 ? TiposEventoParada.Departure : TiposEventoParada.Arrival,
                     structural.LinhaId, structural.CodigoLinha, "trem", "trem", structural.SentidoId,
@@ -108,7 +112,9 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                     null, snapshot?.RailVehicleId, run.ExpectedRunId, null,
                     string.IsNullOrWhiteSpace(snapshot?.TrainCode) ? null : snapshot.TrainCode,
                     scheduledStop.ExpectedAt, estimated, (long)Math.Round((estimated - now).TotalSeconds),
-                    source, quality, evidence, true));
+                    source, quality, evidence, true, null, stationRole,
+                    stationRole == PapeisEstacaoEvento.Origin
+                        ? ModosProximosVeiculos.Departures : ModosProximosVeiculos.Arrivals));
             }
         }
         return events;
@@ -134,6 +140,11 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
     internal static IReadOnlyList<EventoParadaDto> Order(IEnumerable<EventoParadaDto> values) => values
         .OrderBy(x => x.EstimatedAt ?? x.ScheduledAt ?? DateTimeOffset.MaxValue)
         .ThenBy(x => x.SecondsUntilEvent ?? long.MaxValue).ThenBy(x => x.EventId, StringComparer.Ordinal).ToArray();
+
+    internal static string ResolveStationRole(int stopSequence, int lastStopSequence) =>
+        stopSequence == 1 ? PapeisEstacaoEvento.Origin
+        : stopSequence == lastStopSequence ? PapeisEstacaoEvento.Destination
+        : PapeisEstacaoEvento.Intermediate;
 
     private static bool IsRail(string modal) => modal.Contains("trem", StringComparison.OrdinalIgnoreCase)
         || modal.Contains("ferro", StringComparison.OrdinalIgnoreCase);

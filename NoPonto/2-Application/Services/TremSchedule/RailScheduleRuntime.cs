@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.LinearReferencing;
 using NoPonto.Application.TremRealtime.Options;
+using NoPonto.Application.TremRealtime.RailRuntime;
 using NoPonto.Application.TremRealtime.Scheduling;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Domain.Entities;
@@ -19,6 +20,9 @@ public sealed record RailScheduleSpatialPosition(double Latitude, double Longitu
 
 public sealed record RailScheduleProjection(ExpectedStop? Previous, ExpectedStop? Next,
     double? Progress, RailScheduleSpatialPosition? Spatial);
+
+public sealed record RailPhysicalNextProjection(TremTopologyOccurrence? Previous,
+    TremTopologyOccurrence? Next, DateTimeOffset? EstimatedNextAtUtc);
 
 public static class RailScheduleProjectionCalculator
 {
@@ -41,6 +45,40 @@ public static class RailScheduleProjectionCalculator
         if (spatialEnabled && mappingSafe && previous is not null && next is not null && progress is not null)
             spatial = Spatial(run.MappedPadraoVersaoId!.Value, previous, next, progress.Value, topology);
         return new(previous, next, progress, spatial);
+    }
+
+    public static RailPhysicalNextProjection ResolvePhysicalNext(ExpectedRun run,
+        TremPatternTopology pattern, double distanceMetres, RailRunState state, double delaySeconds)
+    {
+        var occurrences = pattern.Occurrences.OrderBy(x => x.Order).ToArray();
+        var previous = occurrences.LastOrDefault(x => x.DistanceAlongPatternMetres <= distanceMetres + .01);
+        var next = state == RailRunState.TerminalHold ? null
+            : occurrences.FirstOrDefault(x => x.Order > (previous?.Order ?? int.MinValue)
+                && x.DistanceAlongPatternMetres > distanceMetres + .01);
+        if (next is null) return new(previous, null, null);
+
+        var mappedStops = new List<(ExpectedStop Stop, TremTopologyOccurrence Occurrence)>();
+        var lastOrder = int.MinValue;
+        foreach (var stop in run.Stops.OrderBy(x => x.StopSequence))
+        {
+            var occurrence = occurrences.FirstOrDefault(x => x.ParadaId == stop.ParadaId && x.Order > lastOrder);
+            if (occurrence is null) continue;
+            mappedStops.Add((stop, occurrence));
+            lastOrder = occurrence.Order;
+        }
+        var exact = mappedStops.FirstOrDefault(x => x.Occurrence.OccurrenceId == next.OccurrenceId);
+        if (exact.Stop is not null)
+            return new(previous, next, exact.Stop.ExpectedAt.AddSeconds(delaySeconds));
+        var lower = mappedStops.LastOrDefault(x => x.Occurrence.Order < next.Order);
+        var upper = mappedStops.FirstOrDefault(x => x.Occurrence.Order > next.Order);
+        if (lower.Stop is null || upper.Stop is null) return new(previous, next, null);
+        var span = upper.Occurrence.DistanceAlongPatternMetres - lower.Occurrence.DistanceAlongPatternMetres;
+        if (span <= 0) return new(previous, next, null);
+        var fraction = Math.Clamp((next.DistanceAlongPatternMetres - lower.Occurrence.DistanceAlongPatternMetres)
+            / span, 0, 1);
+        var lowerAt = lower.Stop.ExpectedAt.AddSeconds(delaySeconds);
+        var upperAt = upper.Stop.ExpectedAt.AddSeconds(delaySeconds);
+        return new(previous, next, lowerAt.AddTicks((long)((upperAt - lowerAt).Ticks * fraction)));
     }
 
     private static RailScheduleSpatialPosition? Spatial(Guid versionId, ExpectedStop previous,

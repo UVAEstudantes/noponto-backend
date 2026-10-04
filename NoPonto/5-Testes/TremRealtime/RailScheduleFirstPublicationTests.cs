@@ -44,6 +44,8 @@ public sealed class RailScheduleFirstPublicationTests
         Assert.Null(value.EstimatedDepartureAtUtc);
         Assert.Equal(360, value.SecondsToDeparture);
         Assert.Equal(RailRunState.AwaitingDeparture, value.State);
+        Assert.Equal(OccB, value.NextOccurrenceId);
+        Assert.Equal("Engenho Novo", value.NextStationName);
     }
 
     [Fact]
@@ -146,6 +148,25 @@ public sealed class RailScheduleFirstPublicationTests
         var value = Assert.Single(h.Provider.CaptureSnapshot().PublicVehicles);
         Assert.Equal(RailPositionSource.RealtimeEstimated, value.PositionSource);
         Assert.Equal(RunId, value.RailRunId); Assert.Equal(RunId, value.RailVehicleId);
+    }
+
+    [Fact]
+    public void RealtimeWinnerKeepsNextOccurrenceNameAndEtaFromSamePhysicalProjection()
+    {
+        var physicalEta = Now.AddMinutes(3);
+        var baseline = Baseline("US167") with
+        {
+            PreviousOccurrenceId = OccA, NextOccurrenceId = OccB,
+            NextStationName = "Engenho Novo",
+            EstimatedArrivalAtNextStationUtc = physicalEta,
+            SecondsToNextStation = 180
+        };
+        var h = Harness(baseline); var run = Run(); h.Refresh(run); h.Confirm(run, Now, 0, 2);
+        var value = Assert.Single(h.Provider.CaptureSnapshot().PublicVehicles);
+        Assert.Equal(OccB, value.NextOccurrenceId);
+        Assert.Equal("Engenho Novo", value.NextStationName);
+        Assert.Equal(physicalEta, value.EstimatedArrivalAtNextStationUtc);
+        Assert.Equal(180, value.SecondsToNextStation);
     }
 
     [Fact]

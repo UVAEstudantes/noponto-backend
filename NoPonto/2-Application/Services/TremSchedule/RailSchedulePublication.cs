@@ -87,17 +87,17 @@ public sealed class RailSchedulePublicationState(RailSchedulePublicationMetrics 
             if (pattern is null) { metrics.NoMapping(); _items.Remove(key); return; }
             if (estimate.PreviousScheduledStop is null || estimate.NextScheduledStop is null)
             { metrics.NoOccurrence(); _items.Remove(key); return; }
-            var pairs = pattern.Occurrences.Where(x => x.ParadaId == estimate.PreviousScheduledStop.ParadaId)
-                .SelectMany(a => pattern.Occurrences.Where(x => x.ParadaId == estimate.NextScheduledStop.ParadaId
-                    && x.Order > a.Order).Select(b => (A: a, B: b))).ToArray();
-            if (pairs.Length != 1) { metrics.NoOccurrence(); _items.Remove(key); return; }
             var referenceDistance = estimate.SpatialPosition.PositionAlongPattern * pattern.LengthMetres;
-            var targetTime = estimate.NextScheduledStop.ExpectedAt.AddSeconds(estimate.DelaySeconds);
+            var physical = RailScheduleProjectionCalculator.ResolvePhysicalNext(run, pattern,
+                referenceDistance, RailRunState.InSegment, estimate.DelaySeconds);
+            if (physical.Previous is null || physical.Next is null
+                || physical.EstimatedNextAtUtc is null)
+            { metrics.NoOccurrence(); _items.Remove(key); return; }
             var candidate = new RailSchedulePublishedCandidate(binding.Provider, binding.TrackingDate, code,
                 run.ExpectedRunId, StableVehicleId(binding.Provider, binding.TrackingDate, code), run.LineId,
-                run.SentidoId, run.MappedPadraoVersaoId!.Value, pairs[0].A.OccurrenceId,
-                pairs[0].B.OccurrenceId, referenceDistance, estimate.EstimatedAtUtc,
-                pairs[0].B.DistanceAlongPatternMetres, targetTime,
+                run.SentidoId, run.MappedPadraoVersaoId!.Value, physical.Previous.OccurrenceId,
+                physical.Next.OccurrenceId, referenceDistance, estimate.EstimatedAtUtc,
+                physical.Next.DistanceAlongPatternMetres, physical.EstimatedNextAtUtc.Value,
                 binding.LastObservedAtUtc + publishFreshness, binding.LastObservedAtUtc,
                 run.ScheduleMappingStatus, true, "SCHEDULE_REALTIME_ESTIMATE");
             if (_items.ContainsKey(key)) metrics.Replaced();
@@ -238,9 +238,6 @@ public sealed class RailPublishedSnapshotProvider(IRailRealtimeEngine engine,
                         LineName = candidate.PublicSnapshot.LineName,
                         DestinationName = candidate.PublicSnapshot.DestinationName,
                         DestinationStationId = candidate.PublicSnapshot.DestinationStationId,
-                        NextStationName = candidate.PublicSnapshot.NextStationName,
-                        EstimatedArrivalAtNextStationUtc = candidate.PublicSnapshot.EstimatedArrivalAtNextStationUtc,
-                        SecondsToNextStation = candidate.PublicSnapshot.SecondsToNextStation,
                         PlatformLabel = selected.Platform,
                         OperationalStatus = RailOperationalStatus.Live,
                         SecondsToDeparture = liveAtOrigin && departure is not null

@@ -189,10 +189,12 @@ public sealed class RailScheduleFirstRuntimeState(IOptions<RailScheduleRuntimeOp
             if (pair is null || projection.Spatial is null) return null;
             distance = projection.Spatial.PositionAlongPattern * pattern.LengthMetres;
         }
-        var previousOccurrence = UniqueOccurrenceAtOrBefore(pattern, previousStop.ParadaId, distance);
-        var nextOccurrence = UniqueOccurrenceAtOrAfter(pattern, nextStop.ParadaId, distance);
+        var physical = RailScheduleProjectionCalculator.ResolvePhysicalNext(run, pattern, distance,
+            publicState, entry.DelaySeconds);
+        var previousOccurrence = physical.Previous;
+        var nextOccurrence = physical.Next;
         var originOccurrence = UniqueOccurrence(pattern, run.Stops[0].ParadaId);
-        if (previousOccurrence is null || nextOccurrence is null || originOccurrence is null) return null;
+        if (previousOccurrence is null || originOccurrence is null) return null;
         var source = entry.TrainCode is null ? RailPositionSource.ScheduledEstimated
             : RailPositionSource.ScheduleEstimated;
         var quality = entry.TrainCode is null ? RailPositionQuality.ScheduleOnly
@@ -207,19 +209,20 @@ public sealed class RailScheduleFirstRuntimeState(IOptions<RailScheduleRuntimeOp
             ? Math.Max(0L, (long)Math.Ceiling((effectiveDeparture - now).TotalSeconds))
             : (long?)null;
         var destinationOccurrence = UniqueOccurrence(pattern, run.TerminalStationId);
-        var secondsToNext = !isAtOriginTerminal && target >= now
-            ? Math.Max(0L, (long)Math.Ceiling((target - now).TotalSeconds))
+        var physicalTarget = physical.EstimatedNextAtUtc;
+        var secondsToNext = !isAtOriginTerminal && physicalTarget >= now
+            ? Math.Max(0L, (long)Math.Ceiling((physicalTarget.Value - now).TotalSeconds))
             : (long?)null;
         var publicValue = new RailVehiclePublicSnapshot(run.ExpectedRunId, run.ExpectedRunId,
             entry.TrainCode ?? string.Empty, run.MappedPadraoVersaoId.Value, run.LineId, run.SentidoId,
-            publicState, previousOccurrence.OccurrenceId, nextOccurrence.OccurrenceId,
-            distance, now, nextOccurrence.DistanceAlongPatternMetres, target,
+            publicState, previousOccurrence.OccurrenceId, nextOccurrence?.OccurrenceId,
+            distance, now, nextOccurrence?.DistanceAlongPatternMetres ?? distance, physicalTarget ?? now,
             null, null, null, source, quality, freshUntil, true, false,
             entry.LastEvidenceUtc ?? DateTimeOffset.MinValue, isAtOriginTerminal,
             scheduledDeparture, estimatedDeparture, secondsToDeparture,
             pattern.LineName, destinationOccurrence?.StationName, run.TerminalStationId,
-            null, nextOccurrence.StationName,
-            !isAtOriginTerminal ? target : null, secondsToNext,
+            null, nextOccurrence?.StationName,
+            !isAtOriginTerminal ? physicalTarget : null, secondsToNext,
             status == RailOperationalRunStatus.Scheduled
                 ? RailOperationalStatus.Scheduled
                 : status == RailOperationalRunStatus.ConfirmedLive

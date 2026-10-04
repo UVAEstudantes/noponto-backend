@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using NoPonto.Application.TremRealtime.Options;
+using NoPonto.Application.TremRealtime.RailRuntime;
 using NoPonto.Application.TremRealtime.Scheduling;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremSchedule;
@@ -116,6 +117,103 @@ public sealed class RailScheduleRuntimeTests
     }
 
     [Fact]
+    public void DistantProbeTargetDoesNotSkipPhysicalIntermediateOccurrence()
+    {
+        var d = Guid.NewGuid();
+        var run = Run(mapping: RailScheduleMappingStatuses.SubsetCompatible,
+            stops: [Stop(A, 1, T0), Stop(d, 2, T0.AddMinutes(30))]);
+        var pattern = Pattern((Guid.NewGuid(), 1, A, 0d), (Guid.NewGuid(), 2, B, 1000d),
+            (Guid.NewGuid(), 3, C, 2000d), (Guid.NewGuid(), 4, d, 3000d));
+
+        var physical = RailScheduleProjectionCalculator.ResolvePhysicalNext(run, pattern,
+            100, RailRunState.InSegment, 0);
+
+        Assert.Equal(B, physical.Next!.ParadaId);
+        Assert.Equal(T0.AddMinutes(10), physical.EstimatedNextAtUtc);
+        Assert.NotEqual(d, physical.Next.ParadaId);
+    }
+
+    [Fact]
+    public void DwellAndTerminalUseNextPhysicalOccurrenceWithoutRepeatingCurrentStation()
+    {
+        var run = Run(); var pattern = Pattern((Guid.NewGuid(), 1, A, 0d),
+            (Guid.NewGuid(), 2, B, 1000d), (Guid.NewGuid(), 3, C, 2000d));
+        var dwell = RailScheduleProjectionCalculator.ResolvePhysicalNext(run, pattern,
+            1000, RailRunState.Dwell, 0);
+        var terminal = RailScheduleProjectionCalculator.ResolvePhysicalNext(run, pattern,
+            2000, RailRunState.TerminalHold, 0);
+        Assert.Equal(C, dwell.Next!.ParadaId);
+        Assert.Null(terminal.Next);
+        Assert.Null(terminal.EstimatedNextAtUtc);
+    }
+
+    [Fact]
+    public void RepeatedStationIsResolvedByOccurrenceOrderAndCrossMidnightKeepsInstant()
+    {
+        var repeated = Guid.NewGuid();
+        var first = Guid.NewGuid(); var middle = Guid.NewGuid(); var second = Guid.NewGuid();
+        var start = new DateTimeOffset(2026, 10, 5, 23, 50, 0, TimeSpan.Zero);
+        var run = Run(serviceDate: new(2026, 10, 5), crossMidnight: true,
+            stops: [Stop(repeated, 1, start), Stop(B, 2, start.AddMinutes(10)),
+                Stop(repeated, 3, start.AddMinutes(20))]);
+        var pattern = Pattern((first, 1, repeated, 0d), (middle, 2, B, 1000d),
+            (second, 3, repeated, 2000d));
+        var physical = RailScheduleProjectionCalculator.ResolvePhysicalNext(run, pattern,
+            100, RailRunState.InSegment, 120);
+        Assert.Equal(middle, physical.Next!.OccurrenceId);
+        Assert.Equal(new DateTimeOffset(2026, 10, 6, 0, 2, 0, TimeSpan.Zero),
+            physical.EstimatedNextAtUtc);
+    }
+
+    [Fact]
+    public void ProviderTargetRemainsAnchorButPublishedTargetBecomesNextPhysicalOccurrence()
+    {
+        var oa = Guid.NewGuid(); var ob = Guid.NewGuid(); var oc = Guid.NewGuid(); var od = Guid.NewGuid();
+        var d = Guid.NewGuid();
+        var pattern = Pattern((oa, 1, A, 0d), (ob, 2, B, 1000d),
+            (oc, 3, C, 2000d), (od, 4, d, 3000d));
+        var profile = RailTemporalPredictor.Build([(oa, 0d, new TimeOnly(8, 0)),
+            (ob, 1000d, new TimeOnly(8, 5)), (oc, 2000d, new TimeOnly(8, 10)),
+            (od, 3000d, new TimeOnly(8, 16))]);
+        var providerTarget = T0.AddMinutes(16);
+        var anchor = new RailTemporalAnchor(Guid.NewGuid(), "A_D", Version, od, d, 4, 3000,
+            T0, T0, providerTarget, 16, RailTemporalAnchorKind.PredictedPassageAtStation,
+            RailPositionSource.RealtimeEstimated, RailPositionQuality.RealtimeAnchored);
+        var raw = new RailPositionEstimate(Guid.NewGuid(), Version, RailRunState.InSegment,
+            oa, od, 100, T0, 3000, providerTarget, RailPositionSource.RealtimeEstimated,
+            RailPositionQuality.TemporalSingleAnchor, T0.AddMinutes(5), true, false, null,
+            RailCorrectionKind.None);
+
+        var aligned = RailRealtimeEngine.AlignToPhysicalNext(pattern, profile, [anchor], raw, T0);
+
+        Assert.Equal(ob, aligned.NextOccurrenceId);
+        Assert.Equal(T0.AddMinutes(5), aligned.TargetTimeUtc);
+        Assert.Equal(providerTarget, anchor.PredictedEventUtc);
+        Assert.Equal(od, anchor.OccurrenceId);
+    }
+
+    [Fact]
+    public void OppositeDirectionAndShortStartFollowTheirOwnOccurrenceOrder()
+    {
+        var d = Guid.NewGuid();
+        var reverseRun = Run(stops: [Stop(d, 1, T0), Stop(C, 2, T0.AddMinutes(10)),
+            Stop(B, 3, T0.AddMinutes(20)), Stop(A, 4, T0.AddMinutes(30))]);
+        var reverse = Pattern((Guid.NewGuid(), 1, d, 0d), (Guid.NewGuid(), 2, C, 1000d),
+            (Guid.NewGuid(), 3, B, 2000d), (Guid.NewGuid(), 4, A, 3000d));
+        Assert.Equal(C, RailScheduleProjectionCalculator.ResolvePhysicalNext(reverseRun, reverse,
+            100, RailRunState.InSegment, 0).Next!.ParadaId);
+
+        var shortRun = Run(shortStart: true,
+            stops: [Stop(C, 1, T0), Stop(d, 2, T0.AddMinutes(10))]);
+        var forward = Pattern((Guid.NewGuid(), 1, A, 0d), (Guid.NewGuid(), 2, B, 1000d),
+            (Guid.NewGuid(), 3, C, 2000d), (Guid.NewGuid(), 4, d, 3000d));
+        var shortStart = RailScheduleProjectionCalculator.ResolvePhysicalNext(shortRun, forward,
+            2000, RailRunState.AwaitingDeparture, 0);
+        Assert.Equal(d, shortStart.Next!.ParadaId);
+        Assert.DoesNotContain(shortStart.Next.ParadaId, new[] { A, B });
+    }
+
+    [Fact]
     public async Task ScheduleAwarePlannerDeduplicatesEquivalentProbeAcrossRuns()
     {
         var runs = new[] { Run(), Run(id: Guid.NewGuid()) };
@@ -188,6 +286,11 @@ public sealed class RailScheduleRuntimeTests
       occurrences.Add(new(Guid.NewGuid(),3,C){DistanceAlongPatternMetres=2000,PositionAlongPattern=1});
       return new(T0,[new(Guid.NewGuid(),run.MappedPadraoVersaoId??Version,Line,Direction,
         occurrences.ToImmutableArray()){LengthMetres=2000,Geometry=geometry}]); }
+    private static TremPatternTopology Pattern(params (Guid Id, int Order, Guid Stop, double Distance)[] values)
+    { var occurrences=values.Select(x=>new TremTopologyOccurrence(x.Id,x.Order,x.Stop)
+        {DistanceAlongPatternMetres=x.Distance,PositionAlongPattern=x.Distance/Math.Max(1,values[^1].Distance)})
+        .ToImmutableArray(); return new(Guid.NewGuid(),Version,Line,Direction,occurrences)
+        {LengthMetres=values[^1].Distance}; }
     private static TremSentinelQuery Query(Guid origin,Guid destination)=>new("SCHEDULE_PROBE",
         new("a","b"),"a","b",origin,destination,new HashSet<Guid>{Line},new HashSet<Guid>{Direction},
         new HashSet<Guid>(),new HashSet<Guid>(),TremSentinelPurpose.Discovery,1,"test",false,

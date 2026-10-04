@@ -214,8 +214,46 @@ public sealed class RailRealtimeEngine : IRailRealtimeEngine
                 ? EstimateSingleAnchor(run, profile, now, previous) : null;
         else
             run.Position = RailPositionEstimator.Estimate(run.Id, run.Pattern, run.Anchors.ToArray(), now, _options, previous);
+        if (run.Position is not null && _temporalProfiles.TryGetValue(run.Pattern.PadraoVersaoId, out var physicalProfile))
+            run.Position = AlignToPhysicalNext(run.Pattern, physicalProfile, run.Anchors, run.Position, now);
         if (previous is null && run.Position is not null) Interlocked.Increment(ref _positions);
         run.State = run.Position?.State ?? RailRunState.Unresolved;
+    }
+
+    internal static RailPositionEstimate AlignToPhysicalNext(TremPatternTopology pattern,
+        RailTemporalProfile profile, IEnumerable<RailTemporalAnchor> anchors,
+        RailPositionEstimate position, DateTimeOffset now)
+    {
+        var ordered = pattern.Occurrences.OrderBy(x => x.Order).ToArray();
+        if (ordered.Length == 0) return position;
+        var previous = ordered.LastOrDefault(x => x.DistanceAlongPatternMetres <=
+            position.DistanceAtReferenceMetres + .01);
+        TremTopologyOccurrence? next = null;
+        if (position.State != RailRunState.TerminalHold)
+        {
+            var previousOrder = previous?.Order ?? int.MinValue;
+            next = ordered.FirstOrDefault(x => x.Order > previousOrder
+                && x.DistanceAlongPatternMetres > position.DistanceAtReferenceMetres + .01);
+        }
+        if (next is null)
+            return position with { PreviousOccurrenceId = previous?.OccurrenceId,
+                NextOccurrenceId = null, TargetDistanceMetres = position.DistanceAtReferenceMetres,
+                TargetTimeUtc = now };
+
+        var nominalNext = profile.Occurrences.FirstOrDefault(x => x.OccurrenceId == next.OccurrenceId);
+        var timedAnchor = anchors.Where(x => x.PredictedEventUtc is not null)
+            .Select(x => (Anchor: x, Nominal: profile.Occurrences.FirstOrDefault(n =>
+                n.OccurrenceId == x.OccurrenceId)))
+            .Where(x => x.Nominal is not null)
+            .OrderByDescending(x => x.Anchor.ReceivedAtUtc).FirstOrDefault();
+        var targetTime = nominalNext is not null && timedAnchor.Anchor is not null
+            ? timedAnchor.Anchor.PredictedEventUtc!.Value
+                + (nominalNext.NominalTimeAlongRoute - timedAnchor.Nominal!.NominalTimeAlongRoute)
+            : position.TargetTimeUtc;
+        return position with { PreviousOccurrenceId = previous?.OccurrenceId,
+            NextOccurrenceId = next.OccurrenceId,
+            TargetDistanceMetres = next.DistanceAlongPatternMetres,
+            TargetTimeUtc = targetTime };
     }
 
     private RailPositionEstimate? EstimateSingleAnchor(RunEntry run, RailTemporalProfile profile,
