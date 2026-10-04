@@ -70,6 +70,63 @@ public sealed class RailSchedulePublicationTests
     }
 
     [Fact]
+    public void ScheduleEvidenceWinsWhenBaselinePositionWasRecalculatedLater()
+    {
+        var baselineEvidence = Now.AddMinutes(-3);
+        var baseline = OldVehicle("T123", Now) with
+        {
+            ReferenceTimeUtc = Now.AddMinutes(1),
+            TargetTimeUtc = Now.AddMinutes(4),
+            PositionSource = RailPositionSource.HistoricalEstimated,
+            PositionQuality = RailPositionQuality.HistoricalFallback
+        };
+        var run = OldRun(baseline, baselineEvidence);
+        var h = Harness(enabled: true, baseline: baseline, baselineRun: run);
+        h.Observe();
+
+        var value = Assert.Single(h.Provider.CaptureSnapshot().PublicVehicles);
+        Assert.Equal(RailPositionSource.ScheduleEstimated, value.PositionSource);
+        Assert.Equal(1, h.Metrics.Capture().LastMerge.ScheduleWinsFresher);
+    }
+
+    [Fact]
+    public void BaselineWithActuallyNewerEvidenceWins()
+    {
+        var baseline = OldVehicle("T123", Now.AddMinutes(1));
+        var h = Harness(enabled: true, baseline: baseline,
+            baselineRun: OldRun(baseline, Now.AddMinutes(1)));
+        h.Observe();
+
+        Assert.Equal(baseline.RailRunId, Assert.Single(h.Provider.CaptureSnapshot().PublicVehicles).RailRunId);
+        Assert.Equal(1, h.Metrics.Capture().LastMerge.BaselineWinsFresher);
+    }
+
+    [Fact]
+    public void EqualRealtimeEvidenceKeepsBaseline()
+    {
+        var baseline = OldVehicle("T123", Now.AddMinutes(2));
+        var h = Harness(enabled: true, baseline: baseline, baselineRun: OldRun(baseline, Now));
+        h.Observe();
+
+        Assert.Equal(baseline.RailRunId, Assert.Single(h.Provider.CaptureSnapshot().PublicVehicles).RailRunId);
+        Assert.Equal(1, h.Metrics.Capture().LastMerge.TiesBaselineWins);
+    }
+
+    [Fact]
+    public void ScheduleOnlyAndBaselineOnlyBothRemainInMergedSnapshot()
+    {
+        var baseline = OldVehicle("OLD", Now);
+        var h = Harness(enabled: true, baseline: baseline); h.Observe();
+
+        var values = h.Provider.CaptureSnapshot().PublicVehicles;
+        Assert.Equal(["OLD", "T123"], values.Select(x => x.TrainCode).ToArray());
+        var merge = h.Metrics.Capture().LastMerge;
+        Assert.Equal(1, merge.ScheduleOnly);
+        Assert.Equal(1, merge.BaselineOnly);
+        Assert.Equal(2, merge.FinalUniqueTrains);
+    }
+
+    [Fact]
     public void ScheduleWinsWhenBaselineIsAbsentExpiredOrOlder()
     {
         var old = OldVehicle("T123", Now.AddMinutes(-1)) with { FreshUntilUtc = Now.AddMinutes(1) };
@@ -103,12 +160,14 @@ public sealed class RailSchedulePublicationTests
     }
 
     private static HarnessState Harness(bool enabled, RailVehiclePublicSnapshot? baseline = null,
-        RailVehiclePublicSnapshot? extraBaseline = null, string mapping = RailScheduleMappingStatuses.Exact)
+        RailVehiclePublicSnapshot? extraBaseline = null, string mapping = RailScheduleMappingStatuses.Exact,
+        RailRun? baselineRun = null)
     {
         var clock = new TestClock(Now); var metrics = new RailSchedulePublicationMetrics();
         var state = new RailSchedulePublicationState(metrics);
         var values = new[] { baseline, extraBaseline }.Where(x => x is not null).Cast<RailVehiclePublicSnapshot>().ToImmutableArray();
-        var engine = new FakeEngine(new(Now, [], [], values));
+        var runs = baselineRun is null ? ImmutableArray<RailRun>.Empty : [baselineRun];
+        var engine = new FakeEngine(new(Now, [], runs, values));
         var provider = new RailPublishedSnapshotProvider(engine, state, metrics,
             Options.Create(new RailScheduleRuntimeOptions { PublishEstimatedPositions = enabled }), clock);
         return new(state, provider, metrics, clock, mapping);
@@ -155,6 +214,13 @@ public sealed class RailSchedulePublicationTests
         Guid.NewGuid(),code,Version,Line,Direction,RailRunState.InSegment,OccA,OccB,100,Now,500,
         Now.AddMinutes(2),null,null,null,RailPositionSource.RealtimeEstimated,RailPositionQuality.RealtimeAnchored,
         Now.AddMinutes(2),true,false,evidence);
+    private static RailRun OldRun(RailVehiclePublicSnapshot vehicle, DateTimeOffset evidence) => new(
+        vehicle.RailRunId, vehicle.RailVehicleId, Guid.NewGuid(), vehicle.LinhaId, vehicle.SentidoId,
+        Guid.NewGuid(), vehicle.PadraoVersaoId, vehicle.State, Now.AddHours(-1), evidence, null,
+        [new(Guid.NewGuid(), "BASE", vehicle.PadraoVersaoId, vehicle.PreviousOccurrenceId!.Value,
+            A, 1, 100, evidence, evidence.AddSeconds(1), evidence.AddMinutes(1), 1,
+            RailTemporalAnchorKind.PredictedPassageAtStation, RailPositionSource.RealtimeEstimated,
+            RailPositionQuality.RealtimeAnchored)], null);
     private sealed class FakeEngine(RailRealtimeSnapshot snapshot):IRailRealtimeEngine
     { public RailRealtimeSnapshot CaptureSnapshot()=>snapshot;
       public void Observe(TremSentinelQuery s,IReadOnlyList<TrackedObservationAcceptance>a,

@@ -19,20 +19,31 @@ public sealed record RailSchedulePublishedCandidate(string Provider, DateOnly Tr
 
 public sealed record RailSchedulePublicationMetricsSnapshot(long Publishable, long Published,
     long SuppressedExistingFresher, long SuppressedStale, long SuppressedNoSpatial,
-    long Removed, long PublishedUniqueTrains);
+    long Removed, long PublishedUniqueTrains, RailSchedulePublicationMergeSnapshot LastMerge);
+
+public sealed record RailSchedulePublicationMergeSnapshot(int ScheduleCandidates, int BaselineCandidates,
+    int MatchedByTrainCode, int ScheduleOnly, int BaselineOnly, int BaselineWinsFresher,
+    int ScheduleWinsFresher, int TiesBaselineWins, int FinalUniqueTrains,
+    int FinalScheduleTrains, int FinalBaselineTrains)
+{
+    public static RailSchedulePublicationMergeSnapshot Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+}
 
 public sealed class RailSchedulePublicationMetrics
 {
     private long _publishable, _published, _existing, _stale, _noSpatial, _removed, _unique;
+    private RailSchedulePublicationMergeSnapshot _lastMerge = RailSchedulePublicationMergeSnapshot.Empty;
     internal void Publishable() => Interlocked.Increment(ref _publishable);
     internal void Published(int unique) { Interlocked.Add(ref _published, unique); Interlocked.Exchange(ref _unique, unique); }
     internal void ExistingFresher() => Interlocked.Increment(ref _existing);
     internal void Stale() => Interlocked.Increment(ref _stale);
     internal void NoSpatial() => Interlocked.Increment(ref _noSpatial);
     internal void Removed(int count) => Interlocked.Add(ref _removed, count);
+    internal void Merge(RailSchedulePublicationMergeSnapshot value) => Interlocked.Exchange(ref _lastMerge, value);
     public RailSchedulePublicationMetricsSnapshot Capture() => new(Interlocked.Read(ref _publishable),
         Interlocked.Read(ref _published), Interlocked.Read(ref _existing), Interlocked.Read(ref _stale),
-        Interlocked.Read(ref _noSpatial), Interlocked.Read(ref _removed), Interlocked.Read(ref _unique));
+        Interlocked.Read(ref _noSpatial), Interlocked.Read(ref _removed), Interlocked.Read(ref _unique),
+        Volatile.Read(ref _lastMerge));
 }
 
 public sealed class RailSchedulePublicationState(RailSchedulePublicationMetrics metrics)
@@ -118,22 +129,50 @@ public sealed class RailPublishedSnapshotProvider(IRailRealtimeEngine engine,
         if (!options.Value.PublishEstimatedPositions) return baseline;
         var now = clock.GetUtcNow();
         var schedule = scheduleState.Capture(now);
-        var winners = baseline.PublicVehicles.Where(x => IsBaselineEligible(x, now))
+        var baselineEvidence = baseline.Runs.ToDictionary(x => x.RailRunId,
+            x => x.Anchors.IsDefaultOrEmpty
+                ? x.LastEvidenceUtc
+                : x.Anchors.Max(a => a.RequestStartedAtUtc));
+        var baselineCandidates = baseline.PublicVehicles.Where(x => IsBaselineEligible(x, now))
             .GroupBy(x => x.TrainCode.Trim(), StringComparer.Ordinal)
-            .ToDictionary(x => x.Key, x => x.OrderByDescending(v => v.LastRealtimeEvidenceUtc).First(),
+            .ToDictionary(x => x.Key, x => x.OrderByDescending(v => EvidenceFor(v, baselineEvidence)).First(),
                 StringComparer.Ordinal);
-        foreach (var candidate in schedule.GroupBy(x => x.TrainCode, StringComparer.Ordinal)
-                     .Select(x => x.OrderByDescending(v => v.LastRealtimeEvidenceUtc).First()))
+        var scheduleCandidates = schedule.GroupBy(x => x.TrainCode.Trim(), StringComparer.Ordinal)
+            .Select(x => x.OrderByDescending(v => v.LastRealtimeEvidenceUtc).First())
+            .ToDictionary(x => x.TrainCode.Trim(), StringComparer.Ordinal);
+        var winners = new Dictionary<string, RailVehiclePublicSnapshot>(baselineCandidates,
+            StringComparer.Ordinal);
+        var matched = 0; var baselineWins = 0; var scheduleWins = 0; var ties = 0;
+        foreach (var (trainCode, candidate) in scheduleCandidates)
         {
-            if (winners.TryGetValue(candidate.TrainCode, out var current)
-                && current.LastRealtimeEvidenceUtc >= candidate.LastRealtimeEvidenceUtc)
-            { metrics.ExistingFresher(); continue; }
-            winners[candidate.TrainCode] = ToPublic(candidate);
+            if (baselineCandidates.TryGetValue(trainCode, out var current))
+            {
+                matched++;
+                var currentEvidence = EvidenceFor(current, baselineEvidence);
+                if (currentEvidence >= candidate.LastRealtimeEvidenceUtc)
+                {
+                    metrics.ExistingFresher();
+                    if (currentEvidence == candidate.LastRealtimeEvidenceUtc) ties++; else baselineWins++;
+                    continue;
+                }
+                scheduleWins++;
+            }
+            winners[trainCode] = ToPublic(candidate);
         }
         var values = winners.Values.OrderBy(x => x.TrainCode, StringComparer.Ordinal).ToImmutableArray();
-        metrics.Published(values.Count(x => x.PositionSource == RailPositionSource.ScheduleEstimated));
+        var finalSchedule = values.Count(x => x.PositionSource == RailPositionSource.ScheduleEstimated);
+        metrics.Published(finalSchedule);
+        metrics.Merge(new(scheduleCandidates.Count, baselineCandidates.Count, matched,
+            scheduleCandidates.Count - matched, baselineCandidates.Count - matched,
+            baselineWins, scheduleWins, ties, values.Length, finalSchedule,
+            values.Length - finalSchedule));
         return baseline with { GeneratedAtUtc = now, PublicVehicles = values };
     }
+
+    private static DateTimeOffset EvidenceFor(RailVehiclePublicSnapshot value,
+        IReadOnlyDictionary<Guid, DateTimeOffset> evidenceByRun) =>
+        evidenceByRun.TryGetValue(value.RailRunId, out var evidence)
+            ? evidence : value.LastRealtimeEvidenceUtc;
 
     private static bool IsBaselineEligible(RailVehiclePublicSnapshot value, DateTimeOffset now) =>
         value.FreshUntilUtc > now && (value.State is RailRunState.InSegment

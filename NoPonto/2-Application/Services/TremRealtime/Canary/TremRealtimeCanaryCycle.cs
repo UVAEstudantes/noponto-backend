@@ -280,11 +280,16 @@ public sealed class TremRealtimeCanaryCycle(
             {
                 var publication = schedulePublicationMetrics.Capture();
                 logger.LogInformation(
-                    "RailSchedulePublicationSummary publishable={Publishable} published={Published} suppressed_existing_fresher={ExistingFresher} suppressed_stale={Stale} suppressed_no_spatial={NoSpatial} removed={Removed} published_unique_trains={Unique}",
+                    "RailSchedulePublicationSummary publishable={Publishable} published={Published} suppressed_existing_fresher={ExistingFresher} suppressed_stale={Stale} suppressed_no_spatial={NoSpatial} removed={Removed} published_unique_trains={Unique} schedule_candidates={ScheduleCandidates} baseline_candidates={BaselineCandidates} matched_by_train_code={Matched} schedule_only={ScheduleOnly} baseline_only={BaselineOnly} baseline_wins_fresher={BaselineWins} schedule_wins_fresher={ScheduleWins} ties_baseline_wins={Ties} final_unique_trains={FinalUnique} final_schedule_trains={FinalSchedule} final_baseline_trains={FinalBaseline}",
                     publication.Publishable, publication.Published,
                     publication.SuppressedExistingFresher, publication.SuppressedStale,
                     publication.SuppressedNoSpatial, publication.Removed,
-                    publication.PublishedUniqueTrains);
+                    publication.PublishedUniqueTrains, publication.LastMerge.ScheduleCandidates,
+                    publication.LastMerge.BaselineCandidates, publication.LastMerge.MatchedByTrainCode,
+                    publication.LastMerge.ScheduleOnly, publication.LastMerge.BaselineOnly,
+                    publication.LastMerge.BaselineWinsFresher, publication.LastMerge.ScheduleWinsFresher,
+                    publication.LastMerge.TiesBaselineWins, publication.LastMerge.FinalUniqueTrains,
+                    publication.LastMerge.FinalScheduleTrains, publication.LastMerge.FinalBaselineTrains);
             }
             if (item.Query.IsScannerProbe)
             {
