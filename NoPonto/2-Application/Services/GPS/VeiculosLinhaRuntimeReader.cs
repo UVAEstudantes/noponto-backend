@@ -1,5 +1,5 @@
 using System.Text.Json;
-using StackExchange.Redis;
+using Microsoft.Extensions.Caching.Distributed;
 
 namespace NoPonto.Application.GPS;
 
@@ -18,7 +18,7 @@ public interface IVeiculosLinhaRuntimeReader
 /// Leitura oficial do runtime rodoviário por linha. Preserva a mesma política
 /// público-observável de /veiculos/linha: ativo primeiro, recente como SemSinal.
 /// </summary>
-public sealed class VeiculosLinhaRuntimeReader(IConnectionMultiplexer redis)
+public sealed class VeiculosLinhaRuntimeReader(IDistributedCache cache)
     : IVeiculosLinhaRuntimeReader
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -34,41 +34,37 @@ public sealed class VeiculosLinhaRuntimeReader(IConnectionMultiplexer redis)
             .Select(x => x.Trim().ToUpperInvariant()).Distinct(StringComparer.Ordinal).ToArray();
         if (codigos.Length == 0) return new([], [], []);
 
-        var database = redis.GetDatabase();
-        var lineValues = await database.StringGetAsync(codigos
-            .Select(x => (RedisKey)GpsPollingService.ChaveLinha(x)).ToArray());
-        ct.ThrowIfCancellationRequested();
-        var ordens = lineValues.SelectMany(x => x.IsNullOrEmpty ? [] : x.ToString()
+        var lineValues = await Task.WhenAll(codigos.Select(x =>
+            cache.GetStringAsync(GpsPollingService.ChaveLinha(x), ct)));
+        var ordens = lineValues.SelectMany(x => string.IsNullOrWhiteSpace(x) ? [] : x
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (ordens.Length == 0) return new(codigos, [], []);
 
-        var activeValues = await database.StringGetAsync(ordens
-            .Select(x => (RedisKey)GpsPollingService.ChaveVeiculoAtivo(x)).ToArray());
-        ct.ThrowIfCancellationRequested();
+        var activeValues = await Task.WhenAll(ordens.Select(x =>
+            cache.GetStringAsync(GpsPollingService.ChaveVeiculoAtivo(x), ct)));
         var missingIndexes = activeValues.Select((value, index) => (value, index))
-            .Where(x => x.value.IsNullOrEmpty).Select(x => x.index).ToArray();
-        var recentValues = missingIndexes.Length == 0 ? [] : await database.StringGetAsync(
-            missingIndexes.Select(index =>
-                (RedisKey)GpsPollingService.ChaveVeiculoRecente(ordens[index])).ToArray());
+            .Where(x => string.IsNullOrWhiteSpace(x.value)).Select(x => x.index).ToArray();
+        var recentValues = await Task.WhenAll(missingIndexes.Select(index =>
+            cache.GetStringAsync(GpsPollingService.ChaveVeiculoRecente(ordens[index]), ct)));
 
         return new(codigos, ordens, Decode(ordens, activeValues, missingIndexes, recentValues));
     }
 
     internal static IReadOnlyList<PosicaoVeiculoDto> Decode(string[] ordens,
-        RedisValue[] activeValues, int[] missingIndexes, RedisValue[] recentValues)
+        string?[] activeValues, int[] missingIndexes, string?[] recentValues)
     {
         var recentByIndex = missingIndexes.Select((index, position) => (index, position))
             .ToDictionary(x => x.index, x => recentValues[x.position]);
         var positions = new List<PosicaoVeiculoDto>(ordens.Length);
         for (var index = 0; index < ordens.Length; index++)
         {
-            var active = !activeValues[index].IsNullOrEmpty;
+            var active = !string.IsNullOrWhiteSpace(activeValues[index]);
             var value = active ? activeValues[index] : recentByIndex.GetValueOrDefault(index);
-            if (value.IsNullOrEmpty) continue;
+            if (string.IsNullOrWhiteSpace(value)) continue;
             try
             {
-                var dto = JsonSerializer.Deserialize<PosicaoVeiculoDto>(value!, JsonOptions);
+                var dto = JsonSerializer.Deserialize<PosicaoVeiculoDto>(value, JsonOptions);
                 if (dto is not null)
                     positions.Add(active ? dto : dto with { Status = StatusVeiculo.SemSinal });
             }

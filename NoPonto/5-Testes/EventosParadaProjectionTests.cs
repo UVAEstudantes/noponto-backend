@@ -3,7 +3,6 @@ using NoPonto.Application.GPS;
 using NoPonto.Application.Services.EventosParada;
 using Xunit;
 using System.Text.Json;
-using StackExchange.Redis;
 
 namespace NoPonto.Tests;
 
@@ -104,10 +103,10 @@ public sealed class EventosParadaProjectionTests
             SentidoId = Guid.Parse("8679948b-7527-4c90-9b06-629ab877a669"),
             TimestampGps = DateTimeOffset.UtcNow
         };
-        RedisValue recent = JsonSerializer.Serialize(source);
+        var recent = JsonSerializer.Serialize(source);
 
         var decoded = VeiculosLinhaRuntimeReader.Decode(
-            ["D86238"], [RedisValue.Null], [0], [recent]);
+            ["D86238"], [null], [0], [recent]);
 
         var vehicle = Assert.Single(decoded);
         Assert.Equal(StatusVeiculo.SemSinal, vehicle.Status);
