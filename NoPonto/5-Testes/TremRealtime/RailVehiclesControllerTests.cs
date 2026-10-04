@@ -38,6 +38,30 @@ public sealed class RailVehiclesControllerTests
         Assert.True(dto.IsEstimated);
         Assert.Equal(vehicle.FreshUntilUtc, dto.FreshUntilUtc);
         Assert.Equal(vehicle.LastRealtimeEvidenceUtc, dto.LastRealtimeEvidenceUtc);
+        Assert.Equal(vehicle.IsAtOriginTerminal, dto.IsAtOriginTerminal);
+        Assert.Equal(vehicle.ScheduledDepartureAtUtc, dto.ScheduledDepartureAtUtc);
+        Assert.Equal(vehicle.EstimatedDepartureAtUtc, dto.EstimatedDepartureAtUtc);
+        Assert.Equal(vehicle.SecondsToDeparture, dto.SecondsToDeparture);
+        Assert.Equal(vehicle.LineName, dto.LineName);
+        Assert.Equal(vehicle.DestinationName, dto.DestinationName);
+        Assert.Equal(vehicle.PlatformLabel, dto.PlatformLabel);
+        Assert.Equal(vehicle.NextStationName, dto.NextStationName);
+        Assert.Equal("Live", dto.OperationalStatus);
+    }
+
+    [Fact]
+    public void ScheduleOnlyNeverSerializesMinValueAsRealtimeConfirmation()
+    {
+        var scheduled = Vehicle(RailRunState.AwaitingDeparture) with
+        {
+            PositionSource = RailPositionSource.ScheduledEstimated,
+            PositionQuality = RailPositionQuality.ScheduleOnly,
+            LastRealtimeEvidenceUtc = DateTimeOffset.MinValue,
+            OperationalStatus = RailOperationalStatus.Scheduled
+        };
+        var dto = Assert.Single(Read(new FakeEngine(Snapshot(scheduled))).Vehicles);
+        Assert.Null(dto.LastRealtimeEvidenceUtc);
+        Assert.Equal("Scheduled", dto.OperationalStatus);
     }
 
     [Theory]
@@ -83,7 +107,10 @@ public sealed class RailVehiclesControllerTests
         Guid.NewGuid(), Guid.NewGuid(), 100, Now, state == RailRunState.InSegment ? 500 : 100,
         state == RailRunState.InSegment ? Now.AddMinutes(3) : Now, "Central", "expresso", "2",
         RailPositionSource.RealtimeEstimated, RailPositionQuality.RealtimeAnchored,
-        Now.AddMinutes(4), true, state == RailRunState.TerminalHold, Now.AddSeconds(-5));
+        Now.AddMinutes(4), true, state == RailRunState.TerminalHold, Now.AddSeconds(-5),
+        LineName: "Santa Cruz", DestinationName: "Central do Brasil",
+        PlatformLabel: "3E", NextStationName: "Engenho Novo",
+        OperationalStatus: RailOperationalStatus.Live);
 
     private sealed class FakeEngine(RailRealtimeSnapshot snapshot) : IRailRealtimeEngine
     {

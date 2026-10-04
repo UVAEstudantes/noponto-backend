@@ -160,7 +160,7 @@ public sealed class RailPublishedSnapshotProvider(IRailRealtimeEngine engine,
         {
             var scheduleFirst = scheduleFirstState?.Capture(now) ?? [];
             var scheduleFirstValues = MergeScheduleFirst(baseline.PublicVehicles,
-                scheduleFirst, scheduleFirstMetrics);
+                scheduleFirst, scheduleFirstMetrics, now);
             return baseline with { GeneratedAtUtc = now, PublicVehicles = scheduleFirstValues };
         }
         var schedule = scheduleState.Capture(now);
@@ -202,13 +202,14 @@ public sealed class RailPublishedSnapshotProvider(IRailRealtimeEngine engine,
             baselineWins, scheduleWins, ties, values.Length, finalSchedule,
             values.Length - finalSchedule));
         if (options.Value.ScheduleFirstPublicationEnabled && scheduleFirstState is not null)
-            values = MergeScheduleFirst(values, scheduleFirstState.Capture(now), scheduleFirstMetrics);
+            values = MergeScheduleFirst(values, scheduleFirstState.Capture(now), scheduleFirstMetrics, now);
         return baseline with { GeneratedAtUtc = now, PublicVehicles = values };
     }
 
     private static ImmutableArray<RailVehiclePublicSnapshot> MergeScheduleFirst(
         ImmutableArray<RailVehiclePublicSnapshot> current,
-        ImmutableArray<RailScheduleFirstCandidate> scheduled, RailScheduleFirstMetrics? lifecycleMetrics)
+        ImmutableArray<RailScheduleFirstCandidate> scheduled,
+        RailScheduleFirstMetrics? lifecycleMetrics, DateTimeOffset now)
     {
         var values = current.ToList();
         foreach (var candidate in scheduled)
@@ -222,9 +223,29 @@ public sealed class RailPublishedSnapshotProvider(IRailRealtimeEngine engine,
                 var selected = candidate.Status == RailOperationalRunStatus.ConfirmedLive
                     ? matches.OrderByDescending(x => x.LastRealtimeEvidenceUtc).FirstOrDefault()
                     : null;
+                var liveAtOrigin = selected is not null
+                    && selected.State is RailRunState.AwaitingDeparture or RailRunState.Dwell
+                    && selected.PreviousOccurrenceId == candidate.OriginOccurrenceId
+                    && selected.NextOccurrenceId == candidate.OriginOccurrenceId;
+                var departure = candidate.PublicSnapshot.EstimatedDepartureAtUtc
+                    ?? candidate.PublicSnapshot.ScheduledDepartureAtUtc;
                 values.Add(selected is null ? candidate.PublicSnapshot
                     : selected with { RailRunId = candidate.ExpectedRunId,
-                        RailVehicleId = candidate.ExpectedRunId });
+                        RailVehicleId = candidate.ExpectedRunId,
+                        IsAtOriginTerminal = liveAtOrigin,
+                        ScheduledDepartureAtUtc = candidate.PublicSnapshot.ScheduledDepartureAtUtc,
+                        EstimatedDepartureAtUtc = candidate.PublicSnapshot.EstimatedDepartureAtUtc,
+                        LineName = candidate.PublicSnapshot.LineName,
+                        DestinationName = candidate.PublicSnapshot.DestinationName,
+                        DestinationStationId = candidate.PublicSnapshot.DestinationStationId,
+                        NextStationName = candidate.PublicSnapshot.NextStationName,
+                        EstimatedArrivalAtNextStationUtc = candidate.PublicSnapshot.EstimatedArrivalAtNextStationUtc,
+                        SecondsToNextStation = candidate.PublicSnapshot.SecondsToNextStation,
+                        PlatformLabel = selected.Platform,
+                        OperationalStatus = RailOperationalStatus.Live,
+                        SecondsToDeparture = liveAtOrigin && departure is not null
+                            ? Math.Max(0L, (long)Math.Ceiling((departure.Value - now).TotalSeconds))
+                            : null });
             }
             else values.Add(candidate.PublicSnapshot);
         }
@@ -251,5 +272,6 @@ public sealed class RailPublishedSnapshotProvider(IRailRealtimeEngine engine,
         RailRunState.InSegment, x.PreviousOccurrenceId, x.NextOccurrenceId,
         x.DistanceAtReferenceMetres, x.ReferenceTimeUtc, x.TargetDistanceMetres, x.TargetTimeUtc,
         null, null, null, RailPositionSource.ScheduleEstimated, RailPositionQuality.ScheduleAnchored,
-        x.FreshUntilUtc, true, false, x.LastRealtimeEvidenceUtc);
+        x.FreshUntilUtc, true, false, x.LastRealtimeEvidenceUtc,
+        OperationalStatus: RailOperationalStatus.Estimated);
 }

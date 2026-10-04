@@ -111,3 +111,40 @@ grade corrigida por evidência; `RealtimeEstimated` indica a fonte realtime mais
 O scanner e seus limites não mudam. A atualização do lifecycle reutiliza a materialização em cache e
 as respostas já obtidas; uma resposta continua alimentando todos os `TrainCode` válidos, não apenas
 o alvo que motivou a consulta.
+
+### Terminal de origem e semântica de partida
+
+O contrato público não exige que o frontend reconheça nomes ou UUIDs de estações. Ele expõe de forma
+aditiva `IsAtOriginTerminal`, `ScheduledDepartureAtUtc`, `EstimatedDepartureAtUtc` e
+`SecondsToDeparture`. A origem é determinada pela primeira parada do `ExpectedRun` e pela primeira
+ocorrência física do padrão mapeado.
+
+Uma execução schedule-only entra no lifecycle até `ProbeWindowMinutes` antes da partida e usa o
+instante programado. Uma execução confirmada usa esse instante acrescido do último delay calculado.
+`SecondsToDeparture` usa teto em segundos e nunca fica negativo; zero representa “saindo agora”. Se
+não existe contexto temporal schedule confiável, os campos de partida permanecem nulos.
+
+Ao entrar no primeiro segmento, `IsAtOriginTerminal` muda para `false` e o countdown é removido. Uma
+posição realtime em `AwaitingDeparture` ou `Dwell` somente mantém a apresentação de partida quando
+suas ocorrências anterior e seguinte são ambas a primeira ocorrência física. Assim, `Dwell` numa
+estação intermediária continua usando a próxima estação. `DayOffset` e cross-midnight já chegam como
+`DateTimeOffset` materializado pelo `ExpectedRunService`; a publicação não tenta reconstruir datas.
+
+### Gate operacional do scanner
+
+`RailScheduleGate` materializa ontem, hoje e amanhã pelo `ExpectedRunService`, reutilizando versão
+ativa, calendário, `DayOffset` e `America/Sao_Paulo`. Para cada origem, a primeira passagem menos
+`WakeLeadMinutes` abre a janela e a última passagem mais `NoShowGraceMinutes` a fecha. Evidência
+confirmada aplica o atraso conhecido ao fechamento. As janelas por service date preservam viagens
+cross-midnight e a transição Sunday → Monday.
+
+O blackout absoluto começa em `HardCutoffLocalTime` (default `01:00`) e termina no primeiro wake útil
+do dia. Ele filtra candidatos antes do scheduler, do permit e do cliente HTTP, inclusive pursuits.
+`MaxRequestsPerRun=0` significa ilimitado; valores positivos preservam o canário finito.
+
+### Contrato público de apresentação
+
+O REST mantém os campos anteriores e acrescenta nomes humanos de linha, destino e próxima estação,
+`PlatformLabel`, ETA confiável até a próxima ocorrência e `OperationalStatus` (`Live`, `Estimated`,
+`Scheduled`). `LastRealtimeEvidenceUtc` é anulável na borda: ScheduleOnly nunca expõe
+`DateTimeOffset.MinValue` como confirmação.

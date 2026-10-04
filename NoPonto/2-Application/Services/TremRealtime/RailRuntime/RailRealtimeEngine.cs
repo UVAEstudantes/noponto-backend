@@ -83,7 +83,8 @@ public sealed class RailRealtimeEngine : IRailRealtimeEngine
                     RailPositionSource.RealtimeEstimated, RailPositionQuality.RealtimeAnchored);
 
                 ObserveResolvedAnchorUnsafe(vehicle, pattern, anchor, receivedAtUtc,
-                    item.Observation.DestinationExternalStationId, item.Observation.TrainType, item.Observation.Platform);
+                    item.Observation.DestinationExternalStationId, item.Observation.TrainType,
+                    item.Observation.PlatformLabel ?? item.Observation.Platform);
             }
         }
     }
@@ -268,10 +269,24 @@ public sealed class RailRealtimeEngine : IRailRealtimeEngine
     private static RailVehiclePublicSnapshot ToPublic(RunEntry x)
     {
         var p = x.Position!;
+        var next = p.NextOccurrenceId is { } nextId
+            ? x.Pattern.Occurrences.FirstOrDefault(o => o.OccurrenceId == nextId) : null;
+        var terminal = x.Pattern.Occurrences.OrderBy(o => o.Order).LastOrDefault();
+        var secondsToNext = next is not null && p.TargetTimeUtc >= p.ReferenceTimeUtc
+            ? Math.Max(0L, (long)Math.Ceiling((p.TargetTimeUtc - p.ReferenceTimeUtc).TotalSeconds))
+            : (long?)null;
         return new(x.Id, x.Vehicle.Id, x.Vehicle.TrainCode, x.Pattern.PadraoVersaoId, x.Pattern.LinhaId,
             x.Pattern.SentidoId, x.State, p.PreviousOccurrenceId, p.NextOccurrenceId,
             p.DistanceAtReferenceMetres, p.ReferenceTimeUtc, p.TargetDistanceMetres, p.TargetTimeUtc,
             x.Destination, x.TrainType, x.Platform, p.PositionSource, p.PositionQuality,
-            p.FreshUntilUtc, true, p.IsClamped, x.LastEvidence);
+            p.FreshUntilUtc, true, p.IsClamped, x.LastEvidence,
+            LineName: x.Pattern.LineName,
+            DestinationName: terminal?.StationName,
+            DestinationStationId: terminal?.ParadaId,
+            PlatformLabel: x.Platform,
+            NextStationName: next?.StationName,
+            EstimatedArrivalAtNextStationUtc: next is null ? null : p.TargetTimeUtc,
+            SecondsToNextStation: secondsToNext,
+            OperationalStatus: RailOperationalStatus.Live);
     }
 }

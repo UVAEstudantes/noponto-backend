@@ -11,12 +11,15 @@ public sealed record TremTopologyOccurrence(Guid OccurrenceId, int Order, Guid P
     public double DistanceAlongPatternMetres { get; init; }
     public double PositionAlongPattern { get; init; }
     public string? ExternalStationId { get; init; }
+    public string? StationName { get; init; }
 }
 public sealed record TremPatternTopology(Guid PadraoOperacionalId, Guid PadraoVersaoId, Guid LinhaId,
     Guid SentidoId, ImmutableArray<TremTopologyOccurrence> Occurrences)
 {
     public double LengthMetres { get; init; }
     public LineString? Geometry { get; init; }
+    public string? LineName { get; init; }
+    public string? DirectionName { get; init; }
 }
 public sealed record TremPublishedTopologySnapshot(DateTimeOffset LoadedAtUtc, ImmutableArray<TremPatternTopology> Patterns)
 {
@@ -60,7 +63,10 @@ public sealed class EfTremPublishedTopologySource(IServiceScopeFactory scopeFact
                 x.PadraoVersao.Geometria,
                 x.PadraoVersao.PadraoOperacionalId,
                 x.PadraoVersao.PadraoOperacional.SentidoId,
-                LinhaId = x.PadraoVersao.PadraoOperacional.Sentido.LinhaId
+                LinhaId = x.PadraoVersao.PadraoOperacional.Sentido.LinhaId,
+                LineName = x.PadraoVersao.PadraoOperacional.Sentido.Linha.Nome,
+                DirectionName = x.PadraoVersao.PadraoOperacional.Sentido.Nome,
+                StationName = x.Parada.Nome
             }).ToArrayAsync(ct);
         var patterns = rows.GroupBy(x => new { x.PadraoOperacionalId, x.PadraoVersaoId, x.LinhaId, x.SentidoId })
             .Select(x => new TremPatternTopology(x.Key.PadraoOperacionalId, x.Key.PadraoVersaoId, x.Key.LinhaId,
@@ -68,11 +74,14 @@ public sealed class EfTremPublishedTopologySource(IServiceScopeFactory scopeFact
                 {
                     DistanceAlongPatternMetres = y.DistanciaAcumuladaMetros,
                     PositionAlongPattern = y.PosicaoTracado,
-                    ExternalStationId = externalByStop.GetValueOrDefault(y.ParadaId)
+                    ExternalStationId = externalByStop.GetValueOrDefault(y.ParadaId),
+                    StationName = y.StationName
                 }).ToImmutableArray())
             {
                 LengthMetres = x.First().ComprimentoMetros,
-                Geometry = x.First().Geometria
+                Geometry = x.First().Geometria,
+                LineName = x.First().LineName,
+                DirectionName = x.First().DirectionName
             })
             .OrderBy(x => x.PadraoVersaoId).ToImmutableArray();
         return new(clock.GetUtcNow(), patterns);

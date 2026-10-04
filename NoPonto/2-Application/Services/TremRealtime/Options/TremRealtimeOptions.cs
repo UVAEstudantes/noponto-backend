@@ -26,6 +26,15 @@ public sealed class TremRealtimeOptions
     public int GracePeriodSeconds { get; set; } = 180;
     public TremSatelliteOptions Satellites { get; set; } = new();
     public TremScannerOptions Scanner { get; set; } = new();
+    public TremScheduleGateOptions ScheduleGate { get; set; } = new();
+}
+
+public sealed class TremScheduleGateOptions
+{
+    public bool Enabled { get; set; } = true;
+    public int WakeLeadMinutes { get; set; } = 5;
+    public int NoShowGraceMinutes { get; set; } = 10;
+    public TimeSpan HardCutoffLocalTime { get; set; } = TimeSpan.FromHours(1);
 }
 
 public sealed class RailScheduleRuntimeOptions
@@ -120,7 +129,7 @@ public sealed class TremRealtimeCanaryOptions
         if (MaxRequestsPerMinute <= 0) errors.Add("MaxRequestsPerMinute must be positive.");
         if (MaxConcurrency <= 0) errors.Add("MaxConcurrency must be positive.");
         if (PollSeconds <= 0) errors.Add("PollSeconds must be positive.");
-        if (MaxRequestsPerRun <= 0) errors.Add("MaxRequestsPerRun must be positive.");
+        if (MaxRequestsPerRun < 0) errors.Add("MaxRequestsPerRun cannot be negative; zero means unlimited.");
         if (AllowedSentinelIds is null || AllowedSentinelIds.Length == 0 ||
             AllowedSentinelIds.Any(string.IsNullOrWhiteSpace) ||
             AllowedSentinelIds.Distinct(StringComparer.Ordinal).Count() != AllowedSentinelIds.Length)
@@ -184,6 +193,11 @@ public sealed class TremRealtimeOptionsValidator : IValidateOptions<TremRealtime
             || scanner.FreshnessRefreshLeadSeconds < 0
             || scanner.MaxReacquisitionAttempts <= 0 || scanner.ReacquisitionTtlMinutes <= 0)
             errors.Add("Adaptive scanner options are invalid.");
+        var gate = o.ScheduleGate;
+        if (gate.WakeLeadMinutes < 0 || gate.NoShowGraceMinutes < 0
+            || gate.HardCutoffLocalTime < TimeSpan.Zero
+            || gate.HardCutoffLocalTime >= TimeSpan.FromDays(1))
+            errors.Add("Schedule gate options are invalid.");
         return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
     }
 }

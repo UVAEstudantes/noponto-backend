@@ -10,7 +10,11 @@ namespace NoPonto.Application.TremSchedule;
 public enum RailOperationalRunStatus { Scheduled, ConfirmedLive, ConfirmedEstimated, CompletedOrExpired }
 
 public sealed record RailScheduleFirstCandidate(Guid ExpectedRunId, string? TrainCode,
-    RailOperationalRunStatus Status, RailVehiclePublicSnapshot PublicSnapshot);
+    RailOperationalRunStatus Status, Guid OriginOccurrenceId,
+    RailVehiclePublicSnapshot PublicSnapshot);
+
+public sealed record RailScheduleGateEvidence(Guid ExpectedRunId, double DelaySeconds,
+    bool Confirmed, DateTimeOffset? LastEvidenceUtc);
 
 public sealed record RailScheduleFirstMetricsSnapshot(int ExpectedRunsOperational,
     int ScheduledOnlyCurrent, int ConfirmedLiveCurrent, int ConfirmedEstimatedCurrent,
@@ -74,7 +78,7 @@ public sealed class RailScheduleFirstRuntimeState(IOptions<RailScheduleRuntimeOp
     {
         if (!options.Value.ScheduleFirstPublicationEnabled) return;
         var grace = TimeSpan.FromMinutes(options.Value.ScheduledGraceAfterEndMinutes);
-        var values = runs.Where(x => x.ExpectedDepartureAt <= now
+        var values = runs.Where(x => x.ExpectedDepartureAt <= now.AddMinutes(options.Value.ProbeWindowMinutes)
             && x.ExpectedArrivalAt + grace > now).DistinctBy(x => x.ExpectedRunId).ToArray();
         lock (_gate)
         {
@@ -141,6 +145,13 @@ public sealed class RailScheduleFirstRuntimeState(IOptions<RailScheduleRuntimeOp
         }
     }
 
+    public ImmutableDictionary<Guid, RailScheduleGateEvidence> CaptureGateEvidence()
+    {
+        lock (_gate) return _items.ToImmutableDictionary(x => x.Key, x =>
+            new RailScheduleGateEvidence(x.Key, x.Value.DelaySeconds,
+                x.Value.TrainCode is not null, x.Value.LastEvidenceUtc));
+    }
+
     private RailScheduleFirstCandidate? CreateCandidate(Entry entry, DateTimeOffset now)
     {
         var run = entry.Run;
@@ -180,19 +191,42 @@ public sealed class RailScheduleFirstRuntimeState(IOptions<RailScheduleRuntimeOp
         }
         var previousOccurrence = UniqueOccurrenceAtOrBefore(pattern, previousStop.ParadaId, distance);
         var nextOccurrence = UniqueOccurrenceAtOrAfter(pattern, nextStop.ParadaId, distance);
-        if (previousOccurrence is null || nextOccurrence is null) return null;
+        var originOccurrence = UniqueOccurrence(pattern, run.Stops[0].ParadaId);
+        if (previousOccurrence is null || nextOccurrence is null || originOccurrence is null) return null;
         var source = entry.TrainCode is null ? RailPositionSource.ScheduledEstimated
             : RailPositionSource.ScheduleEstimated;
         var quality = entry.TrainCode is null ? RailPositionQuality.ScheduleOnly
             : RailPositionQuality.ScheduleAnchored;
         var freshUntil = now.AddSeconds(options.Value.StaleAfterSeconds);
+        var scheduledDeparture = run.ExpectedDepartureAt;
+        var estimatedDeparture = entry.TrainCode is null
+            ? (DateTimeOffset?)null : scheduledDeparture.AddSeconds(entry.DelaySeconds);
+        var effectiveDeparture = estimatedDeparture ?? scheduledDeparture;
+        var isAtOriginTerminal = now <= effectiveDeparture;
+        var secondsToDeparture = isAtOriginTerminal
+            ? Math.Max(0L, (long)Math.Ceiling((effectiveDeparture - now).TotalSeconds))
+            : (long?)null;
+        var destinationOccurrence = UniqueOccurrence(pattern, run.TerminalStationId);
+        var secondsToNext = !isAtOriginTerminal && target >= now
+            ? Math.Max(0L, (long)Math.Ceiling((target - now).TotalSeconds))
+            : (long?)null;
         var publicValue = new RailVehiclePublicSnapshot(run.ExpectedRunId, run.ExpectedRunId,
             entry.TrainCode ?? string.Empty, run.MappedPadraoVersaoId.Value, run.LineId, run.SentidoId,
             publicState, previousOccurrence.OccurrenceId, nextOccurrence.OccurrenceId,
             distance, now, nextOccurrence.DistanceAlongPatternMetres, target,
             null, null, null, source, quality, freshUntil, true, false,
-            entry.LastEvidenceUtc ?? DateTimeOffset.MinValue);
-        return new(run.ExpectedRunId, entry.TrainCode, status, publicValue);
+            entry.LastEvidenceUtc ?? DateTimeOffset.MinValue, isAtOriginTerminal,
+            scheduledDeparture, estimatedDeparture, secondsToDeparture,
+            pattern.LineName, destinationOccurrence?.StationName, run.TerminalStationId,
+            null, nextOccurrence.StationName,
+            !isAtOriginTerminal ? target : null, secondsToNext,
+            status == RailOperationalRunStatus.Scheduled
+                ? RailOperationalStatus.Scheduled
+                : status == RailOperationalRunStatus.ConfirmedLive
+                    ? RailOperationalStatus.Live
+                    : RailOperationalStatus.Estimated);
+        return new(run.ExpectedRunId, entry.TrainCode, status,
+            originOccurrence.OccurrenceId, publicValue);
     }
 
     private RailOperationalRunStatus Status(Entry entry, DateTimeOffset now)

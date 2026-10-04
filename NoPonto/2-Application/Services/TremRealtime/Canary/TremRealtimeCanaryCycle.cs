@@ -45,7 +45,8 @@ public sealed class TremRealtimeCanaryCycle(
     RailSchedulePublicationMetrics? schedulePublicationMetrics = null,
     IExpectedRunService? expectedRuns = null,
     RailScheduleFirstRuntimeState? scheduleFirstState = null,
-    RailScheduleFirstMetrics? scheduleFirstMetrics = null) : ITremRealtimeCanaryCycle
+    RailScheduleFirstMetrics? scheduleFirstMetrics = null,
+    IRailScheduleGate? scheduleGate = null) : ITremRealtimeCanaryCycle
 {
     public async Task RunOnceAsync(CancellationToken ct)
     {
@@ -61,7 +62,8 @@ public sealed class TremRealtimeCanaryCycle(
             var operational = new List<ExpectedRun>();
             foreach (var lineId in catalogQueries.SelectMany(x => x.StructurallyCoveredLinhaIds).Distinct())
                 operational.AddRange(await expectedRuns.InWindowAsync(lineId, now,
-                    TimeSpan.FromMinutes(scheduleOptions.ScheduledGraceAfterEndMinutes), TimeSpan.Zero, ct));
+                    TimeSpan.FromMinutes(scheduleOptions.ScheduledGraceAfterEndMinutes),
+                    TimeSpan.FromMinutes(scheduleOptions.ProbeWindowMinutes), ct));
             scheduleFirstState.Refresh(operational, await topologyCache.GetAsync(ct), now);
         }
         if (!runtime.Enabled || !canary.Enabled) return;
@@ -74,7 +76,7 @@ public sealed class TremRealtimeCanaryCycle(
             return;
         }
         if (state.IsPaused(now)) return;
-        if (state.RequestCount >= canary.MaxRequestsPerRun)
+        if (canary.MaxRequestsPerRun > 0 && state.RequestCount >= canary.MaxRequestsPerRun)
         {
             if (state.TryMarkBudgetLogged()) { metrics.BudgetExhausted(); logger.LogWarning("Trem realtime canary reached CANARY_BUDGET_EXHAUSTED after {Requests} requests.", state.RequestCount); }
             return;
@@ -82,6 +84,18 @@ public sealed class TremRealtimeCanaryCycle(
 
         var allowed = canary.AllowedSentinelIds.ToHashSet(StringComparer.Ordinal);
         catalogQueries ??= await catalog.GetAsync(ct);
+        var gate = scheduleGate is not null
+            ? await scheduleGate.EvaluateAsync(catalogQueries, now, ct)
+            : null;
+        if (gate is not null)
+            logger.LogInformation(
+                "RailScannerScheduleGateSummary service_date={ServiceDate} calendar={Calendar} local_time={LocalTime} active_probes={Active} sleeping_before_service={Before} closed_after_service={Closed} hard_closed={HardClosed} next_wake={NextWake}",
+                gate.ServiceDate, gate.CalendarType,
+                TimeZoneInfo.ConvertTime(now, TimeZoneInfo.FindSystemTimeZoneById(ExpectedRunService.TimeZoneId)),
+                gate.Decisions.Values.Count(x => x.IsEligible),
+                gate.Decisions.Values.Count(x => x.Reason == RailScheduleGateReason.BeforeService),
+                gate.Decisions.Values.Count(x => x.Reason == RailScheduleGateReason.ClosedAfterService),
+                gate.HardClosed, gate.NextWakeUtc);
         scheduler.SetScannerProbeCount(catalogQueries.Count(x => x.IsScannerProbe));
         var schedulePlan = scheduleOptions.Enabled && scheduleOptions.ScheduleAwareProbesEnabled
             && scheduleProbePlanner is not null
@@ -89,6 +103,7 @@ public sealed class TremRealtimeCanaryCycle(
                 : new RailScheduleProbePlan(ImmutableHashSet<string>.Empty, 0, 0, 0, TimeSpan.Zero);
         var candidates = catalogQueries
             .Where(x => IsCanaryCandidate(runtime, canary, allowed, x))
+            .Where(x => gate is null || gate.IsEligible(x.Id))
             .Select(x => state.Query(x))
             .Select(x => (Query: x, Decision: scheduler.Evaluate(now, x, demand, [], TremSchedulingMode.CanaryObservation, TimeSpan.FromSeconds(canary.PollSeconds))))
             .Select(x => schedulePlan.RecommendedProbeIds.Contains(x.Query.Id)
@@ -102,7 +117,9 @@ public sealed class TremRealtimeCanaryCycle(
                     }
                 }) : x)
             .ToArray();
-        var remaining = Math.Max(0, canary.MaxRequestsPerRun - state.RequestCount);
+        var remaining = canary.MaxRequestsPerRun == 0
+            ? canary.MaxConcurrency
+            : Math.Max(0, canary.MaxRequestsPerRun - state.RequestCount);
         var selection = scheduler.SelectDueQueries(now, candidates, Math.Min(canary.MaxConcurrency, remaining));
         foreach (var item in selection.Selected)
         {

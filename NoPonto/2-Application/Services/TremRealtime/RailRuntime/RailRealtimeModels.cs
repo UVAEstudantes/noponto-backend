@@ -9,6 +9,7 @@ public enum RailPositionQuality { MultiSatelliteAnchored, RealtimeAnchored, Temp
 public enum RailCorrectionKind { None, RecalculatedTarget, StrongAnchorSnap, RunReset }
 public enum RailFirstRunClassification { NotCandidate, FirstRunCandidate }
 public enum RailDayType { Weekday, Saturday, Sunday, Holiday }
+public enum RailOperationalStatus { Live, Estimated, Scheduled }
 
 public sealed record RailVehicle(Guid RailVehicleId, Guid TrackerId, string TrainCode,
     DateTimeOffset FirstSeenUtc, DateTimeOffset LastSeenUtc, Guid? CurrentRunId);
@@ -84,7 +85,19 @@ public sealed record RailVehiclePublicSnapshot(
     DateTimeOffset FreshUntilUtc,
     bool IsEstimated,
     bool IsClamped,
-    DateTimeOffset LastRealtimeEvidenceUtc);
+    DateTimeOffset LastRealtimeEvidenceUtc,
+    bool IsAtOriginTerminal = false,
+    DateTimeOffset? ScheduledDepartureAtUtc = null,
+    DateTimeOffset? EstimatedDepartureAtUtc = null,
+    long? SecondsToDeparture = null,
+    string? LineName = null,
+    string? DestinationName = null,
+    Guid? DestinationStationId = null,
+    string? PlatformLabel = null,
+    string? NextStationName = null,
+    DateTimeOffset? EstimatedArrivalAtNextStationUtc = null,
+    long? SecondsToNextStation = null,
+    RailOperationalStatus OperationalStatus = RailOperationalStatus.Live);
 
 public sealed record RailRealtimeSnapshot(DateTimeOffset GeneratedAtUtc,
     ImmutableArray<RailVehicle> Vehicles,

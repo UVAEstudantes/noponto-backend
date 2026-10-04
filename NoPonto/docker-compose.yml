@@ -105,7 +105,7 @@ services:
       TremRealtime__Canary__MaxRequestsPerMinute: ${TremRealtime__Canary__MaxRequestsPerMinute:-1}
       TremRealtime__Canary__MaxConcurrency: ${TremRealtime__Canary__MaxConcurrency:-1}
       TremRealtime__Canary__PollSeconds: ${TremRealtime__Canary__PollSeconds:-60}
-      TremRealtime__Canary__MaxRequestsPerRun: ${TremRealtime__Canary__MaxRequestsPerRun:-5}
+      TremRealtime__Canary__MaxRequestsPerRun: ${TremRealtime__Canary__MaxRequestsPerRun:-0}
       TremRealtime__Canary__AllowedSentinelIds__0: ${TremRealtime__Canary__AllowedSentinelIds__0:-}
       TremRealtime__Canary__AllowedSentinelIds__1: ${TremRealtime__Canary__AllowedSentinelIds__1:-}
       TremRealtime__Canary__AllowedSentinelIds__2: ${TremRealtime__Canary__AllowedSentinelIds__2:-}
@@ -129,6 +129,10 @@ services:
       TremRealtime__Scanner__NoServiceBackoffMultiplier: ${TremRealtime__Scanner__NoServiceBackoffMultiplier:-2}
       TremRealtime__Scanner__MaxDiscoveryBackoffMinutes: ${TremRealtime__Scanner__MaxDiscoveryBackoffMinutes:-15}
       TremRealtime__Scanner__TargetHitResetBackoff: ${TremRealtime__Scanner__TargetHitResetBackoff:-true}
+      TremRealtime__ScheduleGate__Enabled: ${TremRealtime__ScheduleGate__Enabled:-true}
+      TremRealtime__ScheduleGate__WakeLeadMinutes: ${TremRealtime__ScheduleGate__WakeLeadMinutes:-5}
+      TremRealtime__ScheduleGate__NoShowGraceMinutes: ${TremRealtime__ScheduleGate__NoShowGraceMinutes:-10}
+      TremRealtime__ScheduleGate__HardCutoffLocalTime: ${TremRealtime__ScheduleGate__HardCutoffLocalTime:-01:00:00}
       RailScheduleRuntime__Enabled: ${RailScheduleRuntime__Enabled:-false}
       RailScheduleRuntime__ScheduleAwareProbesEnabled: ${RailScheduleRuntime__ScheduleAwareProbesEnabled:-false}
       RailScheduleRuntime__SpatialEstimationEnabled: ${RailScheduleRuntime__SpatialEstimationEnabled:-false}

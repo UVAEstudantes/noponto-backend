@@ -22,7 +22,19 @@ public sealed record RailVehicleSnapshotDto(
     DateTimeOffset FreshUntilUtc,
     bool IsEstimated,
     bool IsClamped,
-    DateTimeOffset LastRealtimeEvidenceUtc)
+    DateTimeOffset? LastRealtimeEvidenceUtc,
+    bool IsAtOriginTerminal,
+    DateTimeOffset? ScheduledDepartureAtUtc,
+    DateTimeOffset? EstimatedDepartureAtUtc,
+    long? SecondsToDeparture,
+    string? LineName,
+    string? DestinationName,
+    Guid? DestinationStationId,
+    string? PlatformLabel,
+    string? NextStationName,
+    DateTimeOffset? EstimatedArrivalAtNextStationUtc,
+    long? SecondsToNextStation,
+    string OperationalStatus)
 {
     public static RailVehicleSnapshotDto From(RailVehiclePublicSnapshot value) => new(
         value.RailRunId, value.RailVehicleId, value.TrainCode, value.LinhaId, value.SentidoId,
@@ -30,7 +42,14 @@ public sealed record RailVehicleSnapshotDto(
         value.DistanceAtReferenceMetres, value.ReferenceTimeUtc, value.TargetDistanceMetres,
         value.TargetTimeUtc, value.Destination, value.TrainType, value.Platform,
         value.PositionSource.ToString(), value.PositionQuality.ToString(), value.FreshUntilUtc,
-        value.IsEstimated, value.IsClamped, value.LastRealtimeEvidenceUtc);
+        value.IsEstimated, value.IsClamped,
+        value.LastRealtimeEvidenceUtc == DateTimeOffset.MinValue ? null : value.LastRealtimeEvidenceUtc,
+        value.IsAtOriginTerminal, value.ScheduledDepartureAtUtc,
+        value.EstimatedDepartureAtUtc, value.SecondsToDeparture,
+        value.LineName, value.DestinationName, value.DestinationStationId,
+        value.PlatformLabel, value.NextStationName,
+        value.EstimatedArrivalAtNextStationUtc, value.SecondsToNextStation,
+        value.OperationalStatus.ToString());
 }
 
 public sealed record RailVehiclesSnapshotDto(DateTimeOffset GeneratedAtUtc,

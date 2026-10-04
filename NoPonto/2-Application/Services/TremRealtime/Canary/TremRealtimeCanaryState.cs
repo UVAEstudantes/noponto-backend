@@ -36,7 +36,9 @@ public sealed class TremRealtimeCanaryState(IOptions<TremRealtimeCanaryOptions> 
     {
         lock (_gate)
         {
-            if (_requestCount >= options.Value.MaxRequestsPerRun) return TremCanaryPermitStatus.BudgetExhausted;
+            if (options.Value.MaxRequestsPerRun > 0
+                && _requestCount >= options.Value.MaxRequestsPerRun)
+                return TremCanaryPermitStatus.BudgetExhausted;
             var now = clock.GetUtcNow();
             while (_requests.TryPeek(out var value) && value <= now.AddMinutes(-1)) _requests.Dequeue();
             if (_requests.Count >= options.Value.MaxRequestsPerMinute) return TremCanaryPermitStatus.RateLimited;

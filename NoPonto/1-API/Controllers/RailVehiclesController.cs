@@ -12,6 +12,8 @@ public sealed class RailVehiclesController(IRailPublishedSnapshotProvider publis
     /// Snapshot in-memory dos trens com posição longitudinal visualizável.
     /// Dwell, AwaitingDeparture e TerminalHold permanecem imóveis. O cliente nunca deve
     /// extrapolar após FreshUntilUtc. A geometria é obtida separadamente por PadraoVersaoId.
+    /// IsAtOriginTerminal seleciona a apresentação de partida; campos de partida nulos
+    /// significam que o backend não possui horário schedule confiável para essa posição.
     /// </summary>
     [HttpGet("snapshot")]
     [ProducesResponseType(typeof(RailVehiclesSnapshotDto), StatusCodes.Status200OK)]
