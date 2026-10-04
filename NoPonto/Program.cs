@@ -534,8 +534,11 @@ builder.Services.AddOptions<RailScheduleRuntimeOptions>()
     .ValidateOnStart();
 builder.Services.AddSingleton<RailScheduleRuntimeMetrics>();
 builder.Services.AddSingleton<RailScheduleEstimateState>();
+builder.Services.AddSingleton<RailSchedulePublicationState>();
+builder.Services.AddSingleton<RailSchedulePublicationMetrics>();
 builder.Services.AddSingleton<IRailScheduleEstimator, RailScheduleEstimator>();
 builder.Services.AddScoped<IRailScheduleProbePlanner, RailScheduleProbePlanner>();
+builder.Services.AddSingleton<IRailPublishedSnapshotProvider, RailPublishedSnapshotProvider>();
 // TEMPORARY FRONTEND COMPATIBILITY: removable adapter for the current APK.
 builder.Services.AddScoped<NoPonto.Application.LegacyCompatibility.Services.IFrontendLegacyMapaService,
     NoPonto.Application.LegacyCompatibility.Services.FrontendLegacyMapaService>();

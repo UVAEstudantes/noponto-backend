@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using NoPonto.Application.TremRealtime.RailRuntime;
+using NoPonto.Application.TremSchedule;
 
 namespace NoPonto.API.Controllers;
 
 [ApiController]
 [Route("rail/vehicles")]
-public sealed class RailVehiclesController(IRailRealtimeEngine engine) : ControllerBase
+public sealed class RailVehiclesController(IRailPublishedSnapshotProvider published) : ControllerBase
 {
     /// <summary>
     /// Snapshot in-memory dos trens com posição longitudinal visualizável.
@@ -18,7 +19,7 @@ public sealed class RailVehiclesController(IRailRealtimeEngine engine) : Control
         [FromQuery] Guid? linhaId = null,
         [FromQuery] Guid? sentidoId = null)
     {
-        var snapshot = engine.CaptureSnapshot();
+        var snapshot = published.CaptureSnapshot();
         var vehicles = snapshot.PublicVehicles
             .Where(x => linhaId is null || x.LinhaId == linhaId)
             .Where(x => sentidoId is null || x.SentidoId == sentidoId)
