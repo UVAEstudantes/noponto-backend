@@ -20,7 +20,11 @@ public sealed class EventosParadaService(TransporteDbContext db, IConnectionMult
         if (!await db.Paradas.AsNoTracking().AnyAsync(x => x.Id == paradaId, ct)) return null;
 
         var occurrences = await db.OcorrenciasParadasPadroes.AsNoTracking()
-            .Where(x => x.ParadaId == paradaId && x.PadraoVersao.PublicadoEmUtc != null)
+            // VersaoAtualId é a fonte de verdade do contrato estrutural V2. Importações
+            // existentes podem ter PublicadoEmUtc nulo mesmo quando a versão é a atual.
+            .Where(x => x.ParadaId == paradaId
+                && (x.PadraoVersao.PadraoOperacional.VersaoAtualId == x.PadraoVersaoId
+                    || x.PadraoVersao.PublicadoEmUtc != null))
             .Select(x => new StopContext(x.Id, x.ParadaId, x.Ordem, x.PosicaoTracado,
                 x.DistanciaAcumuladaMetros, x.PadraoVersaoId, x.PadraoVersao.ComprimentoMetros,
                 x.PadraoVersao.PadraoOperacionalId, x.PadraoVersao.PadraoOperacional.SentidoId,
