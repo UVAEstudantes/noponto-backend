@@ -5,6 +5,7 @@ using NoPonto.Application.TremRealtime.RailRuntime;
 using NoPonto.Application.TremRealtime.Scheduling;
 using NoPonto.Application.TremRealtime.Topology;
 using NoPonto.Application.TremRealtime.Tracking;
+using NoPonto.Application.TremSchedule;
 using Xunit;
 
 namespace NoPonto.Tests.TremRealtime;
@@ -17,7 +18,7 @@ public sealed class RailVehiclesControllerTests
     public void EmptySnapshot_IsReadOnlyAndReturnsEmptyList()
     {
         var engine = new FakeEngine(Snapshot());
-        var result = Assert.IsType<OkObjectResult>(new RailVehiclesController(engine).Snapshot().Result);
+        var result = Assert.IsType<OkObjectResult>(new RailVehiclesController(new FakePublished(engine)).Snapshot().Result);
         var dto = Assert.IsType<RailVehiclesSnapshotDto>(result.Value);
         Assert.Empty(dto.Vehicles);
         Assert.Equal(1, engine.Reads);
@@ -70,7 +71,7 @@ public sealed class RailVehiclesControllerTests
 
     private static RailVehiclesSnapshotDto Read(FakeEngine engine, Guid? line = null, Guid? direction = null)
     {
-        var result = Assert.IsType<OkObjectResult>(new RailVehiclesController(engine).Snapshot(line, direction).Result);
+        var result = Assert.IsType<OkObjectResult>(new RailVehiclesController(new FakePublished(engine)).Snapshot(line, direction).Result);
         return Assert.IsType<RailVehiclesSnapshotDto>(result.Value);
     }
 
@@ -93,4 +94,6 @@ public sealed class RailVehiclesControllerTests
             TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc) =>
             throw new InvalidOperationException("Read endpoint must not observe or call external dependencies.");
     }
+    private sealed class FakePublished(FakeEngine engine) : IRailPublishedSnapshotProvider
+    { public RailRealtimeSnapshot CaptureSnapshot() => engine.CaptureSnapshot(); }
 }

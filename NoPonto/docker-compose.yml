@@ -132,6 +132,7 @@ services:
       RailScheduleRuntime__Enabled: ${RailScheduleRuntime__Enabled:-false}
       RailScheduleRuntime__ScheduleAwareProbesEnabled: ${RailScheduleRuntime__ScheduleAwareProbesEnabled:-false}
       RailScheduleRuntime__SpatialEstimationEnabled: ${RailScheduleRuntime__SpatialEstimationEnabled:-false}
+      RailScheduleRuntime__PublishEstimatedPositions: ${RailScheduleRuntime__PublishEstimatedPositions:-false}
       RailScheduleRuntime__StaleAfterSeconds: ${RailScheduleRuntime__StaleAfterSeconds:-300}
       RailScheduleRuntime__UnavailableAfterSeconds: ${RailScheduleRuntime__UnavailableAfterSeconds:-900}
       RailScheduleRuntime__RecentAnchorCount: ${RailScheduleRuntime__RecentAnchorCount:-5}

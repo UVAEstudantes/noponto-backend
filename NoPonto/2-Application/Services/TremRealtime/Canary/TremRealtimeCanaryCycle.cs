@@ -40,7 +40,9 @@ public sealed class TremRealtimeCanaryCycle(
     IRailScheduleProbePlanner? scheduleProbePlanner = null,
     IRailScheduleEstimator? scheduleEstimator = null,
     RailScheduleEstimateState? scheduleEstimateState = null,
-    RailScheduleRuntimeMetrics? scheduleMetrics = null) : ITremRealtimeCanaryCycle
+    RailScheduleRuntimeMetrics? scheduleMetrics = null,
+    RailSchedulePublicationState? schedulePublicationState = null,
+    RailSchedulePublicationMetrics? schedulePublicationMetrics = null) : ITremRealtimeCanaryCycle
 {
     public async Task RunOnceAsync(CancellationToken ct)
     {
@@ -171,6 +173,8 @@ public sealed class TremRealtimeCanaryCycle(
                             {
                                 var estimate = scheduleEstimator.Estimate(run,
                                     bindingResult.Binding!, topology, receivedAtUtc);
+                                schedulePublicationState?.Observe(run, bindingResult.Binding!, estimate,
+                                    topology, TimeSpan.FromSeconds(scheduleOptions.StaleAfterSeconds));
                                 if (scheduleEstimateState.Set(estimate))
                                     logger.LogInformation(
                                         "RailScheduleEstimate train_code={TrainCode} expected_run_id={ExpectedRunId} binding_state={BindingState} anchors={Anchors} delay_seconds={DelaySeconds} previous_stop={PreviousStop} next_stop={NextStop} segment_progress={SegmentProgress} mapping={Mapping} spatial={Spatial} evidence_age_seconds={EvidenceAgeSeconds} is_estimated=true origin=SCHEDULE_REALTIME_ESTIMATE",
@@ -271,6 +275,16 @@ public sealed class TremRealtimeCanaryCycle(
                     schedule.ExecutedSuggestedProbes, schedule.DiscoveryFallback,
                     TimeSpan.FromTicks(schedule.PlannerTicks).TotalMilliseconds,
                     TimeSpan.FromTicks(schedule.EstimatorTicks).TotalMilliseconds);
+            }
+            if (schedulePublicationMetrics is not null && scheduleOptions.PublishEstimatedPositions)
+            {
+                var publication = schedulePublicationMetrics.Capture();
+                logger.LogInformation(
+                    "RailSchedulePublicationSummary publishable={Publishable} published={Published} suppressed_existing_fresher={ExistingFresher} suppressed_stale={Stale} suppressed_no_spatial={NoSpatial} removed={Removed} published_unique_trains={Unique}",
+                    publication.Publishable, publication.Published,
+                    publication.SuppressedExistingFresher, publication.SuppressedStale,
+                    publication.SuppressedNoSpatial, publication.Removed,
+                    publication.PublishedUniqueTrains);
             }
             if (item.Query.IsScannerProbe)
             {

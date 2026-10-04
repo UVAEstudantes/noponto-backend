@@ -58,3 +58,17 @@ SignalR nesta fase.
 independentes e desligados por padrão. O planner apenas dá prioridade adicional a probes existentes
 cuja origem coincide com a próxima parada programada; consultas equivalentes são deduplicadas por
 probe. Discovery genérico, pursuit, backoff e reversal permanecem como fallback inalterado.
+
+### Publicação estimada
+
+`RailScheduleRuntime.PublishEstimatedPositions` é um gate independente, desligado por padrão.
+Quando ligado, um provedor de snapshot combina `RailRealtimeEngine.PublicVehicles` com posições
+schedule-aware confirmadas, sem criar endpoint, DTO ou SignalR novo. A arbitragem é por
+`TrainCode.Trim()`: vence a fonte elegível com evidência realtime mais recente; empate preserva o
+caminho antigo. A posição schedule-aware usa `RailPositionSource.ScheduleEstimated`,
+`RailPositionQuality.ScheduleAnchored` e `IsEstimated=true`.
+
+Somente bindings `CONFIRMED`, em `IN_PROGRESS`, com ponto espacial e mapping `EXACT` ou
+`SUBSET_COMPATIBLE` podem entrar. O candidato expira em `LastRealtimeEvidenceUtc +
+StaleAfterSeconds`; `STALE`, `UNAVAILABLE`, `BEFORE_START`, `AFTER_EXPECTED_END`, `UNRESOLVED` e
+ausência de TrainCode não são publicados. Reinício começa sem candidatos schedule-aware.

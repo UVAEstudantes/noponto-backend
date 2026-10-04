@@ -34,6 +34,7 @@ public sealed class RailScheduleRuntimeOptions
     public bool Enabled { get; set; }
     public bool ScheduleAwareProbesEnabled { get; set; }
     public bool SpatialEstimationEnabled { get; set; }
+    public bool PublishEstimatedPositions { get; set; }
     public int StaleAfterSeconds { get; set; } = 300;
     public int UnavailableAfterSeconds { get; set; } = 900;
     public int RecentAnchorCount { get; set; } = 5;

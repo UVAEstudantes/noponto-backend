@@ -134,7 +134,8 @@ public sealed class RailScheduleRuntimeTests
     {
         var options = new RailScheduleRuntimeOptions();
         Assert.False(options.Enabled); Assert.False(options.ScheduleAwareProbesEnabled);
-        Assert.False(options.SpatialEstimationEnabled); Assert.True(options.IsValid());
+        Assert.False(options.SpatialEstimationEnabled); Assert.False(options.PublishEstimatedPositions);
+        Assert.True(options.IsValid());
         Assert.Empty(new RailScheduleEstimateState().Capture());
         Assert.Equal(1024, ExpectedRunBindingState.Capacity);
     }
