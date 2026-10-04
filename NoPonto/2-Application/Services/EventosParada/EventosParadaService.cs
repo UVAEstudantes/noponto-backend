@@ -1,19 +1,15 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NoPonto.Application.EventosParada;
 using NoPonto.Application.GPS;
 using NoPonto.Application.TremRealtime.RailRuntime;
 using NoPonto.Application.TremSchedule;
-using StackExchange.Redis;
 
 namespace NoPonto.Application.Services.EventosParada;
 
-public sealed class EventosParadaService(TransporteDbContext db, IConnectionMultiplexer redis,
+public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaRuntimeReader roadRuntime,
     IExpectedRunService expectedRuns, IRailPublishedSnapshotProvider railSnapshot)
     : IEventosParadaService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     public async Task<IReadOnlyList<EventoParadaDto>?> ListarAsync(Guid paradaId,
         DateTimeOffset now, CancellationToken ct = default)
     {
@@ -35,28 +31,24 @@ public sealed class EventosParadaService(TransporteDbContext db, IConnectionMult
             .ToArrayAsync(ct);
 
         var result = new List<EventoParadaDto>();
-        result.AddRange(await RoadEvents(occurrences, now));
+        result.AddRange(await RoadEvents(occurrences, now, ct));
         result.AddRange(await RailEvents(occurrences, now, ct));
         return Order(result);
     }
 
-    private async Task<IReadOnlyList<EventoParadaDto>> RoadEvents(StopContext[] stops, DateTimeOffset now)
+    private async Task<IReadOnlyList<EventoParadaDto>> RoadEvents(
+        StopContext[] stops, DateTimeOffset now, CancellationToken ct)
     {
         var road = stops.Where(x => !IsRail(x.Modal)).ToArray();
         if (road.Length == 0) return [];
-        var cache = redis.GetDatabase();
         var lineCodes = road.Select(x => x.CodigoLinha.ToUpperInvariant()).Distinct().ToArray();
-        var lineValues = await cache.StringGetAsync(lineCodes.Select(x => (RedisKey)GpsPollingService.ChaveLinha(x)).ToArray());
-        var vehicleIds = lineValues.SelectMany(x => x.IsNullOrEmpty ? [] : x.ToString()
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (vehicleIds.Length == 0) return [];
-        var payloads = await cache.StringGetAsync(vehicleIds.Select(x => (RedisKey)GpsPollingService.ChaveVeiculoAtivo(x)).ToArray());
-        var positions = payloads.Where(x => !x.IsNullOrEmpty).Select(x =>
-        {
-            try { return JsonSerializer.Deserialize<PosicaoVeiculoDto>(x!, JsonOptions); }
-            catch (JsonException) { return null; }
-        }).Where(x => x is not null).Cast<PosicaoVeiculoDto>();
+        var positions = (await roadRuntime.ListarAsync(lineCodes, ct)).Posicoes;
+        return ProjectRoadEvents(road, positions, now);
+    }
+
+    internal static IReadOnlyList<EventoParadaDto> ProjectRoadEvents(
+        StopContext[] road, IEnumerable<PosicaoVeiculoDto> positions, DateTimeOffset now)
+    {
         var events = new List<EventoParadaDto>();
         foreach (var position in positions)
         {

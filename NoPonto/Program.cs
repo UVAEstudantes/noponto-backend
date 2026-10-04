@@ -495,6 +495,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(
     _ => ConnectionMultiplexer.Connect(redisConnection));
 
 builder.Services.AddSingleton<IPosicaoVeiculoCacheRepository, PosicaoVeiculoCacheRepository>();
+builder.Services.AddSingleton<IVeiculosLinhaRuntimeReader, VeiculosLinhaRuntimeReader>();
 builder.Services.AddSingleton<IViagemObservadaRepository, ViagemOperacionalRepository>();
 builder.Services.AddSingleton<IOcorrenciaParadaRepository, OcorrenciaParadaRepository>();
 builder.Services.AddSingleton<ViagemObservadaService>();

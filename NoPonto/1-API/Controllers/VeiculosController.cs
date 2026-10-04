@@ -18,15 +18,18 @@ public sealed class VeiculosController : ControllerBase
     private readonly IDistributedCache _cache;
     private readonly IGpsPadraoRepository _gpsPadraoRepo;
     private readonly TransporteDbContext _db;
+    private readonly IVeiculosLinhaRuntimeReader _runtimeReader;
 
     public VeiculosController(
         IDistributedCache cache,
         IGpsPadraoRepository gpsPadraoRepo,
-        TransporteDbContext db)
+        TransporteDbContext db,
+        IVeiculosLinhaRuntimeReader runtimeReader)
     {
         _cache             = cache;
         _gpsPadraoRepo = gpsPadraoRepo;
         _db                = db;
+        _runtimeReader = runtimeReader;
     }
 
     /// <summary>
@@ -62,49 +65,17 @@ public sealed class VeiculosController : ControllerBase
     [HttpGet("linha/{codigoLinha}")]
     public async Task<IActionResult> GetVeiculosPorLinha(string codigoLinha, CancellationToken ct)
     {
-        var linhaNorm  = codigoLinha.ToUpperInvariant();
-        var chaveLinha = GpsPollingService.ChaveLinha(linhaNorm);
-        var ordensRaw  = await _cache.GetStringAsync(chaveLinha, ct);
-
-        if (ordensRaw is null)
+        var snapshot = await _runtimeReader.ListarAsync([codigoLinha], ct);
+        if (snapshot.Ordens.Count == 0)
             return NotFound(new { mensagem = $"Nenhum veículo ativo para a linha {codigoLinha}." });
-
-        var ordens = ordensRaw.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        if (ordens.Length == 0)
-            return NotFound(new { mensagem = $"Nenhum veículo ativo para a linha {codigoLinha}." });
-
-        var tarefas = ordens.Select(async ordem =>
-        {
-            var jsonAtivo = await _cache.GetStringAsync(GpsPollingService.ChaveVeiculoAtivo(ordem), ct);
-            if (jsonAtivo is not null)
-            {
-                try { return JsonSerializer.Deserialize<PosicaoVeiculoDto>(jsonAtivo, JsonOptions); }
-                catch { }
-            }
-
-            var jsonRecente = await _cache.GetStringAsync(GpsPollingService.ChaveVeiculoRecente(ordem), ct);
-            if (jsonRecente is not null)
-            {
-                try
-                {
-                    var dto = JsonSerializer.Deserialize<PosicaoVeiculoDto>(jsonRecente, JsonOptions);
-                    return dto is null ? null : dto with { Status = StatusVeiculo.SemSinal };
-                }
-                catch { }
-            }
-
-            return null;
-        });
-
-        var resultados = await Task.WhenAll(tarefas);
-        var posicoes   = resultados.Where(p => p is not null).ToList();
+        var posicoes = snapshot.Posicoes;
 
         return Ok(new
         {
             codigoLinha,
             totalVeiculos = posicoes.Count,
-            totalAtivos   = posicoes.Count(p => p!.Status == StatusVeiculo.Ativo),
-            totalSemSinal = posicoes.Count(p => p!.Status == StatusVeiculo.SemSinal),
+            totalAtivos   = posicoes.Count(p => p.Status == StatusVeiculo.Ativo),
+            totalSemSinal = posicoes.Count(p => p.Status == StatusVeiculo.SemSinal),
             posicoes
         });
     }
