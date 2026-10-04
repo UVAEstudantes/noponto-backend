@@ -68,6 +68,10 @@ public sealed class RailScheduleEstimateState
     }
     public ImmutableArray<RailScheduleEstimate> Capture() => _items.Values
         .OrderBy(x => x.ExpectedRunId).ToImmutableArray();
+    public int CountCurrentSpatial(DateTimeOffset now, TimeSpan staleAfter) => _items.Values.Count(x =>
+        x.SpatialPosition is not null
+        && x.State is not RailScheduleTemporalState.Stale and not RailScheduleTemporalState.Unavailable
+        && now < x.EstimatedAtUtc - x.EvidenceAge + staleAfter);
 }
 
 public interface IRailScheduleEstimator

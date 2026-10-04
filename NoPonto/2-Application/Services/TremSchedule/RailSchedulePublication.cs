@@ -19,7 +19,9 @@ public sealed record RailSchedulePublishedCandidate(string Provider, DateOnly Tr
 
 public sealed record RailSchedulePublicationMetricsSnapshot(long Publishable, long Published,
     long SuppressedExistingFresher, long SuppressedStale, long SuppressedNoSpatial,
-    long Removed, long PublishedUniqueTrains, RailSchedulePublicationMergeSnapshot LastMerge);
+    long Removed, long PublishedUniqueTrains, long RejectedBeforeStart, long RejectedAfterEnd,
+    long RejectedNoMapping, long RejectedNoOccurrence, long RejectedDuplicateOrReplaced,
+    RailSchedulePublicationMergeSnapshot LastMerge);
 
 public sealed record RailSchedulePublicationMergeSnapshot(int ScheduleCandidates, int BaselineCandidates,
     int MatchedByTrainCode, int ScheduleOnly, int BaselineOnly, int BaselineWinsFresher,
@@ -31,7 +33,8 @@ public sealed record RailSchedulePublicationMergeSnapshot(int ScheduleCandidates
 
 public sealed class RailSchedulePublicationMetrics
 {
-    private long _publishable, _published, _existing, _stale, _noSpatial, _removed, _unique;
+    private long _publishable, _published, _existing, _stale, _noSpatial, _removed, _unique,
+        _beforeStart, _afterEnd, _noMapping, _noOccurrence, _replaced;
     private RailSchedulePublicationMergeSnapshot _lastMerge = RailSchedulePublicationMergeSnapshot.Empty;
     internal void Publishable() => Interlocked.Increment(ref _publishable);
     internal void Published(int unique) { Interlocked.Add(ref _published, unique); Interlocked.Exchange(ref _unique, unique); }
@@ -39,10 +42,18 @@ public sealed class RailSchedulePublicationMetrics
     internal void Stale() => Interlocked.Increment(ref _stale);
     internal void NoSpatial() => Interlocked.Increment(ref _noSpatial);
     internal void Removed(int count) => Interlocked.Add(ref _removed, count);
+    internal void BeforeStart() => Interlocked.Increment(ref _beforeStart);
+    internal void AfterEnd() => Interlocked.Increment(ref _afterEnd);
+    internal void NoMapping() => Interlocked.Increment(ref _noMapping);
+    internal void NoOccurrence() => Interlocked.Increment(ref _noOccurrence);
+    internal void Replaced() => Interlocked.Increment(ref _replaced);
     internal void Merge(RailSchedulePublicationMergeSnapshot value) => Interlocked.Exchange(ref _lastMerge, value);
     public RailSchedulePublicationMetricsSnapshot Capture() => new(Interlocked.Read(ref _publishable),
         Interlocked.Read(ref _published), Interlocked.Read(ref _existing), Interlocked.Read(ref _stale),
         Interlocked.Read(ref _noSpatial), Interlocked.Read(ref _removed), Interlocked.Read(ref _unique),
+        Interlocked.Read(ref _beforeStart), Interlocked.Read(ref _afterEnd),
+        Interlocked.Read(ref _noMapping), Interlocked.Read(ref _noOccurrence),
+        Interlocked.Read(ref _replaced),
         Volatile.Read(ref _lastMerge));
 }
 
@@ -60,18 +71,26 @@ public sealed class RailSchedulePublicationState(RailSchedulePublicationMetrics 
         {
             if (estimate.State is RailScheduleTemporalState.Stale or RailScheduleTemporalState.Unavailable)
             { metrics.Stale(); _items.Remove(key); return; }
+            if (estimate.State == RailScheduleTemporalState.BeforeStart)
+            { metrics.BeforeStart(); _items.Remove(key); return; }
+            if (estimate.State == RailScheduleTemporalState.AfterExpectedEnd)
+            { metrics.AfterEnd(); _items.Remove(key); return; }
+            if (run.MappedPadraoVersaoId is null || (run.ScheduleMappingStatus is not
+                (RailScheduleMappingStatuses.Exact or RailScheduleMappingStatuses.SubsetCompatible)))
+            { metrics.NoMapping(); _items.Remove(key); return; }
             if (!EligibleBase(run, binding, estimate) || estimate.SpatialPosition is null)
             {
                 if (estimate.SpatialPosition is null) metrics.NoSpatial();
                 _items.Remove(key); return;
             }
             var pattern = topology.Patterns.SingleOrDefault(x => x.PadraoVersaoId == run.MappedPadraoVersaoId);
-            if (pattern is null || estimate.PreviousScheduledStop is null || estimate.NextScheduledStop is null)
-            { metrics.NoSpatial(); _items.Remove(key); return; }
+            if (pattern is null) { metrics.NoMapping(); _items.Remove(key); return; }
+            if (estimate.PreviousScheduledStop is null || estimate.NextScheduledStop is null)
+            { metrics.NoOccurrence(); _items.Remove(key); return; }
             var pairs = pattern.Occurrences.Where(x => x.ParadaId == estimate.PreviousScheduledStop.ParadaId)
                 .SelectMany(a => pattern.Occurrences.Where(x => x.ParadaId == estimate.NextScheduledStop.ParadaId
                     && x.Order > a.Order).Select(b => (A: a, B: b))).ToArray();
-            if (pairs.Length != 1) { metrics.NoSpatial(); _items.Remove(key); return; }
+            if (pairs.Length != 1) { metrics.NoOccurrence(); _items.Remove(key); return; }
             var referenceDistance = estimate.SpatialPosition.PositionAlongPattern * pattern.LengthMetres;
             var targetTime = estimate.NextScheduledStop.ExpectedAt.AddSeconds(estimate.DelaySeconds);
             var candidate = new RailSchedulePublishedCandidate(binding.Provider, binding.TrackingDate, code,
@@ -81,6 +100,7 @@ public sealed class RailSchedulePublicationState(RailSchedulePublicationMetrics 
                 pairs[0].B.DistanceAlongPatternMetres, targetTime,
                 binding.LastObservedAtUtc + publishFreshness, binding.LastObservedAtUtc,
                 run.ScheduleMappingStatus, true, "SCHEDULE_REALTIME_ESTIMATE");
+            if (_items.ContainsKey(key)) metrics.Replaced();
             _items[key] = candidate;
             metrics.Publishable();
             while (_items.Count > 1024)
@@ -101,6 +121,11 @@ public sealed class RailSchedulePublicationState(RailSchedulePublicationMetrics 
             }
             return _items.Values.OrderBy(x => x.TrainCode, StringComparer.Ordinal).ToImmutableArray();
         }
+    }
+
+    public int CountCurrent(DateTimeOffset now)
+    {
+        lock (_gate) return _items.Values.Count(x => x.FreshUntilUtc > now);
     }
 
     private static bool EligibleBase(ExpectedRun run, ExpectedRunBinding binding,

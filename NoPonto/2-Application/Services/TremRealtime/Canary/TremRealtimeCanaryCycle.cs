@@ -266,11 +266,13 @@ public sealed class TremRealtimeCanaryCycle(
             if (scheduleMetrics is not null && scheduleOptions.Enabled)
             {
                 var schedule = scheduleMetrics.Capture();
+                var currentSpatial = scheduleEstimateState?.CountCurrentSpatial(clock.GetUtcNow(),
+                    TimeSpan.FromSeconds(scheduleOptions.StaleAfterSeconds)) ?? 0;
                 logger.LogInformation(
-                    "RailScheduleRuntimeSummary expected_runs_active={ExpectedRuns} bindings_provisional={Provisional} bindings_confirmed={Confirmed} delay_calculable={Delay} temporal_positions={Temporal} spatial_positions={Spatial} unresolved={Unresolved} stale={Stale} probes_suggested={Suggested} probes_deduplicated={Deduplicated} probes_executed={Executed} discovery_fallback={Fallback} planner_ms={PlannerMs} estimator_ms={EstimatorMs}",
+                    "RailScheduleRuntimeSummary expected_runs_active={ExpectedRuns} bindings_provisional={Provisional} bindings_confirmed={Confirmed} delay_calculable={Delay} temporal_positions={Temporal} spatial_positions={Spatial} current_spatial_estimates={CurrentSpatial} unresolved={Unresolved} stale={Stale} probes_suggested={Suggested} probes_deduplicated={Deduplicated} probes_executed={Executed} discovery_fallback={Fallback} planner_ms={PlannerMs} estimator_ms={EstimatorMs}",
                     schedulePlan.ActiveExpectedRuns, expectedRunBindingMetrics?.Capture().Provisional ?? 0,
                     expectedRunBindingMetrics?.Capture().Confirmed ?? 0, schedule.DelayCalculable,
-                    schedule.TemporalPositions, schedule.SpatialPositions, schedule.Unresolved,
+                    schedule.TemporalPositions, schedule.SpatialPositions, currentSpatial, schedule.Unresolved,
                     schedule.Stale, schedule.SuggestedProbes, schedule.DeduplicatedProbes,
                     schedule.ExecutedSuggestedProbes, schedule.DiscoveryFallback,
                     TimeSpan.FromTicks(schedule.PlannerTicks).TotalMilliseconds,
@@ -279,12 +281,16 @@ public sealed class TremRealtimeCanaryCycle(
             if (schedulePublicationMetrics is not null && scheduleOptions.PublishEstimatedPositions)
             {
                 var publication = schedulePublicationMetrics.Capture();
+                var currentCandidates = schedulePublicationState?.CountCurrent(clock.GetUtcNow()) ?? 0;
                 logger.LogInformation(
-                    "RailSchedulePublicationSummary publishable={Publishable} published={Published} suppressed_existing_fresher={ExistingFresher} suppressed_stale={Stale} suppressed_no_spatial={NoSpatial} removed={Removed} published_unique_trains={Unique} schedule_candidates={ScheduleCandidates} baseline_candidates={BaselineCandidates} matched_by_train_code={Matched} schedule_only={ScheduleOnly} baseline_only={BaselineOnly} baseline_wins_fresher={BaselineWins} schedule_wins_fresher={ScheduleWins} ties_baseline_wins={Ties} final_unique_trains={FinalUnique} final_schedule_trains={FinalSchedule} final_baseline_trains={FinalBaseline}",
+                    "RailSchedulePublicationSummary publishable={Publishable} published={Published} suppressed_existing_fresher={ExistingFresher} suppressed_stale={Stale} suppressed_no_spatial={NoSpatial} removed={Removed} published_unique_trains={Unique} current_publication_candidates={CurrentCandidates} rejected_before_start={BeforeStart} rejected_after_end={AfterEnd} rejected_no_mapping={NoMapping} rejected_no_occurrence={NoOccurrence} rejected_duplicate_or_replaced={Replaced} schedule_candidates={ScheduleCandidates} baseline_candidates={BaselineCandidates} matched_by_train_code={Matched} schedule_only={ScheduleOnly} baseline_only={BaselineOnly} baseline_wins_fresher={BaselineWins} schedule_wins_fresher={ScheduleWins} ties_baseline_wins={Ties} final_unique_trains={FinalUnique} final_schedule_trains={FinalSchedule} final_baseline_trains={FinalBaseline}",
                     publication.Publishable, publication.Published,
                     publication.SuppressedExistingFresher, publication.SuppressedStale,
                     publication.SuppressedNoSpatial, publication.Removed,
-                    publication.PublishedUniqueTrains, publication.LastMerge.ScheduleCandidates,
+                    publication.PublishedUniqueTrains, currentCandidates,
+                    publication.RejectedBeforeStart, publication.RejectedAfterEnd,
+                    publication.RejectedNoMapping, publication.RejectedNoOccurrence,
+                    publication.RejectedDuplicateOrReplaced, publication.LastMerge.ScheduleCandidates,
                     publication.LastMerge.BaselineCandidates, publication.LastMerge.MatchedByTrainCode,
                     publication.LastMerge.ScheduleOnly, publication.LastMerge.BaselineOnly,
                     publication.LastMerge.BaselineWinsFresher, publication.LastMerge.ScheduleWinsFresher,

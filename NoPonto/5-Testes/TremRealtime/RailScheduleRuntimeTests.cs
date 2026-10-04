@@ -140,6 +140,20 @@ public sealed class RailScheduleRuntimeTests
         Assert.Equal(1024, ExpectedRunBindingState.Capacity);
     }
 
+    [Fact]
+    public void CurrentSpatialGaugeExcludesCachedEstimateAfterEvidenceBecomesStale()
+    {
+        var run = Run();
+        var estimate = Estimator(spatial: true).Estimate(run,
+            Binding(run, [Anchor(run.Stops[0], 0)], last: T0), Topology(run), T0.AddMinutes(1));
+        var state = new RailScheduleEstimateState();
+        state.Set(estimate);
+
+        Assert.Equal(1, state.CountCurrentSpatial(T0.AddMinutes(4), TimeSpan.FromMinutes(5)));
+        Assert.Equal(0, state.CountCurrentSpatial(T0.AddMinutes(5), TimeSpan.FromMinutes(5)));
+        Assert.Single(state.Capture());
+    }
+
     private static readonly Guid Line = Guid.NewGuid(), Direction = Guid.NewGuid(), Version = Guid.NewGuid();
     private static readonly Guid A = Guid.NewGuid(), B = Guid.NewGuid(), C = Guid.NewGuid();
 

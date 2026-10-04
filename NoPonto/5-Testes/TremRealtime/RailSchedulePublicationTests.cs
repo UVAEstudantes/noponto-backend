@@ -159,6 +159,23 @@ public sealed class RailSchedulePublicationTests
         Assert.DoesNotContain("Gps", value.PositionSource.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void PublicationDiagnosticsSeparateCurrentGaugeFromCumulativeRejectionsAndReplacement()
+    {
+        var h = Harness(enabled: true);
+        h.Observe(temporalState: RailScheduleTemporalState.BeforeStart, spatial: false);
+        h.Observe(temporalState: RailScheduleTemporalState.AfterExpectedEnd, spatial: false);
+        h.Observe();
+        h.Observe();
+
+        var metrics = h.Metrics.Capture();
+        Assert.Equal(1, metrics.RejectedBeforeStart);
+        Assert.Equal(1, metrics.RejectedAfterEnd);
+        Assert.Equal(1, metrics.RejectedDuplicateOrReplaced);
+        Assert.Equal(1, h.State.CountCurrent(Now));
+        Assert.Equal(2, metrics.Publishable);
+    }
+
     private static HarnessState Harness(bool enabled, RailVehiclePublicSnapshot? baseline = null,
         RailVehiclePublicSnapshot? extraBaseline = null, string mapping = RailScheduleMappingStatuses.Exact,
         RailRun? baselineRun = null)
