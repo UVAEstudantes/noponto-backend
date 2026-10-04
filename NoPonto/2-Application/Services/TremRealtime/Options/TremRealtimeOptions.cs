@@ -35,6 +35,8 @@ public sealed class RailScheduleRuntimeOptions
     public bool ScheduleAwareProbesEnabled { get; set; }
     public bool SpatialEstimationEnabled { get; set; }
     public bool PublishEstimatedPositions { get; set; }
+    public bool ScheduleFirstPublicationEnabled { get; set; }
+    public int ScheduledGraceAfterEndMinutes { get; set; } = 30;
     public int StaleAfterSeconds { get; set; } = 300;
     public int UnavailableAfterSeconds { get; set; } = 900;
     public int RecentAnchorCount { get; set; } = 5;
@@ -44,7 +46,8 @@ public sealed class RailScheduleRuntimeOptions
 
     public bool IsValid() => StaleAfterSeconds > 0
         && UnavailableAfterSeconds > StaleAfterSeconds && RecentAnchorCount is > 0 and <= 16
-        && DelayOutlierSeconds > 0 && ProbeWindowMinutes > 0 && ProbePriorityBoost >= 0;
+        && DelayOutlierSeconds > 0 && ProbeWindowMinutes > 0 && ProbePriorityBoost >= 0
+        && ScheduledGraceAfterEndMinutes > 0;
 }
 
 public sealed class TremScannerOptions

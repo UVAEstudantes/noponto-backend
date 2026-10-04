@@ -146,13 +146,23 @@ public interface IRailPublishedSnapshotProvider { RailRealtimeSnapshot CaptureSn
 
 public sealed class RailPublishedSnapshotProvider(IRailRealtimeEngine engine,
     RailSchedulePublicationState scheduleState, RailSchedulePublicationMetrics metrics,
-    IOptions<RailScheduleRuntimeOptions> options, TimeProvider clock) : IRailPublishedSnapshotProvider
+    IOptions<RailScheduleRuntimeOptions> options, TimeProvider clock,
+    RailScheduleFirstRuntimeState? scheduleFirstState = null,
+    RailScheduleFirstMetrics? scheduleFirstMetrics = null) : IRailPublishedSnapshotProvider
 {
     public RailRealtimeSnapshot CaptureSnapshot()
     {
         var baseline = engine.CaptureSnapshot();
-        if (!options.Value.PublishEstimatedPositions) return baseline;
+        if (!options.Value.PublishEstimatedPositions
+            && !options.Value.ScheduleFirstPublicationEnabled) return baseline;
         var now = clock.GetUtcNow();
+        if (!options.Value.PublishEstimatedPositions)
+        {
+            var scheduleFirst = scheduleFirstState?.Capture(now) ?? [];
+            var scheduleFirstValues = MergeScheduleFirst(baseline.PublicVehicles,
+                scheduleFirst, scheduleFirstMetrics);
+            return baseline with { GeneratedAtUtc = now, PublicVehicles = scheduleFirstValues };
+        }
         var schedule = scheduleState.Capture(now);
         var baselineEvidence = baseline.Runs.ToDictionary(x => x.RailRunId,
             x => x.Anchors.IsDefaultOrEmpty
@@ -191,7 +201,40 @@ public sealed class RailPublishedSnapshotProvider(IRailRealtimeEngine engine,
             scheduleCandidates.Count - matched, baselineCandidates.Count - matched,
             baselineWins, scheduleWins, ties, values.Length, finalSchedule,
             values.Length - finalSchedule));
+        if (options.Value.ScheduleFirstPublicationEnabled && scheduleFirstState is not null)
+            values = MergeScheduleFirst(values, scheduleFirstState.Capture(now), scheduleFirstMetrics);
         return baseline with { GeneratedAtUtc = now, PublicVehicles = values };
+    }
+
+    private static ImmutableArray<RailVehiclePublicSnapshot> MergeScheduleFirst(
+        ImmutableArray<RailVehiclePublicSnapshot> current,
+        ImmutableArray<RailScheduleFirstCandidate> scheduled, RailScheduleFirstMetrics? lifecycleMetrics)
+    {
+        var values = current.ToList();
+        foreach (var candidate in scheduled)
+        {
+            values.RemoveAll(x => x.RailRunId == candidate.ExpectedRunId);
+            if (!string.IsNullOrWhiteSpace(candidate.TrainCode))
+            {
+                var matches = values.Where(x => string.Equals(x.TrainCode.Trim(),
+                    candidate.TrainCode.Trim(), StringComparison.Ordinal)).ToArray();
+                values.RemoveAll(matches.Contains);
+                var selected = candidate.Status == RailOperationalRunStatus.ConfirmedLive
+                    ? matches.OrderByDescending(x => x.LastRealtimeEvidenceUtc).FirstOrDefault()
+                    : null;
+                values.Add(selected is null ? candidate.PublicSnapshot
+                    : selected with { RailRunId = candidate.ExpectedRunId,
+                        RailVehicleId = candidate.ExpectedRunId });
+            }
+            else values.Add(candidate.PublicSnapshot);
+        }
+        var result = values.DistinctBy(x => x.RailRunId).OrderBy(x => x.TrainCode,
+            StringComparer.Ordinal).ThenBy(x => x.RailRunId).ToImmutableArray();
+        lifecycleMetrics?.Published(result.Length,
+            result.Count(x => x.PositionQuality == RailPositionQuality.ScheduleOnly),
+            result.Count(x => x.PositionSource == RailPositionSource.ScheduleEstimated),
+            result.Count(x => x.PositionSource == RailPositionSource.RealtimeEstimated));
+        return result;
     }
 
     private static DateTimeOffset EvidenceFor(RailVehiclePublicSnapshot value,

@@ -42,17 +42,32 @@ public sealed class TremRealtimeCanaryCycle(
     RailScheduleEstimateState? scheduleEstimateState = null,
     RailScheduleRuntimeMetrics? scheduleMetrics = null,
     RailSchedulePublicationState? schedulePublicationState = null,
-    RailSchedulePublicationMetrics? schedulePublicationMetrics = null) : ITremRealtimeCanaryCycle
+    RailSchedulePublicationMetrics? schedulePublicationMetrics = null,
+    IExpectedRunService? expectedRuns = null,
+    RailScheduleFirstRuntimeState? scheduleFirstState = null,
+    RailScheduleFirstMetrics? scheduleFirstMetrics = null) : ITremRealtimeCanaryCycle
 {
     public async Task RunOnceAsync(CancellationToken ct)
     {
         var runtime = runtimeOptions.Value;
         var canary = canaryOptions.Value;
+        var now = clock.GetUtcNow();
+        var scheduleOptions = scheduleRuntimeOptions?.Value ?? new RailScheduleRuntimeOptions();
+        IReadOnlyList<TremSentinelQuery>? catalogQueries = null;
+        if (scheduleOptions.ScheduleFirstPublicationEnabled && expectedRuns is not null
+            && scheduleFirstState is not null)
+        {
+            catalogQueries = await catalog.GetAsync(ct);
+            var operational = new List<ExpectedRun>();
+            foreach (var lineId in catalogQueries.SelectMany(x => x.StructurallyCoveredLinhaIds).Distinct())
+                operational.AddRange(await expectedRuns.InWindowAsync(lineId, now,
+                    TimeSpan.FromMinutes(scheduleOptions.ScheduledGraceAfterEndMinutes), TimeSpan.Zero, ct));
+            scheduleFirstState.Refresh(operational, await topologyCache.GetAsync(ct), now);
+        }
         if (!runtime.Enabled || !canary.Enabled) return;
         if (!canary.IsValid(out var diagnostic)) { logger.LogError("Trem realtime canary is fail-closed due to invalid configuration: {Diagnostic}", diagnostic); return; }
 
         metrics.Cycle();
-        var now = clock.GetUtcNow();
         if (!scheduler.IsWithinOperationalWindow(now))
         {
             logger.LogInformation("Trem satellite acquisition skipped outside operational service window.");
@@ -66,9 +81,8 @@ public sealed class TremRealtimeCanaryCycle(
         }
 
         var allowed = canary.AllowedSentinelIds.ToHashSet(StringComparer.Ordinal);
-        var catalogQueries = await catalog.GetAsync(ct);
+        catalogQueries ??= await catalog.GetAsync(ct);
         scheduler.SetScannerProbeCount(catalogQueries.Count(x => x.IsScannerProbe));
-        var scheduleOptions = scheduleRuntimeOptions?.Value ?? new RailScheduleRuntimeOptions();
         var schedulePlan = scheduleOptions.Enabled && scheduleOptions.ScheduleAwareProbesEnabled
             && scheduleProbePlanner is not null
                 ? await scheduleProbePlanner.PlanAsync(catalogQueries, now, ct)
@@ -175,6 +189,7 @@ public sealed class TremRealtimeCanaryCycle(
                                     bindingResult.Binding!, topology, receivedAtUtc);
                                 schedulePublicationState?.Observe(run, bindingResult.Binding!, estimate,
                                     topology, TimeSpan.FromSeconds(scheduleOptions.StaleAfterSeconds));
+                                scheduleFirstState?.ObserveConfirmed(run, bindingResult.Binding!, estimate, topology);
                                 if (scheduleEstimateState.Set(estimate))
                                     logger.LogInformation(
                                         "RailScheduleEstimate train_code={TrainCode} expected_run_id={ExpectedRunId} binding_state={BindingState} anchors={Anchors} delay_seconds={DelaySeconds} previous_stop={PreviousStop} next_stop={NextStop} segment_progress={SegmentProgress} mapping={Mapping} spatial={Spatial} evidence_age_seconds={EvidenceAgeSeconds} is_estimated=true origin=SCHEDULE_REALTIME_ESTIMATE",
@@ -296,6 +311,18 @@ public sealed class TremRealtimeCanaryCycle(
                     publication.LastMerge.BaselineWinsFresher, publication.LastMerge.ScheduleWinsFresher,
                     publication.LastMerge.TiesBaselineWins, publication.LastMerge.FinalUniqueTrains,
                     publication.LastMerge.FinalScheduleTrains, publication.LastMerge.FinalBaselineTrains);
+            }
+            if (scheduleFirstMetrics is not null && scheduleOptions.ScheduleFirstPublicationEnabled)
+            {
+                var lifecycle = scheduleFirstMetrics.Capture();
+                logger.LogInformation(
+                    "RailScheduleFirstSummary expected_runs_operational={Expected} scheduled_only_current={Scheduled} confirmed_live_current={Live} confirmed_estimated_current={Estimated} completed_or_expired_current={Completed} final_unique_trains={Final} final_schedule_only={FinalScheduled} final_confirmed_estimated={FinalEstimated} final_live={FinalLive} confirmed_once_total={Once} confirmed_twice_total={Twice} schedule_only_expired_total={Expired}",
+                    lifecycle.ExpectedRunsOperational, lifecycle.ScheduledOnlyCurrent,
+                    lifecycle.ConfirmedLiveCurrent, lifecycle.ConfirmedEstimatedCurrent,
+                    lifecycle.CompletedOrExpiredCurrent, lifecycle.FinalUniqueTrains,
+                    lifecycle.FinalScheduleOnly, lifecycle.FinalConfirmedEstimated,
+                    lifecycle.FinalLive, lifecycle.ConfirmedOnceTotal,
+                    lifecycle.ConfirmedTwiceTotal, lifecycle.ScheduleOnlyExpiredTotal);
             }
             if (item.Query.IsScannerProbe)
             {

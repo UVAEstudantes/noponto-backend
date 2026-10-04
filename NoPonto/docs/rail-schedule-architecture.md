@@ -72,3 +72,42 @@ Somente bindings `CONFIRMED`, em `IN_PROGRESS`, com ponto espacial e mapping `EX
 `SUBSET_COMPATIBLE` podem entrar. O candidato expira em `LastRealtimeEvidenceUtc +
 StaleAfterSeconds`; `STALE`, `UNAVAILABLE`, `BEFORE_START`, `AFTER_EXPECTED_END`, `UNRESOLVED` e
 ausência de TrainCode não são publicados. Reinício começa sem candidatos schedule-aware.
+
+## Runtime schedule-first / realtime-corrected
+
+`RailScheduleRuntime.ScheduleFirstPublicationEnabled` habilita, de forma independente e desligada
+por padrão, um lifecycle process-local por `ExpectedRunId`. Com a flag desligada, o caminho descrito
+acima permanece idêntico. `ScheduledGraceAfterEndMinutes` vale 30 minutos por padrão e controla por
+quanto tempo uma execução continua operacionalmente plausível depois do fim programado corrigido
+pelo último atraso conhecido.
+
+Antes, a observação realtime sustentava simultaneamente a existência e a posição pública do trem.
+No modo schedule-first, a grade sustenta a existência: cada `ExpectedRun` operacional pode produzir
+uma posição `ScheduledEstimated`/`ScheduleOnly`, sempre com `IsEstimated=true`, mesmo sem `TrainCode`.
+Realtime apenas confirma a execução, associa o código e corrige o atraso e a posição.
+
+O lifecycle distingue:
+
+- `Scheduled`: existe apenas pela grade, nunca foi confirmado e tem confiança baixa;
+- `ConfirmedLive`: possui evidência realtime com menos de `StaleAfterSeconds`;
+- `ConfirmedEstimated`: já foi confirmado, mas a evidência deixou de ser fresca; continua projetado
+  pela grade e último atraso conhecido;
+- `CompletedOrExpired`: ultrapassou o fim corrigido mais a margem operacional e deixa de ser publicado.
+
+Perder freshness não elimina a viagem. `StaleAfterSeconds` passa a separar live de estimated; não é o
+TTL de existência no modo schedule-first. `UnavailableAfterSeconds` continua válido para o estimator
+legado, mas não apaga uma execução confirmada ainda dentro da janela operacional.
+
+`ExpectedRunId` é também a identidade pública determinística (`RailRunId` e `RailVehicleId`) antes e
+depois do binding. `TrainCode` é atributo operacional posterior. Quando uma posição do runtime
+realtime vence o merge, sua identidade pública é alinhada ao `ExpectedRunId`, evitando um segundo
+ícone na transição de programado para confirmado.
+
+Somente mappings `EXACT` e `SUBSET_COMPATIBLE` com ocorrências físicas não ambíguas produzem ponto.
+Runs `UNRESOLVED` ou `CONFLICT` podem existir conceitualmente, mas não recebem coordenada inventada.
+Nenhuma dessas posições é GPS: `ScheduledEstimated` indica grade pura; `ScheduleEstimated` indica
+grade corrigida por evidência; `RealtimeEstimated` indica a fonte realtime mais forte disponível.
+
+O scanner e seus limites não mudam. A atualização do lifecycle reutiliza a materialização em cache e
+as respostas já obtidas; uma resposta continua alimentando todos os `TrainCode` válidos, não apenas
+o alvo que motivou a consulta.

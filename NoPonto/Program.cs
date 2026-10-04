@@ -536,6 +536,8 @@ builder.Services.AddSingleton<RailScheduleRuntimeMetrics>();
 builder.Services.AddSingleton<RailScheduleEstimateState>();
 builder.Services.AddSingleton<RailSchedulePublicationState>();
 builder.Services.AddSingleton<RailSchedulePublicationMetrics>();
+builder.Services.AddSingleton<RailScheduleFirstMetrics>();
+builder.Services.AddSingleton<RailScheduleFirstRuntimeState>();
 builder.Services.AddSingleton<IRailScheduleEstimator, RailScheduleEstimator>();
 builder.Services.AddScoped<IRailScheduleProbePlanner, RailScheduleProbePlanner>();
 builder.Services.AddSingleton<IRailPublishedSnapshotProvider, RailPublishedSnapshotProvider>();
