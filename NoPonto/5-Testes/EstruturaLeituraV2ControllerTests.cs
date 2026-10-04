@@ -9,12 +9,28 @@ namespace NoPonto.Tests;
 public sealed class EstruturaLeituraV2ControllerTests
 {
     [Fact]
+    public void ContratoLinha_BrtMantemModalRealETipoRotaExplicito()
+    {
+        var linhaId = Guid.NewGuid();
+        var modalOnibusId = Guid.NewGuid();
+        var dto = new LinhaEstruturalResumoDto(linhaId, "B42", "Transcarioca",
+            "brt", "BRT Rio", modalOnibusId, "Ônibus");
+
+        Assert.Equal(linhaId, dto.LinhaId);
+        Assert.Equal(modalOnibusId, dto.ModalId);
+        Assert.Equal("Ônibus", dto.Modal);
+        Assert.Equal("brt", dto.TipoRota);
+    }
+
+    [Fact]
     public async Task LinhaComum_ListaESentidoComUmPadraoPublicado()
     {
         var repo = Scenario();
         var linhas = new EstruturaLinhasController(repo);
         var pagina = Assert.IsType<OkObjectResult>(await linhas.Listar("006", null, 1, 20)).Value;
-        Assert.Equal("006", Assert.Single(Assert.IsType<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>>(pagina).Itens).Codigo);
+        var linha = Assert.Single(Assert.IsType<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>>(pagina).Itens);
+        Assert.Equal("006", linha.Codigo);
+        Assert.Equal(repo.LinhaId, linha.LinhaId);
         var sentidos = Assert.IsAssignableFrom<IReadOnlyList<SentidoEstruturalResumoDto>>(
             Assert.IsType<OkObjectResult>(await linhas.Sentidos("006", default)).Value);
         var padroes = Assert.IsAssignableFrom<IReadOnlyList<PadraoOperacionalResumoDto>>(

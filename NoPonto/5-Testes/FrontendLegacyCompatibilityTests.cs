@@ -160,7 +160,9 @@ public sealed class FrontendLegacyCompatibilityTests
         var repository = new EstruturaLeituraV2Repository(db);
         var byCode = await repository.ListarLinhasAsync(null, "b42", 1, 10, default);
         var brt = Assert.Single(byCode.Itens);
-        Assert.Equal(FrontendLegacyModalIds.Brt, brt.ModalId);
+        Assert.Equal(ids.BusModal, brt.ModalId);
+        Assert.Equal("Ônibus", brt.Modal);
+        Assert.Equal("brt", brt.TipoRota);
         var byName = await repository.ListarLinhasAsync(null, "terminal teste", 1, 1, default);
         Assert.Equal(1, byName.TotalRegistros);
         Assert.Equal(1, byName.TamanhoPagina);

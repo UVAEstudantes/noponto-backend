@@ -2,8 +2,13 @@ using NoPonto.Application.DTOs.Compartilhado;
 
 namespace NoPonto.Application.DTOs.EstruturaV2;
 
-public sealed record LinhaEstruturalResumoDto(Guid Id, string Codigo, string Nome,
-    string TipoRota, string? Consorcio, Guid ModalId, string Modal);
+public sealed record LinhaEstruturalResumoDto(Guid LinhaId, string Codigo, string Nome,
+    string TipoRota, string? Consorcio, Guid ModalId, string Modal)
+{
+    // Compatibilidade aditiva com clientes anteriores. O contrato V2 usa LinhaId.
+    [Obsolete("Use LinhaId no contrato estrutural V2.")]
+    public Guid Id => LinhaId;
+}
 
 public sealed record SentidoEstruturalResumoDto(Guid Id, Guid LinhaId, string Nome);
 

@@ -522,6 +522,8 @@ builder.Services.AddHostedService<GpsStructuralHintMetricsReporter>();
 
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 builder.Services.AddScoped<IEstruturaLeituraV2Repository, EstruturaLeituraV2Repository>();
+builder.Services.AddScoped<NoPonto.Application.EventosParada.IEventosParadaService,
+    NoPonto.Application.Services.EventosParada.EventosParadaService>();
 builder.Services.AddScoped<RailScheduleRepository>();
 builder.Services.AddSingleton<ExpectedRunCache>();
 builder.Services.AddScoped<IExpectedRunService, ExpectedRunService>();
