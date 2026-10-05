@@ -143,6 +143,14 @@ public sealed class EventosParadaProjectionTests
             EventosParadaService.ResolveStationRole(1, 8));
     }
 
+    [Fact]
+    public void DestinoFinalNaoEhExpostoComoFalsaPassagem()
+    {
+        Assert.True(EventosParadaService.ShouldExposeRailEvent(PapeisEstacaoEvento.Origin));
+        Assert.True(EventosParadaService.ShouldExposeRailEvent(PapeisEstacaoEvento.Intermediate));
+        Assert.False(EventosParadaService.ShouldExposeRailEvent(PapeisEstacaoEvento.Destination));
+    }
+
     private static EventosParadaService.StopContext Context(Guid id, int order) => new(id,
         Guid.NewGuid(), order, .5, 500, Guid.NewGuid(), 1000, Guid.NewGuid(), Guid.NewGuid(),
         Guid.NewGuid(), "1", "Ônibus", "regular");

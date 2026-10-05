@@ -105,6 +105,9 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                     ? null : (DateTimeOffset?)snapshot.LastRealtimeEvidenceUtc;
                 var stationRole = ResolveStationRole(scheduledStop.StopSequence,
                     run.Stops.Max(x => x.StopSequence));
+                // A chegada ao destino encerra este run; ela não é uma futura
+                // passagem nem uma saída deste mesmo serviço.
+                if (!ShouldExposeRailEvent(stationRole)) continue;
                 events.Add(new($"rail:{run.ExpectedRunId:D}:{scheduledStop.ScheduledStopId:D}",
                     scheduledStop.StopSequence == 1 ? TiposEventoParada.Departure : TiposEventoParada.Arrival,
                     structural.LinhaId, structural.CodigoLinha, "trem", "trem", structural.SentidoId,
@@ -145,6 +148,9 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
         stopSequence == 1 ? PapeisEstacaoEvento.Origin
         : stopSequence == lastStopSequence ? PapeisEstacaoEvento.Destination
         : PapeisEstacaoEvento.Intermediate;
+
+    internal static bool ShouldExposeRailEvent(string stationRole) =>
+        stationRole != PapeisEstacaoEvento.Destination;
 
     private static bool IsRail(string modal) => modal.Contains("trem", StringComparison.OrdinalIgnoreCase)
         || modal.Contains("ferro", StringComparison.OrdinalIgnoreCase);

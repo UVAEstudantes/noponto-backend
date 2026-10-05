@@ -97,6 +97,7 @@ public sealed class GpsBrtClient
         {
             Ordem             = $"BRT-{dto.Codigo.Trim()}",
             CodigoLinha       = dto.Linha.Trim().ToUpperInvariant(),
+            TipoRota         = "brt",
             Latitude          = dto.Latitude,
             Longitude         = dto.Longitude,
             Velocidade        = dto.Velocidade,

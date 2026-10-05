@@ -32,7 +32,7 @@ public sealed record FrontendLegacyItinerarioMapaLinhaDto(
 /// matching, Redis, CAS, travel state or ETA. Legacy ItinerarioId aliases PadraoVersaoId.
 /// </summary>
 public sealed record FrontendLegacyPosicaoSignalRDto(
-    string Ordem, string CodigoLinha, double Latitude, double Longitude, double Velocidade,
+    string Ordem, string CodigoLinha, string TipoRota, double Latitude, double Longitude, double Velocidade,
     DateTimeOffset TimestampGps, DateTimeOffset TimestampServidor, double? LatitudeAnterior,
     double? LongitudeAnterior, DateTimeOffset? TimestampAnterior, double? PosicaoNaRota,
     double? ComprimentoRotaMetros, Guid? PadraoOperacionalId, Guid? PadraoVersaoId,
@@ -43,7 +43,7 @@ public sealed record FrontendLegacyPosicaoSignalRDto(
     string? EtaConfianca, StatusVeiculo Status)
 {
     public static FrontendLegacyPosicaoSignalRDto From(PosicaoVeiculoDto value) => new(
-        value.Ordem, value.CodigoLinha, value.Latitude, value.Longitude, value.Velocidade,
+        value.Ordem, value.CodigoLinha, value.TipoRota, value.Latitude, value.Longitude, value.Velocidade,
         value.TimestampGps, value.TimestampServidor, value.LatitudeAnterior,
         value.LongitudeAnterior, value.TimestampAnterior, value.PosicaoNaRota,
         value.ComprimentoRotaMetros, value.PadraoOperacionalId, value.PadraoVersaoId,

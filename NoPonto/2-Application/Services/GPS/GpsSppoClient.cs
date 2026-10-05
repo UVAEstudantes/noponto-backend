@@ -269,6 +269,7 @@ public sealed class GpsSppoClient
         {
             Ordem             = dto.Ordem.Trim().ToUpperInvariant(),
             CodigoLinha       = dto.Linha.Trim().ToUpperInvariant(),
+            TipoRota         = "onibus",
             Latitude          = lat,
             Longitude         = lon,
             Velocidade        = velocidade,

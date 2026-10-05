@@ -138,6 +138,7 @@ public sealed record PosicaoVeiculoDto
 
     public string Ordem { get; init; } = null!;
     public string CodigoLinha { get; init; } = null!;
+    public string TipoRota { get; init; } = "onibus";
 
     // ── Posição GPS bruta ─────────────────────────────────────────────────────
 

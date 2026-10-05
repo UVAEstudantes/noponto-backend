@@ -119,14 +119,16 @@ public sealed class FrontendLegacyCompatibilityTests
         var version = Guid.NewGuid();
         var dto = FrontendLegacyPosicaoSignalRDto.From(new PosicaoVeiculoDto
         {
-            Ordem = "V1", CodigoLinha = "006", PadraoVersaoId = version,
+            Ordem = "V1", CodigoLinha = "006", TipoRota = "brt", PadraoVersaoId = version,
             TimestampGps = DateTimeOffset.UtcNow, TimestampServidor = DateTimeOffset.UtcNow
         });
         Assert.Equal(version, dto.PadraoVersaoId);
         Assert.Equal(version, dto.ItinerarioId);
+        Assert.Equal("brt", dto.TipoRota);
         var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.Contains("\"padraoVersaoId\"", json);
         Assert.Contains("\"itinerarioId\"", json);
+        Assert.Contains("\"tipoRota\":\"brt\"", json);
         Assert.NotNull(typeof(GpsHub).GetMethod("InscreverseLinha"));
         Assert.NotNull(typeof(GpsHub).GetMethod("CancelarLinha"));
     }
