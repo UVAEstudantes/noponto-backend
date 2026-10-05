@@ -44,7 +44,9 @@ public class LinhasController : ControllerBase
     ///   ]
     /// }
     /// </remarks>
-    [HttpGet]
+    // A listagem pública é atendida por EstruturaLinhasController, cujo DTO mantém
+    // o alias `id` e acrescenta a identidade estrutural V2. Evita duas actions GET /linhas.
+    [NonAction]
     [ProducesResponseType(typeof(PaginacaoRespostaDTO<LinhaConsultaDTO>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

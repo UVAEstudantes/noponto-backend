@@ -5,6 +5,8 @@ namespace NoPonto.Application.DTOs.EstruturaV2;
 public sealed record LinhaEstruturalResumoDto(Guid LinhaId, string Codigo, string Nome,
     string TipoRota, string? Consorcio, Guid ModalId, string Modal)
 {
+    public string? TerminalA { get; init; }
+    public string? TerminalB { get; init; }
     // Compatibilidade aditiva com clientes anteriores. O contrato V2 usa LinhaId.
     [Obsolete("Use LinhaId no contrato estrutural V2.")]
     public Guid Id => LinhaId;
@@ -36,7 +38,8 @@ public sealed record ItinerarioPadraoVersaoDto(
 public interface IEstruturaLeituraV2Repository
 {
     Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
-        string? codigo, string? nome, int pagina, int tamanhoPagina, CancellationToken ct);
+        string? codigo, string? nome, Guid? modalId, string? tipoRota,
+        string? excluirTipoRota, int pagina, int tamanhoPagina, CancellationToken ct);
     Task<LinhaEstruturalResumoDto?> BuscarLinhaPorCodigoAsync(string codigo, CancellationToken ct);
     Task<IReadOnlyList<SentidoEstruturalResumoDto>?> ListarSentidosAsync(string codigoLinha, CancellationToken ct);
     Task<IReadOnlyList<PadraoOperacionalResumoDto>?> ListarPadroesAsync(Guid sentidoId, CancellationToken ct);

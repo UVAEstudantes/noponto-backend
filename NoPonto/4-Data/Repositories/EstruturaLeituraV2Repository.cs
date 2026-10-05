@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using NoPonto.Application.DTOs.Compartilhado;
 using NoPonto.Application.DTOs.EstruturaV2;
+using System.Globalization;
+using System.Text;
 
 namespace NoPonto.Data.Repositories;
 
@@ -8,7 +10,8 @@ public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
     : IEstruturaLeituraV2Repository
 {
     public async Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
-        string? codigo, string? nome, int pagina, int tamanhoPagina, CancellationToken ct)
+        string? codigo, string? nome, Guid? modalId, string? tipoRota,
+        string? excluirTipoRota, int pagina, int tamanhoPagina, CancellationToken ct)
     {
         var query = db.Linhas.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(codigo))
@@ -18,9 +21,25 @@ public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
         }
         if (!string.IsNullOrWhiteSpace(nome))
         {
-            var filtro = nome.Trim();
-            query = query.Where(x => EF.Functions.ILike(x.Codigo, $"%{filtro}%")
-                || EF.Functions.ILike(x.Nome, $"%{filtro}%"));
+            var filtro = RemoverAcentos(nome.Trim());
+            var pattern = $"%{filtro}%";
+            query = query.Where(x => EF.Functions.ILike(x.Codigo, pattern)
+                || EF.Functions.ILike(x.Nome.ToLower()
+                    .Replace("á", "a").Replace("à", "a").Replace("ã", "a").Replace("â", "a")
+                    .Replace("é", "e").Replace("ê", "e").Replace("í", "i")
+                    .Replace("ó", "o").Replace("ô", "o").Replace("õ", "o")
+                    .Replace("ú", "u").Replace("ü", "u").Replace("ç", "c"), pattern));
+        }
+        if (modalId.HasValue) query = query.Where(x => x.ModalId == modalId.Value);
+        if (!string.IsNullOrWhiteSpace(tipoRota))
+        {
+            var filtro = tipoRota.Trim();
+            query = query.Where(x => EF.Functions.ILike(x.TipoRota, filtro));
+        }
+        if (!string.IsNullOrWhiteSpace(excluirTipoRota))
+        {
+            var filtro = excluirTipoRota.Trim();
+            query = query.Where(x => !EF.Functions.ILike(x.TipoRota, filtro));
         }
 
         var total = await query.CountAsync(ct);
@@ -29,6 +48,21 @@ public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
             .Select(x => new LinhaEstruturalResumoDto(x.Id, x.Codigo, x.Nome,
                 x.TipoRota, x.Consorcio, x.ModalId, x.Modal.Nome))
             .ToListAsync(ct);
+        var ids = itens.Select(x => x.LinhaId).ToArray();
+        var endpoints = await db.OcorrenciasParadasPadroes.AsNoTracking()
+            .Where(x => ids.Contains(x.PadraoVersao.PadraoOperacional.Sentido.LinhaId)
+                && x.PadraoVersao.PadraoOperacional.VersaoAtualId == x.PadraoVersaoId)
+            .Select(x => new { LinhaId = x.PadraoVersao.PadraoOperacional.Sentido.LinhaId,
+                x.PadraoVersaoId, x.Ordem, x.Parada.Nome }).ToListAsync(ct);
+        itens = itens.Select(item =>
+        {
+            var terminais = endpoints.Where(x => x.LinhaId == item.LinhaId)
+                .GroupBy(x => x.PadraoVersaoId)
+                .SelectMany(g => new[] { g.MinBy(x => x.Ordem)!.Nome, g.MaxBy(x => x.Ordem)!.Nome })
+                .Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
+            return item with { TerminalA = terminais.ElementAtOrDefault(0),
+                TerminalB = terminais.ElementAtOrDefault(1) };
+        }).ToList();
         return new PaginacaoRespostaDTO<LinhaEstruturalResumoDto>
         {
             Pagina = pagina, TamanhoPagina = tamanhoPagina, TotalRegistros = total,
@@ -36,6 +70,9 @@ public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
             Itens = itens
         };
     }
+
+    private static string RemoverAcentos(string value) => new(value.Normalize(NormalizationForm.FormD)
+        .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray());
 
     public Task<LinhaEstruturalResumoDto?> BuscarLinhaPorCodigoAsync(string codigo, CancellationToken ct)
         => db.Linhas.AsNoTracking().Where(x => x.Codigo == codigo)

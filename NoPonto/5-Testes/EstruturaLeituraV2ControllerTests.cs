@@ -27,7 +27,8 @@ public sealed class EstruturaLeituraV2ControllerTests
     {
         var repo = Scenario();
         var linhas = new EstruturaLinhasController(repo);
-        var pagina = Assert.IsType<OkObjectResult>(await linhas.Listar("006", null, 1, 20)).Value;
+        var pagina = Assert.IsType<OkObjectResult>(await linhas.Listar("006", null, null,
+            null, null, 1, 20)).Value;
         var linha = Assert.Single(Assert.IsType<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>>(pagina).Itens);
         Assert.Equal("006", linha.Codigo);
         Assert.Equal(repo.LinhaId, linha.LinhaId);
@@ -37,6 +38,16 @@ public sealed class EstruturaLeituraV2ControllerTests
             Assert.IsType<OkObjectResult>(await new EstruturaSentidosController(repo)
                 .Padroes(Assert.Single(sentidos).Id, default)).Value);
         Assert.NotNull(Assert.Single(padroes).VersaoAtualId);
+    }
+
+    [Fact]
+    public async Task BuscaEncaminhaFiltrosEstruturaisAoRepositorio()
+    {
+        var repo = Scenario();
+        var modalId = Guid.NewGuid();
+        await new EstruturaLinhasController(repo).Listar(null, "deodoro", modalId,
+            "train", "brt", 2, 15);
+        Assert.Equal(("deodoro", modalId, "train", "brt"), repo.LastSearch);
     }
 
     [Fact]
@@ -106,6 +117,7 @@ public sealed class EstruturaLeituraV2ControllerTests
         public Guid VersaoId { get; } = Guid.NewGuid();
         public Guid ParadaId { get; } = Guid.NewGuid();
         public int MutationCount { get; private set; }
+        public (string? Nome, Guid? ModalId, string? TipoRota, string? ExcluirTipoRota) LastSearch { get; private set; }
         private readonly bool _multipattern;
         private readonly bool _circular;
         public FakeRepository(bool multipattern, bool circular)
@@ -114,10 +126,14 @@ public sealed class EstruturaLeituraV2ControllerTests
         private LinhaEstruturalResumoDto Linha => new(LinhaId, "006", "Castelo - Silvestre",
             "regular", null, Guid.NewGuid(), "Ônibus");
         public Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
-            string? codigo, string? nome, int pagina, int tamanhoPagina, CancellationToken ct)
-            => Task.FromResult(new PaginacaoRespostaDTO<LinhaEstruturalResumoDto>
+            string? codigo, string? nome, Guid? modalId, string? tipoRota,
+            string? excluirTipoRota, int pagina, int tamanhoPagina, CancellationToken ct)
+        {
+            LastSearch = (nome, modalId, tipoRota, excluirTipoRota);
+            return Task.FromResult(new PaginacaoRespostaDTO<LinhaEstruturalResumoDto>
             { Pagina = pagina, TamanhoPagina = tamanhoPagina, TotalRegistros = 1,
                 TotalPaginas = 1, Itens = [Linha] });
+        }
         public Task<LinhaEstruturalResumoDto?> BuscarLinhaPorCodigoAsync(string codigo, CancellationToken ct)
             => Task.FromResult<LinhaEstruturalResumoDto?>(codigo is "006" or "866"
                 ? Linha with { Codigo = codigo } : null);

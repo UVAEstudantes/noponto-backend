@@ -160,19 +160,29 @@ public sealed class FrontendLegacyCompatibilityTests
         var before = await CountsAsync(db);
 
         var repository = new EstruturaLeituraV2Repository(db);
-        var byCode = await repository.ListarLinhasAsync(null, "b42", 1, 10, default);
+        var byCode = await repository.ListarLinhasAsync(null, "b42", null, null, null, 1, 10, default);
         var brt = Assert.Single(byCode.Itens);
         Assert.Equal(ids.BusModal, brt.ModalId);
         Assert.Equal("Ônibus", brt.Modal);
         Assert.Equal("brt", brt.TipoRota);
-        var byName = await repository.ListarLinhasAsync(null, "terminal teste", 1, 1, default);
+        var byName = await repository.ListarLinhasAsync(null, "terminal teste", null, null, null, 1, 1, default);
         Assert.Equal(1, byName.TotalRegistros);
         Assert.Equal(1, byName.TamanhoPagina);
-        var firstPage = await repository.ListarLinhasAsync(null, null, 1, 1, default);
-        Assert.Equal(3, firstPage.TotalRegistros);
+        var firstPage = await repository.ListarLinhasAsync(null, null, null, null, null, 1, 1, default);
+        Assert.Equal(7, firstPage.TotalRegistros);
         Assert.Single(firstPage.Itens);
-        var regular = Assert.Single((await repository.ListarLinhasAsync(null, "r10", 1, 10, default)).Itens);
+        var regular = Assert.Single((await repository.ListarLinhasAsync(null, "r10", null, null, null, 1, 10, default)).Itens);
         Assert.Equal(ids.BusModal, regular.ModalId);
+        Assert.Equal("Deodoro", Assert.Single((await repository.ListarLinhasAsync(null, "deodoro",
+            ids.TremModal, null, null, 1, 10, default)).Itens).Nome);
+        Assert.Equal("Santa Cruz", Assert.Single((await repository.ListarLinhasAsync(null, "santa",
+            ids.TremModal, null, null, 1, 10, default)).Itens).Nome);
+        Assert.Equal("884", Assert.Single((await repository.ListarLinhasAsync(null, "sepetiba",
+            ids.BusModal, null, "brt", 1, 10, default)).Itens).Codigo);
+        Assert.Equal("10", Assert.Single((await repository.ListarLinhasAsync(null, "10",
+            ids.BusModal, "brt", null, 1, 10, default)).Itens).Codigo);
+        Assert.DoesNotContain((await repository.ListarLinhasAsync(null, "10", ids.BusModal,
+            null, "brt", 1, 10, default)).Itens, x => x.TipoRota == "brt");
 
         var service = new FrontendLegacyMapaService(db);
         var map = await service.BuscarMapaLinhaAsync(ids.BrtLine, true, default);
@@ -205,8 +215,14 @@ public sealed class FrontendLegacyCompatibilityTests
             ModalId = modal.Id, TipoRota = "brt" };
         var regular = new Linha { Id = Guid.NewGuid(), Codigo = "R10", Nome = "Regular",
             ModalId = modal.Id, TipoRota = "regular" };
-        var trem = new Linha { Id = Guid.NewGuid(), Codigo = "RAMAL", Nome = "Ramal Teste",
+        var trem = new Linha { Id = Guid.NewGuid(), Codigo = "TREM-DEODORO", Nome = "Deodoro",
             ModalId = tremModal.Id, TipoRota = "train" };
+        var santa = new Linha { Id = Guid.NewGuid(), Codigo = "TREM-SANTA-CRUZ", Nome = "Santa Cruz",
+            ModalId = tremModal.Id, TipoRota = "train" };
+        var bus884 = new Linha { Id = Guid.NewGuid(), Codigo = "884", Nome = "Sepetiba - Terminal Campo Grande",
+            ModalId = modal.Id, TipoRota = "regular" };
+        var brt10 = new Linha { Id = Guid.NewGuid(), Codigo = "10", Nome = "Santa Cruz - Terminal Alvorada",
+            ModalId = modal.Id, TipoRota = "brt" };
         var direction = new Sentido { Id = Guid.NewGuid(), LinhaId = brt.Id, Nome = "IDA (1)" };
         var preferred = new PadraoOperacional { Id = Guid.NewGuid(), SentidoId = direction.Id,
             Chave = "a-principal", TipoServico = "brt" };
@@ -225,7 +241,7 @@ public sealed class FrontendLegacyCompatibilityTests
             Localizacao = factory.CreatePoint(new NetTopologySuite.Geometries.Coordinate(-43.05, -22.05)), TipoLocal = TiposLocalParada.Estacao };
         var station = new Parada { Id = Guid.NewGuid(), Codigo = "T1", Nome = "Estação Teste",
             Localizacao = factory.CreatePoint(new NetTopologySuite.Geometries.Coordinate(-43, -22)), TipoLocal = TiposLocalParada.Estacao };
-        db.AddRange(modal, tremModal, brt, regular, trem, direction, tremDirection, preferred,
+        db.AddRange(modal, tremModal, brt, regular, trem, santa, bus884, brt10, direction, tremDirection, preferred,
             other, tremPattern, historical, current, otherVersion, tremVersion, repeated, middle, station);
         await db.SaveChangesAsync();
         preferred.VersaoAtualId = current.Id;
@@ -238,7 +254,7 @@ public sealed class FrontendLegacyCompatibilityTests
             Occurrence(tremVersion.Id, station.Id, 1, 0));
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
-        return new(modal.Id, brt.Id, historical.Id, current.Id, current.Id, trem.Id, tremVersion.Id);
+        return new(modal.Id, tremModal.Id, brt.Id, historical.Id, current.Id, current.Id, trem.Id, tremVersion.Id);
     }
 
     private static PadraoVersao Version(Guid pattern, int number,
@@ -264,7 +280,7 @@ public sealed class FrontendLegacyCompatibilityTests
         await db.PadroesOperacionais.CountAsync(), await db.PadroesVersoes.CountAsync(),
         await db.OcorrenciasParadasPadroes.CountAsync());
 
-    private sealed record SeedIds(Guid BusModal, Guid BrtLine, Guid HistoricalVersion,
+    private sealed record SeedIds(Guid BusModal, Guid TremModal, Guid BrtLine, Guid HistoricalVersion,
         Guid CurrentVersion, Guid PreferredPatternVersion, Guid TremLine, Guid TremCurrentVersion);
 
     private sealed class FakeModalRepository(IReadOnlyList<ModalConsultaDTO> persisted) : IModalRepository
