@@ -1,509 +1,168 @@
 # NoPonto Backend
 
-Backend da plataforma **NoPonto**, focado em mobilidade urbana com:
+Backend do **NoPonto**, plataforma acadêmica de informação sobre mobilidade urbana desenvolvida no contexto de um Trabalho de Conclusão de Curso. Este repositório concentra estrutura de transporte, aquisição e tratamento de dados operacionais, APIs, processamento geoespacial, realtime e persistência utilizados pelo aplicativo móvel.
 
-- catálogo de linhas, sentidos, itinerários e paradas;
-- relacionamento geoespacial de paradas ↔ itinerários;
-- ingestão e associação de POIs (OpenStreetMap/Overpass);
-- stream de GPS em tempo real com enriquecimento via PostGIS + Redis + SignalR.
+O núcleo vigente cobre ônibus, BRT e representação ferroviária. Rotas multimodais, Rotinas, notificações e metrô operacional permanecem planejados.
 
-- 🎨 [Repositório do Frontend](https://github.com/UVAEstudantes/noponto-frontend)
+## Estado do projeto
 
----
+| Área | Estado |
+|---|---|
+| Estrutura de transporte V2 versionada | operacional |
+| GPS e matching de ônibus/BRT | operacional no backend |
+| Redis, snapshots e SignalR | operacional; estado efêmero |
+| Ferrovia schedule-first | operacional; posições inferidas, não GPS |
+| Aplicativo mobile | implementado; build distribuído não confirmado nesta baseline |
+| Telemetria e viagem operacional | implementadas |
+| ETA legado | cliente fail-open presente; serviço Python desligado |
+| ETA V2 | fundação experimental implementada; flags produtivas desligadas |
+| POIs e tarifas | parciais, sem fluxo produtivo completo comprovado |
+| Rotas, Rotinas, notificações e metrô | planejados |
 
-## Sumário
+## Funcionalidades principais
 
-1. [Visão geral da arquitetura](#visão-geral-da-arquitetura)
-2. [Stack técnica](#stack-técnica)
-3. [Estrutura do projeto](#estrutura-do-projeto)
-4. [Modelagem de domínio (resumo)](#modelagem-de-domínio-resumo)
-5. [APIs externas consumidas](#apis-externas-consumidas)
-6. [Fluxos principais](#fluxos-principais)
-7. [Fluxo de GPS em tempo real (detalhado)](#fluxo-de-gps-em-tempo-real-detalhado)
-8. [Fluxo de POIs (detalhado)](#fluxo-de-pois-detalhado)
-9. [Fluxo de relacionamento Paradas x Itinerários](#fluxo-de-relacionamento-paradas-x-itinerários)
-10. [Endpoints expostos](#endpoints-expostos)
-11. [Configuração e variáveis de ambiente](#configuração-e-variáveis-de-ambiente)
-12. [Como rodar localmente](#como-rodar-localmente)
-13. [Observabilidade e logs](#observabilidade-e-logs)
-14. [Próximos passos do projeto](#próximos-passos-do-projeto)
+- Catálogo V2 de modais, linhas, sentidos, padrões operacionais, versões de percurso, paradas e ocorrências ordenadas.
+- Importação estrutural com identidades externas, proveniência, hashes e publicação versionada.
+- Coleta configurável de GPS de ônibus/BRT, validação, deduplicação e estado causal.
+- Map matching em lote com PostgreSQL/PostGIS, continuidade, bearing, fração longitudinal e próxima ocorrência.
+- Viagem operacional durável, passagens de parada, eventos e outbox.
+- Snapshots Redis com TTL e CAS Lua, além de publicação SignalR por linha.
+- Schedules ferroviários versionados, expected runs em memória, scanner limitado por budget, binding, tracker e estimativa temporal/espacial.
+- Eventos de parada, histórico e telemetria para avaliação.
+- Fundação ETA V2 com baseline/shadow/canary, persistência e ground truth, atualmente desabilitada em produção.
 
----
+## Arquitetura
 
-## Visão geral da arquitetura
+O backend é um **monólito modular em camadas**, não um conjunto de microsserviços. Controllers REST, SignalR e workers internos executam no mesmo processo ASP.NET Core.
 
-A aplicação segue um desenho em camadas:
+```mermaid
+flowchart LR
+  APP[Aplicativo Expo] -->|HTTP e SignalR| API[API ASP.NET Core + workers]
+  API -->|SQL e PostGIS| PG[(PostgreSQL e PostGIS)]
+  API -->|RESP| RD[(Redis efêmero)]
+  API -->|HTTP| EXT[Providers externos]
+  API -.->|legado OFF| ML[ETA Python]
+```
 
-- **1-API**: controllers HTTP, middleware global de exceção e hub SignalR.
-- **2-Application**: regras de negócio, serviços de importação, jobs e serviços de background.
-- **3-Domain**: entidades centrais do domínio de transporte.
-- **4-Data**: DbContext e repositórios (EF Core + SQL/PostGIS).
+- `1-API`: controllers, hubs, middleware e contratos de entrada HTTP.
+- `2-Application`: regras, GPS, ferrovia, ETA, importações e BackgroundServices.
+- `3-Domain`: entidades persistentes do domínio.
+- `4-Data`: DbContext, interfaces, repositories e SQL/PostGIS.
+- `5-Testes`: testes xUnit incorporados ao projeto.
 
-A inicialização (`Program.cs`) registra:
+Diagramas completos estão no [catálogo arquitetural](docs/07-diagramas/00-catalogo-convencoes-e-rastreabilidade.md).
 
-- DI para repositórios/serviços;
-- `DbContext` PostgreSQL + NetTopologySuite;
-- cache distribuído em Redis;
-- serviços hospedados (`BackgroundService`) para GPS, importações e fila de POIs;
-- SignalR para push de posição em tempo real;
-- Swagger com documentação XML.
+## Tecnologias
 
----
+- .NET 9, ASP.NET Core e C#.
+- Entity Framework Core 9, Npgsql e NetTopologySuite.
+- PostgreSQL 16 e PostGIS 3.4.
+- Redis 7 e StackExchange.Redis.
+- SignalR e Swagger/OpenAPI.
+- Docker/Compose, GitHub Actions e GHCR.
+- Frontend relacionado: Expo 55, React Native 0.83 e MapLibre GL JS em WebView.
 
-## Stack técnica
+## Fluxos resumidos
 
-- **.NET 9 (ASP.NET Core Web API)**
-- **Entity Framework Core 9**
-- **PostgreSQL 16 + PostGIS**
-- **Redis 7**
-- **SignalR**
-- **NetTopologySuite**
-- **Npgsql + NpgsqlDataSource**
-- **Swashbuckle/Swagger**
+### Rodoviário
 
-> O `docker-compose` do repositório sobe PostgreSQL (com PostGIS) e Redis.
+O collector consulta providers com janela e overlap, normaliza e deduplica observações. O polling aplica validação, matching PostGIS e correção causal. Posições aceitas atualizam Redis, viagem/outbox/telemetria conforme o estágio e são publicadas aos grupos SignalR.
 
----
+### Ferroviário
 
-## Estrutura do projeto
+Grades versionadas materializam viagens esperadas. Gate, sentinelas e budgets controlam consultas; evidências são associadas a expected runs e usadas para inferir progresso e posição sobre a geometria. O frontend recebe snapshots HTTP com origem, qualidade e idade.
+
+### Persistência e ETA
+
+PostgreSQL/PostGIS é a autoridade durável. Redis guarda projeções, locks, TTLs e streams, mas está configurado sem RDB/AOF e não deve ser tratado como backup. O ETA legado falha sem interromper GPS; ETA V2 permanece experimental e desligado.
+
+## Estrutura do repositório
 
 ```text
-/workspace/noponto-backend
-├── README.md
+noponto-backend/
+├── .github/workflows/       # build e deploy
+├── docs/                    # documentação técnica e acadêmica
 ├── NoPonto.sln
 └── NoPonto/
     ├── 1-API/
-    │   ├── Controllers/
-    │   ├── Hubs/
-    │   └── Middlewares/
     ├── 2-Application/
-    │   ├── DTOs/
-    │   ├── GPS/
-    │   ├── Interfaces/
-    │   ├── Services/
-    │   │   └── BackgroundServices/
-    │   └── ...
-    ├── 3-Domain/Entities/
+    ├── 3-Domain/
     ├── 4-Data/
-    │   ├── Context/
-    │   ├── Interfaces/
-    │   └── Repositories/
+    ├── 5-Testes/
     ├── Migrations/
     ├── Program.cs
+    ├── Dockerfile
     └── docker-compose.yml
 ```
 
----
+## Execução em desenvolvimento
 
-## Modelagem de domínio (resumo)
+### Pré-requisitos
 
-Principais entidades:
+- .NET SDK 9.
+- PostgreSQL com PostGIS.
+- Redis 7.
+- Docker e Compose são opcionais para a infraestrutura local; o Docker Desktop local não representa a produção.
 
-- **Modal** → ex.: Ônibus
-- **Linha** (`Codigo`, `Nome`, `ModalId`)
-- **Sentido** (`LinhaId`, `Nome`)
-- **Itinerario** (`SentidoId`, `Geometria`, `DistanciaMetros`)
-- **Parada** (`Codigo`, `Nome`, `Localizacao`)
-- **ParadaItinerario** (join com `Ordem`, `PosicaoLinha`, `DistanciaMetros`)
-- **Poi** (`Nome`, `Categoria`, `Prioridade`, `Localizacao`)
-- **PoiParada** (join com `DistanciaMetros`)
+Defina variáveis de ambiente com valores próprios. Não versione `.env`, senhas, tokens ou connection strings. Categorias relevantes:
 
-Pontos importantes de modelagem geoespacial:
+- `POSTGRES_*` e `REDIS_*`;
+- `CORS__ORIGINS__*`;
+- `GPS__*`, `GpsPolling__*` e seleção de sources;
+- `TremRealtime__*` e `RailScheduleRuntime__*`;
+- `EtaV2__*` e `TelemetriaMlSampling__*`;
+- URLs e parâmetros dos providers estruturais.
 
-- `Itinerario.Geometria` é `geometry(LineString,4326)`;
-- `Parada.Localizacao` e `Poi.Localizacao` são `geometry(Point,4326)`;
-- índices **GIST** para operações espaciais eficientes.
-
----
-
-## APIs externas consumidas
-
-### 1) ArcGIS (metadados e geometria de itinerários)
-
-Usada por `ArcGisClientService` e importadores para:
-
-- paginar metadados (`servico`, `destino`, `direcao`, `shape_id`, `extensao`);
-- buscar geometria GeoJSON por `shape_id`.
-
-### 2) ArcGIS de Paradas (GeoJSON)
-
-`ImportacaoParadasService` busca paradas por paginação (`resultOffset/resultRecordCount`) e converte para entidades locais.
-
-### 3) API pública de GPS SPPO (Mobilidade Rio)
-
-`GpsSppoClient` consulta janela temporal com overlap retroativo para evitar perda de eventos com atraso de envio.
-
-### 4) Overpass API (OpenStreetMap)
-
-`OverpassClient` importa POIs por bbox/tile, com:
-
-- taxonomia de categorias + prioridade;
-- deduplicação por OSM id;
-- retry exponencial em `429`/`504`;
-- filtro de qualidade por nome/categoria.
-
----
-
-## Fluxos principais
-
-### A) Carga de base de transporte
-
-1. Importação agendada de itinerários roda diariamente no horário configurado.
-2. Metadados vêm do ArcGIS.
-3. Para cada shape, a geometria é buscada e salva no banco.
-4. Na sequência, ocorre importação paginada de paradas.
-
-### B) Relacionamento Paradas ↔ Itinerários
-
-1. Job usa PostGIS para buscar candidatos por proximidade da geometria da rota.
-2. Algoritmo escolhe melhor parada por vértice (reduz falsos positivos ida/volta).
-3. Relações são persistidas em `ParadasItinerario` com ordem e posição na linha.
-
-### C) POIs
-
-1. Fase 1: importa POIs OSM em tiles para o banco local.
-2. Fase 2: matching local (sem HTTP) para ligar POI à parada mais próxima por itinerário.
-3. Endpoints de consulta retornam POIs por parada, por itinerário e diagnósticos.
-
-### D) GPS em tempo real
-
-1. Polling em loop consulta API SPPO por janela de tempo.
-2. Sistema deduplica por veículo e filtra pontos antigos.
-3. Enriquecimento geoespacial roda principalmente para linhas com assinantes SignalR.
-4. Estado é gravado no Redis (`ativo`/`recente` + índices por linha).
-5. Broadcast envia `PosicaoAtualizada` para grupos SignalR por código da linha.
-
----
-
-## Fluxo de GPS em tempo real (detalhado)
-
-### Componentes envolvidos
-
-- `GpsPollingService` (worker principal)
-- `GpsSppoClient` (integração HTTP GPS)
-- `GpsEnriquecimentoService` (bearing, velocidade média, rota/próxima parada)
-- `IGpsItinerarioRepository` + `GpsItinerarioRepository` (SQL PostGIS)
-- `GpsHub` (assinaturas por linha)
-- Redis (`IDistributedCache`) para estado efêmero
-
-### Estratégias aplicadas
-
-- **Janela retroativa** no polling para tolerar atrasos de envio da API externa.
-- **Deduplicação por veículo**: mantém a posição GPS mais recente.
-- **Filtro de idade máxima** (`MaxIdadeGpsSegundos`) para evitar “veículos fantasmas”.
-- **Dois TTLs no Redis**:
-  - `veiculo:{ordem}:ativo`
-  - `veiculo:{ordem}:recente`
-- **Status de retorno**:
-  - `Ativo`: posição atual no ciclo curto;
-  - `SemSinal`: não apareceu no último ciclo, mas ainda no TTL longo.
-- **Enriquecimento seletivo**: linhas sem assinantes podem pular query PostGIS para reduzir custo.
-- **Paralelismo controlado** no enriquecimento com `SemaphoreSlim`.
-- **Uso de `NpgsqlDataSource`** no repositório GPS para evitar disputa de conexão em consultas paralelas.
-
-### O que o enriquecimento calcula
-
-- `bearing` (azimute entre posição anterior e atual, com filtro de deslocamento mínimo);
-- `velocidadeMedia` com janela móvel e descarte de outliers;
-- `itinerarioId` mais provável para aquela posição;
-- `posicaoNaRota` (0..1) com `ST_LineLocatePoint`;
-- `proximaParada` e distância até ela.
-
-### Endpoints de GPS
-
-- `GET /veiculos/{ordem}`
-- `GET /veiculos/linha/{codigoLinha}`
-- `GET /veiculos/itinerario/{itinerarioId}/geometria`
-
-### Protocolo SignalR
-
-- Cliente → servidor:
-  - `InscreverseLinha(codigoLinha)`
-  - `CancelarLinha(codigoLinha)`
-- Servidor → cliente:
-  - `PosicaoAtualizada(posicoes[])`
-
----
-
-## Fluxo de POIs (detalhado)
-
-### Visão macro
-
-A arquitetura de POIs foi desenhada para **evitar custo alto de rede**:
-
-- primeiro importa POIs uma vez para base local (Fase 1);
-- depois faz matching em lote local (Fase 2), sem chamar Overpass a cada itinerário.
-
-### Fase 1 — Importação OSM em tiles
-
-- Calcula bbox geral com base nas paradas locais.
-- Divide em tiles (~3km x 3km).
-- Faz requisição Overpass por tile.
-- Executa upsert/dedupe por chave lógica (`nome + categoria`) na área.
-
-### Fase 2 — Matching local POI → Parada
-
-- Para cada itinerário, carrega suas paradas ordenadas.
-- Busca POIs na bbox expandida pelo raio configurado.
-- Para cada POI, escolhe parada mais próxima dentro do raio.
-- Se já houver vínculo concorrente melhor, mantém o de menor distância.
-- Persiste em lote na tabela `PoiParadas`.
-
-### Fila assíncrona
-
-`PopularPoisQueue` (canal bounded) + `PopularPoisWorker` processam jobs:
-
-- `ImportacaoOsm`
-- `Matching`
-
-### Endpoints relevantes de POI
-
-- Consultas:
-  - `GET /pois`
-  - `GET /pois/por-parada/{paradaId}`
-  - `GET /pois/por-itinerario/{itinerarioId}`
-  - `GET /pois/contagem-por-itinerario`
-  - `GET /pois/por-ponto`
-- Processamento:
-  - `POST /pois/importar-osm`
-  - `POST /pois/popular`
-  - `POST /pois/popular/parada/{paradaId}`
-  - `POST /pois/popular/itinerario/{itinerarioId}`
-- Limpeza:
-  - `DELETE /pois/por-parada/{paradaId}`
-  - `DELETE /pois/por-itinerario/{itinerarioId}`
-  - `DELETE /pois/popular`
-
----
-
-## Fluxo de relacionamento Paradas x Itinerários
-
-### Objetivo
-
-Encontrar, para cada itinerário, as paradas que realmente pertencem à rota e em qual ordem aparecem.
-
-### Técnica usada
-
-Serviço `RelacionarParadasItinerariosService` combina SQL + PostGIS com estratégia em 2 passos:
-
-1. Para cada parada candidata, encontra o vértice mais próximo do LineString.
-2. Para cada vértice, mantém apenas a parada mais próxima.
-
-Esse desenho reduz erro comum de “paradas frente a frente” (ida/volta) mapeadas no mesmo trecho.
-
-Além disso, o score considera:
-
-- distância ao vértice;
-- distância à linha;
-- componente perpendicular (lado da via);
-- posição relativa na linha (`PosicaoLinha`) para ordenação final.
-
-### Endpoints
-
-- `POST /relacionamento/paradas-itinerarios`
-- `POST /relacionamento/paradas-itinerarios/{itinerarioId}`
-- `DELETE /relacionamento/paradas-itinerarios/{itinerarioId}`
-- `DELETE /relacionamento/paradas-itinerarios`
-
----
-
-## Endpoints expostos
-
-> Prefixo base: sem versionamento explícito (`/linhas`, `/paradas`, etc.).
-
-### Modais
-
-- `GET /modais`
-
-### Linhas
-
-- `GET /linhas`
-- `GET /linhas/por-parada/{paradaId}`
-- `GET /linhas/{linhaId}/detalhes`
-
-### Sentidos
-
-- `GET /sentidos`
-
-### Itinerários
-
-- `GET /itinerarios/por-linha/{linhaId}`
-- `GET /itinerarios/{itinerarioId}/mapa`
-
-### Paradas
-
-- `GET /paradas`
-- `GET /paradas/por-itinerario/{itinerarioId}`
-- `GET /paradas/proximas?lat=&lng=&raio=`
-- `GET /paradas/{paradaId}/linhas`
-
-### POIs
-
-- `GET /pois`
-- `GET /pois/por-parada/{paradaId}`
-- `GET /pois/por-itinerario/{itinerarioId}`
-- `GET /pois/contagem-por-itinerario`
-- `GET /pois/por-ponto?latitude=&longitude=&raioMetros=`
-- `POST /pois/importar-osm`
-- `POST /pois/popular`
-- `POST /pois/popular/parada/{paradaId}`
-- `POST /pois/popular/itinerario/{itinerarioId}`
-- `DELETE /pois/por-parada/{paradaId}`
-- `DELETE /pois/por-itinerario/{itinerarioId}`
-- `DELETE /pois/popular`
-
-### Relacionamento
-
-- `POST /relacionamento/paradas-itinerarios`
-- `POST /relacionamento/paradas-itinerarios/{itinerarioId}`
-- `DELETE /relacionamento/paradas-itinerarios/{itinerarioId}`
-- `DELETE /relacionamento/paradas-itinerarios`
-
-### Veículos/GPS
-
-- `GET /veiculos/{ordem}`
-- `GET /veiculos/linha/{codigoLinha}`
-- `GET /veiculos/itinerario/{itinerarioId}/geometria`
-
----
-
-## Configuração e variáveis de ambiente
-
-A aplicação usa `DotNetEnv` (`Env.Load()`), então normalmente lê variáveis de ambiente (ou `.env`).
-
-### Banco e cache
-
-Obrigatórias para subir:
-
-- `POSTGRES_PORT`
-- `POSTGRES_DB`
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-- `REDIS_PORT`
-
-### CORS
-
-- `CORS__ORIGINS` (array em configuração; se não definido, aceita qualquer origem com credenciais)
-
-### GPS
-
-- `GPS__API__BASE_URL` (default: `https://dados.mobilidade.rio/gps/sppo`)
-- `GPS__HTTP_TIMEOUT_SECONDS` (default: `15`)
-- `GPS__HUB__ROUTE` (default: `/hub/gps`)
-- seção `GpsPolling`:
-  - `IntervaloSegundos`
-  - `TtlAtivoSegundos`
-  - `TtlRecenteSegundos`
-  - `TtlLinhaSegundos`
-  - `VelocidadeMaximaKmh`
-  - `JanelaVelocidadeLeituras`
-  - `JanelaRetroativaSegundos`
-  - `DistanciaMaximaRotaMetros`
-  - `GrauParalelismoEnriquecimento`
-  - `MaxIdadeGpsSegundos`
-
-### Importação ArcGIS
-
-- `IMPORTACAO_HORA` / `IMPORTACAO_MINUTO` (ou `ARCGIS__ITINERARIOS__HORARIO_IMPORTACAO`)
-- `IMPORT__BATCH_SIZE`
-- `ARCGIS__ITINERARIOS__BASE_URL`
-- `ARCGIS__ITINERARIOS__WHERE`
-- `ARCGIS__ITINERARIOS__OUT_FIELDS`
-- `ARCGIS__ITINERARIOS__PAGE_SIZE`
-- `ARCGIS__PARADAS__BASE_URL`
-- `ARCGIS__PARADAS__WHERE`
-- `ARCGIS__PARADAS__OUT_FIELDS`
-- `ARCGIS__PARADAS__PAGE_SIZE`
-
-### POI
-
-- `POI__DISTANCIA_MAXIMA_METROS` (default em código: `150`)
-
----
-
-## Como rodar localmente
-
-## 1) Pré-requisitos
-
-- .NET SDK 9
-- Docker + Docker Compose
-
-## 2) Subir infra
+Com PostgreSQL/Redis já disponíveis e a configuração preenchida:
 
 ```bash
-cd NoPonto
-docker compose up -d
-```
-
-## 3) Aplicar migrations
-
-```bash
-dotnet ef database update --project NoPonto/NoPonto.csproj
-```
-
-> Se você executar dentro da pasta `NoPonto`, use apenas `dotnet ef database update`.
-
-## 4) Executar API
-
-```bash
+dotnet restore NoPonto.sln
 dotnet run --project NoPonto/NoPonto.csproj
 ```
 
-Por padrão (perfil http local): `http://localhost:5166`.
+Para usar o Compose local, revise primeiro o override e forneça todas as variáveis exigidas:
 
-## 5) Abrir Swagger
+```bash
+docker compose -f NoPonto/docker-compose.yml -f NoPonto/docker-compose.override.yml up -d
+```
 
-- `http://localhost:5166/swagger`
+O override publica a API localmente em `5000:8080`. A URL criada pelo perfil `dotnet run` pode variar conforme `launchSettings.json`; consulte a saída da aplicação.
 
----
+Migrations não são aplicadas automaticamente por este README. Execute-as somente em ambiente autorizado, após conferir alvo, backup e compatibilidade.
 
-## Observabilidade e logs
+## API e Swagger
 
-O projeto possui logs ricos em pontos críticos:
+Swagger é exposto pela aplicação em `/swagger`; use a origem informada no startup. A superfície vigente inclui consultas estruturais V2, veículos, eventos de parada, snapshots ferroviários e contratos de compatibilidade necessários ao frontend. Controllers antigos de itinerários, POIs e administração estão total ou parcialmente excluídos da compilação e não devem ser usados como referência de API atual.
 
-- importação ArcGIS (paginação, lotes e contadores);
-- ciclo de polling GPS (quantidade de posições, descartes por idade, tempo do ciclo);
-- progresso de matching de POIs e relacionamento paradas-itinerários;
-- warnings de dados inválidos/ruído geográfico;
-- middleware global para padronizar respostas de erro.
+O ambiente observado não demonstrou autenticação/autorização suficiente para promover operações mutáveis como API pública. Consulte [segurança](docs/05-infraestrutura/06-seguranca-e-superficie-de-exposicao.md).
 
----
+## Testes
 
-## Próximos passos do projeto
+O projeto possui testes xUnit unitários e de integração para estrutura V2, PostGIS, GPS, Redis, viagem, ferrovia, telemetria e ETA. Alguns testes exigem dependências descartáveis ou configuração específica.
 
-A evolução planejada do NoPonto segue uma priorização clara, com foco imediato em **qualidade de GPS** e, em seguida, expansão multimodal:
+```bash
+dotnet test NoPonto.sln
+```
 
-### 1) Prioridade máxima: evoluir o sistema de GPS
+O comando não foi executado durante a atualização deste README. Antes de rodar, confira filtros, requisitos de PostgreSQL/Redis e isolamento; não direcione testes de integração à produção.
 
-Objetivo: reduzir erros de posição, melhorar previsibilidade de deslocamento e aumentar confiança da experiência em tempo real.
+## Build e deploy
 
-- Aplicar abordagem de **ML (Machine Learning)** para enriquecer o cálculo de posição e previsão de progresso na rota.
-- Treinar modelos considerando variáveis como:
-  - velocidade média por trecho da linha;
-  - histórico de lentidão em regiões com cruzamentos/semáforos;
-  - padrões por faixa de horário;
-  - efeitos de contexto urbano (ex.: áreas próximas a escolas com tráfego sazonal em horários de entrada/saída);
-  - comportamento histórico por linha/sentido e recorrência de perda de sinal.
-- Usar esses sinais para melhorar dead-reckoning, estimativa de tempo e qualidade do status de veículo.
+O workflow backend constrói imagem `linux/amd64` com Buildx e publica no GHCR como `latest`, tag temporal com SHA curto e `build-N`. O deploy ocorre somente por execução manual do workflow, via rede privada e script remoto. O Compose produtivo usa `latest`; pin por digest, smoke test e rollback automatizado não foram comprovados.
 
-### 2) Expansão de modais (nesta ordem)
+## Documentação
 
-Após consolidar o GPS dos ônibus, o plano é aplicar o mesmo ecossistema para novos modais:
+A [documentação completa](docs/README.md) reúne auditoria, projeto, arquitetura, fluxos, modelagem, infraestrutura, roadmap, diagramas e material acadêmico do TCC.
 
-1. **BRT**
-2. **Metrô**
-3. **Trem**
+## Limitações conhecidas
 
-A ideia é reaproveitar a base arquitetural já existente (itinerários, paradas, geoprocessamento, cache e streaming) e adaptar regras de negócio para cada modal.
+- Redis operacional sem persistência em disco.
+- API e workers compartilham recursos no mesmo processo.
+- Backup/restore, RPO/RTO e observabilidade centralizada ainda não comprovados.
+- Rastreabilidade produtiva prejudicada pelo uso de tag mutável.
+- Segurança de portas, Docker socket e endpoints requer estabilização.
+- Resultados quantitativos de matching, ferrovia e ETA dependem de protocolo consolidado.
 
-### 3) Melhorias contínuas de POIs e paradas por itinerário
+## Autoria e licença
 
-- Refino do algoritmo de matching de **POIs ↔ paradas** para reduzir falsos positivos e melhorar relevância contextual.
-- Evolução do relacionamento **paradas ↔ itinerários** com calibração mais fina de critérios geoespaciais e validação operacional.
-
-### 4) Sistema de mensageria e notificações
-
-- Construir camada de mensageria para eventos de operação em tempo real.
-- Habilitar notificações como “veículos próximos da parada”, alertas por linha e eventos de mudança de estado.
-
-> Resumo estratégico: o foco principal é **melhorar o sistema de GPS primeiro**; em seguida, avançar para os demais modais e expandir funcionalidades de experiência operacional.
+Projeto acadêmico NoPonto. Não foi identificado arquivo de licença nesta baseline; nenhum direito de reutilização deve ser presumido sem autorização do responsável pelo projeto.
