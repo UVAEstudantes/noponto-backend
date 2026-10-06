@@ -152,6 +152,20 @@ A evolução funcional foi documentada sem prometer capacidades futuras. Rotas m
 
 `07-diagramas` reúne modelos editáveis e rastreáveis da arquitetura vigente. `08-tcc` organiza metodologia, requisitos, avaliação, evidências e redação acadêmica preliminar sem inventar resultados. A Etapa 3 completa a base documental; a redação/formatação final da monografia e a execução dos experimentos permanecem posteriores.
 
+## Etapa 4 — Validação técnica e preparação de evidências
+
+1. [Auditoria e validação dos diagramas](09-validacao/01-auditoria-e-validacao-dos-diagramas.md)
+2. [Inventário de testes e execuções](09-validacao/02-inventario-de-testes-e-execucoes.md)
+3. [Plano experimental GPS e matching](09-validacao/03-plano-experimental-gps-e-matching.md)
+4. [Plano experimental ferroviário](09-validacao/04-plano-experimental-ferrovia.md)
+5. [Plano experimental ETA V2](09-validacao/05-plano-experimental-eta-v2.md)
+6. [Validação mobile e jornadas](09-validacao/06-validacao-mobile-e-jornadas.md)
+7. [Catálogo operacional de evidências](09-validacao/07-catalogo-operacional-de-evidencias.md)
+8. [Backlog de estabilização e prontidão](09-validacao/08-backlog-de-estabilizacao-e-criterios-de-prontidao.md)
+9. [Relatório consolidado de validação](09-validacao/09-relatorio-consolidado-de-validacao.md)
+
+A Etapa 4 conecta a documentação às evidências: registra execuções locais reais, separa falhas de bloqueios ambientais e prepara protocolos quantitativos sem acessar produção. A validação Mermaid permaneceu estática por ausência de renderizador; integrações PostgreSQL/Redis e jornadas Android dependem de ambientes controlados.
+
 ## Convenções
 
 - **Implementação:** implementado, parcial, em desenvolvimento, planejado ou não identificado.
@@ -162,4 +176,4 @@ A evolução funcional foi documentada sem prometer capacidades futuras. Rotas m
 
 ## Veredito da auditoria
 
-**DOCUMENTATION_BASE_COMPLETE.** Auditoria, arquitetura, fluxos, dados, infraestrutura, evolução, diagramas e consolidação acadêmica estão organizados. Resultados experimentais, referências bibliográficas verificadas, decisão final de escopo e redação institucional da monografia permanecem pendentes.
+**NEEDS_TEST_ENVIRONMENT.** A base documental e os protocolos de validação estão completos, e um subconjunto seguro foi executado. A validação integrada requer PostgreSQL/PostGIS e Redis descartáveis, runner frontend, dispositivo Android e renderizador Mermaid controlado; falhas de fixture e instabilidade temporal foram registradas.
