@@ -7,6 +7,13 @@ namespace NoPonto.Tests;
 
 public sealed class EtaDatasetTests
 {
+    [Fact] public void Cutoff_RejeitaViagemParcialMesmoComGpsNovo()
+    {
+        var(c,e,o)=Caso();
+        Assert.Equal("ExecucaoForaIntervalo",EtaDataset.Avaliar(c,e with{Inicio=o.Inicio.AddTicks(-1)},o).Motivo);
+        Assert.NotNull(EtaDataset.Avaliar(c,e with{Inicio=o.Inicio},o).Amostra);
+        Assert.Equal("ExecucaoForaIntervalo",EtaDataset.Avaliar(c,e with{Fim=o.Fim},o).Motivo);
+    }
     [Fact]
     public void PreparacaoPostgres_PassagemSatisfazValidatorProdutivo()
     {

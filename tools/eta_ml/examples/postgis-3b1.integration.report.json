@@ -1,0 +1,101 @@
+{
+  "status": "APROVADO",
+  "data_kind": "synthetic",
+  "observations": 1004,
+  "exported_trips": 4,
+  "audit_trips": 8,
+  "splits": {
+    "TRAIN": 1002,
+    "VALIDATION": 1,
+    "TEST": 1
+  },
+  "discovery": {
+    "gps_trip_candidates": 1007,
+    "missing_label_journal_structure": 1,
+    "trips_outside_window": 2,
+    "trips_crossing_split": 2
+  },
+  "counts": {
+    "Lidos": 1006,
+    "Exportados": 1004,
+    "Descartes": {
+      "IdentidadeEstruturalIncompativel": 1,
+      "DestinoNaoAdianteOuDistanciaInvalida": 1
+    }
+  },
+  "samples_direct_sql": [
+    {
+      "trip": "00000000-0000-0000-0000-000000000001",
+      "label_seconds": 60.0,
+      "distance_meters": 615.5874145445704,
+      "split": "TRAIN"
+    },
+    {
+      "trip": "00000000-0000-0000-0000-000000000004",
+      "label_seconds": 60.0,
+      "distance_meters": 1280.0428469260182,
+      "split": "TEST"
+    }
+  ],
+  "dataset_sha256": "1ca69769d5d5f0eb790d96aacb59c8db85cbca040169408655bdc913c7691526",
+  "csv_deterministic": true,
+  "negative_cases": [
+    "duplicate-trip",
+    "unaudited",
+    "protected",
+    "no-reference",
+    "wrong-build",
+    "wrong-cutoff",
+    "wrong-boundary",
+    "missing-end",
+    "journal-mismatch-candidate-discarded"
+  ],
+  "volume": {
+    "ready": false,
+    "failures": [
+      "menos de 10000 linhas elegíveis",
+      "menos de 14 dias UTC distintos",
+      "TRAIN: menos de 200 viagens completas",
+      "VALIDATION: menos de 50 viagens completas",
+      "TEST: menos de 50 viagens completas",
+      "nenhuma linha com 30/10/10 viagens e 8 horas de TRAIN"
+    ],
+    "rows": 1004,
+    "days": 3,
+    "trips": {
+      "TRAIN": 2,
+      "VALIDATION": 1,
+      "TEST": 1
+    },
+    "lines": {
+      "FIXTURE-0": {
+        "trips": {
+          "TRAIN": 2,
+          "VALIDATION": 1,
+          "TEST": 0
+        },
+        "train_distinct_hours": 1,
+        "ready_for_line_claim": false
+      },
+      "FIXTURE-1": {
+        "trips": {
+          "TRAIN": 0,
+          "VALIDATION": 0,
+          "TEST": 1
+        },
+        "train_distinct_hours": 0,
+        "ready_for_line_claim": false
+      }
+    },
+    "data_kind": "synthetic",
+    "discarded": {}
+  },
+  "sql_sha256": "b2c5f0909d817fc57ba3942c9b2985e77dcfbf9bbaf9a1644dd3228aa77898be",
+  "environment": {
+    "postgres": "16.4 (Debian 16.4-1.pgdg110+2)",
+    "postgis": "3.4.3"
+  },
+  "container": "noponto-eta-3b1-b477dfb8c8e6",
+  "fixture_schema_sha256": "cbac71c95d65f1c356d9cdb820b82a916073420093d0984b6ce703f6a5e00d3b",
+  "fixture_seed_sha256": "1ebdb5fca84bc07a778c7a0ebe3170a67e122c82247c3664bfc2a28658982741"
+}

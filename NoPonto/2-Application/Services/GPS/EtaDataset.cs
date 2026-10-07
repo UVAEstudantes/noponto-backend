@@ -55,6 +55,8 @@ public static class EtaDataset
         ExecucaoDatasetEta e, OpcoesDatasetEta o)
     {
         var g=c.Gps; var h=c.Passagem; var d=c.Destino;
+        // O intervalo é de execuções completas, não apenas de observações GPS.
+        if(e.Inicio<o.Inicio || e.Fim>=o.Fim) return(null,"ExecucaoForaIntervalo");
         if(e.Qualidade!=QualidadeExecucaoDataset.AuditadaSemProtecao || string.IsNullOrWhiteSpace(e.ReferenciaAuditoria))
             return (null,"ProcedenciaNaoAuditadaOuProtegida");
         if(c.Journal is not {Tipo:"PassagemParada"} j || j.SchemaVersion!=2
