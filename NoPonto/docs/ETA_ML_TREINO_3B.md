@@ -262,3 +262,294 @@ Usar diretório novo. O runner exige Docker local e imagem `postgis/postgis:16-3
 **D — Evidência/revisão necessária:** permanece necessária evidência externa confiável da execução completa e revisão dos critérios/versões da coleta, ou futura decisão explícita sobre evidência mínima auditável. Logs incompletos, flag ligada ou ausência de erro observado não bastam. Fixture tem lifecycle conhecido por construção; essa evidência não se transfere a viagens reais.
 
 Estamos tecnicamente prontos para analisar **snapshot real exploratório local**, com SQL de descoberta/contagens e revisão de fronteiras/labels/schema. A exploração não certifica automaticamente dataset de treino. Para publicar exportação real pelo console, ainda é necessário manifesto com viagens fechadas e auditoria fundamentada; para treinar, também volume/representatividade suficientes e schema/geometrias/versões reais preservados. Custo/plano do adapter em snapshot grande, cobertura de coleta e validação física dos labels continuam pendentes. Não houve acesso a produção, treino real, deploy ou mudança operacional.
+
+## 3B.2A — auditoria real pré-snapshot
+
+**Status: preparada e revisada estaticamente; não executada em nenhum banco.** Checkpoint de entrada `749b882` (`feat(eta-ml): implementa pipeline offline e valida adapter PostGIS`), árvore inicialmente limpa. Esta etapa acrescenta `NoPonto/ETA_ML_AUDITORIA_REAL_3B_2.sql`, quatro guardas estáticas em `tools/eta_ml/test_audit_sql.py`, esta seção e entrada no histórico. SQL 3A, adapter, pipeline, runtime, dependências, infraestrutura e sampling preservados. Sem produção/SSH, snapshot, export, treino, commit ou push.
+
+O arquivo é para **psql 16+ / PostgreSQL 16+ com PostGIS**, não para executar diretamente em um driver: usa metacomandos de psql para habilitar o bloco opcional. Envolve as consultas em `BEGIN READ ONLY; ... COMMIT;` e usa `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ` somente para manter uma fotografia MVCC consistente. Não escreve tabelas, não usa temp tables, migrations, locks explícitos, funções de alteração de estado, ANALYZE, EXPLAIN ANALYZE ou cálculo geográfico. A coleta pode continuar; a fotografia reflete o início da transação, não eventos que chegarem depois. Relações são resolvidas no search_path do serviço: revisar A/H para confirmar o schema esperado antes de habilitar detalhes.
+
+### Blocos e custo
+
+| Bloco | Conteúdo | Execução/custo |
+|---|---|---|
+| A | Banco/schema, UTC da transação, PostgreSQL/PostGIS, contrato/cutoff, read_only/isolamento | Padrão, baixo custo esperado |
+| B | Existência, `reltuples`, tamanho físico total das dez fontes, soma e índices reais | Padrão, catálogo; sem COUNT de tabelas grandes |
+| H | Colunas/tipos reais e FKs das fontes | Padrão, catálogo; confirma dependências antes do snapshot |
+| C | Total GPS pós-cutoff, min/max, dias UTC, ViagemId, versão/ocorrências/volta, identidade estrutural conferida; grupos modal/linha/dia/hora UTC | Opcional, scan global e joins estruturais |
+| D | Viagens com início canônico válido >= cutoff; com fim real no journal, sem fim observado, fim inválido, passagens, candidatos; duração min/mediana/P90/max; grupos modal/linha/dia/motivo de fim | Opcional; percentis/agregações |
+| E | Eventos por tipo, envelopes inválidos, histórico, viagens com passagem, início+fim, fechadas sem passagem, discrepâncias seguras | Opcional; lê journal/histórico |
+| F | Uma linha JSON por viagem: fronteiras, contagens/identidades, pares potenciais e booleano `candidate_inventory` | Opcional; joins GPS/passagem por viagem/ocorrência/volta |
+| G | Fim por `PerdaContinuidadeCircular`, divergências de fronteiras e markers correntes PascalCase | Opcional; somente evidências negativas |
+
+Os blocos padrão usam catálogos/funções de tamanho, geralmente baratos; não existe garantia universal de latência. No detalhado, cada fonte é lida uma vez para CTE materializada e reutilizada na mesma consulta. Agregações são por viagem e joins conjuntos, sem rescans por viagem. Materialização, joins e ordenações ainda podem consumir memória e spill interno para disco; esse custo existe mesmo em READ ONLY. O relatório retorna todas as linhas na distribuição C com `rank_por_volume` dentro de cada grupo; para top linhas, filtrar `relatorio=C_telemetria_nao_e_dataset`, `grupo=linha` e `rank_por_volume <= 20` no resultado local (empates compartilham rank). A contagem diária é exata na fotografia, e não uma extrapolação de sampling.
+
+Índices verificados no código: `EventosViagem.TimestampEvento`; histórico `TimestampGps`, `(ViagemId,TimestampPassagem)` e unicidade parcial `(ViagemId,OcorrenciaParadaPadraoId,Volta)`; GPS `(CodigoLinha,TimestampGps)`, `(OrdemVeiculo,TimestampGps)` e parcial `(ViagemId,TimestampGps)`. Não há índice isolado global de TimestampGps no GPS. Um filtro global de cutoff pode ler telemetria antiga inteira; não criar índice nesta etapa. Estado operacional não tem mais índice AtualizadoEmUtc. O bloco B lista o que de fato estiver instalado. O detalhado vem desligado porque pode ser caro no servidor de ~4 GB; executar apenas após revisar tamanhos, em período apropriado, com timeout/memória limitados. Timeout encerra a tentativa; com ON_ERROR_STOP a conexão fecha e a transação é revertida. Não insistir aumentando limites sem revisar custo. Não executar adapter/SQL 3A em produção para completar esta auditoria.
+
+### Interpretação e limites
+
+- `C` mede observações cujo **TimestampGps >= 2026-10-07T14:53:59.225082Z**. Inclui GPS de viagens iniciadas antes do cutoff; não representa dataset elegível. `com_viagem_id` mede não nulo, enquanto `identidade_estrutural_conferida` também rejeita UUID vazio, origem diferente de REAL, modal fora de ONIBUS/BRT, volta inválida e cadeia estrutural incompatível. IDs são auditoria, nunca features adicionadas ao modelo.
+- `D/F` exigem início válido/canônico no journal pós-cutoff. Não usam último GPS para inventar fim. `sem_fim_observado` significa ausência de fim no journal nesta fotografia: pode haver viagem em andamento, journal atrasado/retido ou lacuna; não prova estado operacional aberto. Fim sem início pós-cutoff aparece em E/G, podendo corresponder a viagem antiga. Início malformado aparece nas contagens de envelopes/fronteiras inválidas, não é promovido a viagem válida. Durações só são calculadas com fronteiras únicas válidas, identidade concordante e fim >= início.
+- F exige fronteiras únicas válidas, fechamento, identidade concordante e pelo menos um par GPS/passagem com identidade e tempos compatíveis dentro das fronteiras. Descarta automaticamente do inventário evidências de perda/marker negativo. Não aplica todos os filtros de `EtaDataset`: geometria/distância real, velocidades, label máximo, posições, todos os campos de passagem e cobertura completa ainda precisam do adapter no snapshot local. Um candidato pode depois exportar zero linhas. Nenhuma viagem parcialmente anterior ao cutoff é candidata.
+- `candidate_inventory=true` é descoberta exploratória, **não AuditadaSemProtecao**. `false` e as contagens ajudam a localizar bloqueios; ausência de fim, passagem, identidade ou fronteira pode ser atraso/lacuna e pede investigação. Labels/voltas corretas, volume e representatividade não são certificados por estas contagens.
+- Motivo de fim `PerdaContinuidadeCircular` e marker com Continuidade=1 (Ambigua), PerdaEm/Motivo preenchidos são evidências negativas para a viagem identificada. IntegridadeCircular é JSONB corrente, serializado PascalCase, Contrato=1; inclui registros fora da janela e o relatório mostra timestamps/contrato para revisão. O UPSERT substitui markers e não conserva toda a história; ausência de marker negativo jamais aprova execução inteira. Contratos/desvios inesperados exigem revisão. A consulta confere envelope/schema_version=2/canonical IDs e identidade das fronteiras, mas não é auditoria completa de cada payload/estado.
+- E/histórico usa TimestampGps >= cutoff para incluir confirmação posterior de passagem interpolada; TimestampPassagem anterior ao cutoff não vira label candidato. Contagens globais E não são todas restritas às viagens candidatas. Comparações de timestamps do envelope são feitas na precisão PostgreSQL; casts de UUID/timestamp do payload são protegidos por `pg_input_is_valid`.
+- Mesmo candidatos existentes só sustentam um **possível export exploratório local** após snapshot autorizado e revisão de evidências. Esta etapa não informa se já existe volume real suficiente. Para treino permanecem os critérios já definidos no gate: 10.000 observações, 14 dias UTC, 200/50/50 viagens train/validation/test, linha com 30/10/10 viagens e 8 horas, além de auditoria de qualidade, split temporal inteiro e representatividade. Esses números são aferidos no dataset exportado, não no total GPS ou neste inventário.
+
+### Execução manual pelo operador
+
+O agente não executou estes comandos. A partir da raiz do checkout no servidor, usando um **serviço libpq já configurado pelo operador** com banco/schema corretos e usuário com permissão de leitura (sem credenciais no comando), executar primeiro:
+
+```sh
+PGOPTIONS='-c statement_timeout=60000 -c lock_timeout=3000 -c work_mem=8MB -c timezone=UTC' psql -X --dbname='service=noponto_auditoria' -v ON_ERROR_STOP=1 -v detalhado=false -f NoPonto/ETA_ML_AUDITORIA_REAL_3B_2.sql -L eta-auditoria-3b2-catalogo.log
+```
+
+Depois da revisão dos tamanhos/schema/índices, o operador pode executar o opcional (mesmo limite de 60 segundos por statement, deliberadamente conservador):
+
+```sh
+PGOPTIONS='-c statement_timeout=60000 -c lock_timeout=3000 -c work_mem=8MB -c timezone=UTC' psql -X --dbname='service=noponto_auditoria' -v ON_ERROR_STOP=1 -v detalhado=true -f NoPonto/ETA_ML_AUDITORIA_REAL_3B_2.sql -L eta-auditoria-3b2-detalhado.log
+```
+
+Comandos em shell POSIX do servidor; não usar a sintaxe PGOPTIONS acima diretamente no PowerShell. `noponto_auditoria` é nome de serviço **a ser configurado fora do repositório**, não conexão fornecida/testada pelo agente. `-X` ignora psqlrc, pager desligado, `-L` escreve apenas resultado local do cliente. Proteger os logs: contêm IDs operacionais e nomes de banco/schema; não publicar conexão/credenciais nem despejar esses resultados no histórico. A saída A registra o instante efetivo para delimitar futuro snapshot; execuções padrão/detalhada distintas são fotografias diferentes.
+
+### Recorte mínimo futuro (nenhum snapshot criado)
+
+Preservar linhas completas das fontes selecionadas para manter compatibilidade com o `to_jsonb(t/h)` do SQL 3A; não transportar só a lista de features. Colunas e FKs efetivas saem em H. Lista funcional:
+
+| Fonte | Colunas/relacionamentos essenciais | Recorte futuro |
+|---|---|---|
+| TelemetriasVeiculoMl | Id/ObservacaoId, ViagemId, TimestampGps, Modal/Provedor/OrdemVeiculo/CodigoLinha/OrigemPosicao, LinhaId/SentidoId/PadraoVersaoId, ocorrências/Volta; posições/GPS/distância/comprimento/velocidades e timestamps de proveniência | GPS >= cutoff até limite UTC registrado; preferir IDs de viagens com início >= cutoff, sem recortar viagem fechada ao meio |
+| HistoricoPassagens | ViagemId, OcorrenciaParadaPadraoId/PadraoVersaoId/SentidoId/ParadaId/Volta, Ordem/CodigoLinha, TimestampPassagem/TimestampGps/TimestampRegistro, PosicaoNaRota/velocidades | Todas as passagens das viagens selecionadas, incluindo confirmações; não filtrar só TimestampPassagem e perder interpolação |
+| EventosViagem | EventId/Tipo/Payload JSONB/TimestampEvento; IDs canônicos inicio/fim/passagem | Todos os eventos das mesmas viagens; preservar fronteiras e payload originais, não somente passagens ou janela arbitrária |
+| ViagensOperacionais | OrdemVeiculo/Estado JSONB/Versao/AtualizadoEmUtc/IntegridadeCircular JSONB | Estado corrente de evidência, preferencialmente completo; não filtrar por AtualizadoEmUtc para concluir qualidade histórica |
+| OcorrenciasParadasPadroes | Id/PadraoVersaoId/ParadaId/Ordem/PosicaoTracado | Todas as ocorrências das versões referenciadas, não apenas destino observado |
+| PadroesVersoes | Id/PadraoOperacionalId/Geometria/Topologia/ComprimentoMetros e metadados/versionamento | Todas as versões referenciadas, inclusive inativas/antigas; sem filtro de cutoff/Ativo |
+| PadroesOperacionais | Id/SentidoId/VersaoAtualId e metadados | Padrões referenciados e fechamento das versões atuais para restauração das FKs |
+| Sentidos | Id/LinhaId e metadados | Sentidos referenciados, sem filtro temporal |
+| Linhas | Id/Codigo/ModalId e metadados | Linhas referenciadas |
+| Paradas | Id/Localizacao/ModalId/ParadaPaiId e metadados | Paradas de todas as ocorrências e pais necessários |
+
+O intervalo exploratório é `[cutoff, instante UTC da auditoria]`, sujeito à confirmação do snapshot consistente futuro; para exporter escolher limite final explícito que preserve viagens completas e considerar sua regra `Fim < options.Fim`. Diário/primeiro/último GPS em C descrevem intervalo observado, não início de viagem ou atestado da coleta. Estrutura pode ser anterior ao cutoff e deve ser conservada. Para explorar inicialmente, carregar toda a estrutura pode ser mais simples e seguro que selecionar cadeias incompletas.
+
+As dez fontes são o conjunto funcional do exportador mais evidência corrente. Um restore com **schema completo e FKs** também precisa dos pais que H apontar, especialmente Modais, FontesEstruturais (Sentidos) e pais recursivos de Paradas; relações legadas do histórico podem exigir Itinerarios/ParadasItinerario. Revisar fechamento transitivo de FKs reais no banco antes de transportar. Não incluir todas as tabelas de produção por suposição nem remover constraints nesta etapa. O contexto PostGIS/schema/migrations precisa acompanhar o snapshot futuro em manifesto.
+
+B/H fornecem a estimativa de planejamento disponível sem scans extras: soma dos bytes físicos **completos das dez fontes**, incluindo índices/TOAST. É uma referência conservadora para essas fontes completas, não tamanho garantido de pg_dump comprimido nem do banco restaurado. O recorte de dados pode ser menor; dependências de FKs, índices recriados, geometrias/TOAST e compressão mudam o total. `reltuples` pode estar desatualizado. Não estimar um recorte por proporção global de GPS como se todas as linhas tivessem o mesmo tamanho; ainda falta definir IDs/limite e medir dump local para tamanho final. Nenhum número real foi inventado.
+
+### Validação desta entrega
+
+Executado `python -m unittest tools.eta_ml.test_audit_sql -v`: quatro guardas estáticas (envelope/allowlist de statements, fontes pesadas somente no opcional com uma leitura base por fonte, colunas/chaves JSON conferidas no schema/código, cutoff e SHA256 do SQL 3A preservado). Revisão manual de aliases, agregações, fronteiras, casts defensivos, custo e interpretação. `git diff --check` executado. Estes testes não são parser PostgreSQL nem prova de plano/latência; nenhuma consulta SQL foi executada, nem em fixture. Validação de execução/schema instalado/performance e resultados reais cabem à execução manual do operador. Suites de treino/adapter não repetidas porque não foram alterados; nenhum treino realizado.
+
+### Correção estrutural 3B.2A — ocorrências e validação seletiva
+
+**Atualização de operação:** o operador informou catálogo READ-ONLY executado com sucesso, ~19M GPS/~13 GB e proibição de scans globais. O agente não verificou produção. Os comandos anteriores de detalhado=true ficam como referência histórica e NÃO devem ser executados nesse banco. Usar somente o procedimento seletivo abaixo.
+
+Equivalência confirmada no SQL: `o` é ligado à ProximaOcorrenciaParadaPadraoId, e exigir `t.OcorrenciaParadaPadraoId=o.Id` une os papéis. Não foi confirmado que isso rejeite linhas válidas produzidas pela factory atual. TelemetriaMl.cs/TelemetriaMlIdentidadeTests mostram que, havendo identidade confiável e próxima operacional, **ambos recebem o ID operacional**. OcorrenciaParadaPadraoId não é sempre o matching original. Sem próxima operacional, pode preservar fallback; ViagemId e Volta podem continuar preenchidos se a execução for confiável (ProximaOperacionalNula_CompativelMantemViagemEFallbackObservacional). Sem associação confiável, viagem/volta/próxima operacional ficam nulas e matching pode permanecer.
+
+| Campo | Semântica persistida na factory |
+|---|---|
+| OcorrenciaParadaPadraoId | Próxima operacional quando disponível; senão fallback posicao.ProximaOcorrenciaParadaPadraoId; pode ser nulo |
+| ProximaOcorrenciaParadaPadraoId | Apenas próxima operacional de execução confiável/compatível; sem fallback; pode ser nulo mesmo com viagem confiável |
+| PadraoVersaoId | Versão do matching/DTO; associação exige compatibilidade com estado e próxima operacional, quando presente |
+| LinhaId / SentidoId | IDs do matching/DTO, preservados mesmo sem associação; associação exige concordância e IDs não vazios |
+| Volta | Volta do estado operacional confirmado; não inferida pela ocorrência observacional; auditoria exige >=0 |
+
+Correção restrita à auditoria: `o` continua destino operacional obrigatório; novo LEFT JOIN `obs` confere OcorrenciaParadaPadraoId separadamente. Observacional ausente é permitido; presente exige ID não vazio, existência e mesma versão do destino operacional/matching. A cadeia linha→sentido→padrão→versão/parada continua exigindo IDs não vazios, concordância com GPS, REAL, ONIBUS/BRT, volta válida e topologia LINEAR/CIRCULAR. Não exigir igualdade entre IDs de ocorrências. Mesma versão implica mesmo padrão/sentido/linha. Fallback sem próxima operacional não vira candidato.
+
+Revisados pares/inventario/candidate_inventory: `HistoricoPassagens.OcorrenciaParadaPadraoId = GPS.ProximaOcorrenciaParadaPadraoId` está correto: passagem pelo destino operacional, não campo observacional do GPS. Mantidas viagem/volta iguais; predicado corrigido é reutilizado sem outra equiparação. `com_versao_ocorrencias_volta` continua contador de presença de ambos os campos, não elegibilidade; identidade_estrutural permite observacional nulo, então esses contadores não são subconjuntos obrigatórios um do outro.
+
+**Divergência reportada sem expandir escopo:** EtaDataset.Avaliar exige `g.OcorrenciaParadaPadraoId == destino.Id` além da próxima operacional. Isso é coerente com a factory atual quando há próxima; não demonstrado defeito do exportador. A auditoria solicitada fica mais ampla e pode descobrir candidato com observacional distinto/nulo que o adapter rejeitará por IdentidadeEstruturalIncompativel. A fixture PostGIS3B.1 e seu gerador usam ocorrências iguais nos positivos; não validam suporte a IDs distintos. SQL3A, EtaDataset, factory, fixture, runtime, sampling e dependências não alterados. IDs diferentes pós-cutoff pedem investigar procedência/versão da coleta, não aprovação automática.
+
+Outras limitações: candidate_inventory não é AuditadaSemProtecao; conferência de journal é parcial; ausência de marker não aprova execução inteira. Não houve banco/SQL real/SSH/Docker/snapshot/treino/índice/commit/push. Teste estático acrescentado verifica ausência da igualdade direta/invertida e indireta via alias do destino, observacional opcional e mesma versão, ID não vazio e passagem ligada à próxima operacional.
+
+#### Comando manual seletivo — uma viagem por execução
+
+Na raiz do checkout, shell POSIX, Python abaixo **somente escreve arquivo SQL local** extraindo o predicado corrigido; não conecta. Usar UUID não vazio de viagem já identificado pelo operador; não descobrir IDs varrendo GPS. Fronteiras são dois lookups por PK EventId; início >= cutoff e fim posterior. GPS é filtrado por ViagemId específico e intervalo completo, aproveitando índice parcial (ViagemId,TimestampGps). Sem fronteiras válidas, zero registros; fim nunca inferido do GPS. Isso confere estrutura, não o atestado completo do journal/qualidade.
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+source = Path('NoPonto/ETA_ML_AUDITORIA_REAL_3B_2.sql').read_text(encoding='utf-8')
+gps = source.split('gps AS MATERIALIZED (', 1)[1].split('\n),\njournal AS MATERIALIZED', 1)[0]
+cutoff = '''WHERE t."TimestampGps">=TIMESTAMPTZ '2026-10-07T14:53:59.225082Z' '''.strip()
+assert gps.count(cutoff) == 1
+gps = gps.replace(cutoff, '''WHERE t."ViagemId"=:'viagem_id'::uuid
+ AND t."TimestampGps">=(SELECT inicio FROM limites)
+ AND t."TimestampGps"<=(SELECT fim FROM limites)''')
+query = '''WITH limites AS MATERIALIZED (
+ SELECT i."TimestampEvento" AS inicio, f."TimestampEvento" AS fim
+ FROM "EventosViagem" i JOIN "EventosViagem" f
+ ON f."EventId"='fim:'||(:'viagem_id'::uuid)::text
+ WHERE i."EventId"='inicio:'||(:'viagem_id'::uuid)::text
+ AND i."Tipo"='ViagemIniciada' AND f."Tipo"='ViagemFinalizada'
+ AND i."Payload"->>'viagem_id'=(:'viagem_id'::uuid)::text
+ AND f."Payload"->>'viagem_id'=(:'viagem_id'::uuid)::text
+ AND i."TimestampEvento">=TIMESTAMPTZ '2026-10-07T14:53:59.225082Z'
+ AND f."TimestampEvento">i."TimestampEvento"
+), gps AS MATERIALIZED (''' + gps + ''')
+SELECT "ViagemId", count(*) AS gps_da_viagem,
+ count(*) FILTER (WHERE identidade_estrutural) AS identidade_corrigida,
+ count(*) FILTER (WHERE identidade_estrutural AND "OcorrenciaParadaPadraoId"
+   IS DISTINCT FROM "ProximaOcorrenciaParadaPadraoId") AS adicionais_vs_igualdade_antiga,
+ count(*) FILTER (WHERE identidade_estrutural AND "OcorrenciaParadaPadraoId" IS NULL) AS observacional_nula,
+ count(*) FILTER (WHERE identidade_estrutural AND "OcorrenciaParadaPadraoId" IS NOT NULL
+   AND "OcorrenciaParadaPadraoId"<>"ProximaOcorrenciaParadaPadraoId") AS ocorrencias_distintas
+FROM gps GROUP BY "ViagemId";'''
+Path('eta-auditoria-seletiva.sql').write_text(
+ 'BEGIN READ ONLY;\nSET TRANSACTION ISOLATION LEVEL REPEATABLE READ;\n'
+ + '\\if :executar\n' + query + '\n\\else\nEXPLAIN (COSTS ON) ' + query
+ + '\n\\endif\nCOMMIT;\n', encoding='utf-8')
+PY
+```
+
+Primeiro **somente plano, sem ANALYZE**; substituir UUID_DA_VIAGEM por UUID real conhecido, serviço libpq configurado pelo operador sem credenciais no repositório:
+
+```sh
+PGOPTIONS='-c statement_timeout=30000 -c lock_timeout=3000 -c work_mem=8MB -c timezone=UTC' psql -X --dbname='service=noponto_auditoria' -v ON_ERROR_STOP=1 -v viagem_id='UUID_DA_VIAGEM' -v executar=false -f eta-auditoria-seletiva.sql
+```
+
+Exigir Index Scan/Bitmap Index Scan de GPS com ViagemId/limites de TimestampGps; **não executar** se houver Seq Scan global de TelemetriasVeiculoMl. Scans de estruturas pequenas são distintos. Só após revisar plano, executar o mesmo comando com `-v executar=true`, mantendo UUID/timeout/arquivo. Não aumentar limites/insistir em plano global. Repetir para poucos IDs conhecidos pós-cutoff. O agente não aferiu plano; filtro seletivo não garante sozinho a escolha de índice.
+
+`adicionais_vs_igualdade_antiga` mede efeito potencial da mudança. Zero é esperado na factory atual com próxima operacional; positivo exige investigação de procedência, sem provar erro/qualidade. Contagens dessa viagem não são labels/exportadas/volume de produção.
+
+### Conclusão A — contrato de observação elegível confirmado
+
+A ressalva anterior fica delimitada: inventário mais permissivo pode aceitar ocorrências distintas/nulas, mas **isso não demonstra defeito no exportador**. Contrato3A documenta igualdade dos dois campos GPS com o destino. Factory, quando existe alvo operacional, grava o mesmo ID nos dois campos e substitui matching/fallback; próxima operacional válida com campo geral diferente não é saída possível desse código. OcorrenciaParadaPadraoId não significa parada atual. Viagem confiável com próxima nula mantém contexto, mas esse GPS não tem label elegível.
+
+Fluxo: factory/registro GPS → SQL3A destino por ProximaOcorrenciaParadaPadraoId → histórico da mesma viagem/volta e ocorrência do alvo → journal conferido → EtaDataset exige ambos campos GPS e ocorrência da passagem iguais ao destino, estrutura/tempos/distância válidos e alvo à frente → label TimestampPassagem−TimestampGps. SQL3A não possui a igualdade entre os dois campos GPS; essa checagem ocorre no EtaDataset. Rastreio detalhado/cobertura registrado ao final de docs/ETA_ML_DATASET_3A.md.
+
+A auditoria recém-separada continua consistente somente como descoberta mais ampla, sem certificação de elegibilidade3A. Obs distinto/nulo com próxima válida é anomalia de procedência/contrato da factory, não automaticamente exemplo aproveitável. Nenhuma mudança no SQL da auditoria, SQL3A, EtaDataset ou runtime nesta análise. Acrescentadas apenas regressões em EtaDatasetTests e documentação/histórico. Próximo passo é operador revisar plano e contagem seletiva de poucos IDs conhecidos, sem scan global; se houver diferença de IDs, investigar escritor/build/dados antes de qualquer relaxamento. Sem testes PostgreSQL/Docker/SSH ou acesso real.
+
+### Anomalia inicial N → primeiro journal N+1/N+2 — investigação local
+
+**Conclusão delimitada:** C é um mecanismo compatível reproduzido localmente (alvo publicado antes de uma adoção/cancelamento sem retroativos); não está provado que explique as oito viagens reais. Não há evidência suficiente para classificar definitivamente cada caso como A/B/C. Contagens21.111/21.089/22,21GPS em8viagens e1fora1h foram fornecidas pelo operador, não verificadas pelo agente. Bootstrap A isolado não explica a perda de um alvo que estava à frente numa observação operacional válida antes da primeira passagem. Não demonstrado bug B de emissão somente da última parada.
+
+Fluxo conferido: GPS aceito pelo cache/mapa → matching/projeção e ViagemObservadaService → ViagemOperacionalRepository calcula baseline/transição → Decidir cria/adota/avança estado e lista eventos → estado/outbox na mesma transação → projeção Redis pós-commit → resultado com transition.Proxima → factoryML após aguardar AtualizarAsync. ViagemOutboxWorker materializa EventosViagem e HistoricoPassagens/ACK na transação; somente PassagemParada gera histórico. Ausência em ambos é compatível com evento não emitido, mas não prova que chegou ao outbox nem exclui retenção/pendência. O retry não republica ML e pode alterar a sequência operacional entre observações amostradas; matching ausente/falhas/backlog não autorizam associação ML.
+
+**Criação:** anterior null usa baseline na posição atual (PosicaoInicialTransicao). SQL de OcorrenciaParadaRepository incorpora todas as posições <= início, cursor=max(ordem), próxima=primeira ordem acima do cursor, Ultrapassadas vazio. Decidir grava cursor e emite somente ViagemIniciada. Nascer entre4/5 começa com cursor4 e próxima5; não emite4 retroativamente nem publica4 como próxima nesse bootstrap normal. Antes da primeira:cursor0/próxima1; após várias:cursor da última incorporada. Ordens podem ter lacunas e posições coincidentes, pois validação não exige ordens contíguas nem posições estritamente crescentes; comparar diferença numérica de ordens não prova quantas ocorrências existiam entre elas.
+
+**Avanço normal:** incorporadas exige ordem>cursor e posição>posição anterior, <=posição atual. Decidir percorre TODAS Ultrapassadas em ordem (ou ordem dirigida no wrap), emite um evento canônico por ocorrência/volta com interpolação quando admissível. Saltos de1/2 ou mais não descartam as primeiras no caminho normal. Cursor avança para última, próxima é calculada DEPOIS do avanço. Primeira atualização normal após criação segue essa mesma regra. Um GPS anterior ao alvo, seguido de cruzamento normal, deve produzir passagem daquele alvo.
+
+**Caminho C reproduzido:** t0 nova viagem confiável antes de N, ML publica N; t1 matching aponta para outra operação e abre candidato (não há passagem, timestamp avança sem substituir posição confirmada); t2 retorna à operação original e cancela candidato; com flag MudancaOperacionalHabilitada a consulta é baseline na posição adotada e Decidir recebe adocaoLegado=true, sem eventos retroativos; mesmo ViagemId/Volta, cursor incorpora N ou N e a seguinte; t3 cruza a próxima ainda futura, primeiro journal N+1 ou N+2. Testes usam ordens1→2 e1→3 como equivalentes de N genérico. Sem flag/contexto/candidato correspondentes, esse caminho não está demonstrado. Mudança confirmada cria nova viagem/baseline; circular protegida tem prova/ancora/volta e possível nova viagem com motivo PerdaContinuidadeCircular. Não confundir isso com cancelamento linear na mesma execução.
+
+**Sem janela de próxima antiga comprovada na factory:** polling aguarda decisão e recebe transition.Proxima da transição atual, não lê a próxima do matching anterior como operacional. No teste C, ML ANTES do candidato contém N; ML DEPOIS da adoção já contém próximo alvo novo, nunca N antigo. Identidade transitória é contexto válido no instante t0 que perde futura label após rebaseline, não prova de corrida nem observação já atrás do cursor naquele mesmo instante. Nenhuma garantia de passagem futura é feita pela factory. Anular todo alvo inicial não é justificado: retiraria observações úteis de bootstrap normal, sem resolver adoções posteriores; não alterado. O relato “imediatamente anterior” pode excluir GPS intermediários por sampling/falha/retry; é preciso distinguir último GPS coletado de última atualização operacional.
+
+**Cobertura e limites:** testes existentes Baseline_CriaAtiva_EmiteSomenteInicio/Finalizada_*SemRetroativos, interpolação múltipla, Cancelamento_ConsultaBaselineNaPosicaoAdotada (.25/.39/.55/.65), flag false, circularbaseline/volta, mudança e integridade cobrem partes do desenho. Acrescentados5casos em ViagemOperacionalRegraTests: bootstrap antes/entre/depois de várias paradas e primeira atualização normal cruzando1/2, emitindo todas. Acrescentados2casos em CancelamentoCandidatoCursorTests ligam factory antes/depois, candidato/cancelamento, posição baseline/cursor e primeiro journal+1/+2. Transições baseline são modelo lógico do retorno SQL, não PostgreSQL executado; testes não provam como a produção calculou a transição real nem materializam journal. Integrações OcorrenciaParadaTests/MudancaOperacionalPontaAPontaTests/fixture circular/PostGIS foram inspecionadas, não executadas.
+
+**Impacto:** dataset deve descartar observações sem passagem correspondente e horizonte>1h, sem fabricar label/relaxar3A. Estado do app/ETA também usa contexto operacional e pode ter histórico de chegadas incompleto em intervalos adotados; não afirmar efeito exclusivamenteML. Mapa continua aceito, cursor pós-adoção se alinha à posição atual e alvo futuro pode ser válido; ausência de erro no app/ETA público não foi verificada. Números restritos ao inventário fornecido não são coverage geral nem desempenho. Sem mudança operacional/ML/sampling/SQL3A/EtaDataset/auditoriaSQL/infra.
+
+**O que falta para concluir as8:** UUIDs sanitizados/volta/versão/topologia, payload do início/cursor, posições físicas antes/depois do alvo e timestamps dos GPS, flags efetivas e evidência de candidato/cancelamento/proteção/retry/outbox no intervalo. Estado corrente substitui anteriores, e journal não registra cada candidato/cancelamento; dados amostrados não reconstituem o caminho completo. Se continuidade linear sem candidato/adoção/proteção for demonstrada e houver cruzamento físico válido de N, a hipótese B merece teste seletivo adicional. Não presumir que perdas iniciais são bootstrap seguro nem condenar materializador sem evidência.
+
+#### Consulta adicional manual mínima (não executada)
+
+Executar apenas para um UUID/ocorrência/volta JÁ conhecidos entre os8, com serviço libpq configurado pelo operador, timeout30s. O início canônico deve ser >= cutoff. Primeiro revisar EXPLAIN sem ANALYZE da consulta GPS e exigir índice parcial (ViagemId,TimestampGps), não Seq Scan global; nas demais usar PK EventId/Id e índice histórico (ViagemId,TimestampPassagem). Não executar se plano for global. Exemplo em shell POSIX, trocar os três placeholders; retorno é janela inicial de10min/até50GPS, não reconstrução completa de todos os GPS:
+
+```sh
+PGOPTIONS='-c statement_timeout=30000 -c lock_timeout=3000 -c work_mem=8MB -c timezone=UTC' psql -X --dbname='service=noponto_auditoria' -v ON_ERROR_STOP=1 -v viagem='UUID_DA_VIAGEM' -v alvo='UUID_DA_OCORRENCIA' -v volta='0' <<'SQL'
+BEGIN READ ONLY;
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+SELECT "EventId","Tipo","TimestampEvento","Payload" FROM "EventosViagem"
+WHERE "EventId" IN ('inicio:'||(:'viagem'::uuid)::text,
+ 'passagem:'||(:'viagem'::uuid)::text||':'||(:'alvo'::uuid)::text||':'||(:'volta'::int)::text);
+SELECT "Id","Ordem","PosicaoTracado","PadraoVersaoId" FROM "OcorrenciasParadasPadroes"
+WHERE "Id"=:'alvo'::uuid;
+-- Primeiro somente plano, sem ANALYZE; retirar EXPLAIN apenas apos revisar indice.
+EXPLAIN (COSTS ON)
+SELECT t."TimestampGps",t."PosicaoNaRota",t."PadraoVersaoId",t."Volta",
+ t."OcorrenciaParadaPadraoId",t."ProximaOcorrenciaParadaPadraoId"
+FROM "TelemetriasVeiculoMl" t
+WHERE t."ViagemId"=:'viagem'::uuid
+ AND t."TimestampGps">=(SELECT "TimestampEvento" FROM "EventosViagem"
+  WHERE "EventId"='inicio:'||(:'viagem'::uuid)::text AND "Tipo"='ViagemIniciada'
+  AND "Payload"->>'viagem_id'=(:'viagem'::uuid)::text
+  AND "TimestampEvento">=TIMESTAMPTZ '2026-10-07T14:53:59.225082Z')
+ AND t."TimestampGps"<=(SELECT "TimestampEvento"+interval '10 minutes' FROM "EventosViagem"
+  WHERE "EventId"='inicio:'||(:'viagem'::uuid)::text)
+ORDER BY t."TimestampGps" LIMIT 50;
+SELECT "TimestampPassagem","TimestampGps","Volta","OcorrenciaParadaPadraoId","PadraoVersaoId"
+FROM "HistoricoPassagens" WHERE "ViagemId"=:'viagem'::uuid
+ AND "Volta"=:'volta'::int ORDER BY "TimestampPassagem" LIMIT 5;
+COMMIT;
+SQL
+```
+
+Não colocar IDs/resultados reais/credenciais no histórico. Essa consulta ajuda a comparar cursor inicial/posição alvo/GPS e primeiras passagens; não prova ausência histórica de candidato. Complementar apenas com logs já existentes, seletivos por veículo/intervalo, fornecidos pelo operador e sanitizados. Não conectar ou criar nova instrumentação automaticamente. Próximo passo3B.2A: separar essas21observações como sem label; preservar restante inventário sem certificação positiva; investigar poucos exemplos N+1/N+2 antes de declarar causa das8 ou aprovar snapshot/treino.
+
+### Novas posições reais — baseline de renascimento distinto do bootstrap null
+
+Novos casos físicos fornecidos pelo operador: início15:51:41/posição.2132447277/nextordem4(.1288164736), já apósordem5(.1787908964); primeiro evento6(.2561770242). Outro caso posição.0663955227/next2(.0639872683), próximo2 mantido até.1308317048; primeiro evento3(.1320921575) interpolado18:14:56.442 com GPSconfirmador18:15:27. Agente não verificou banco/produção.
+
+**Retificação da abrangência anterior:** bootstrap com anterior=null realmente incorpora <= posição atual, sem margem, e não produz esses alvos atrás. Porém ViagemIniciada NÃO implica anterior=null. DecidirAposFinalizada confirma uma nova execução a partir de candidato com movimento; o repositório pode retornar Updated (durável já existia), apesar de novo ViagemId/início. No helper PosicaoInicialTransicao, baseline=true por previous.Estado=Finalizada NÃO basta para usar atual: se versão igual e flagMudancaOperacionalHabilitada=false, retorna previous.Observada.PosicaoNaRotaConfirmada. SQL baseline usa PosicaoTracado<=@anterior, não @atual. DecidirAposFinalizada grava posição/timestamp ATUAIS no novo estado mas copia cursor da transição anterior; retorno Proxima também vem dessa transição. Factory grava posição ATUAL e próxima recebida, sem verificar que alvo esteja à frente.
+
+**Demonstrado localmente, sem prova de origem dos8:** snapshots finalizados sintéticos com mesma versão e posição anterior.10/.02, candidato de reinício válido, flagfalse e GPSatual.2132447277/.0663955227. Baseline incorpora atéordem3/1; retorna próxima4/2; novoViagemId e TimestampEvento=TimestampGps atual, ML publica posição atual com alvo atrás. Atualização normal seguinte usa posição atual recém-gravada como limite inferior:4/5 ou2 já estão atrás e nunca cruzam novamente; como próxima SQL é por ordem>cursor, o alvo antigo permanece até cruzar6/3, que vira primeiro evento, exatamente o padrão numérico fornecido. Com flagtrue+candidato, helper usa atual e elimina esse desalinhamento específico. Não inferir flagtrue/false da configuração de sampling.
+
+Nova teoria RenascimentoMesmaVersao_BaselineAnteriorPodePublicarAlvoJaAtras (2casos) chama helper real, decisão real e factory real, modelando retornoSQL sem banco. Snapshot finalizado foi construído como entrada sintética; teste NÃO comprova que uma sequência íntegra de fim terminal criou essa posição anterior baixa, nem valida alcance desses snapshots em produção. Uma viagem linear finalizada normalmente deve ter alcançado o terminal; por isso explicar a origem/posição do estado anterior também é necessário. A reprodução estabelece inconsistência na fronteira helper→novaexecução quando recebe tal entrada, não certifica causalidade real.
+
+**Posições operacional/ML:** no mesmo ciclo, projeção operacional pode substituir posição em gpsOperacional quando matching diverge de versão da execução anterior ativa/PossivelFim. Factory continua recebendo DTO observacional original, mas recusa identidade quando versão operacional difere; logo esse caminho não explica automaticamente próximos operacionais preenchidos na mesma versão. No renascimento acima, não precisa haver diferença DTOoperacional/DTOobservacional: ambos têm atual; a diferença é @anterior usado como corte baseline. Sem normalização dirigida/margem no baseline; circular só altera wrap e retorno da primeira ocorrência após última, não explica alvo4 quando ainda existem ordens maiores. Monotonicidade estrutural permite posições iguais/lacunas de ordem, mas não corrige posições concretas atrás apresentadas.
+
+Polling aguarda AtualizarAsync antes da factory e persiste ambos campos diretamente. TimestampEvento início vem do timestampGPS, não relógio da execução. Igualdade desses instantes é coerente com a mesma transição de renascimento (testado) mas sozinha não prova um único ciclo/escritor: retry conserva timestamp físico, pode reenriquecer, não republica ML; reprocessamento igual/antigo é rejeitado pela autoridade e factory não associa status rejeitado. ObservacaoId identifica modal/provedor/veículo/timestamp, e não contém ViagemId; outro escritor/build/dado fora do contrato exige evidência, não deve ser presumido. Nenhum replay antigo legítimo que misture novo ViagemId/estado com positionposterior foi demonstrado.
+
+**Hipóteses restantes:** (1) renascimento com baseline anterior, condicionado à flag/estado anterior/versão; (2) estrutura/escritor/build/associação diferente do código e sequência considerados. Criação realmente null na estrutura fornecida viola a invariante alvoadiante (caso1 próxima6; caso2 próxima3). CancelamentoC demonstrado anteriormente não explica sozinho alvoatrás já no GPS de início; não mantê-lo como atribuição desses casos. Veredito: defeito local demonstrado no corte baseline de renascimento (B condicional), causa real ainda não fechada. Não há justificativa para classificar o alvoatrás como estado transitório confiável aceitável.
+
+**Consulta mínima seguinte (manual, não executada):** obter payload bruto de início pela PK e comparar ocorrência/cursor/volta/versão com estrutura; recuperar próximos fins de mesmo veículo apenas em janela temporal indexada. Sem scanGPS global. Serviço libpq previamente configurado, UUID conhecido, shellPOSIX:
+
+```sh
+PGOPTIONS='-c statement_timeout=30000 -c lock_timeout=3000 -c timezone=UTC' psql -X --dbname='service=noponto_auditoria' -v ON_ERROR_STOP=1 -v viagem='UUID_DA_VIAGEM' <<'SQL'
+BEGIN READ ONLY;
+SELECT "EventId","TimestampEvento","Tipo","Payload"
+FROM "EventosViagem" WHERE "EventId"='inicio:'||(:'viagem'::uuid)::text;
+WITH inicio AS MATERIALIZED (
+ SELECT "TimestampEvento" AS ts,"Payload"->>'ordem_veiculo' AS veiculo
+ FROM "EventosViagem" WHERE "EventId"='inicio:'||(:'viagem'::uuid)::text
+ AND "Tipo"='ViagemIniciada'
+ AND "TimestampEvento">=TIMESTAMPTZ '2026-10-07T14:53:59.225082Z'
+)
+SELECT e."EventId",e."TimestampEvento",e."Payload"
+FROM "EventosViagem" e JOIN inicio i ON e."TimestampEvento">=i.ts-interval '5 minutes'
+ AND e."TimestampEvento"<=i.ts
+WHERE e."Tipo"='ViagemFinalizada' AND e."Payload"->>'ordem_veiculo'=i.veiculo
+ORDER BY e."TimestampEvento" DESC LIMIT 5;
+COMMIT;
+SQL
+```
+
+A segunda consulta usa índice TimestampEvento e filtra JSON só dentro5min; operador deve revisar EXPLAIN sem ANALYZE, não executar se plano global. Ausência de fim nessa janela não elimina renascimento (fim pode ser antigo); não ampliar janela global por hipótese. Se cursor início for3/1, reforça baseline atrás; se5/2 mas próximo4/2 persistido, precisa investigar associação/estrutura/escritor. Conferir flags/build efetivos e, se disponíveis, logs/estado anterior sanitizados; journal início não persiste posição e registro corrente sobrescreve predecessores. Consultas anteriores já fornecem GPS/alvo; não repetir scanGPS.
+
+**Ação:** não alterar runtime agora nem encaixar dados no contrato. Menor correção candidata, após revisão de causalidade/invariantes, é usar posição atual quando baseline=true e anterior.Estado=Finalizada, preservando política de cancelamento/recovery/wrap. Não implementada nem implantada. Labels ausentes são descartadas, e EtaDataset também rejeita destino atrás; isso protege esses exemplos de treino mas não prova cobertura/ETAoperacional corretos. Alvo inicial inválido pode afetar consumidores, exigindo revisão funcional antes de declarar problema sóML. Pode continuar contagens seletivas3B.2A mantendo esses casos excluídos; não encerrar causa comoC/bootstrapping esperado, nem liberar3B.2B/snapshot/treino por esse diagnóstico sozinho.
+
+### Correção confirmada — renascimento após Finalizada usa corte atual
+
+**Veredito B: bug de renascimento confirmado pela cadeia do código e pelas evidências seletivas fornecidas pelo operador.** Agente não acessou produção. A confirmação é do caso N+2 documentado; não significa reconstituição independente dos8casos nem prova adicional da origem do N+1. Mudanças/análises anteriores preservadas como histórico.
+
+A regra primeiro constrói `atual` com PosicaoNaRotaConfirmada=p, conservando cursor conforme transição. Em PossivelFim, `permaneceTerminal` verifica cursor terminal/próxima nula/nenhuma ultrapassada, não que p esteja fisicamente no terminal. Ao segundo confirmador, muda Estado para Finalizada e emite fim a partir DESSE atual. Assim GPS.10942379055055879 no ciclo15:48:41 é gravado junto de cursor terminal26. SQL linear conserva cursor nas regressões, sem inventar wrap; essa combinação é alcançável pela máquina de estados e foi exercitada no teste. Não alterada política de finalização nesta correção focalizada.
+
+Persistência segue GravarEstadoAsync/codec→Estado JSONB e outbox na mesma transação; projeção Redis depois do commit. O estado finalizado lido conserva.10942379. DecidirAposFinalizada constrói semInicio alterando somente TimestampUltimaAtualizacao; uma observação em.20535911939693594 pode criar/atualizar candidato ou mantê-lo, SEM substituir PosicaoNaRotaConfirmada. No nascimento.2132447277027137, candidato fornece evidência de movimento (janela180s), não o corte baseline. Versão igual/flagfalse fazia helper retornar.10942379: incorpora3(.07672496), ainda antes4(.12881647), próxima4. Novo estado iniciava fisicamente após5, mas cursor3/próxima4; atualizações normais não voltam a cruzar4/5 e primeira passagem futura é6. Isso fecha a lacuna do snapshot anteriormente apenas sintético.
+
+A igualdade de timestamp início/GPS é esperada: ambos usam instante físico da observação confirmadora; início novo pode retornar Updated por haver estado durável anterior. Factory recusava associação na finalização (faseFinalizada) e enquanto não havia novo estadoAtiva, preservando fallback, compatível com GPS semViagemId/Volta/próxima em15:48:41 e15:51:11. No renascimento, ambos campos de ocorrência recebem próxima calculada; o erro era no corte espacial, não no mapping SQL3A/factory/materializador.
+
+**Menor alteração efetiva:** PosicaoInicialTransicao acrescenta somente `baseline && anterior.Estado == EstadoViagem.Finalizada` às condições que retornam posição atual. Não muda fluxo não-baseline nem adoção/cancelamento de estado ativo. Null e versão diferente já usam atual; flagtrue+candidato já usa atual; flagfalse passa a corrigir renascimento. Mudança confirmada calcula baseline p,p antes de Decidir(null); recovery/proteção circular de execução ativa mantém política própria. Circular naturalmente não encerra por terminal; caso finalizado reiniciado deve ter baseline da nova execução, com volta resetada pelo código já existente. Nenhum wrap artificial/passagem retroativa adicionado. Retry chama mesmo repository/helper, sem contrato novo. Não mudar sampling, cutoff, SQL3A, EtaDataset ou telemetria histórica.
+
+Regressão anterior ajustada para esperar comportamento corrigido, agora4casos (N+2/N+1 × flagfalse/true). Constrói execução ativa, passagem terminal, primeiro confirmador e finalização com GPS na posição inicial; exige EstadoFinalizada/posição nova/cursor26. Depois candidato não altera posição finalizada; baseline usa GPSatual; cursor5/2 e próxima6/3; novoViagemId/volta0/únicoViagemIniciada, MLalvoàfrente, nenhuma passagem retroativa e primeira passagem futura normal. SQL/transição de ocorrências permanecem modelados localmente; PostgreSQL não executado. RED antes da correção:2false falharam,2true passaram. Sem flags de teste/coleta relaxadas.
+
+Os21GPS previamente sem label continuam sem label: não reconstruir4/5 nem mudar histórico para completardataset. Bug operacional pode causar alvoatrás para consumidores; filtros de labels ausentes/destinoatrás protegem exportação desses casos, não provam funcionamento do ETApúblico. Correção é prospectiva e não foi implantada. Falhas/gaps/sampling e evidência de execução inteira continuam critérios independentes.
+
+**Riscos/validação pendente:** teste puro cobre encadeamento/regra/helper/factory, não matching real/SQL/PostGIS/cache/outbox conectado. Política de finalização com cursor terminal e posição regredida permanece, pois é fora da correção mínima; merece observação específica futura, sem modificar automaticamente. Configuração/build de produção não verificados pelo agente. Não atribuir automaticamente mesma causa às8viagens. Revisar diff/testes antes de qualquer deploy autorizado; depois validar coleta seletiva pós-deploy para ausência de alvoatrás em novos renascimentos. Pode encerrar esta subinvestigação causal do N+2 e voltar à3B.2A/preparação3B.2B, mantendo exclusões/auditoria/volume e autorização de snapshot separadas.
+
+Integração futura, SOMENTE ambiente local descartável configurado pelo operador via POSTGIS_TEST_CONNECTION/REDIS_TEST_CONNECTION (fixtures escrevem/removem dados próprios), não executada nesta rodada:
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj --no-restore --filter '(FullyQualifiedName~ViagemOperacionalIntegracaoTests|FullyQualifiedName~MudancaOperacionalPontaAPontaTests|FullyQualifiedName~IntegridadeCircularPostgresTests)' --verbosity normal
+```
+
+Não executar esse comando contra banco real/produção ou serviços preexistentes sem isolamento confirmado. Nenhum teste longo/integração externa foi iniciado pelo agente.
+
+Validação desta correção: RED2falhas(flagfalse)/2aprovados(flagtrue) antes da alteração; GREEN184/184 testes locais relacionados após correção,0falhas/ignorados,6s; Pythonguardas auditoria6/6,1,296s; git diff --check aprovado. Cinco avisos preexistentes na recompilação, sem novos avisos. Nenhum teste conectado executado. Correção pronta para revisão local, sem deploy/commit/push, com mudanças anteriores preservadas.
+
+### Fechamento — integração PostgreSQL/Redis validada pelo operador
+
+**Atualização posterior à auditoria local:** o operador informou execução MANUAL em ambiente descartável e isolado, sem banco de produção: PostgreSQL 16/PostGIS 3.4 em loopback porta 55439 e Redis 7 em loopback porta 6397, configurados via POSTGIS_TEST_CONNECTION/REDIS_TEST_CONNECTION. O agente não acessou esses serviços nem repetiu os testes. O comando de integração documentado acima foi executado com o mesmo filtro de ViagemOperacionalIntegracaoTests, MudancaOperacionalPontaAPontaTests e IntegridadeCircularPostgresTests, usando --no-restore e --verbosity normal.
+
+Build com sucesso; **75 testes executados, 75 aprovados, 0 falhas e 0 ignorados**. Duração dos testes ~129,5s; execução total ~139,4s. A tentativa anterior falhou somente porque os containers descartáveis estavam desligados e nenhuma conexão era aceita na porta 55439; após o operador reiniciá-los, a mesma suíte passou integralmente, sem mudança de código.
+
+Isso fecha a principal ressalva da auditoria anterior: a integração PostgreSQL/Redis está validada no escopo dessa suíte e desse ambiente, conforme resultado fornecido pelo operador. As afirmações anteriores de integração pendente referem-se às rodadas anteriores. A correção permanece prospectiva e não implantada; **validação em produção ainda depende de observação seletiva pós-deploy**, após implantação separadamente autorizada. A política de finalização com cursor terminal/posição regredida permanece fora desta correção; não há reconstrução dos 21 GPS sem passagem, atribuição automática da causa às oito viagens ou certificação do dataset real.
+
+Este fechamento altera somente documentação/histórico, sem credenciais, connection strings completas ou UUIDs reais adicionais. Runtime, testes, SQL, migrations, sampling, infraestrutura e dataset preservados; nenhum commit, push ou deploy realizado.

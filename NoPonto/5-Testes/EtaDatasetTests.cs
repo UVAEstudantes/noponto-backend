@@ -7,6 +7,32 @@ namespace NoPonto.Tests;
 
 public sealed class EtaDatasetTests
 {
+    [Fact]
+    public void ViagemConfiavelSemAlvoOperacional_NaoAutorizaLabelPeloFallback()
+    {
+        var(c,e,o)=Caso();
+        c.Gps.ProximaOcorrenciaParadaPadraoId=null;
+        // Mesmo com viagem/volta e fallback coincidente com a passagem,
+        // nao inventar o alvo operacional que esta ausente na observacao.
+        Assert.Equal(e.ViagemId,c.Gps.ViagemId);
+        Assert.Equal(c.Passagem.OcorrenciaParadaPadraoId,c.Gps.OcorrenciaParadaPadraoId);
+        var(a,m)=EtaDataset.Avaliar(c,e,o);
+        Assert.Null(a);Assert.Equal("DadosIncompletos",m);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AlvoExplicitoComCampoGeralDivergenteOuNulo_RejeitaContratoDaFactory(bool nulo)
+    {
+        var(c,e,o)=Caso();
+        Assert.NotNull(EtaDataset.Avaliar(c,e,o).Amostra);
+        // Adulteracao isolada: factory atual copia o alvo explicito neste campo.
+        c.Gps.OcorrenciaParadaPadraoId=nulo ? null : Guid.NewGuid();
+        Assert.Equal(c.Destino.Id,c.Gps.ProximaOcorrenciaParadaPadraoId);
+        Assert.Equal(c.Destino.Id,c.Passagem.OcorrenciaParadaPadraoId);
+        var(a,m)=EtaDataset.Avaliar(c,e,o);
+        Assert.Null(a);Assert.Equal("IdentidadeEstruturalIncompativel",m);
+    }
     [Fact] public void Cutoff_RejeitaViagemParcialMesmoComGpsNovo()
     {
         var(c,e,o)=Caso();

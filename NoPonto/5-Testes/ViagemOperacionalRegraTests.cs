@@ -10,6 +10,96 @@ namespace NoPonto.Tests;
 
 public sealed class ViagemOperacionalRegraTests
 {
+    [Theory]
+    [InlineData(0.10942379055055879,0.2132447277027137,0.2523808473,0.2628259396,4,6,false)]
+    [InlineData(0.10942379055055879,0.2132447277027137,0.2523808473,0.2628259396,4,6,true)]
+    [InlineData(0.02,0.0663955227,0.1308317048,0.1587919335,2,3,false)]
+    [InlineData(0.02,0.0663955227,0.1308317048,0.1587919335,2,3,true)]
+    public void RenascimentoMesmaVersao_BaselineAtualPublicaPrimeiroAlvoFuturo(
+        double antiga,double inicial,double intermediaria,double final,int alvo,int primeiraPassagem,bool flag)
+    {
+        var posicoes=alvo==4 ? new[]{.0767249642,.1288164736,.1787908964,.2561770242,.2909474115}
+            : new[]{0.0,.0639872683,.1320921575,.1959359782,.2596613824};
+        var primeiraOrdem=alvo==4 ? 3 : 1;
+        var seq=posicoes.Select((p,i)=>P(primeiraOrdem+i,p)).ToArray();
+        // Alcanca o terminal, confirma uma vez e finaliza com GPS ja no inicio.
+        // A regra conserva cursor terminal, mas grava a posicao atual da finalizacao.
+        var terminal=P(26,.9999996647);
+        var ativa=ViagemOperacionalRegra.Decidir(null,E(),G(-180,.9),T(),Guid.NewGuid()).Estado;
+        var possivel=ViagemOperacionalRegra.Decidir(ativa,E(),G(-150,1),
+            T(terminal,[terminal],terminal),Guid.NewGuid()).Estado;
+        var confirmacao=ViagemOperacionalRegra.Decidir(possivel,E(),G(-120,1),
+            T(terminal,terminal:terminal),Guid.NewGuid()).Estado;
+        var fim=ViagemOperacionalRegra.Decidir(confirmacao,E(),G(-90,antiga),
+            T(terminal,terminal:terminal),Guid.NewGuid());
+        Assert.Equal("ViagemFinalizada",Assert.Single(fim.Eventos).Tipo);
+        Assert.Equal(EstadoViagem.Finalizada,fim.Estado.Estado);
+        Assert.Equal(antiga,fim.Estado.Observada.PosicaoNaRotaConfirmada);
+        Assert.Equal(26,fim.Estado.Observada.UltimaParadaOrdem);
+        var candidatoGps=G(-30,alvo==4 ? .20535911939693594 : inicial-.01) with {Latitude=-22.9002};
+        var anterior=ViagemOperacionalRegra.Decidir(fim.Estado,E(),candidatoGps,T(),Guid.NewGuid()).Estado;
+        Assert.Equal(antiga,anterior.Observada.PosicaoNaRotaConfirmada);
+        Assert.Empty(ViagemOperacionalRegra.Decidir(fim.Estado,E(),candidatoGps,T(),Guid.NewGuid()).Eventos);
+        Assert.NotNull(anterior.Candidato);
+        var g=G(0,inicial) with {LinhaId=_linha,SentidoId=_s1,PadraoOperacionalId=_po1,
+            TopologiaPadrao="LINEAR",ModalFonte="ONIBUS",ProvedorFonte="TEST"};
+        var baseline=ViagemOperacionalRepository.PosicaoInicialTransicao(anterior,_r1,inicial,true,flag);
+        Assert.Equal(inicial,baseline);
+        Assert.Equal(inicial,ViagemOperacionalRepository.PosicaoInicialTransicao(anterior,_r1,inicial,true,true));
+        // Retorno modelado do SQL: baseline usa <= @anterior, nao <= @atual.
+        var incorporada=seq.Last(p=>p.PosicaoLinha<=baseline);
+        var proxima=seq.First(p=>p.Ordem>incorporada.Ordem);
+        var nova=ViagemOperacionalRegra.Decidir(anterior,E(),g,
+            new(ViagemObservadaStatus.Updated,incorporada.Id,incorporada.Ordem,[],proxima),Guid.NewGuid());
+        Assert.NotEqual(anterior.Observada.ViagemId,nova.Estado.Observada.ViagemId);
+        Assert.Equal(inicial,nova.Estado.Observada.PosicaoNaRotaConfirmada);
+        Assert.Equal(g.TimestampGps,Assert.Single(nova.Eventos).TimestampEvento);
+        var ml=EventoTelemetriaMlFactory.Criar(g,
+            new ViagemObservadaResultado(ViagemObservadaStatus.Updated,nova.Estado.Observada)
+                {EstadoOperacional=nova.Estado,ProximaOcorrenciaOperacional=proxima},_t);
+        Assert.Equal(primeiraPassagem,proxima.Ordem);
+        Assert.Equal(primeiraPassagem-1,nova.Estado.Observada.UltimaParadaOrdem);
+        Assert.Equal(0,nova.Estado.Observada.Volta);
+        Assert.True(proxima.PosicaoLinha>ml.PosicaoNaRota);
+        Assert.Equal(proxima.Id,ml.ProximaOcorrenciaParadaPadraoId);
+        Assert.Equal(nova.Estado.Observada.ViagemId,ml.ViagemId);
+        // Atualizacao intermediaria nao cruza alvo atras nem a proxima fisica.
+        Assert.DoesNotContain(seq,p=>p.Ordem>incorporada.Ordem && p.PosicaoLinha>inicial && p.PosicaoLinha<=intermediaria);
+        var cruzadas=seq.Where(p=>p.Ordem>incorporada.Ordem && p.PosicaoLinha>intermediaria && p.PosicaoLinha<=final).ToArray();
+        var ultima=cruzadas[^1];
+        var futuro=ViagemOperacionalRegra.Decidir(nova.Estado with {Observada=nova.Estado.Observada with
+            {PosicaoNaRotaConfirmada=intermediaria,TimestampUltimaAtualizacao=_t.AddSeconds(30)}},
+            E(),G(60,final),new(ViagemObservadaStatus.Updated,ultima.Id,ultima.Ordem,cruzadas),Guid.NewGuid());
+        Assert.Equal(primeiraPassagem,Assert.Single(futuro.Eventos).Ordem);
+    }
+    [Theory]
+    [InlineData(.05,0)]
+    [InlineData(.35,1)]
+    [InlineData(.65,3)]
+    public void BootstrapAntesEntreOuDepoisDeParadas_NaoEmiteRetroativos(double posicao,int ordem)
+    {
+        var ocorrencias=Enumerable.Range(1,5).Select(n=>P(n,n*.2)).ToArray();
+        var cursor=ocorrencias.LastOrDefault(p=>p.PosicaoLinha<=posicao);
+        var next=ocorrencias.First(p=>p.PosicaoLinha>posicao);
+        var d=ViagemOperacionalRegra.Decidir(null,E(),G(0,posicao),
+            new(ViagemObservadaStatus.Updated,cursor?.Id??Guid.Empty,ordem,[],next),Guid.NewGuid());
+        Assert.Equal(ordem,d.Estado.Observada.UltimaParadaOrdem);
+        Assert.Equal("ViagemIniciada",Assert.Single(d.Eventos).Tipo);
+    }
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void PrimeiraAtualizacaoNormal_EmiteTodasAsUmaOuDuasParadasCruzadas(int quantidade)
+    {
+        var inicial=ViagemOperacionalRegra.Decidir(null,E(),G(0,.1),T(),Guid.NewGuid()).Estado;
+        var passagens=Enumerable.Range(1,quantidade).Select(n=>P(n,n*.2)).ToArray();
+        var cursor=passagens[^1];
+        var d=ViagemOperacionalRegra.Decidir(inicial,E(),G(10,cursor.PosicaoLinha+.01),
+            T(cursor,passagens),Guid.NewGuid());
+        Assert.Equal(quantidade,d.Eventos.Count);
+        Assert.Equal(passagens.Select(p=>p.Id),d.Eventos.Select(e=>e.OcorrenciaParadaPadraoId!.Value));
+        Assert.All(d.Eventos,e=>Assert.Equal("PassagemParada",e.Tipo));
+    }
     [Fact]
     public void Modelo_SnapshotSincronizado()
     {

@@ -6,6 +6,51 @@ namespace NoPonto.Tests;
 
 public sealed class CancelamentoCandidatoCursorTests
 {
+    [Theory]
+    [InlineData(.25,2)]
+    [InlineData(.45,3)]
+    public void AlvoMlAntesDoCandidato_BaselineSemRetroativos_PrimeiroEventoUmaOuDuasOrdensDepois(
+        double retorno,int primeiraOrdem)
+    {
+        var paradas=Enumerable.Range(1,4).Select(n=>new OcorrenciaParada(
+            Guid.NewGuid(),A.PadraoVersaoId,Guid.NewGuid(),n,n*.2)).ToArray();
+        var g0=G(A,0,.1);
+        var inicial=ViagemOperacionalRegra.Decidir(null,A,g0,
+            new(ViagemObservadaStatus.Updated,Guid.Empty,0,[],paradas[0]),Guid.NewGuid());
+        var resultado=new ViagemObservadaResultado(ViagemObservadaStatus.Created,inicial.Estado.Observada)
+            {EstadoOperacional=inicial.Estado,ProximaOcorrenciaOperacional=paradas[0]};
+        var ml=EventoTelemetriaMlFactory.Criar(g0,resultado,T);
+        Assert.Equal(paradas[0].Id,ml.ProximaOcorrenciaParadaPadraoId);
+        var divergente=G(B,10,.1);
+        var avaliacao=ViagemOperacionalRegra.AvaliarMudancaSeHabilitada(
+            new(){MudancaOperacionalHabilitada=true},inicial.Estado,B,divergente)!;
+        var candidato=ViagemOperacionalRegra.AplicarAvaliacaoMudanca(inicial.Estado,avaliacao,divergente)!.Estado;
+        var volta=G(A,20,retorno);
+        Assert.Equal(StatusMudancaOperacional.CandidatoCancelado,
+            ViagemOperacionalRegra.AvaliarMudancaSeHabilitada(
+                new(){MudancaOperacionalHabilitada=true},candidato,A,volta)!.Status);
+        var posicaoBaseline=ViagemOperacionalRepository.PosicaoInicialTransicao(
+            candidato,A.PadraoVersaoId,retorno,true,true);
+        // Modelo de retorno da consulta baseline: SQL real nao e executado neste teste.
+        var cursor=paradas.Last(p=>p.PosicaoLinha<=posicaoBaseline);
+        var proxima=paradas.First(p=>p.Ordem>cursor.Ordem);
+        var adotada=ViagemOperacionalRegra.Decidir(candidato,A,volta,
+            new(ViagemObservadaStatus.Updated,cursor.Id,cursor.Ordem,[],proxima),Guid.NewGuid(),true);
+        Assert.Empty(adotada.Eventos);
+        Assert.Equal(inicial.Estado.Observada.ViagemId,adotada.Estado.Observada.ViagemId);
+        var mlDepois=EventoTelemetriaMlFactory.Criar(volta,
+            new ViagemObservadaResultado(ViagemObservadaStatus.Updated,adotada.Estado.Observada)
+                {EstadoOperacional=adotada.Estado,ProximaOcorrenciaOperacional=proxima},T.AddSeconds(20));
+        Assert.Equal(proxima.Id,mlDepois.ProximaOcorrenciaParadaPadraoId);
+        Assert.NotEqual(ml.ProximaOcorrenciaParadaPadraoId,mlDepois.ProximaOcorrenciaParadaPadraoId);
+        var futura=ViagemOperacionalRegra.Decidir(adotada.Estado,A,
+            G(A,30,proxima.PosicaoLinha+.01),
+            new(ViagemObservadaStatus.Updated,proxima.Id,proxima.Ordem,[proxima]),Guid.NewGuid());
+        var evento=Assert.Single(futura.Eventos);
+        Assert.Equal(primeiraOrdem,evento.Ordem);
+        Assert.Equal("PassagemParada",evento.Tipo);
+        Assert.Equal(ml.ViagemId,evento.ViagemId);
+    }
     private static readonly DateTimeOffset T = new(2026, 10, 6, 12, 0, 0, TimeSpan.Zero);
     private static readonly EstruturaViagem A = new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "A", true, Guid.NewGuid());
     private static readonly EstruturaViagem B = new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "B", true, Guid.NewGuid());

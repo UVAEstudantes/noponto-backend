@@ -344,6 +344,8 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
     internal static double PosicaoInicialTransicao(ViagemOperacionalState? anterior,
         Guid versao, double atual, bool baseline, bool mudancaHabilitada) =>
         anterior is null || anterior.Observada.PadraoVersaoId != versao
+            // Nova execucao apos o fim: nao herdar o corte espacial da viagem anterior.
+            || (baseline && anterior.Estado == EstadoViagem.Finalizada)
             || (baseline && mudancaHabilitada && anterior.Candidato is not null)
             ? atual : anterior.Observada.PosicaoNaRotaConfirmada;
 
