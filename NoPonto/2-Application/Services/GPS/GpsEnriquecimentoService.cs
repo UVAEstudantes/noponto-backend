@@ -15,8 +15,18 @@ namespace NoPonto.Application.GPS;
 ///   _historicoVelocidades usa ConcurrentDictionary na chave e lock interno na Queue
 ///   porque Queue nao e thread-safe por si so.
 /// </summary>
-public sealed partial class GpsEnriquecimentoService
+public sealed partial class GpsEnriquecimentoService : IEnriquecimentoRetryOperacionalGps
 {
+    async Task<ResultadoEnriquecimentoGps> IEnriquecimentoRetryOperacionalGps.RecalcularAsync(
+        PendenciaOperacionalGps pendencia, ContextoOperacional? contexto, CancellationToken ct)
+    {
+        // Isolar histerese/velocidade do GPS atual; sem regredir memória do enriquecedor singleton.
+        var isolado = new GpsEnriquecimentoService(_repositorio, Options.Create(_opcoes), _logger);
+        var anterior = RetryOperacionalGpsService.Observacional(pendencia.Predecessor!);
+        await isolado.EnriquecerAsync(anterior, ct);
+        return await isolado.EnriquecerComContextoAsync(
+            RetryOperacionalGpsService.Observacional(pendencia.Gps), contexto, ct, null);
+    }
     private readonly IGpsPadraoRepository _repositorio;
     private readonly GpsPollingOptions _opcoes;
     private readonly ILogger<GpsEnriquecimentoService> _logger;
@@ -498,6 +508,13 @@ public sealed partial class GpsEnriquecimentoService
             SentidoId                    = rota?.SentidoId,
             LinhaId                      = rota?.LinhaId,
             TopologiaPadrao              = rota?.Topologia,
+            MatchingOperacionalPlausivel = rota is not null && validacaoTemporalPassou == true
+                && posicao.TemHistorico
+                && GpsLeituraValidator.CoordenadaValida(posicao.LatitudeAnterior!.Value, posicao.LongitudeAnterior!.Value)
+                && posicao.TimestampAnterior < posicao.TimestampGps
+                && !EhSaltoImplausivel(posicao.LatitudeAnterior.Value, posicao.LongitudeAnterior.Value,
+                    posicao.Latitude, posicao.Longitude,
+                    (posicao.TimestampGps - posicao.TimestampAnterior!.Value).TotalSeconds, _opcoes.VelocidadeMaximaKmh),
             ProximaOcorrenciaParadaPadraoId = rota?.ProximaOcorrenciaParadaPadraoId,
             ProximaParadaNome            = rota?.ProximaParadaNome,
             DistanciaProximaParadaMetros = rota?.DistanciaProximaParadaMetros,
@@ -518,8 +535,11 @@ public sealed partial class GpsEnriquecimentoService
         && double.IsFinite(rota.ComprimentoRotaMetros) && rota.ComprimentoRotaMetros > 0;
 
     private double OrcamentoProjecaoMetros(double segundos) =>
-        (_opcoes.VelocidadeMaximaKmh * FatorToleranciaSalto / 3.6) * segundos
-        + _opcoes.ToleranciaProjecaoMetros;
+        OrcamentoProjecaoMetros(segundos, _opcoes);
+
+    internal static double OrcamentoProjecaoMetros(double segundos, GpsPollingOptions opcoes) =>
+        (opcoes.VelocidadeMaximaKmh * FatorToleranciaSalto / 3.6) * segundos
+        + opcoes.ToleranciaProjecaoMetros;
 
     private FaixaProjecao? CalcularFaixaProjecao(PosicaoVeiculoDto posicao, PadraoConfirmado confirmado)
     {

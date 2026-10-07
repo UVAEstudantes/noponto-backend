@@ -4,6 +4,10 @@ namespace NoPonto.Application.GPS;
 
 public sealed class ViagemObservadaService
 {
+    internal Task<ContextoOperacional?> LerDuravelParaRetryAsync(string ordem, CancellationToken ct) =>
+        _repository.LerDuravelParaRetryAsync(ordem, ct);
+    internal Task<ContextoOperacional?> LerContextoParaRetryAsync(string ordem, CancellationToken ct) =>
+        _repository.LerContextoAsync(ordem, ct);
     private readonly IViagemObservadaRepository _repository;
     private readonly ILogger<ViagemObservadaService> _logger;
 

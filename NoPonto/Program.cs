@@ -500,6 +500,12 @@ builder.Services.AddSingleton<IVeiculosLinhaRuntimeReader, VeiculosLinhaRuntimeR
 builder.Services.AddSingleton<IViagemObservadaRepository, ViagemOperacionalRepository>();
 builder.Services.AddSingleton<IOcorrenciaParadaRepository, OcorrenciaParadaRepository>();
 builder.Services.AddSingleton<ViagemObservadaService>();
+builder.Services.AddOptions<RetryOperacionalGpsOptions>()
+    .Bind(builder.Configuration.GetSection("RetryOperacionalGps"))
+    .Validate(x => x.Valido(), "Configuração de retry operacional inválida.").ValidateOnStart();
+builder.Services.AddSingleton<IPendenciaOperacionalGpsStore, PendenciaOperacionalGpsRepository>();
+builder.Services.AddSingleton<IEnriquecimentoRetryOperacionalGps>(sp => sp.GetRequiredService<GpsEnriquecimentoService>());
+builder.Services.AddSingleton<IRetryOperacionalGps, RetryOperacionalGpsService>();
 builder.Services.AddSingleton<IPosicaoVeiculoPayloadWriter, PosicaoVeiculoPayloadWriter>();
 builder.Services.AddSingleton<PosicaoVeiculoTsBootstrapper>();
 builder.Services.AddSingleton<EstadoCausalPosicaoCodec>();

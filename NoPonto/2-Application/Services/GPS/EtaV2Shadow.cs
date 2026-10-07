@@ -132,10 +132,21 @@ public sealed class EtaV2ShadowService(IEtaV2Ingress ingress, IOptions<EtaV2Opti
         var settings = options.Value;
         if (!settings.Enabled || !settings.ShadowEnabled || trip?.Estado is not { } state
             || trip.Value.Status is not (ViagemObservadaStatus.Created or ViagemObservadaStatus.Updated)
+            || (trip.Value.EstadoOperacional is { } operacional && !ViagemOperacionalRegra.IdentidadeConfiavel(operacional))
             || trip.Value.ProximaOcorrenciaOperacional is not { } target)
         { metrics.IneligibleCandidate(); return false; }
         var position = enrichment.Posicao;
-        if (position.PadraoVersaoId != state.PadraoVersaoId
+        if (state.ViagemId == Guid.Empty || state.OrdemVeiculo != position.Ordem
+            || state.TimestampUltimaAtualizacao != position.TimestampGps
+            || state.PadraoOperacionalId == Guid.Empty || position.PadraoOperacionalId != state.PadraoOperacionalId
+            || target.Id == Guid.Empty || target.PadraoVersaoId != state.PadraoVersaoId
+            || (trip.Value.EstadoOperacional is { } identity
+                && (identity.Observada != state
+                    || identity.Estado is not (EstadoViagem.Ativa or EstadoViagem.PossivelFim)
+                    || identity.CodigoLinha != position.CodigoLinha
+                    || identity.LinhaId != position.LinhaId || identity.SentidoId != position.SentidoId
+                    || state.Topologia != position.TopologiaPadrao))
+            || position.PadraoVersaoId != state.PadraoVersaoId
             || position.ProximaOcorrenciaParadaPadraoId != target.Id
             || position.LinhaId is not { } line || line == Guid.Empty
             || position.SentidoId is not { } direction || direction == Guid.Empty

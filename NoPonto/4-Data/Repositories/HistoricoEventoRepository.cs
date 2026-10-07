@@ -188,6 +188,8 @@ public static class EventoViagemValidator
 {
     public static void Validar(EventoViagem e)
     {
+        if (e.MotivoFim is not null && (e.Tipo != "ViagemFinalizada" || e.MotivoFim != "PerdaContinuidadeCircular"))
+            throw new FormatException("Motivo de encerramento inválido.");
         if (e.ViagemId == Guid.Empty || e.SentidoId == Guid.Empty || e.PadraoVersaoId == Guid.Empty
             || string.IsNullOrWhiteSpace(e.OrdemVeiculo) || string.IsNullOrWhiteSpace(e.CodigoLinha)
             || e.TimestampEvento <= DateTimeOffset.UnixEpoch || e.TimestampEvento.Offset != TimeSpan.Zero)
@@ -227,7 +229,8 @@ public static class EventoViagemValidator
             PadraoOperacionalId: fields.TryGetValue("padrao_operacional_id", out var po) ? Guid.Parse(po) : null,
             OcorrenciaParadaPadraoId: fields.TryGetValue("ocorrencia_parada_padrao_id", out var op) ? Guid.Parse(op) : null,
             Volta: fields.TryGetValue("volta", out var volta) ? int.Parse(volta, CultureInfo.InvariantCulture) : null,
-            LinhaId: fields.TryGetValue("linha_id", out var linha) ? Guid.Parse(linha) : null);
+            LinhaId: fields.TryGetValue("linha_id", out var linha) ? Guid.Parse(linha) : null,
+            MotivoFim: fields.GetValueOrDefault("motivo_fim"));
         if (e.Tipo == "PassagemParada") e = e with {
             ParadaId = G("parada_id"), Ordem = int.Parse(V("ordem"), CultureInfo.InvariantCulture),
             PosicaoLinha = double.Parse(V("posicao_linha"), CultureInfo.InvariantCulture),

@@ -13,7 +13,11 @@ public sealed record CandidatoViagem(Guid PadraoVersaoId, Guid SentidoId, Guid L
 public sealed record ViagemOperacionalState(ViagemObservadaState Observada, string CodigoLinha,
     Guid LinhaId, Guid SentidoId, EstadoViagem Estado = EstadoViagem.Ativa,
     int ConfirmacoesPosTerminal = 0, DateTimeOffset? TimestampFim = null,
-    CandidatoViagem? Candidato = null);
+    CandidatoViagem? Candidato = null)
+{
+    // Extensão durável independente do snapshot de 27 posições.
+    internal IntegridadeCircular? Integridade { get; init; }
+}
 
 public sealed record EstruturaViagem(Guid PadraoVersaoId, Guid LinhaId, Guid SentidoId,
     string CodigoLinha, bool SentidoInequivoco, Guid PadraoOperacionalId = default,
@@ -39,7 +43,8 @@ public sealed record EventoViagem(
     [property: JsonPropertyName("schema_version")] int SchemaVersion = 2,
     [property: JsonPropertyName("padrao_operacional_id")] Guid? PadraoOperacionalId = null,
     [property: JsonPropertyName("volta")] int? Volta = null,
-    [property: JsonPropertyName("linha_id")] Guid? LinhaId = null);
+    [property: JsonPropertyName("linha_id")] Guid? LinhaId = null,
+    [property: JsonPropertyName("motivo_fim"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MotivoFim = null);
 
 public sealed record DecisaoViagem(ViagemOperacionalState Estado, IReadOnlyList<EventoViagem> Eventos);
 
@@ -80,11 +85,12 @@ internal static class PersistenciaViagemOperacional
         || anterior.Estado != atual.Estado
         || anterior.ConfirmacoesPosTerminal != atual.ConfirmacoesPosTerminal
         || anterior.TimestampFim != atual.TimestampFim
-        || anterior.Candidato != atual.Candidato;
+        || anterior.Candidato != atual.Candidato
+        || anterior.Integridade != atual.Integridade;
 }
 
 /// <summary>Decisão pura para itinerários não circulares; nunca reinicia cursor por regressão.</summary>
-public static class ViagemOperacionalRegra
+public static partial class ViagemOperacionalRegra
 {
     // Mesma semantica do deslocamento historicamente considerado confiavel para
     // bearing: tolerancia espacial contra jitter GPS, nao regra temporal de negocio.
@@ -92,7 +98,8 @@ public static class ViagemOperacionalRegra
     internal const double JanelaCandidatoSegundos = 180.0;
 
     public static DecisaoViagem Decidir(ViagemOperacionalState? anterior, EstruturaViagem estrutura,
-        PosicaoVeiculoDto gps, TransicaoParadas transicao, Guid novaId, bool adocaoLegado = false)
+        PosicaoVeiculoDto gps, TransicaoParadas transicao, Guid novaId, bool adocaoLegado = false,
+        ProvaGeometricaCircular? provaCircular = null, GpsPollingOptions? opcoes = null)
     {
         if (transicao.Status != ViagemObservadaStatus.Updated || gps.PadraoVersaoId != estrutura.PadraoVersaoId
             || gps.PosicaoNaRota is not { } p || !double.IsFinite(p) || p is < 0 or > 1)
@@ -106,12 +113,16 @@ public static class ViagemOperacionalRegra
                 transicao.UltimaOrdem == 0 ? null : transicao.UltimaOrdem, transicao.Volta,
                 p * (gps.ComprimentoRotaMetros ?? 0), estrutura.Topologia),
                 estrutura.CodigoLinha, estrutura.LinhaId, estrutura.SentidoId);
+            inicial = AtualizarAncoraCircular(inicial, estrutura, gps, opcoes);
             eventos.Add(Evento(inicial, "ViagemIniciada", gps.TimestampGps));
             return new(inicial, eventos);
         }
         var obs = anterior.Observada;
         if (gps.TimestampGps <= obs.TimestampUltimaAtualizacao)
             throw new InvalidOperationException("Timestamp não crescente.");
+        var integridade = DecidirIntegridadeCircular(anterior, estrutura, gps, transicao,
+            novaId, adocaoLegado, provaCircular, opcoes ?? new());
+        if (integridade is not null) return integridade;
         if (anterior.Estado == EstadoViagem.PossivelFim
             && (estrutura.LinhaId != anterior.LinhaId || estrutura.PadraoVersaoId != obs.PadraoVersaoId
                 || estrutura.SentidoId != anterior.SentidoId))
@@ -166,7 +177,7 @@ public static class ViagemOperacionalRegra
         }
         else if (anterior.Estado == EstadoViagem.PossivelFim)
             atual = atual with { Estado = EstadoViagem.Ativa, ConfirmacoesPosTerminal = 0 };
-        return new(atual, eventos);
+        return new(AtualizarAncoraCircular(atual, estrutura, gps, opcoes), eventos);
     }
 
     private static DecisaoViagem DecidirAposFinalizada(ViagemOperacionalState anterior,

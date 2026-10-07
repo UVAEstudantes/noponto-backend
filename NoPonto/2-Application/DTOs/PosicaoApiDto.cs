@@ -210,6 +210,11 @@ public sealed record PosicaoVeiculoDto
     public Guid? SentidoId { get; init; }
     public Guid? LinhaId { get; init; }
     public string? TopologiaPadrao { get; init; }
+    // Prova efêmera produzida pelo enriquecimento; nunca reconstruída do cache/payload público.
+    [JsonIgnore]
+    internal bool MatchingOperacionalPlausivel { get; init; }
+    [JsonIgnore]
+    internal bool ExigirPersistenciaDuravel { get; init; }
     public Guid? ProximaOcorrenciaParadaPadraoId { get; init; }
 
     /// <summary>

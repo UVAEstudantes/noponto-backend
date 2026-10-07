@@ -39,6 +39,9 @@ public enum ViagemObservadaStatus
 public readonly record struct ViagemObservadaResultado(
     ViagemObservadaStatus Status, ViagemObservadaState? Estado = null)
 {
+    // Identidade completa da decisão confirmada, somente para consumidores internos.
+    internal ViagemOperacionalState? EstadoOperacional { get; init; }
+    internal bool PersistidoDuravelmente { get; init; }
     public IReadOnlyList<OcorrenciaParada> OcorrenciasUltrapassadas { get; init; } = Array.Empty<OcorrenciaParada>();
     public OcorrenciaParada? ProximaOcorrenciaOperacional { get; init; }
 }

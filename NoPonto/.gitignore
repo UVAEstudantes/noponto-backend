@@ -6,6 +6,7 @@
 *.zip
 
 lab-output/
+docs/
 
 CONTEXTO_NOPONTO.md
 IDEIAS_FUTURAS_NOPONTO.md

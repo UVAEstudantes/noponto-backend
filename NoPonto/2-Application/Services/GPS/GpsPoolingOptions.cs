@@ -22,6 +22,8 @@ public sealed class GpsPollingOptions
     /// ativa o modo conservador (persiste toda posição elegível).
     /// </summary>
     public int    CheckpointViagemSegundos        { get; set; } = 60;
+    /// <summary>Ativação controlada; ausente/false preserva o fluxo anterior.</summary>
+    public bool MudancaOperacionalHabilitada { get; set; } = false;
 
     /// <summary>
     /// Velocidade mínima em km/h para considerar o bearing do veículo confiável.

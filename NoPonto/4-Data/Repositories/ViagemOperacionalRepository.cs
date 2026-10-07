@@ -10,11 +10,17 @@ using StackExchange.Redis;
 namespace NoPonto.Data.Repositories;
 
 /// <summary>PostgreSQL e a autoridade; Redis recebe somente uma projecao descartavel.</summary>
-public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, NpgsqlDataSource source,
+public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer redis, NpgsqlDataSource source,
     IOptions<GpsPollingOptions> options,
     ILogger<ViagemOperacionalRepository> logger) : IViagemObservadaRepository
 {
     public const string Stream = "noponto:viagem:eventos";
+    public async Task<ContextoOperacional?> LerDuravelParaRetryAsync(string ordem, CancellationToken ct)
+    {
+        await using var connection = await source.OpenConnectionAsync(ct);
+        var durable = await LerDuravelAsync(connection, null, ordem, false, ct);
+        return durable is null ? new([], null, null) : Contexto(durable);
+    }
     internal static readonly TimeSpan ProjectionTtl = TimeSpan.FromHours(24);
     internal string StreamKey { get; init; } = Stream;
     internal Func<Task>? BeforeDurableProjectionAsync { get; init; }
@@ -33,6 +39,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
     {
         if (string.IsNullOrWhiteSpace(ordem)) return null;
         var performance = GpsCommitPerformanceContext.Current;
+        ContextoOperacional? circularCache = null;
         try
         {
             var values = (RedisResult[]?)await redis.GetDatabase().ScriptEvaluateAsync(
@@ -51,9 +58,12 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                     var state = ViagemOperacionalCodec.Decode(ViagemOperacionalCodec.Names
                         .ToDictionary(n => n, n => map[n]), ordem);
                     performance?.RegistrarViagemRedisContextHit();
-                    return new(["postgres", version.ToString(CultureInfo.InvariantCulture)],
+                    if (state.Observada.Topologia != "CIRCULAR")
+                        return new(["postgres", version.ToString(CultureInfo.InvariantCulture)],
                         state.Observada, state, version,
                         new DateTimeOffset(checkpointTicks, TimeSpan.Zero));
+                    circularCache = new(["postgres", version.ToString(CultureInfo.InvariantCulture)],
+                        state.Observada, state, version,new DateTimeOffset(checkpointTicks,TimeSpan.Zero));
                 }
             }
         }
@@ -67,6 +77,18 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
         performance?.RegistrarViagemPgRead();
         var durable = await LerDuravelAsync(connection, null, ordem, false, ct);
         if (durable is null) return new([], null, null);
+        // Integridade SEMPRE vem da autoridade. Preservar snapshots quentes de viagens
+        // confiáveis somente na mesma versão, sem substituir evidência física durável.
+        if (ViagemOperacionalRegra.IdentidadeConfiavel(durable.Estado)
+            && circularCache?.Estado is { } cached && circularCache.VersaoDuravel == durable.Versao
+            && cached.Observada.ViagemId == durable.Estado.Observada.ViagemId
+            && cached.Observada.PadraoVersaoId == durable.Estado.Observada.PadraoVersaoId
+            && cached.Observada.TimestampUltimaAtualizacao >= durable.Estado.Observada.TimestampUltimaAtualizacao)
+        {
+            cached = cached with { Integridade = durable.Estado.Integridade };
+            cached.Integridade?.Validar(cached);
+            return circularCache with { Estado = cached, Observada = cached.Observada };
+        }
         await ProjetarRedisAsync(ordem, durable.Estado, [], durable.Versao, durable.AtualizadoEmUtc, ct);
         return Contexto(durable);
     }
@@ -103,11 +125,37 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             if (observed is not null && gps.TimestampGps <= observed.TimestampUltimaAtualizacao)
                 return new(ViagemObservadaStatus.RejectedOlderOrEqual, observed);
 
+            DecisaoViagem? decisionMudanca = null;
+            TransicaoParadas? baselineMudanca = null;
+            var protegida = previous is not null && !ViagemOperacionalRegra.IdentidadeConfiavel(previous);
+            if (!protegida && options.Value.MudancaOperacionalHabilitada
+                && previous?.Estado is EstadoViagem.Ativa or EstadoViagem.PossivelFim)
+            {
+                await using var leituraMudanca = await source.OpenConnectionAsync(ct);
+                var estruturaObservacional = await EstruturaAsync(leituraMudanca, null, gps, ct);
+                var avaliacao = ViagemOperacionalRegra.AvaliarMudancaSeHabilitada(
+                    options.Value, previous, estruturaObservacional, gps)!;
+                if (avaliacao.Status == StatusMudancaOperacional.MudancaConfirmada)
+                {
+                    baselineMudanca = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(
+                        leituraMudanca, null, itinerary, p, p, Guid.Empty, 0, true, ct,
+                        estruturaObservacional!.Topologia, 0);
+                    if (baselineMudanca.Status != ViagemObservadaStatus.Updated)
+                        return new(baselineMudanca.Status);
+                }
+                decisionMudanca = ViagemOperacionalRegra.AplicarAvaliacaoMudanca(previous, avaliacao,
+                    gps, baselineMudanca, baselineMudanca is null ? Guid.Empty : Guid.NewGuid());
+                // Não deixar Decidir limpar candidatos em observações sem prova positiva.
+                if (decisionMudanca is null && previous.Candidato is not null
+                    && avaliacao.Status == StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente)
+                    return new(ViagemObservadaStatus.ItineraryChanged, observed);
+            }
+
             var gpsOperacional = gps;
             var usandoProjecao = false;
             var divergente = previous?.Estado is EstadoViagem.Ativa or EstadoViagem.PossivelFim
                 && observed!.PadraoVersaoId != itinerary;
-            if (divergente && projecao.Status != StatusProjecaoOperacional.NaoSolicitada)
+            if (!protegida && decisionMudanca is null && divergente && projecao.Status != StatusProjecaoOperacional.NaoSolicitada)
             {
                 if (projecao.Status == StatusProjecaoOperacional.FalhaInfraestrutura)
                     return new(ViagemObservadaStatus.InfrastructureFailure, observed);
@@ -123,44 +171,75 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                     ComprimentoRotaMetros = op.ComprimentoRotaMetros };
                 itinerary = op.PadraoVersaoId; p = op.PosicaoNaRota; usandoProjecao = true;
             }
-            if (previous?.Estado == EstadoViagem.Ativa && observed!.PadraoVersaoId != itinerary)
+            if (!protegida && decisionMudanca is null && previous?.Estado == EstadoViagem.Ativa && observed!.PadraoVersaoId != itinerary)
                 return Divergencia(observed);
 
             await using var connection = await source.OpenConnectionAsync(ct);
-            EstruturaViagem? structure;
-            if (usandoProjecao && previous is not null)
-                structure = new(previous.Observada.PadraoVersaoId, previous.LinhaId,
-                    previous.SentidoId, previous.CodigoLinha, true,
-                    previous.Observada.PadraoOperacionalId, previous.Observada.Topologia);
+            TransicaoParadas transition;
+            bool baseline;
+            DecisaoViagem decision;
+            if (decisionMudanca is not null)
+            {
+                decision = decisionMudanca;
+                baseline = true;
+                transition = baselineMudanca ?? new(ViagemObservadaStatus.Updated,
+                    previous!.Observada.UltimaOcorrenciaParadaPadraoId, previous.Observada.UltimaParadaOrdem, []);
+            }
             else
             {
+                EstruturaViagem? structure;
+                if (usandoProjecao && previous is not null)
+                    structure = new(previous.Observada.PadraoVersaoId, previous.LinhaId,
+                        previous.SentidoId, previous.CodigoLinha, true,
+                        previous.Observada.PadraoOperacionalId, previous.Observada.Topologia);
+                else
+                {
+                    GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
+                    structure = await EstruturaAsync(connection, null, gpsOperacional, ct);
+                }
+                if (structure is null) return new(ViagemObservadaStatus.InvalidSequence);
+                baseline = previous is null || previous.Estado == EstadoViagem.Finalizada
+                    || previous.Observada.PadraoVersaoId != itinerary
+                    || protegida
+                    || (previous.Candidato is not null && (options.Value.MudancaOperacionalHabilitada
+                        || previous.Observada.Topologia == "CIRCULAR"));
                 GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
-                structure = await EstruturaAsync(connection, null, gpsOperacional, ct);
+                transition = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(connection, null,
+                    itinerary, protegida || (baseline && previous?.Candidato is not null
+                        && previous.Observada.Topologia == "CIRCULAR") ? p
+                        : PosicaoInicialTransicao(previous, itinerary, p, baseline,
+                            options.Value.MudancaOperacionalHabilitada), p,
+                    baseline ? Guid.Empty : previous!.Observada.UltimaOcorrenciaParadaPadraoId,
+                    baseline ? 0 : previous!.Observada.UltimaParadaOrdem, baseline, ct,
+                    structure.Topologia, previous is null || previous.Estado == EstadoViagem.Finalizada
+                        || previous.Observada.PadraoVersaoId != itinerary ? 0 : previous.Observada.Volta);
+                if (transition.Status != ViagemObservadaStatus.Updated) return new(transition.Status);
+                var provaCircular = previous?.Observada.Topologia == "CIRCULAR"
+                    && (protegida || previous.Candidato is not null)
+                    ? await BuscarProvaCircularAsync(connection, previous, structure, gpsOperacional, ct) : null;
+                decision = ViagemOperacionalRegra.Decidir(previous, structure, gpsOperacional,
+                    transition, Guid.NewGuid(), adocaoLegado: options.Value.MudancaOperacionalHabilitada
+                        && previous?.Candidato is not null, provaCircular: provaCircular, opcoes: options.Value);
+                if (previous is not null && transition.Ultrapassadas.Count > 0)
+                    GpsCommitPerformanceContext.Current?.RegistrarCatchupPassagens(
+                        transition.Ultrapassadas.Count,
+                        gpsOperacional.TimestampGps - previous.Observada.TimestampUltimaAtualizacao);
             }
-            if (structure is null) return new(ViagemObservadaStatus.InvalidSequence);
-            var baseline = previous is null || previous.Estado == EstadoViagem.Finalizada
-                || previous.Observada.PadraoVersaoId != itinerary;
-            GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
-            var transition = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(connection, null,
-                itinerary, previous is null || previous.Observada.PadraoVersaoId != itinerary
-                    ? p : previous.Observada.PosicaoNaRotaConfirmada, p,
-                baseline ? Guid.Empty : previous!.Observada.UltimaOcorrenciaParadaPadraoId,
-                baseline ? 0 : previous!.Observada.UltimaParadaOrdem, baseline, ct,
-                structure.Topologia, baseline ? 0 : previous!.Observada.Volta);
-            if (transition.Status != ViagemObservadaStatus.Updated) return new(transition.Status);
-            var decision = ViagemOperacionalRegra.Decidir(previous, structure, gpsOperacional,
-                transition, Guid.NewGuid());
-            if (previous is not null && transition.Ultrapassadas.Count > 0)
-                GpsCommitPerformanceContext.Current?.RegistrarCatchupPassagens(
-                    transition.Ultrapassadas.Count,
-                    gpsOperacional.TimestampGps - previous.Observada.TimestampUltimaAtualizacao);
+            // Flag false não cria âncoras novas em viagens antigas confiáveis. Uma proteção
+            // já existente ou recém-necessária por candidato antigo jamais é removida.
+            if (!options.Value.MudancaOperacionalHabilitada && previous?.Integridade is null
+                && decision.Estado.Integridade?.Continuidade == ContinuidadeCircular.Confiavel)
+                decision = decision with { Estado = decision.Estado with { Integridade = null } };
             foreach (var evento in decision.Eventos) EventoViagemValidator.Validar(evento);
             var checkpointSeconds = options.Value.CheckpointViagemSegundos;
             var checkpointInterval = checkpointSeconds <= 0
                 ? TimeSpan.Zero : TimeSpan.FromSeconds(checkpointSeconds);
-            var motivo = PersistenciaViagemOperacional.DevePersistirDuravelmente(previous,
+            var motivo = decisionMudanca is not null || protegida ? MotivoPersistenciaViagem.Semantica
+                : PersistenciaViagemOperacional.DevePersistirDuravelmente(previous,
                 decision.Estado, decision.Eventos, contexto?.UltimoCheckpointUtc,
                 UtcNow(), checkpointInterval);
+            if (gps.ExigirPersistenciaDuravel && motivo == MotivoPersistenciaViagem.Nenhum)
+                motivo = MotivoPersistenciaViagem.Checkpoint;
             if (motivo == MotivoPersistenciaViagem.Nenhum)
             {
                 try
@@ -178,6 +257,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                     GpsCommitPerformanceContext.Current?.RegistrarViagemDurableWriteSkipped();
                     return new(ViagemObservadaStatus.Updated, decision.Estado.Observada)
                     {
+                        EstadoOperacional = decision.Estado,
                         OcorrenciasUltrapassadas = [], ProximaOcorrenciaOperacional = transition.Proxima
                     };
                 }
@@ -208,18 +288,30 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
                     && gps.TimestampGps <= atualDuravel.TimestampUltimaAtualizacao
                     ? new(ViagemObservadaStatus.RejectedOlderOrEqual, atualDuravel)
                     : new(ViagemObservadaStatus.Conflict, durable?.Estado.Observada ?? contexto?.Observada);
+            if (previous?.Integridade != durable?.Estado.Integridade)
+                return new(ViagemObservadaStatus.Conflict,durable?.Estado.Observada);
             var encoded = ViagemOperacionalCodec.Encode(decision.Estado);
+            decision.Estado.Integridade?.Validar(decision.Estado);
             _ = ViagemOperacionalCodec.Decode(ViagemOperacionalCodec.Names.Zip(encoded)
                 .ToDictionary(x => x.First, x => x.Second), gps.Ordem);
             foreach (var evento in decision.Eventos) EventoViagemValidator.Validar(evento);
             var nextVersion = (durable?.Versao ?? 0) + 1;
-            await GravarEstadoAsync(connection, transaction, gps.Ordem, encoded, nextVersion, ct);
+            await GravarEstadoAsync(connection, transaction, gps.Ordem, encoded, nextVersion,
+                decision.Estado.Integridade, ct);
             if (AfterDurableStateWriteAsync is not null)
                 await AfterDurableStateWriteAsync();
             await InserirOutboxAsync(connection, transaction, decision.Eventos, ct);
             if (AfterDurableOutboxWriteAsync is not null)
                 await AfterDurableOutboxWriteAsync();
             await transaction.CommitAsync(ct);
+            if (decision.Estado.Integridade?.Continuidade == ContinuidadeCircular.Ambigua
+                && previous?.Integridade?.Continuidade != ContinuidadeCircular.Ambigua)
+                logger.LogWarning("Viagem circular {viagem} de {ordem} protegida: {motivo}.",
+                    decision.Estado.Observada.ViagemId, gps.Ordem, decision.Estado.Integridade.Motivo);
+            else if (previous?.Integridade?.Continuidade == ContinuidadeCircular.Ambigua
+                && ViagemOperacionalRegra.IdentidadeConfiavel(decision.Estado))
+                logger.LogInformation("Continuidade de {ordem} recuperada: execução {anterior} -> {atual}, volta {volta}.",
+                    gps.Ordem,previous.Observada.ViagemId,decision.Estado.Observada.ViagemId,decision.Estado.Observada.Volta);
             var checkpointUtc = UtcNow();
             GpsCommitPerformanceContext.Current?.RegistrarViagemDurableWrite(
                 motivo == MotivoPersistenciaViagem.Checkpoint, decision.Eventos.Count);
@@ -230,6 +322,8 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             var status = durable is null ? ViagemObservadaStatus.Created : ViagemObservadaStatus.Updated;
             return new(status, decision.Estado.Observada)
             {
+                PersistidoDuravelmente = true,
+                EstadoOperacional = decision.Estado,
                 OcorrenciasUltrapassadas = status == ViagemObservadaStatus.Updated && !baseline
                     && previous?.Estado != EstadoViagem.Finalizada ? transition.Ultrapassadas : [],
                 ProximaOcorrenciaOperacional = transition.Proxima,
@@ -247,6 +341,12 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
         }
     }
 
+    internal static double PosicaoInicialTransicao(ViagemOperacionalState? anterior,
+        Guid versao, double atual, bool baseline, bool mudancaHabilitada) =>
+        anterior is null || anterior.Observada.PadraoVersaoId != versao
+            || (baseline && mudancaHabilitada && anterior.Candidato is not null)
+            ? atual : anterior.Observada.PosicaoNaRotaConfirmada;
+
     private static ContextoOperacional Contexto(EstadoDuravel durable) => new(
         ["postgres", durable.Versao.ToString(CultureInfo.InvariantCulture)],
         durable.Estado.Observada, durable.Estado, durable.Versao, durable.AtualizadoEmUtc);
@@ -259,7 +359,7 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
     private static async Task<EstadoDuravel?> LerDuravelAsync(NpgsqlConnection connection,
         NpgsqlTransaction? transaction, string ordem, bool forUpdate, CancellationToken ct)
     {
-        var sql = "SELECT \"Estado\"::text, \"Versao\", \"AtualizadoEmUtc\" FROM \"ViagensOperacionais\" WHERE \"OrdemVeiculo\"=@ordem"
+        var sql = "SELECT \"Estado\"::text, \"Versao\", \"AtualizadoEmUtc\", \"IntegridadeCircular\"::text FROM \"ViagensOperacionais\" WHERE \"OrdemVeiculo\"=@ordem"
             + (forUpdate ? " FOR UPDATE" : "");
         await using var command = new NpgsqlCommand(sql, connection, transaction);
         command.Parameters.AddWithValue("ordem", ordem);
@@ -271,21 +371,30 @@ public sealed class ViagemOperacionalRepository(IConnectionMultiplexer redis, Np
             throw new FormatException("Versao desconhecida do estado duravel.");
         var state = ViagemOperacionalCodec.Decode(ViagemOperacionalCodec.Names.Take(values.Length).Zip(values)
             .ToDictionary(x => x.First, x => x.Second), ordem);
+        if (!reader.IsDBNull(3))
+        {
+            state = state with { Integridade = JsonSerializer.Deserialize<IntegridadeCircular>(reader.GetString(3))
+                ?? throw new FormatException("Integridade circular vazia.") };
+            state.Integridade.Validar(state);
+        }
         return new(state, reader.GetInt64(1), reader.GetFieldValue<DateTimeOffset>(2));
     }
 
     private static async Task GravarEstadoAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
-        string ordem, string[] state, long version, CancellationToken ct)
+        string ordem, string[] state, long version, IntegridadeCircular? integridade, CancellationToken ct)
     {
         await using var command = new NpgsqlCommand("""
-            INSERT INTO "ViagensOperacionais" ("OrdemVeiculo","Estado","Versao","AtualizadoEmUtc")
-            VALUES (@ordem,@estado::jsonb,@versao,now())
+            INSERT INTO "ViagensOperacionais" ("OrdemVeiculo","Estado","Versao","AtualizadoEmUtc","IntegridadeCircular")
+            VALUES (@ordem,@estado::jsonb,@versao,now(),@integridade::jsonb)
             ON CONFLICT ("OrdemVeiculo") DO UPDATE SET
-                "Estado"=EXCLUDED."Estado", "Versao"=EXCLUDED."Versao", "AtualizadoEmUtc"=EXCLUDED."AtualizadoEmUtc"
+                "Estado"=EXCLUDED."Estado", "Versao"=EXCLUDED."Versao", "AtualizadoEmUtc"=EXCLUDED."AtualizadoEmUtc",
+                "IntegridadeCircular"=EXCLUDED."IntegridadeCircular"
             """, connection, transaction);
         command.Parameters.AddWithValue("ordem", ordem);
         command.Parameters.AddWithValue("estado", JsonSerializer.Serialize(state));
         command.Parameters.AddWithValue("versao", version);
+        command.Parameters.Add(new NpgsqlParameter("integridade", NpgsqlTypes.NpgsqlDbType.Text)
+            { Value = integridade is null ? DBNull.Value : JsonSerializer.Serialize(integridade) });
         await command.ExecuteNonQueryAsync(ct);
     }
 

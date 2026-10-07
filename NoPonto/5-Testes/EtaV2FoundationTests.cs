@@ -108,6 +108,60 @@ public sealed class EtaV2FoundationTests
     }
 
     [Fact]
+    public void Shadow_IntegridadeCircularAmbigua_NaoProduzLabels()
+    {
+        var repo=new RecordingIngress(); var data=Scenario(); var o=data.Trip.Estado!;
+        var p=data.Enrichment.Posicao;
+        o=o with {Topologia="CIRCULAR",PadraoOperacionalId=p.PadraoOperacionalId!.Value};
+        var s=new ViagemOperacionalState(o,p.CodigoLinha,p.LinhaId!.Value,p.SentidoId!.Value);
+        s=s with {Integridade=new(o.ViagemId,s.LinhaId,s.SentidoId,o.PadraoOperacionalId,o.PadraoVersaoId,
+            o.Volta,ContinuidadeCircular.Ambigua,null,o.TimestampUltimaAtualizacao,"ContagemCircularNaoComprovada")};
+        Assert.False(Service(repo).TryRecord(data.Enrichment,data.Trip with {Estado=o,EstadoOperacional=s}));
+        Assert.Empty(repo.Requests);
+    }
+
+    [Theory]
+    [InlineData("linha")]
+    [InlineData("sentido")]
+    [InlineData("codigo")]
+    [InlineData("fase")]
+    [InlineData("snapshot")]
+    public void Shadow_EstadoOperacionalDivergenteNaoEntraNaFila(string campo)
+    {
+        var repo = new RecordingIngress(); var data = Scenario();
+        var p = data.Enrichment.Posicao with { TopologiaPadrao = "LINEAR" };
+        var s = new ViagemOperacionalState(data.Trip.Estado!, p.CodigoLinha,
+            p.LinhaId!.Value, p.SentidoId!.Value);
+        if (campo == "linha") s = s with { LinhaId = Guid.NewGuid() };
+        if (campo == "sentido") s = s with { SentidoId = Guid.NewGuid() };
+        if (campo == "codigo") s = s with { CodigoLinha = "OUTRA" };
+        if (campo == "fase") s = s with { Estado = EstadoViagem.Finalizada };
+        if (campo == "snapshot") s = s with { Observada = s.Observada with { Volta = 2 } };
+        Assert.False(Service(repo).TryRecord(data.Enrichment with { Posicao = p },
+            data.Trip with { EstadoOperacional = s }));
+        Assert.Empty(repo.Requests);
+    }
+
+    [Theory]
+    [InlineData("veiculo")]
+    [InlineData("timestamp")]
+    [InlineData("padrao")]
+    [InlineData("versao_alvo")]
+    public void Shadow_IdentidadeIncoerenteNaoEntraNaFila(string campo)
+    {
+        var repo = new RecordingIngress(); var data = Scenario();
+        var p = data.Enrichment.Posicao;
+        var target = data.Target;
+        if (campo == "veiculo") p = p with { Ordem = "OUTRO" };
+        if (campo == "timestamp") p = p with { TimestampGps = p.TimestampGps.AddSeconds(1) };
+        if (campo == "padrao") p = p with { PadraoOperacionalId = Guid.NewGuid() };
+        if (campo == "versao_alvo") target = target with { PadraoVersaoId = Guid.NewGuid() };
+        Assert.False(Service(repo).TryRecord(data.Enrichment with { Posicao = p },
+            data.Trip with { ProximaOcorrenciaOperacional = target }));
+        Assert.Empty(repo.Requests);
+    }
+
+    [Fact]
     public void Shadow_FlagDesligadaNaoProduzEvento()
     {
         var repo = new RecordingIngress(); var data = Scenario();

@@ -8,6 +8,24 @@ namespace NoPonto.Tests;
 
 public sealed class GpsBrtTelemetriaTests
 {
+    [Theory]
+    [InlineData("42")]
+    [InlineData("43")]
+    public async Task BRT_CodigosDiferentesPreservamMesmoVeiculo(string linha)
+    {
+        var timestamp = DateTimeOffset.UtcNow.AddSeconds(-5).ToUnixTimeMilliseconds();
+        var json = $$"""
+            {"veiculos":[{"codigo":"902090","linha":"{{linha}}","latitude":-22.9,
+            "longitude":-43.2,"velocidade":25,"dataHora":{{timestamp}},"direcao":"90"}]}
+            """;
+        using var http = new HttpClient(new Handler(json)) { BaseAddress = new Uri("https://brt.test/") };
+        var posicao = Assert.Single((await new GpsBrtClient(http,
+            NullLogger<GpsBrtClient>.Instance).BuscarResultadoAsync()).Posicoes);
+        Assert.Equal("BRT-902090", posicao.Ordem);
+        Assert.Equal(linha, posicao.CodigoLinha);
+        Assert.Equal("BRT", posicao.ModalFonte);
+    }
+
     [Fact]
     public async Task BRT_PreservaSomenteTimestampExistenteENaoInventaZirix()
     {

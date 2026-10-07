@@ -42,6 +42,7 @@ public sealed class GpsPollingService : BackgroundService
     private readonly EtaV2ShadowService? _etaV2Shadow;
     private readonly ITelemetriaMlSamplingPolicy? _telemetriaMlSampling;
     private readonly TelemetriaMlMetrics? _telemetriaMlMetrics;
+    private readonly IRetryOperacionalGps? _retryOperacional;
     private long _ultimoErroSamplingLogUnixMinute = long.MinValue;
 
     public GpsPollingService(
@@ -64,7 +65,8 @@ public sealed class GpsPollingService : BackgroundService
         GpsStructuralHintMetrics? structuralHintMetrics = null,
         EtaV2ShadowService? etaV2Shadow = null,
         ITelemetriaMlSamplingPolicy? telemetriaMlSampling = null,
-        TelemetriaMlMetrics? telemetriaMlMetrics = null)
+        TelemetriaMlMetrics? telemetriaMlMetrics = null,
+        IRetryOperacionalGps? retryOperacional = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -88,6 +90,7 @@ public sealed class GpsPollingService : BackgroundService
         _etaV2Shadow = etaV2Shadow;
         _telemetriaMlSampling = telemetriaMlSampling;
         _telemetriaMlMetrics = telemetriaMlMetrics;
+        _retryOperacional = retryOperacional;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -167,6 +170,7 @@ public sealed class GpsPollingService : BackgroundService
         TimeSpan? startToStart,
         CancellationToken ct)
     {
+        if (_retryOperacional is not null) await _retryOperacional.ExecutarCicloAsync(ct);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var performance = new GpsCicloPerformance(
             agora, (long)opcoes.IntervaloSegundos * 1000)
@@ -391,6 +395,8 @@ public sealed class GpsPollingService : BackgroundService
                         finally { semaforo.Release(); }
                     }));
             }
+            enriquecimentos = enriquecimentos.Select((x, i) => x with
+                { PredecessorFisico = paraEnriquecer[i].Anterior }).ToArray();
             resultadosEnriquecidos = enriquecimentos.Select(x => x.Posicao).ToArray();
         }
         performance.MatchingEtapaMs = (long)System.Diagnostics.Stopwatch
@@ -1084,11 +1090,15 @@ public sealed class GpsPollingService : BackgroundService
                 posicao, null, ResultadoProjecaoOperacional.NaoSolicitada()),
             ttlAtivo, ttlRecente, ct, performance);
 
-    private async Task<PosicaoVeiculoCacheResultado> ConfirmarPosicaoAsync(
+    internal async Task<PosicaoVeiculoCacheResultado> ConfirmarPosicaoAsync(
         ResultadoEnriquecimentoGps enriquecimento, TimeSpan ttlAtivo, TimeSpan ttlRecente,
         CancellationToken ct, GpsCicloPerformance? performance = null)
     {
         var posicao = enriquecimento.Posicao;
+        var matchingIndisponivel = enriquecimento.Diagnostico?.StatusGlobal == StatusBuscaPadrao.InfrastructureFailure
+            || enriquecimento.Diagnostico?.StatusDirecionado == StatusBuscaPadrao.InfrastructureFailure;
+        if (_retryOperacional is not null)
+            await _retryOperacional.RecuperarVeiculoAsync(posicao.Ordem, ct);
         var inicioCommit = System.Diagnostics.Stopwatch.GetTimestamp();
         var resultado = await _posicaoCache.TentarAtualizarAsync(
             posicao.Ordem, posicao, posicao.TimestampGps, ttlAtivo, ttlRecente, ct);
@@ -1098,7 +1108,24 @@ public sealed class GpsPollingService : BackgroundService
         {
             performance?.RegistrarViagemChamada();
             var inicioViagem = System.Diagnostics.Stopwatch.GetTimestamp();
-            var viagem = await _viagemObservada.AtualizarAsync(enriquecimento, ct);
+            ViagemObservadaResultado? viagem;
+            if (_retryOperacional is not null && await _retryOperacional.TemPendenciaAsync(posicao.Ordem, ct))
+            {
+                // Mapa aceito; não ultrapassar observação operacional anterior em backoff/lease.
+                if (posicao.PadraoVersaoId is not null || matchingIndisponivel)
+                    await _retryOperacional.RegistrarAsync(posicao, enriquecimento.PredecessorFisico,
+                        enriquecimento.ContextoOperacional, ct, aguardandoAnterior: true);
+                viagem = null;
+            }
+            else
+            {
+                viagem = await _viagemObservada.AtualizarAsync(enriquecimento, ct);
+                if (_retryOperacional is not null && (viagem?.Status is
+                    ViagemObservadaStatus.InfrastructureFailure or ViagemObservadaStatus.Conflict
+                    || (viagem is null && matchingIndisponivel)))
+                    await _retryOperacional.RegistrarAsync(posicao, enriquecimento.PredecessorFisico,
+                        enriquecimento.ContextoOperacional, ct);
+            }
             performance?.RegistrarViagem(viagem,
                 System.Diagnostics.Stopwatch.GetElapsedTime(inicioViagem));
             // Hot path estritamente não bloqueante: nenhuma conexão/query PostgreSQL ETA.

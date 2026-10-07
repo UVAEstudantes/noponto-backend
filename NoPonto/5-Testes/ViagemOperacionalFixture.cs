@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using NoPonto.Data.Configuration;
 using NoPonto.Domain.Entities;
+using NoPonto.Application.GPS;
 using Npgsql;
 using StackExchange.Redis;
 using Xunit;
@@ -86,5 +87,45 @@ public sealed class ViagemOperacionalFixture : IAsyncLifetime
             await command.ExecuteNonQueryAsync();
             await _admin.DisposeAsync();
         }
+    }
+
+    internal async Task<EstruturaViagem> CriarCircularAsync()
+    {
+        // Identidades e código exclusivos; não modificar/publicar versões compartilhadas.
+        using var scope=Provider.CreateScope();
+        var context=scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
+        var linha=Guid.NewGuid(); var sentido=Guid.NewGuid(); var padrao=Guid.NewGuid(); var versao=Guid.NewGuid();
+        var modal=await context.Modais.Select(x=>x.Id).FirstAsync();
+        var codigo="CIRC-"+linha.ToString("N")[..8];
+        context.Linhas.Add(new(){Id=linha,ModalId=modal,Codigo=codigo,Nome="Circular isolada"});
+        context.Sentidos.Add(new(){Id=sentido,LinhaId=linha,Nome="Circular dirigido"});
+        var p=new PadraoOperacional{Id=padrao,Ativo=true,SentidoId=sentido,Chave=codigo,TipoServico="TESTE"};
+        context.PadroesOperacionais.Add(p);
+        await context.SaveChangesAsync();
+        context.PadroesVersoes.Add(new(){Id=versao,PadraoOperacionalId=padrao,Numero=1,Topologia="CIRCULAR",
+            Geometria=new LineString([new(-43.21,-22.9),new(-43.205,-22.9),new(-43.205,-22.895),
+                new(-43.215,-22.895),new(-43.215,-22.9),new(-43.21,-22.9)]){SRID=4326},
+            ComprimentoMetros=3000,HashEstrutural=versao.ToString("N"),MetodoConstrucao="TESTE",AlgoritmoVersao="TESTE",
+            Confianca=1,ResultadoValidacao=ResultadosValidacaoPadrao.Valida,Relatorio="{}",CriadoEmUtc=DateTimeOffset.UtcNow});
+        for(var i=1;i<=4;i++) context.OcorrenciasParadasPadroes.Add(new(){Id=Guid.NewGuid(),PadraoVersaoId=versao,
+            ParadaId=Stop,Ordem=i,PosicaoTracado=i*.2,DistanciaAcumuladaMetros=i*600,DistanciaDaLinhaMetros=0});
+        await context.SaveChangesAsync();
+        p.VersaoAtualId=versao; await context.SaveChangesAsync();
+        return new(versao,linha,sentido,codigo,true,padrao,"CIRCULAR");
+    }
+
+    internal async Task<(double Latitude,double Longitude,double Comprimento,double Bearing)> PontoCircularAsync(Guid versao,double posicao)
+    {
+        await using var command=Source.CreateCommand("""
+            SELECT ST_Y(ST_LineInterpolatePoint("Geometria",@p)),ST_X(ST_LineInterpolatePoint("Geometria",@p)),
+                ST_Length("Geometria"::geography),degrees(ST_Azimuth(
+                    ST_LineInterpolatePoint("Geometria",greatest(0,@p-0.025))::geography,
+                    ST_LineInterpolatePoint("Geometria",least(1,@p+0.025))::geography))
+            FROM "PadroesVersoes" WHERE "Id"=@id
+            """);
+        command.Parameters.AddWithValue("id",versao); command.Parameters.AddWithValue("p",posicao);
+        await using var reader=await command.ExecuteReaderAsync();
+        if(!await reader.ReadAsync()) throw new InvalidOperationException("Versão circular de teste ausente.");
+        return (reader.GetDouble(0),reader.GetDouble(1),reader.GetDouble(2),reader.GetDouble(3));
     }
 }

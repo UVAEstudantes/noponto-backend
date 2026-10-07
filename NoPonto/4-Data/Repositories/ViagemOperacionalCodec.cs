@@ -75,7 +75,13 @@ internal static class ViagemOperacionalCodec
         {
             candidate = new(Id(V(14)), Id(V(15)), Id(V(18)), Time(V(16)), Progress(V(17)),
                 Coordinate(V(19), -90, 90), Coordinate(V(20), -180, 180));
-            if (phase != EstadoViagem.Finalizada || candidate.Timestamp > obs.TimestampUltimaAtualizacao)
+            // Compatibilidade de leitura antecipada; as regras atuais só criam candidatos após Finalizada.
+            // Preservar candidatos antigos de Finalizada, inclusive coordenadas opcionais.
+            if (candidate.Timestamp > obs.TimestampUltimaAtualizacao
+                || (phase != EstadoViagem.Finalizada
+                    && (phase is not (EstadoViagem.Ativa or EstadoViagem.PossivelFim)
+                        || candidate.Timestamp < obs.TimestampObservacaoInicial
+                        || candidate.LatitudeInicial is null || candidate.LongitudeInicial is null)))
                 throw new FormatException("Candidato inconsistente.");
         }
         else if (V(19) != "" || V(20) != "") throw new FormatException("Coordenada de candidato órfã.");

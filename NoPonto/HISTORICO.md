@@ -1,0 +1,605 @@
+# Histórico de alterações
+
+Registro incremental do trabalho efetivamente realizado. Acrescentar novas entradas sem substituir as anteriores. Não registrar credenciais ou dados sensíveis.
+
+Cada entrada deve conter: data, objetivo, problema identificado, arquivos modificados, alterações implementadas, decisões técnicas e justificativas, testes e resultados, pendências e limitações.
+
+## 2026-10-06 — Etapa 1: integridade da telemetria ML
+
+### Objetivo
+
+Impedir associação de GPS válido a identidade operacional incompatível, preservando a coleta e o matching observacional. Inicializar as regras permanentes e este histórico.
+
+### Problema identificado
+
+`EventoTelemetriaMlFactory.Criar` copiava viagem, volta e próxima ocorrência do resultado operacional sem verificar status, fase ou compatibilidade com linha, sentido e versão do matching atual. O resultado observado sozinho não transportava linha, sentido e fase da decisão operacional. O validator de telemetria aceita campos operacionais nulos e não dispõe do contexto necessário para verificar essa associação.
+
+### Arquivos modificados
+
+- `AGENTS.md`: regras permanentes solicitadas.
+- `NoPonto/HISTORICO.md`: estrutura incremental e esta entrada.
+- `NoPonto/2-Application/Services/GPS/ViagemObservadaState.cs`: propriedade interna opcional `EstadoOperacional` no resultado.
+- `NoPonto/4-Data/Repositories/ViagemOperacionalRepository.cs`: transporte da decisão operacional confirmada nos retornos de sucesso, tanto quente como durável.
+- `NoPonto/2-Application/Services/GPS/TelemetriaMl.cs`: validação de compatibilidade antes da associação e comentários sobre a semântica dos campos.
+- `NoPonto/5-Testes/TelemetriaMlIdentidadeTests.cs`: casos de compatibilidade, divergência, ausência, fallback e round-trip do payload.
+- `NoPonto/5-Testes/TelemetriaMlTests.cs`: fixture compatível com a identidade completa exigida.
+- `NoPonto/5-Testes/ViagemObservadaServiceTests.cs`: regressão pelo polling para GPS aceito com viagem divergente.
+
+### Alterações implementadas
+
+A fábrica associa viagem e volta somente em resultados Created/Updated com fase Ativa/PossivelFim, estado observado consistente, veículo e timestamp iguais, identificadores não vazios e linha, código, sentido, versão, padrão operacional e topologia compatíveis. Quando existe próxima ocorrência operacional, ela deve pertencer à mesma versão e ter identificador não vazio.
+
+Sem identidade confiável, mantém GPS, timestamps, velocidade, posição, distância e matching observacional; `ViagemId`, `Volta` e `ProximaOcorrenciaParadaPadraoId` ficam nulos. `OcorrenciaParadaPadraoId` mantém o fallback observacional. Em viagem compatível sem próxima ocorrência operacional, preserva viagem/volta e o fallback já existente.
+
+### Decisões técnicas e justificativas
+
+- A verificação ocorre na fábrica, onde estão disponíveis observação e decisão operacional. Não endurecer o validator do consumidor evita rejeitar eventos antigos já enfileirados por uma regra que exige contexto ausente no payload.
+- A propriedade adicionada pertence somente ao contrato CLR interno. Nenhuma coluna, migration, DTO HTTP ou campo do payload Redis foi acrescentado. O nome JSON legado da próxima ocorrência foi preservado.
+- Usar campos operacionais já anuláveis foi a menor representação segura dentro do schema atual. A identidade divergente continua existindo no estado operacional; esta etapa não a duplica na telemetria como associação confiável. Persistir diagnóstico completo da divergência exigiria proposta separada de schema/contrato.
+- Foram inspecionados entidade, mapeamento EF, repositório, validator, publisher, worker e referências à telemetria. Os consumidores atuais aceitam esses campos nulos; testes verificam validator, serialização e aceite/publicação pelo polling.
+- Não foram alterados ciclo de vida, detector de passagens, histórico existente, infraestrutura ou credenciais. A alteração prévia em `NoPonto/.gitignore` foi preservada e não pertence a esta execução. Nenhum commit foi criado.
+
+### Testes e resultados
+
+- Primeira rodada: 128 testes aprovados, zero falhas.
+- Rodada final após adicionar regressão pelo polling: 130 testes aprovados, zero falhas, zero ignorados.
+- Comando final, sem restore/download de dependências:
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~TelemetriaMlIdentidadeTests|FullyQualifiedName~TelemetriaMlTests|FullyQualifiedName~ViagemObservadaServiceTests|FullyQualifiedName~ViagemOperacionalRegraTests|FullyQualifiedName~TelemetriaMlSamplingTests|FullyQualifiedName~GpsBrtTelemetriaTests' --verbosity quiet
+```
+
+- `git diff --check`: aprovado. Git avisou sobre normalização LF/CRLF.
+- Compilação apresentou warnings preexistentes CS8981 (`tarifas`) e CS7022 (entry point do SDK de testes); nenhum erro de compilação.
+- Não executados testes de integração com PostgreSQL/PostGIS/Redis reais, suíte completa ou validação de SignalR em infraestrutura. Não foi iniciado Docker nem acessada produção. Para execução manual futura, somente com banco/Redis explicitamente isolados e autorizados, usar `dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~TelemetriaMlIntegracaoTests|FullyQualifiedName~ViagemDuravelPostgresTests'` após configurar o ambiente de testes exigido pelas fixtures.
+
+### Pendências e limitações
+
+- Viagens antigas podem continuar ativas: política de encerramento está fora desta etapa.
+- Telemetrias históricas e eventos já enfileirados não são corrigidos retroativamente.
+- Ausência versus divergência operacional não ganha motivo persistido distinto; ambas deixam a associação indisponível no schema existente.
+- Qualidade temporal das passagens e volta do alvo circular continuam pendentes. Esta correção não certifica labels ETA e não altera sua geração.
+- Integração real entre retornos quente/durável e persistência foi revisada no código, mas não executada contra serviços externos nesta sessão.
+
+## 2026-10-06 — Etapa 2A: diagnóstico e proposta para divergência sustentada
+
+### Objetivo
+
+Investigar transição segura de viagens presas por mudança operacional sustentada, preservando a Etapa 1, as alterações prévias e as restrições sobre contratos persistidos. Não implementar expiração por inatividade, nova detecção de terminal, ETA ou reprocessamento.
+
+### Problema identificado e evidências
+
+- `ViagemOperacionalRepository.TentarAtualizarInternoAsync`, linhas 108–127: divergência de versão em Ativa/PossivelFim retorna antecipadamente quando a projeção antiga é inelegível; falha de infraestrutura retorna sem transição. Não acumula evidência da operação nova. Se a projeção antiga é válida, substitui o GPS operacional pelo padrão antigo antes da decisão.
+- `GpsItinerarRepository`, linhas 233–241: projeção operacional com identidade validada exige também código da linha antiga igual ao código GPS atual. Mudanças reais de código podem impedir a projeção que concluiria a viagem antiga.
+- `ViagemOperacionalRegra.Decidir`, linhas 115–130: divergência preserva identidade e limpa candidato; não registra sequência de observações do novo padrão. Repetir a divergência não confirma mudança.
+- `DecidirAposFinalizada`, linhas 172–230: o candidato existente confirma início somente depois de Finalizada. Exige sentido inequívoco, identidade consistente, janela máxima de 180 segundos, deslocamento físico e progresso de pelo menos 10 metros. Os 10 metros são tolerância espacial contra jitter; a janela limita idade da evidência, não é duração mínima de divergência.
+- `ViagemOperacionalCodec.Decode`, linhas 67–79: candidato só é válido em Finalizada; fases não Ativa exigem cursor não vazio. O repositório faz Encode/Decode antes de gravar e usa o mesmo codec para recuperação durável. Candidato em Ativa/PossivelFim seria rejeitado.
+- `ViagemOperacionalRedisScript.Commit`, linhas 97–104, também valida candidato apenas em Finalizada. Esse script é legado/testado; o fluxo registrado atual usa ProjectDurable/CommitHot e a validação C# do codec. Não confundir os caminhos.
+- Testes de regras exigem preservação em outra linha, sentido e versão; testes de integração explicitam congelamento quando a projeção é inelegível e preservação de versão pinada após mudança do pointer publicado.
+
+### Bloqueio e decisão desta execução
+
+Nenhum código funcional ou teste foi modificado. A solicitação exige parar antes de alterar contrato persistido e não inventar critérios de domínio. Acumular candidato em Ativa/PossivelFim mudaria o conjunto de estados válidos do contrato persistido, mesmo mantendo os mesmos 27 elementos. Memória local ou Redis isoladamente não atendem recuperação após reinício e perda do cache. Finalizar no primeiro GPS para aproveitar o candidato existente destruiria a garantia contra oscilação transitória; também falharia no contrato para viagens sem cursor.
+
+Os critérios já existentes podem ser reaproveitados tecnicamente, mas sua aplicação ao abandono de uma viagem ativa precisa ser aprovada como política de domínio. Permanecem em aberto: evidência suficiente para mudar, precedência da projeção antiga válida, diferença entre versão geométrica nova e mudança real de operação, e significado do horário de encerramento inferido.
+
+### Arquivos modificados
+
+- Somente `NoPonto/HISTORICO.md`: esta entrada de diagnóstico, proposta, verificação e pendências. Os arquivos da Etapa 1 e a alteração prévia em `.gitignore` foram preservados.
+
+### Proposta técnica específica para aprovação — não implementada
+
+1. Definir identidade operacional como linha/sentido/padrão/topologia, mantendo versão como identidade geométrica da evidência. Uma troca isolada de versão não deve ser declarada troca de operação automaticamente; preservar a regra de versão pinada enquanto a projeção anterior for válida. Decidir explicitamente a política quando só muda a versão e a projeção antiga deixa de ser possível.
+2. Aprovar ou substituir a aplicação dos critérios existentes de candidato à divergência: observações com timestamps distintos, sentido inequívoco, identidade candidata consistente, movimento físico/progresso concordantes de pelo menos 10 metros dentro da janela máxima de 180 segundos. Usar o orçamento de plausibilidade já existente para impedir saltos. Esses critérios são uma proposta de reaproveitamento, não uma política já existente de mudança sustentada.
+3. Aprovar extensão semântica dos campos de candidato nas posições 15–21 para Ativa/PossivelFim, sem alterar ordem, quantidade ou representação dos 27 elementos. Recuperar padrão e topologia do candidato pela versão e estrutura relacional validada. Atualizar codec/validações e verificar leitores antigos, coexistência de versões e rollback: o binário antigo rejeita candidatos nessas fases. Alternativa: armazenamento dedicado versionado de evidências, que exigiria schema/migration fora do escopo atual.
+4. No repositório, avaliar a estrutura observacional antes dos retornos de divergência. Falha de infraestrutura não conta como evidência positiva de troca. Persistir criação/substituição/cancelamento de candidato como mudança semântica durável sob os locks e versão já existentes. Decidir se evidência sustentada da operação nova pode superar uma projeção válida no padrão antigo, pois percursos compartilhados podem permitir ambas.
+5. Retorno à operação original cancela candidato; oscilação entre candidatos substitui a evidência; observação duplicada/antiga não conta; candidato vencido/ambíguo não confirma mudança. Em circular, conservar ViagemId e Volta na continuidade normal e não interpretar automaticamente regressão candidata como nova operação.
+6. Após confirmação, produzir estado Ativa com novo ViagemId e baseline na observação confirmadora. No mesmo commit durável, emitir fim da execução anterior e início da nova usando os tipos e identidades de evento existentes. Proposta de TimestampFim: instante da confirmação, como encerramento inferido da execução observada, sem afirmar chegada física ao terminal. A aprovação deve incluir essa semântica. Não persistir um estado intermediário Finalizada sem cursor para contornar a validação.
+7. Não emitir PassagemParada entre a primeira evidência divergente e o baseline novo, nem misturar cursor/volta da execução anterior. Usar volta inicial zero na nova execução. A Etapa 1 continua bloqueando associação ML durante a divergência e só aceita a nova identidade confirmada compatível.
+
+### Transições propostas e revisão dos testes existentes
+
+- Atual: Ativa/PossivelFim + divergência inelegível → mesma viagem sem candidato/eventos, repetidamente.
+- Proposta: primeira evidência elegível → mesma viagem com candidato durável; retorno à original → cancela candidato; evidência confirmadora → nova Ativa com fim/início atômicos, sem passagens retroativas.
+- Preservar testes de uma única divergência, falha de infraestrutura, continuidade circular e publicação de versão. Após aprovação, adaptar testes que exigem ausência de qualquer candidato durante divergência elegível, mantendo a exigência de não trocar na primeira observação.
+- Adicionar testes de sequência sustentada para linha, sentido e padrão, BRT 42→43 sem equivalência presumida, mesma linha com versão nova, cancelamento por retorno, A→B→C→B, GPS duplicado/antigo, saltos, janela, ambiguidade, wrap circular, estado sem cursor, codec de snapshots anteriores, restart, perda Redis, concorrência, rollback estado/outbox, reentrega e Etapa 1.
+
+### Testes e resultados desta execução
+
+Executada novamente a seleção existente em aproximadamente seis segundos de comando, usando o binário compilado na Etapa 1 (não houve mudança de código nesta execução): 130 aprovados, zero falhas, zero ignorados.
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj --no-build --no-restore --filter 'FullyQualifiedName~TelemetriaMlIdentidadeTests|FullyQualifiedName~TelemetriaMlTests|FullyQualifiedName~ViagemObservadaServiceTests|FullyQualifiedName~ViagemOperacionalRegraTests|FullyQualifiedName~TelemetriaMlSamplingTests|FullyQualifiedName~GpsBrtTelemetriaTests' --verbosity quiet
+```
+
+Isso verifica preservação do comportamento atual; não demonstra a transição proposta. Não foram criados/executados testes de uma correção ainda não autorizada nesse contrato. Integrações PostgreSQL/PostGIS/Redis não foram executadas. `ViagemOperacionalFixture` exige `POSTGIS_TEST_CONNECTION`, cria schema e executa migrations, portanto não foi iniciada diante das restrições atuais. Para validação posterior, requer serviços isolados e autorização específica para o setup da fixture; então executar a seleção `ViagemOperacionalIntegracaoTests`, `ViagemDuravelPostgresTests` e `ViagemOutboxBatchTests` com `dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~ViagemOperacionalIntegracaoTests|FullyQualifiedName~ViagemDuravelPostgresTests|FullyQualifiedName~ViagemOutboxBatchTests'`.
+
+### Pendências e limitações
+
+A correção permanece não implementada, aguardando decisões sobre política de confirmação, precedência da projeção antiga, troca isolada de versão e extensão do contrato persistido. Os casos de viagens presas continuam possíveis; a proteção da Etapa 1 permanece ativa. Não houve acesso a produção, SSH, Docker, banco real, migrations, deploy ou commit.
+
+## 2026-10-06 — Etapa 2A.1: compatibilidade de leitura do candidato persistido
+
+### Objetivo e problema identificado
+
+Preparar exclusivamente os leitores para candidatos em Ativa/PossivelFim, sem implementar as decisões aprovadas para a futura Etapa 2A.2. O codec anterior rejeitava qualquer candidato fora de Finalizada. AGENTS.md, entradas anteriores e mudanças da Etapa 1 foram revisados antes das alterações.
+
+### Arquivos modificados
+
+- `NoPonto/4-Data/Repositories/ViagemOperacionalCodec.cs`, método `Decode`: extensão isolada da validação de leitura.
+- `NoPonto/5-Testes/ViagemOperacionalCodecCompatibilidadeTests.cs`: testes de snapshots, round-trip, rejeições e ausência de novos candidatos nas regras atuais.
+- `NoPonto/HISTORICO.md`: esta entrada incremental.
+
+### Alterações implementadas e contrato antes/depois
+
+Antes, candidato não nulo era aceito somente em Finalizada. Agora é aceito também em Ativa/PossivelFim com identidade candidata completa, coordenadas presentes/válidas e timestamp entre início e última atualização da execução. Essas fases não ganham nova lógica produtora ou confirmadora.
+
+Todos os estados antigos válidos continuam legíveis: o ramo Finalizada mantém a validação anterior, inclusive coordenadas opcionais e timestamps de candidato anteriormente aceitos. Não foi acrescentada uma restrição retroativa de timestamp mínimo ou presença de coordenadas nesse ramo. Snapshots sem candidato mantêm o tratamento anterior.
+
+O array conserva exatamente os mesmos 27 elementos, nomes, ordem e representação. `Encode`, contratos CLR, GUIDs N, ticks D19, campos opcionais vazios, schema, migrations, endpoints e payloads públicos não mudaram. A fase desconhecida com candidato continua rejeitada; não foi ampliada a aceitação a valores fora das três fases previstas.
+
+### Validações preservadas e decisões técnicas
+
+Permanecem as validações de quantidade/nome dos campos, ordem do veículo, GUIDs não vazios, timestamps do snapshot, pares de cursor/ordem, última ocorrência/ordem, posição finita em [0,1], volta/progresso não negativos, topologia, contadores da fase, presença e intervalo de TimestampFim, identidade candidata completa, timestamp candidato não posterior à última atualização e coordenadas órfãs/inválidas. Nas novas fases, coordenadas completas e timestamp dentro da execução impedem aceitar evidência estruturalmente incompleta. O codec não consulta relações SQL: pertencimento da versão à linha/sentido e plausibilidade física continuam sendo responsabilidade do processamento, a ser tratado na Etapa 2A.2.
+
+Foi verificado `Program.cs:500`: `IViagemObservadaRepository` usa `ViagemOperacionalRepository`. Tanto leitura Redis (`LerContextoAsync`) como PostgreSQL (`LerDuravelAsync`) usam este codec. A validação antes da gravação também usa Decode, mas nenhuma regra passou a criar candidatos nas novas fases. Os scripts ativos Read/ProjectDurable/CommitHot não possuem a restrição de fase removida e não precisaram de alteração. O script legado `ViagemOperacionalRedisScript.Commit` ainda restringe candidatos a Finalizada; não há chamada a esse script no código produtivo registrado. Sua ativação futura exigiria revisão própria.
+
+Nenhuma alteração em `ViagemOperacionalRegra.Decidir`, `DecidirAposFinalizada`, escrita do repositório, outbox, geração de passagens, tratamento de terminal/inatividade ou proteção da Etapa 1. A divergência atual continua preservando viagem e não criando candidato em Ativa/PossivelFim. Alterações anteriores, inclusive `.gitignore`, foram preservadas.
+
+### Testes e resultados
+
+Novo arquivo cobre: snapshot antigo independente do encoder; round-trip JSON no formato usado pelo PostgreSQL e mapa Redis com metadados duráveis; três fases antigas; candidatos antigos com coordenadas opcionais; novas fases com candidato; candidato incompleto/inválido/futuro/anterior à execução; cursor/identidade/topologia/fase/timestamps inválidos; coordenada órfã; quantidade diferente de 27; divergência repetida nas regras atuais com serialização/recuperação entre decisões, sem candidato, nova viagem ou evento.
+
+Primeira compilação/rodada: 151 aprovados e uma falha no novo teste de snapshot, por fixture de ticks sem o padding D19. Fixture corrigida e adicionados casos de fase desconhecida e tamanho do contrato. Rodada final recompilou os arquivos alterados: 155 aprovados, zero falhas, zero ignorados; duração dos testes de um segundo. Ambas usaram `--no-restore`, sem `--no-build`, downloads ou novas dependências, dentro do limite de preparação/execução solicitado.
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~ViagemOperacionalCodecCompatibilidadeTests|FullyQualifiedName~ViagemOperacionalRegraTests|FullyQualifiedName~TelemetriaMlIdentidadeTests|FullyQualifiedName~TelemetriaMlTests|FullyQualifiedName~ViagemObservadaServiceTests' --verbosity quiet
+```
+
+Regressões da Etapa 1 e regras operacionais existentes passaram. Warnings preexistentes CS8981 e CS7022; nenhum erro de compilação. `git diff --check` aprovado, com avisos de normalização LF/CRLF. Integração real PostgreSQL/PostGIS/Redis não executada: fixtures exigem serviços e executam migrations. O round-trip em memória verifica o contrato de recuperação, não uma operação real contra banco/cache.
+
+### Limitações, rollback e implantação futura
+
+- Esta etapa não habilita geração de candidatos em Ativa/PossivelFim e não corrige viagens presas.
+- Binários anteriores ao preparo rejeitam esses candidatos. Antes de ativar escritores da Etapa 2A.2, atualizar todos os leitores/processadores compartilhando o estado, validar snapshots antigos e novos e retirar instâncias incompatíveis.
+- A versão preparatória lê os futuros candidatos, mas as regras atuais ainda podem limpá-los durante o processamento. Por isso, a ativação futura também exige todos os processadores com a lógica 2A.2 instalada; compatibilidade de leitura sozinha não garante coexistência comportamental.
+- Recomenda-se instalar a Etapa 2A.2 com escrita nova inicialmente desativada e ativá-la somente após homogeneizar os processadores. Isso é plano de implantação, não uma feature flag criada nesta execução.
+- Após começar a escrever candidatos nas novas fases, rollback direto para binário pré-2A.1 é incompatível. Desativar novos produtores não remove candidatos já persistidos. Preferir rollback para versão que reconheça o contrato e definir antecipadamente o tratamento de candidatos existentes, sem limpeza automática nesta etapa. Retornar à versão somente leitora preserva leitura, mas pode perder evidência de candidato pelas regras antigas.
+- Sem Docker, SSH, produção, infraestrutura, banco real, migrations, deploy ou commit. A futura Etapa 2A.2 permanece não implementada.
+
+## 2026-10-06 — Etapa 2A.2A: avaliação isolada de mudança operacional
+
+### Objetivo e problema identificado
+
+Implementar reconhecimento determinístico de divergência sustentada sem conectar a lógica ao processamento produtivo. As regras atuais não reconhecem essa mudança; o codec já preparado permite representar os candidatos futuros. Regras permanentes, histórico, candidatos, máquina de estados, plausibilidade do matching e testes anteriores foram revisados. Alterações anteriores foram preservadas.
+
+### Arquivos modificados
+
+- `NoPonto/2-Application/Services/GPS/ViagemOperacional.Mudanca.cs`: novo método interno puro `ViagemOperacionalRegra.AvaliarMudancaOperacional` e contratos internos de resultado/status.
+- `NoPonto/2-Application/Services/GPS/ViagemOperacional.cs`: classe marcada como partial, permitindo reaproveitar diretamente constantes e `EvidenciaInicioSuficiente`, sem alterar o corpo de Decidir ou a confirmação após Finalizada.
+- `NoPonto/2-Application/Services/GPS/GpsEnriquecimentoService.cs`: extração da fórmula existente do orçamento de projeção para sobrecarga interna estática; método original delega com as mesmas opções e fórmula. Nenhuma mudança de cálculo ou limiar.
+- `NoPonto/5-Testes/MudancaOperacionalRegraTests.cs`: testes unitários da nova avaliação.
+- `NoPonto/HISTORICO.md`: esta entrada incremental.
+
+### Alterações implementadas
+
+O resultado distingue Continuidade, PrimeiraEvidencia, CandidatoMantido, CandidatoSubstituido, CandidatoCancelado, MudancaConfirmada e EvidenciaRejeitadaOuInsuficiente. Contém candidato proposto, motivo e estrutura confirmada quando aplicável; não contém criação de Guid de viagem, evento, encerramento ou persistência.
+
+A avaliação aceita Ativa/PossivelFim. Exige observação posterior ao último timestamp processado e à primeira evidência candidata, matching Found e plausibilidade observacional validada pelo chamador. Valida identidade completa e coerente entre DTO/estrutura, veículo, coordenadas, posição, comprimento e parâmetros. A primeira evidência divergente de linha/sentido cria apenas um candidato. Sentido ambíguo não cria/confirma e invalida o candidato existente.
+
+Continuidade compara linha, sentido, padrão operacional e topologia, sem usar apenas código ou igualdade de versão. Versão diferente na mesma operação continua sendo continuidade. Retorno à operação original cancela candidato. Identidade candidata diferente ou evidência acima da janela máxima de 180 segundos substitui o candidato, iniciando uma nova primeira evidência. Observações duplicadas/antigas ou matching indisponível/implausível não avançam a evidência e preservam o candidato anterior.
+
+Para confirmação, reaproveita `EvidenciaInicioSuficiente`: deslocamento físico >=10m e progresso projetado >=10m, na mesma versão candidata. Reutiliza `GpsEnriquecimentoService.EhSaltoImplausivel` e o orçamento existente de projeção, com velocidade/tolerância configuradas, para rejeitar saltos físicos/projetados. Movimento insuficiente conserva a primeira evidência; salto implausível invalida candidato. A janela de 180 segundos é máxima, não espera mínima. A avaliação não usa a projeção da operação antiga como veto à confirmação observacional.
+
+### Decisões técnicas e limitações
+
+- Matching confiável e plausibilidade da observação de entrada são pré-condições explícitas (`statusMatching` e `matchingPlausivel`). Na integração futura, o booleano deve vir da validação real do matching, inclusive deslocamento desde a observação anterior; não presumir confiabilidade a partir de Found apenas. Os limites adicionais entre primeira e segunda evidências são avaliados pela própria regra.
+- Padrão e topologia atuais vêm da estrutura validada; o candidato continua usando os campos existentes de versão/linha/sentido. A versão deve resolver para estrutura relacional estável/coerente. O codec não prova esse vínculo: repositório futuro deverá validá-lo.
+- Mudança apenas de padrão ou topologia, mantendo linha/sentido, retorna insuficiência sem presumir nova execução ou equivalência. A decisão de domínio para esses casos permanece aberta; restante da lógica foi implementado.
+- A confirmação precisa de evidências dentro da mesma versão candidata. Se a versão muda entre elas, inicia nova primeira evidência, sem misturar frações de geometrias diferentes.
+- Continuidade circular é reconhecida sem alterar ViagemId/Volta; regressão candidata não vira automaticamente progresso confirmador. Sem regra nova de wraps candidatos, um candidato que atravessa o fim/início pode precisar de novas evidências posteriores. O controle produtivo de voltas não foi alterado.
+- O chamador futuro deve incorporar candidato/timestamp a um estado sob CAS e persistência durável. A avaliação isolada não atualiza nem o objeto de entrada; os testes simulam a incorporação, inclusive round-trip do codec.
+
+### Testes e resultados
+
+Cobertura nova: continuidade, primeira divergência sem transição, duas evidências, linha BRT 42→43, mesmo código com sentido/linha diferentes, versão isolada, padrão/topologia ambíguos, A→B→A, A→B→C, janela de 180/181s, GPS duplicado/antigo, movimento/progresso insuficientes, regressão, saltos físico/projetado, sentido ambíguo, infraestrutura, ausência/implausibilidade de matching, circular/nova volta, projeção antiga válida sem veto, candidatos recuperados pelo codec nas duas fases e identidades incompletas.
+
+A primeira tentativa de compilação encontrou CS0051 em assinatura pública de teste com parâmetro enum interno. Corrigido apenas o teste, usando parâmetro bool. Rodada final compilou os arquivos alterados e aprovou 276 testes, zero falhas/ignorados, duração dos testes de um segundo. Incluídas regressões das Etapas 1/2A.1, máquina atual e enriquecimento GPS. Não usado --no-build; sem restore/download ou dependências novas. Preparação/execução dentro do limite aproximado de cinco minutos.
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~MudancaOperacionalRegraTests|FullyQualifiedName~ViagemOperacionalCodecCompatibilidadeTests|FullyQualifiedName~ViagemOperacionalRegraTests|FullyQualifiedName~TelemetriaMlIdentidadeTests|FullyQualifiedName~TelemetriaMlTests|FullyQualifiedName~ViagemObservadaServiceTests|FullyQualifiedName~GpsEnriquecimentoServiceTests' --verbosity quiet
+```
+
+`git diff --check` aprovado. Warnings preexistentes CS8981/CS7022 e avisos Git LF/CRLF; nenhum erro final de compilação. Não executados testes com banco/cache reais ou migrations. A busca de referências encontrou somente a declaração da avaliação e chamada pelos testes; nenhum consumidor produtivo.
+
+### Pendências para Etapa 2A.2B e preservação do comportamento atual
+
+Conectar explicitamente a avaliação ao matching observacional e seu resultado de plausibilidade, antes dos retornos que congelam divergências. Incorporar candidatos/timestamps com controle de concorrência e gravação durável; na confirmação, definir e executar a transição com baseline e eventos fim/início atômicos sem passagens retroativas. Validar relações de identidade/versão, concorrência, recuperação e rollout homogêneo conforme Etapa 2A.1. Não misturar esse resultado com o GPS reprojetado no padrão antigo.
+
+Nada disso foi ativado nesta execução. Não foram modificados repositório produtivo, PostgreSQL/Redis, outbox, eventos, detector de passagens, telemetria, schema JSONB, migrations, endpoints, terminal ou inatividade. A única extração em caminho existente conserva exatamente a fórmula do orçamento, com regressões aprovadas. Sem acesso a produção/SSH/banco real, Docker, infraestrutura, deploy ou commit.
+
+## 2026-10-06 — Etapa 2A.2B: integração controlada, desligada por padrão
+
+Consultados AGENTS.md, histórico e etapas anteriores. Program.cs vincula GpsPollingOptions à seção GpsPolling e registra ViagemOperacionalRepository como IViagemObservadaRepository. Acrescentada a opção GpsPolling:MudancaOperacionalHabilitada, default false; nenhuma configuração foi alterada para ativá-la. Com false, nenhuma avaliação/consulta adicional da mudança é executada e permanece o fluxo anterior.
+
+### Fluxo e arquivos alterados nesta etapa
+
+- GpsPoolingOptions.cs: flag específica, independente das opções GPS/ETA existentes.
+- PosicaoApiDto.cs/GpsEnriquecimentoService.cs: prova interna MatchingOperacionalPlausivel, JsonIgnore, efêmera. Exige matching temporal aceito, histórico GPS com timestamp anterior, coordenadas válidas e salto físico plausível pelo critério existente. Found isolado não comprova plausibilidade; DTO reconstruído de payload/cache não recupera essa prova. Observação sem histórico não inicia evidência.
+- ViagemOperacional.Mudanca.cs: AvaliarMudancaSeHabilitada e AplicarAvaliacaoMudanca conectam o avaliador puro à decisão operacional. Primeira evidência/manutenção/substituição conservam viagem, fase e cursor, avançando somente timestamp/candidato. Rejeições preservam o candidato durável, mesmo quando o avaliador isolado recomenda invalidá-lo: o fluxo não limpa evidência nem interpola cursor com observação rejeitada. Uma futura observação válida pode substituir/cancelar; a janela de 180s continua impedindo confirmação com evidência vencida.
+- ViagemOperacionalRepository.cs: resolve a estrutura relacional da observação atual antes dos retornos de divergência; não usa a reprojeção antiga como matching. Linha/sentido/padrão/versão/topologia são comparados pelo avaliador. Consulta/infraestrutura falha retorna InfrastructureFailure sem gravar. Uma observação validada independente pode confirmar apesar de projeção antiga válida; falha dessa projeção não é utilizada como evidência.
+
+Candidatos são gravados duravelmente pelo caminho existente, sem depender de checkpoint ou CAS quente. Timestamp avança sem deslocar cursor da operação antiga. Retorno à mesma versão original com candidato retoma por baseline e adocaoLegado para suprimir interpolação do intervalo congelado; preserva Volta, sem passagens retroativas. Retorno numa versão geométrica diferente exige a projeção antiga aceita pelo fluxo existente para cancelar e retomar por baseline; sem ela, conserva o candidato durável. Casos de apenas padrão/topologia ou sentido ambíguo permanecem conservadores e sem nova execução. Não alterados detector geral, terminal ou inatividade.
+
+Confirmação exige baseline Updated, sem ultrapassagens e com volta zero. Novo ViagemId, Ativa, cursor da observação confirmadora, sem reaproveitamento de cursor antigo. Produz ViagemFinalizada da identidade antiga no instante da confirmação, sem ocorrência de parada, e ViagemIniciada da nova identidade. Contrato/validator/consumidor atual admitem finalização sem parada e não exigem terminal para esse evento; portanto nenhum campo afirma chegada física. O contrato não possui motivo explícito: consumidores não podem distinguir todas as causas somente pelo tipo de evento. Nenhuma mudança de schema/evento público.
+
+Estado novo e ambos os eventos seguem a MESMA transação PostgreSQL já existente: advisory lock por veículo, leitura FOR UPDATE, comparação de versão, upsert e outbox, commit e projeção Redis. Sem dupla escrita/novo caminho transacional. GPS antigo/duplicado é rejeitado antes da avaliação; concorrência usa o snapshot/versionamento existente. JSONB permanece exatamente 27 strings, mesmas posições e significados; recuperação usa o codec preparado em 2A.1. Redis continua projeção descartável, com PostgreSQL como autoridade.
+
+### Validação e limitações
+
+283 testes lógicos aprovados, zero falhas/ignorados, com compilação (sem --no-build), incluindo regressões das Etapas 1/2A.1/2A.2A, máquina atual e enriquecimento GPS. Sete casos novos em MudancaOperacionalIntegracaoLogicaTests exercitam flag false, candidato+codec, substituição/cancelamento, BRT42→43/sentido, baseline/eventos, rejeição sem prova e versão isolada. Não são prova de atomicidade PostgreSQL nem recuperação real de Redis.
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~MudancaOperacionalIntegracaoLogicaTests|FullyQualifiedName~MudancaOperacionalRegraTests|FullyQualifiedName~ViagemOperacionalCodecCompatibilidadeTests|FullyQualifiedName~ViagemOperacionalRegraTests|FullyQualifiedName~TelemetriaMlIdentidadeTests|FullyQualifiedName~TelemetriaMlTests|FullyQualifiedName~ViagemObservadaServiceTests|FullyQualifiedName~GpsEnriquecimentoServiceTests' --verbosity quiet
+```
+
+Acrescentados e compilados três testes reais na fixture ViagemOperacionalIntegracaoTests, com flag true: candidato recuperado depois da perda Redis e confirmação sem passagens/duplicação; falha após inserção do outbox com rollback do estado e contagem de eventos; confirmação concorrente com um único commit. Entradas desses testes fornecem prova interna sintética, portanto não validam de ponta a ponta sua produção pelo matching GPS.
+
+NÃO EXECUTADOS testes reais: não foi estabelecido ambiente PostgreSQL/PostGIS/Redis isolado e autorizado. Fixture exige POSTGIS_TEST_CONNECTION, cria schema/aplica migrations e usa REDIS_TEST_CONNECTION; não foi acionada nem tentada conexão. Atomicidade, concorrência e recuperação REAL da nova feature permanecem pendentes de execução nesses serviços. Também pendente teste completo do pipeline GPS→repositório com flag true e matriz real de linha/BRT/projeção/falha. Os testes lógicos e inspeção do caminho compartilhado não substituem essas verificações. Preparação/testes sem restore/download/novas dependências, builds longos ou acesso a serviços. Warnings preexistentes CS8981/CS7022.
+
+### Implantação futura e rollback
+
+Não ativar antes de executar testes reais e revisar a matriz de integração pendente. Primeiro distribuir leitores compatíveis 2A.1 ou posteriores para TODOS os consumidores/instâncias; somente depois considerar ativação homogênea. Binários anteriores a 2A.1 rejeitam candidatos Ativa/PossivelFim mesmo mantendo 27 posições. Desligar a flag impede novas decisões, mas não remove candidatos já persistidos; rollback para leitor incompatível exige estratégia específica, não apagar dados automaticamente. Com flag desligada, o fluxo legado pode limpar um candidato ao processar continuidade. Nenhum acesso/modificação em produção, Docker, SSH, migrations executadas, infraestrutura, ETA/ML, histórico de passagens, deploy ou commit. Alterações anteriores e .gitignore preservados.
+
+## 2026-10-06 — Etapa 2A.2D: registro da execução manual dos três testes reais
+
+Resultados informados pelo usuário após execução manual no Windows, com Docker Desktop local, PostgreSQL 16/PostGIS 3.4.3 e Redis 7, em containers exclusivamente descartáveis. Não se trata de nova execução ou conferência de logs pelo agente nesta etapa.
+
+| Teste em ViagemOperacionalIntegracaoTests | Resultado | Tempo total aproximado |
+| --- | --- | --- |
+| MudancaHabilitada_CandidatoDuravelPerdaRedis_ConfirmacaoSemPassagens | 1 aprovado, zero falhas | 72 segundos |
+| MudancaHabilitada_FalhaDepoisOutbox_RollbackEstadoEEventos | 1 aprovado, zero falhas | 51 segundos |
+| MudancaHabilitada_ConfirmacaoConcorrente_ApenasUmCommit | 1 aprovado, zero falhas | 33 segundos |
+
+Os testes foram executados sequencialmente, recompilando o projeto, com --no-restore. Após a rodada, containers, volumes anônimos e rede exclusivos foram removidos e as variáveis temporárias de ambiente restauradas. Não houve acesso à produção, deploy ou ativação da feature flag na aplicação; somente as opções construídas pelos testes habilitam a mudança operacional.
+
+Esses resultados validam os cenários reais de persistência/recuperação do candidato, rollback entre estado e outbox e confirmação concorrente cobertos pelos três testes. A limitação permanece: fornecem provas de matching sintéticas, não validando completamente filtros de polling, enriquecimento PostGIS, matching observacional e produção/propagação real de MatchingOperacionalPlausivel. Também não substituem as regressões completas de persistência durável/outbox nem a materialização ponta a ponta dos eventos de mudança. Os bloqueios de execução registrados na entrada anterior descrevem aquela execução; os três testes acima foram posteriormente executados manualmente com os resultados agora registrados.
+
+Nesta Etapa 2A.2D, a única alteração autorizada/realizada é esta entrada incremental no histórico. Sem implementação de novos testes, alteração funcional/configuração/infraestrutura, Docker/containers iniciados pelo agente, migrations, acesso a serviços/produção/SSH, ativação da flag, deploy ou commit.
+
+## 2026-10-06 — Etapa 2A.2E: baseline do cursor após cancelamento
+
+Consultados AGENTS.md, histórico e os contratos/fluxos das Etapas 2A.1/2A.2A/2A.2B. Alterações anteriores preservadas. Defeito confirmado no argumento de posição entregue à consulta de baseline, por reprodução local antes da correção; a reprodução NÃO executou PostgreSQL/PostGIS/Redis.
+
+### Reprodução e causa
+
+Primeiro extraída, sem mudar seu comportamento, a expressão de posição inicial da consulta para ViagemOperacionalRepository.PosicaoInicialTransicao. Acrescentado CancelamentoCandidatoCursorTests: cria A ativa com cursor válido em 0,25, acumula candidato B pela avaliação/decisão existentes, volta para A e verifica o argumento REAL da consulta. Rodada compilada anterior à correção: seis casos, quatro falhas e dois aprovados. Retornos 0,39/0,55/0,65 e circular 0,95 recebiam 0,25 como posição inicial do baseline. Retorno sem avanço e controle com flag desligada passavam.
+
+OcorrenciaParadaRepository.Sql incorpora baseline por PosicaoTracado <= @anterior. Já Decidir adota a posição atual do GPS. Portanto, no retorno 0,55 com paradas 0,2/0,4/0,6, o argumento antigo deixava cursor na parada 0,2 enquanto a posição avançava a 0,55 e a próxima poderia continuar em 0,4. Essa inconsistência é demonstrada pelo argumento produtivo e semântica SQL encontrada. Os testes locais modelam a incorporação SQL; não constituem reprodução real da consulta nem prova de materialização no banco.
+
+### Correção mínima
+
+ViagemOperacionalRepository usa a posição operacional ATUAL como limite inicial somente quando baseline=true, MudancaOperacionalHabilitada=true e há candidato anterior. Nos demais casos mantém exatamente a expressão antiga. Após resolução de uma versão observacional diferente por projeção antiga aceita, a posição usada é a da projeção operacional adotada, não a fração de outra geometria. Sem modificar detector/SQL de passagens, codec, 27 posições, locks, transação, outbox, esquema, terminal ou política de inatividade. ViagemId/identidade e Volta já preservados pelo caminho de continuidade; não infere voltas atravessadas durante o intervalo divergente.
+
+### Testes
+
+CancelamentoCandidatoCursorTests: oito casos aprovados após correção, cobrindo retorno sem avanço, antes da próxima parada, depois de uma/várias paradas, controles de flag desligada/sem baseline/sem candidato, primeira passagem futura na regra atual, circular próxima ao wrap com Volta preservada e avanço posterior, versão geométrica resolvida pela posição operacional e duas divergências com substituição seguida de cancelamento. Regressões existentes cobrem duplicado/fora de ordem, A→B confirmada, Etapa 1, codec e máquina operacional anterior.
+
+Preparada teoria real MudancaHabilitada_CancelamentoBaseline_CursorProximaEPassagemFutura em ViagemOperacionalIntegracaoTests, reutilizando ViagemOperacionalFixture, com retornos 0,25/0,39/0,55/0,65. Verifica posição, ambos os campos de cursor, próxima ocorrência à frente (ou null após terminal), ViagemId, Volta, candidato cancelado, ausência de passagens no baseline, rejeição de timestamp repetido/antigo, primeiro GPS posterior e materialização pelo ViagemOutboxWorker. Compilada, NÃO EXECUTADA: ambiente descartável não iniciado nesta etapa. Prova de matching continua sintética nesse teste real.
+
+Rodada local com compilação e --no-restore: 291 aprovados, zero falhas/ignorados, duração dos testes aproximadamente um segundo. Não usado --no-build. Warnings preexistentes CS8981/CS7022/xUnit2031; sem dependências/downloads. Preparação/testes dentro do limite aproximado solicitado.
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~CancelamentoCandidatoCursorTests|FullyQualifiedName~MudancaOperacionalIntegracaoLogicaTests|FullyQualifiedName~MudancaOperacionalRegraTests|FullyQualifiedName~ViagemOperacionalCodecCompatibilidadeTests|FullyQualifiedName~ViagemOperacionalRegraTests|FullyQualifiedName~TelemetriaMlIdentidadeTests|FullyQualifiedName~TelemetriaMlTests|FullyQualifiedName~ViagemObservadaServiceTests|FullyQualifiedName~GpsEnriquecimentoServiceTests' --verbosity quiet
+```
+
+Com ambiente isolado identificado e autorização para a fixture, executar futuramente (a fixture aplica migrations):
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~MudancaHabilitada_CancelamentoBaseline_CursorProximaEPassagemFutura' --verbosity normal
+```
+
+Pendentes SQL real/materialização desta correção e integração real das variantes circular/geométrica/substituição; também continuam pendentes os testes GPS ponta a ponta, histerese e falha operacional depois do aceite GPS identificados na auditoria. Sem afirmar ausência de todos os impactos ETA antes dessas validações. Nenhum acesso/alteração em produção, SSH, Docker iniciado, migrations executadas, ETA/ML, endpoints, infraestrutura, CI/CD, deploy ou commit. Feature flag continua false por padrão, sem configuração habilitada.
+
+## 2026-10-06 — Etapa 2A.2F: primeiros testes ponta a ponta preparados
+
+Consultados AGENTS.md, histórico, etapas anteriores, fixtures e caminhos produtivos. Criado somente NoPonto/5-Testes/MudancaOperacionalPontaAPontaTests.cs e acrescentada esta entrada; nenhum código funcional/configuração/infraestrutura alterado. Reutiliza ViagemOperacionalFixture (schema migrado + dados + Redis); PostgisGpsFixture foi examinada e não substitui a fixture operacional completa. Nenhuma segunda infraestrutura criada.
+
+### Caminho preparado
+
+GPS sintético sem IDs de matching/prova é publicado em GpsSppoSnapshotStore. Harness invoca por reflexão o método PRIVADO produtivo GpsPollingService.ProcessarCicloAsync, com ciclo aguardado e timeout: atravessa filtros de idade/timestamp, histórico Redis, snapshot operacional, matching/enriquecimento PostGIS individual ou batch, ETA, aceite Redis e ViagemObservadaService. Reflexão fica somente nos testes e evita mudar visibilidade/código funcional ou iniciar loops BackgroundService. Fonte externa BRT devolve vazio; HTTP ETA usa handler local sem rede; SignalR usa contexto real DI sem clientes. Não valida os parsers dos provedores externos nem entrega de broadcast.
+
+GpsPadraoRepository, GpsEnriquecimentoService, PosicaoVeiculoCacheRepository/PosicaoVeiculoPayloadWriter, RedisCache, ViagemOperacionalRepository e ViagemObservadaService são reais. Observador transparente encaminha todas as chamadas ao repositório real e captura a prova produzida pelo enriquecedor; não injeta MatchingOperacionalPlausivel nem chama avaliador diretamente. Prova depende de histórico físico/tempo/salto plausível e matching temporal aceito pelo código existente. Primeira leitura explicitamente sem prova; observações divergentes elegíveis exigem prova true na entrada real do repositório.
+
+Estado/outbox persistem no PostgreSQL; ViagemOutboxWorker e HistoricoEventoRepository materializam tabelas finais. Reentrega idêntica ao materializador e novo claim vazio verificam idempotência, contagem de journal e histórico. Falha do polling, falta de candidato, ausência de chamadas/prova ou divergência de tabelas falha as assertivas; não apresentar como validação parcial bem-sucedida.
+
+### Cenários e cobertura
+
+- ABB_MatchingReal_ConfirmaEMaterializaSemPassagens (individual/batch): A .25→.30; B .75→.76 na geometria reversa, com movimento físico oeste e progresso dirigido. Primeira evidência preserva viagem; segunda muda ViagemId, Ativa, identidade completa R2/P2/S2/Linha, cursor baseline ordem1 e volta0. Materialização: três eventos (início A, fim A sem parada e início B), timestamps da confirmação e zero HistoricoPassagens após replay.
+- ABA_BaselineCoerente_SomentePassagemFutura (individual/batch): primeira divergência B, retorno A .55, cursor na ocorrência .4 e próxima .6 à frente, nenhuma ultrapassagem no baseline; GPS duplicado/antigo não chama repositório; remoção da projeção Redis reidrata o mesmo estado durável; próximo A .61 gera somente a passagem .6, sem fim indevido, um histórico após replay. Complementa os quatro casos reais preparados em 2A.2E.
+- FlagDesligada_ProvaRealNaoCriaCandidato: prova real true em B sem candidato/nova execução; só início original materializado, zero passagens.
+
+Escolhido A→B por mudança de SENTIDO na linha VIAGEM3 da fixture existente, e não BRT42→43: duas geometrias opostas tornam bearing inequívoco sem alterar dados compartilhados ou criar infraestrutura. BRT/mudança de linha permanecem lacuna real. Controles de histerese, matching ambíguo/implausível, versão isolada e falha sem evidência positiva reaproveitam testes existentes de enriquecimento/regra; NÃO são controles ponta a ponta novos desses casos. Padrão/topologia e política de wrap não alterados.
+
+Limite temporal: validator produtivo usa DateTimeOffset.UtcNow, sem clock injetável. Harness captura uma única âncora UtcNow-2min e usa deltas fixos, sem sleeps/datas históricas/horários do dia. Portanto ainda existe dependência da janela do relógio real; eliminá-la integralmente exigiria mudança funcional não autorizada. EnriquecerTodasLinhas=true e checkpoint conservador são opções somente do harness; flag habilitada somente em instâncias de testes.
+
+### Compilação e execução
+
+Cinco casos reais compilados, NÃO EXECUTADOS. Nenhuma inicialização de fixture PostgreSQL/PostGIS/Redis, migration, Docker/containers, conexão externa ou dependência baixada. Rodada local recompilou com --no-restore (sem --no-build): 291 aprovados, zero falhas/ignorados, incluindo Etapas 1/2A.1/2A.2A/2A.2E, máquina e enriquecimento. Warnings preexistentes CS8981/CS7022/xUnit2031. Preparação e testes locais limitados conforme pedido.
+
+Com serviços descartáveis recriados e IDENTIFICADOS, POSTGIS_TEST_CONNECTION e REDIS_TEST_CONNECTION exclusivos de testes na sessão (PostgreSQL16/PostGIS3.4.3 e Redis7 usados na rodada manual), executar futuramente:
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~NoPonto.Tests.MudancaOperacionalPontaAPontaTests' --verbosity normal
+```
+
+Complemento separado da Etapa 2A.2E:
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~MudancaHabilitada_CancelamentoBaseline_CursorProximaEPassagemFutura' --verbosity normal
+```
+
+A fixture aplica migrations e DROP SCHEMA CASCADE: não executar antes de verificar ambiente isolado/autorizado. Não usar Compose/volumes de produção nem definir REDIS_TEST_CONTAINER para esta rodada. Resultados dos novos testes continuam pendentes; compilação não comprova matching/SQL/pipeline real. Sem correção funcional, produção/SSH, ativação da flag de produção, deploy ou commit. Todas as alterações anteriores preservadas.
+
+## 2026-10-06 — Etapa 2A.2H: resultados manuais de 2A.2G e prontidão
+
+Resultados INFORMADOS PELO USUÁRIO, não executados novamente pelo agente: Windows/Docker Desktop local, PostgreSQL16/PostGIS3.4.3 e Redis7 em containers descartáveis. Grupos executados sequencialmente com dotnet test, --no-restore e recompilação:
+
+| Grupo | Aprovados | Falhas |
+| --- | ---: | ---: |
+| MudancaHabilitada_CancelamentoBaseline_CursorProximaEPassagemFutura | 4 | 0 |
+| MudancaOperacionalPontaAPontaTests | 5 | 0 |
+| ViagemOutboxBatchTests | 20 | 0 |
+| ViagemDuravelPostgresTests, excluindo Chaos_RedisPara_ReiniciaVazio_ContinuaMesmaViagem | 28 | 0 |
+| TOTAL | 57 | 0 |
+
+Containers, volumes anônimos e rede exclusivos removidos; variáveis temporárias restauradas. Sem deploy, produção ou ativação da flag na aplicação. As pendências de execução das entradas anteriores descrevem aquelas etapas; estes grupos foram posteriormente executados manualmente. Aprovação dos casos existentes não equivale a cobertura de todas as variantes.
+
+Auditoria de leitura: resultados sustentam baseline/cancelamento linear, matching real por mudança de sentido na mesma linha nos caminhos individual/batch, persistência, recuperação/idempotência e materialização nos casos cobertos. Não demonstram BRT42→43 pelo pipeline BRT, padrões sobrepostos, cancelamento circular atravessando wrap ou retorno entre versões pela projeção antiga. Não existe atomicidade cache GPS+viagem: são commits separados. Etapa1 impede identidade operacional incompatível na telemetria, sem garantir labels completos.
+
+Risco circular: baseline de cancelamento conserva Volta anterior no ViagemOperacionalRepository; houveWrap exige !baseline no OcorrenciaParadaRepository. Se o veículo cruza fim/início durante a divergência, esse wrap não é contado. Passagens futuras podem reutilizar EventId viagem/ocorrência/volta já emitido, com conflito de payload e rollback. Evidência de código, não reprodução em serviços nesta auditoria. Teste circular local cobre wrap POSTERIOR ao cancelamento. Bloqueador de ativação global até reproduzir e definir tratamento seguro.
+
+Validações mínimas adicionais: mudança real de linha/códigos diferentes com assinatura; histerese em padrões sobrepostos/falha direcionada; falha PostgreSQL depois do aceite GPS seguida de timestamp igual/crescente; cancelamento circular atravessando wrap; retorno geométrico por projeção antiga. Histerese pode conservar padrão anterior enquanto melhoria não supera limiares, mas consulta direcionada filtra código atual: não generalizar para toda troca de código. Falha operacional após cache aceito perde tentativa/evidência daquele timestamp; candidatos/eventos já duráveis continuam recuperáveis.
+
+Recomendação: prosseguir com homologação isolada e bloquear rollout global por enquanto. Flag false, por instância, sem allowlist existente de linhas/veículos. Distribuir leitores 2A.1+ antes de novas escritas; evitar instâncias com flags diferentes disputando veículos. Desligar não apaga candidatos nem permite rollback direto para leitor antigo. Rollback deve manter leitor compatível e outbox processável, sem apagar dados. Métricas existentes gerais de matching/commit/viagem/outbox não substituem acompanhamento dedicado de candidatos/causas. Classificações e plano detalhados entregues na conversa.
+
+Única alteração desta execução: esta entrada. Sem mudanças funcionais/testes/configurações/infraestrutura, testes executados, conexão a serviços/SSH/produção, Docker, migrations, ativação, deploy ou commit. Alterações anteriores preservadas.
+
+## 2026-10-06 — Etapa 2A.2I: reprodução da colisão circular, sem correção
+
+Lidos AGENTS.md/histórico e regras/repositórios/testes circulares. Criados WrapDuranteCandidatoTests.cs e WrapDuranteCandidatoIntegracaoTests.cs; somente testes e esta entrada foram acrescentados. Código funcional, schema/codec/27 posições, infraestrutura e ETA/ML preservados.
+
+Reprodução LOCAL: regras produtivas criam A circular, emitem passagem na ocorrência .2/volta0, avançam a .95, acumulam candidato B e cancelam no retorno A .05. PosicaoInicialTransicao produtiva escolhe .05. O resultado de baseline SQL é modelado explicitamente no teste, não executado: cursor vazio, próxima .2, volta anterior0, sem passagens. Decidir adota .05 e conserva volta0. Próximo .25 emite novamente a ocorrência .2: MESMO EventId viagem/ocorrência/0, payload e timestamps DIFERENTES; ambos passam EventoViagemValidator. Isso comprova colisão na regra de geração, não execução real de SQL ou evidência física de um percurso completo.
+
+Caracterizacao_ColisaoDeIdentidadeComPayloadDiferente passa e demonstra colisão/telemetria aceitando identidade compatível com volta0. Regressao_VoltaFisicaSeguinte_NaoPodeReutilizarIdentidadeDaPassagem fica INTENCIONALMENTE VERMELHO, exigindo identidades distintas após a volta física representada pelo cenário. Nenhuma política foi alterada para fazê-lo passar. Controle normal sem candidato e controles .94/.95 sem volta não inventam incremento. Reutilizados controles de wrap após cancelamento, geometria, duplicado/antigo, B confirmado e flag desligada das suítes existentes. Controle .94 demonstra pequena regressão, mas não prova classificação física de ruído; dados geométricos reais continuam pendentes.
+
+Resultado inicial: 2 aprovados/1 falha esperada em 3 testes. Rodada final recompilada com --no-restore: 139 aprovados, 1 falha esperada, zero ignorados, total140, duração dos testes1s. Inclui CancelamentoCandidatoCursorTests, MudancaOperacionalRegraTests, MudancaOperacionalIntegracaoLogicaTests, ViagemOperacionalRegraTests, TelemetriaMlIdentidadeTests e TelemetriaMlTests. Compilação bem-sucedida; warnings preexistentes CS8981/CS7022/xUnit2031. Não usado --no-build. O filtro amplo que inclua a regressão retorna exit code1 até decisão/correção futura; não confundir com 140 aprovados.
+
+Causa: ViagemOperacionalRepository baseline de candidato conserva Volta anterior; OcorrenciaParadaRepository houveWrap exige !baseline; ViagemOperacionalRegra.Decidir usa Volta recebida e EventId inclui viagem/ocorrência/volta. InserirOutboxAsync compara payload e lança EventoViagemPayloadConflictException se a identidade existente diverge. Consequência prevista: rollback da transação da nova passagem/estado, convertido em InfrastructureFailure; histórico anterior preservado, passagem nova ausente e labels da volta seguinte indisponíveis. Rollback SQL real NÃO foi demonstrado nesta execução.
+
+Teste REAL preparado CancelamentoCircular_ColisaoOutbox_ReverteEstadoEPreservaHistorico: reutiliza ViagemOperacionalFixture, configura P1 circular somente no teste e restaura em finally; emite/materializa as três passagens originais, cancela em .05, tenta novo cruzamento .2, espera InfrastructureFailure, outbox inalterado, estado durável anterior recuperado após remover projeção Redis, histórico preservado e payload original no outbox. Compilado, NÃO EXECUTADO. Geometria R1 da fixture continua linear e prova de matching é sintética: teste focal de persistência/topologia, não prova de wrap físico nem ponta a ponta de matching circular. Fixture cria schema/aplica migrations somente quando futuramente autorizada em ambiente descartável.
+
+Comando futuro, não executado:
+
+    dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~WrapDuranteCandidatoIntegracaoTests' --verbosity normal
+
+Política ainda NÃO aprovada: diminuir posição não comprova wrap. Recomendação para análise posterior: evidência dirigida de fim→início em geometria estável, matching inequívoco, timestamps/limites físicos coerentes e janela que exclua múltiplas voltas; só então adotar volta e baseline sem sintetizar passagens do intervalo. Em ambiguidade, impedir geração de identidade reutilizada e aguardar reancoragem/decisão explícita. Baseline pode receber uma volta validada, mas não produz essa evidência; estado atual não registra trajetória completa de A durante a divergência. Riscos/alternativas apresentados na entrega, sem implementar novo contrato ou política. Eventos antigos devem permanecer imutáveis/idempotentes; iniciar nova execução inferida em ambiguidade exigiria aprovação de domínio.
+
+Sem Docker/containers, migrations executadas, conexão a serviços/produção/SSH, ativação da flag/configuração, dependências/downloads, deploy ou commit. Flag default false. Bloqueador permanece até validação real e decisão de política.
+
+## 2026-10-06 — Etapa 2A.2J: inventário e proposta de política circular, sem aprovação funcional
+
+Lidos AGENTS.md/histórico, estado/codec, polling/enriquecimento, regras/repositórios e testes 2A.2E–2A.2I. Somente esta entrada acrescentada. Sem testes executados ou modificados, correção funcional, migrations/schema/codec, serviços/produção/SSH/Docker, ativação, deploy ou commit. Teste vermelho preservado; reprodução de conflito SQL real continua pendente.
+
+Constatações: estado durável de 27 posições guarda identidade A, posição/cursor/Volta/progresso absoluto e timestamps gerais. Durante candidatura a posição/cursor de A congelam enquanto TimestampUltimaAtualizacao avança; não existe timestamp específico da última posição A nem coordenadas desse anchor. Candidato guarda primeira posição/coordenadas/timestamp de B, sem trilha de A, contador de wraps, motivo de ambiguidade ou versão de evidência. DTO recebe coordenadas/timestamp da posição GPS anterior pelo cache ativo; esse anterior pode ser B. Redis recente contém um snapshot substituído, não trilha completa. Enriquecedor guarda rota/timestamp e fila de velocidades em memória, perdidos no reinício. Comprimento/geometria/ocorrências podem ser consultados no PostgreSQL, mas projeção geométrica não prova trajeto físico percorrido. Telemetria durável pode conter amostras, mas coleta/sampling/ingress/falhas não garantem sequência completa disponível no instante da decisão.
+
+É possível provar colisão lógica de identidades e preservar eventos antigos; não é possível reconstruir universalmente quantas voltas físicas ocorreram num intervalo sem trilha confiável. Mesmo observar uma volta futura completa não revela a quantidade de voltas anteriores perdidas. Não aprovada inferência Volta+1 por simples diminuição de posição.
+
+PROPOSTA, NÃO DECISÃO APROVADA: registrar anchor de A com posição/coordenadas/timestamp/versão/sentido/Volta antes da divergência, evidência dirigida limitada e estado de integridade Confiavel/Ambigua. Confirmar wrap somente com geometria estável, matching físico/direcional inequívoco, sequência temporal dirigida fim→início, plausibilidade e intervalo excluindo múltiplas voltas/atalhos ambíguos. Limiares/segmentos de evidência exigem aprovação e testes; proximidade fim/início e bearing isolados não bastam. Wrap comprovado atualiza volta e baseline atomicamente, sem reconstruir passagens do intervalo.
+
+PROPOSTA para ambiguidade: conservar identidade antiga sem emitir passagens/labels operacionais duvidosos, persistir marcador e continuar GPS normalmente. Não basta suspender indefinidamente: após observações novas consistentes que reancorem operação/posição/sentido, se a contagem histórica continuar irrecuperável, iniciar nova execução inferida por perda de continuidade, com novo ViagemId, baseline e volta0 RELATIVA à nova execução. Isso requer aprovação explícita de domínio: não é chegada física nem confirmação de mudança de linha. Sem reancoragem confiável, alerta/intervenção explícita; tempo decorrido sozinho não recupera identidade. Alternativa manter ViagemId exigiria recuperar contagem por evidência externa confiável; somente uma volta futura não resolve.
+
+PROPOSTA arquitetural preferida para avaliação: extensão durável separada do snapshot de 27 posições (registro de integridade/evidência), sob MESMO lock/versão/transação PostgreSQL. Não reutilizar campos do candidato B, Volta ou fase como marcadores. JSON antigo pode permanecer estruturalmente idêntico, mas leitores/escritores antigos que ignoram o marcador não são semanticamente seguros. Redis é projeção; perda/reinício não pode apagar Ambigua. Guard de integridade deve impedir emissão incerta inclusive com a flag de mudança desligada depois de produzir esses estados. Binários anteriores não são destino de rollback sem proteção compatível. Nenhuma dessas extensões foi implementada/autorizada.
+
+Próximos passos propostos: executar teste SQL anterior à correção no ambiente descartável; aprovar semântica de reancoragem/nova execução; validar wrap comprovado versus ruído/versão/intervalo longo, ausência de eventos no baseline, marker durável/reinício, concorrência, próxima passagem/idempotência, ML sem identidade incerta e flag desligada. Necessária geometria circular real para política física: fixture focal anterior usa linha com topologia circular e prova sintética.
+
+## 2026-10-06 — Etapa 2A.2K: correção exclusiva da preparação SQL circular
+
+Lidos AGENTS.md/histórico; consultados entidade PadraoVersao, mapeamento EF, migration EstruturaFinalEtapas1e2, fixture e consulta EstruturaAsync do ViagemOperacionalRepository. O erro 42703 informado na execução manual decorre do UPDATE incorreto escrito na preparação do teste: Topologia pertence a PadroesVersoes, não a PadroesOperacionais. A consulta produtiva lê v.Topologia pela versão operacional. A migration também protege contra mutação de versões apontadas por VersaoAtualId; trocar apenas o nome da tabela não resolveria essa proteção.
+
+Alterado exclusivamente WrapDuranteCandidatoIntegracaoTests.cs: helper transacional bloqueia os registros P1/R1 exclusivos da fixture, valida a referência atual, captura a topologia original, retira temporariamente VersaoAtualId de P1, configura R1.Topologia=CIRCULAR e repõe a referência antes do commit. Nenhuma coluna criada, ALTER TABLE ou trigger desabilitado. Falha na preparação reverte a transação. Finally restaura a topologia original pelo mesmo procedimento; limpeza Redis permanece em finally próprio, inclusive se a restauração falhar. Não alteradas assertivas de colisão, rollback, identidade ou preservação do histórico. Teste vermelho local WrapDuranteCandidatoTests preservado.
+
+Validação executada: dotnet build NoPonto/NoPonto.csproj --no-restore --verbosity quiet; aprovado, zero erros, cinco avisos em arquivos não alterados nesta etapa (CS8981, CS7022, xUnit2031), duração 45,08 segundos. Não executados testes, PostgreSQL, Redis, Docker, migrations ou comandos contra serviços. A preparação SQL corrigida ainda depende de execução manual no ambiente descartável. Geometria R1 continua linear e prova de matching sintética: configura topologia relacional circular aceita pelo contrato existente, sem comprovar wrap físico ou matching circular ponta a ponta.
+
+Comando futuro para somente o teste real, não executado:
+
+    dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName=NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests.CancelamentoCircular_ColisaoOutbox_ReverteEstadoEPreservaHistorico' --verbosity normal
+
+Somente o teste de integração e esta entrada foram alterados. Código funcional, algoritmo circular, entidades, migrations, schema/codec, configurações, infraestrutura e alterações anteriores preservados. Sem ativação da flag da aplicação, produção/SSH, deploy ou commit. Defeito de domínio não corrigido.
+
+## 2026-10-06 — Etapa 2A.2K: instrumentação do teste para comprovar conflito SQL e rollback
+
+Lidos AGENTS.md/histórico/teste e reconfirmada a cadeia: InserirOutboxAsync compara payloads JSONB no PostgreSQL e lança EventoViagemPayloadConflictException quando diferentes; essa exceção herda de FormatException, capturada por TentarAtualizarInternoAsync como InvalidState. A expectativa anterior de InfrastructureFailure estava incorreta. InvalidState isolado não comprova colisão.
+
+Alterado somente WrapDuranteCandidatoIntegracaoTests.cs: logger exclusivo da instância recebe as exceções pelo LogWarning produtivo existente, sem subscriptions globais, mocks de comportamento, alteração funcional ou recursos externos de diagnóstico a liberar. Antes da tentativa final, limpa os registros de exceção; exige exatamente EventoViagemPayloadConflictException, EventId esperado, campo divergente payload, ausência de truncamento e stack trace contendo InserirOutboxAsync. Somente junto dessas evidências aceita InvalidState.
+
+Acrescentadas leituras do payload original existente no outbox e snapshot SQL completo de Estado/Versao/AtualizadoEmUtc. Prévia somente de leitura executa a consulta real de transição de ocorrências e Decidir produtivo para o mesmo GPS; valida o evento, exige o mesmo EventId e compara no PostgreSQL o novo payload serializado com o antigo usando desigualdade JSONB. Nenhum evento ou resultado é injetado no repositório. Após a chamada real, exige snapshot durável integralmente inalterado e payload original preservado; mantém assertivas de contagem do outbox, recuperação do estado após remoção Redis, ausência de novos itens para materialização, três passagens históricas e timestamp/volta originais. Preparação/restauração da topologia e limpeza Redis preservadas. Teste vermelho local não alterado.
+
+Compilação executada: dotnet build NoPonto/NoPonto.csproj --no-restore --verbosity quiet; aprovada, zero erros, cinco avisos preexistentes em arquivos não alterados (CS8981/CS7022/xUnit2031), duração 19,75 segundos. Nenhuma assertiva do teste real foi executada nesta etapa. Colisão SQL e rollback continuam pendentes de comprovação manual com esta instrumentação; comportamento até aqui fundamentado no código e na falha anterior informada. Limitação física permanece: geometria linear e matching sintético da fixture não demonstram trajeto circular real.
+
+Comando futuro, não executado:
+
+    dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName=NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests.CancelamentoCircular_ColisaoOutbox_ReverteEstadoEPreservaHistorico' --verbosity normal
+
+Alterações efetivas: teste de integração e esta entrada. Sem código funcional/schema/codec/migrations/política circular modificados, teste vermelho removido, serviços externos executados, Docker iniciado, produção/SSH, ativação da flag da aplicação, commit ou deploy.
+
+## 2026-10-06 — Etapa 2A.2L: implementação de integridade circular (em validação)
+
+O usuário informou aprovação manual de WrapDuranteCandidatoIntegracaoTests instrumentado no PostgreSQL/PostGIS/Redis descartáveis: conflito específico, rollback e histórico preservado. Resultado informado, não executado pelo agente; fixture linear com topologia circular/matching sintético continua sem demonstrar percurso físico circular. Lidos pedido anexado, AGENTS.md/histórico, contratos/regras/codec, polling/enriquecimento, persistência, outbox/journal, fixture e testes anteriores.
+
+Primeira implementação: estado interno IntegridadeCircular independente do array de 27 posições, com identidade da execução/linha/sentido/padrão/versão, volta confirmada, âncora física confiável e evidência de reancoragem, ambiguidade/momento/motivo. Migration aditiva 20261006180000_IntegridadeCircularDuravel acrescenta coluna JSONB anulável na mesma linha ViagensOperacionais. Migration criada, não aplicada; tabela já mantida por SQL fora do modelo EF, como nas migrations duráveis existentes. Estado/integração/outbox usam o mesmo CAS, lock e transação. Contextos circulares são recuperados da autoridade PostgreSQL, sem confiar em Redis para a extensão.
+
+Regra conservadora nova ViagemOperacional.Integridade.cs: em cancelamento com risco de reabrir cursor ou perder contagem, protege execução e suprime passagens antes de construí-las. Sem prova suficiente não incrementa volta. Recuperação original exige mesma identidade, âncora física, matching/direção e geometria realmente fechada simples, trecho fim→início no corredor físico entre observações e orçamento temporal que admita avanço dirigido mas exclua regressão inversa/volta adicional. Reutilizados 10m/180s, velocidade/margem existentes e tangente/tolerância angular do matching. Com ambiguidade, novas observações sustentadas podem reancorar operação por duas evidências com movimento/progresso/plausibilidade existentes: fim inferido motivo_fim=PerdaContinuidadeCircular, novo ViagemId, volta0 e baseline sem passagens retroativas. Campo opcional omitido em eventos antigos; parsing Redis/validator atualizado. Proteção permanece com flag de mudança desligada. Telemetria ML omite identidade operacional ambígua mantendo GPS/matching observacional.
+
+Arquivos desta primeira implementação: ViagemOperacional.cs, ViagemOperacional.Integridade.cs, TelemetriaMl.cs, ViagemOperacionalRepository.cs, ViagemOperacionalRepository.Integridade.cs, HistoricoEventoRepository.cs e migration aditiva. Testes e auditoria ainda em andamento; esta entrada não declara validação concluída. Sem serviços externos, Docker, produção/SSH, migration aplicada, deploy, commit ou flag ativada em configuração.
+
+### Etapa 2A.2L — testes, refinamentos e auditoria final
+
+Acrescentados IntegridadeCircularRegraTests e IntegridadeCircularPostgresTests. WrapDuranteCandidatoTests mantém Regressao_VoltaFisicaSeguinte_NaoPodeReutilizarIdentidadeDaPassagem e a comparação original Assert.NotEqual de EventId: o cenário agora percorre proteção sem eventos, duas observações físicas novas consistentes, fim/início inferidos e primeira passagem da nova execução. A antiga caracterização de colisão virou regressão de proteção/telemetria. Não feito incremento artificial de volta para tornar verde. Controles antigos de wrap normal/após cancelamento, cursor, linha/sentido/versão, flag e Etapa1 preservados.
+
+WrapDuranteCandidatoIntegracaoTests atualizado para CancelamentoCircular_ProtegeOutboxEHistorico_RecuperaNovaExecucao: a expectativa após a correção é proteção ANTES de outbox, sem exceção de conflito, payload original/histórico preservados, perda de Redis e flag desligada, reancoragem/nova execução, baseline sem passagem e primeira passagem posterior com identidade distinta. Esse teste continua focal e sintético sobre geometria linear; a confirmação manual da antiga colisão permanece registrada acima e não foi reexecutada pelo agente.
+
+Fixture ganhou CriarCircularAsync/PontoCircularAsync: código/linha/sentido/padrão/versão próprios, geometria fechada simples e coordenadas interpoladas no PostgreSQL, sem mutar versões compartilhadas. Reutilizado Harness de MudancaOperacionalPontaAPontaTests com CicloPosicao; provas de matching não são injetadas nos dois casos reais individual/batch. Esses casos percorrem polling, enriquecimento/matching, candidato divergente por código, retorno fim→início, consulta geométrica, baseline/volta1, perda do Redis e materialização da primeira passagem. Outros casos reais preparados: flag false sem ambiguidade e snapshots quentes; falha depois da escrita de estado/integridade tanto na proteção quanto na recuperação, rollback incluindo versão/timestamp/outbox; recuperação concorrente por snapshots iguais após reinício/Redis perdido com flag false, um único fim/início. Total desta etapa: seis casos reais preparados (cinco na classe nova, um na classe anterior atualizada), compilados e NÃO EXECUTADOS.
+
+Refinamentos de auditoria: ProjecaoOperacional.PodeProjetar não solicita projeção da execução ambígua; matching observacional/mapa seguem disponíveis. EtaV2ShadowService também suprime solicitações com identidade ambígua, além da fábrica Telemetria ML; acrescentada regressão em EtaV2FoundationTests, sem alterar predictor/ETA público. PerdaEm é o momento de DETECÇÃO da perda, não hora física de wrap. Âncora guarda timestamp físico próprio; timestamp do candidato nunca é usado como timestamp da posição de A. Em snapshots antigos sem âncora, idade total da execução limita conservadoramente a janela, sem fabricar coordenadas/evidência. Movimento/progresso insuficiente e timeout sozinhos não reancoram.
+
+Semântica de ruído: não marcar por mera posição menor. Reabertura de cursor, mudança geométrica no baseline ou orçamento que comporte wrap/volta adicional fundamentam proteção; pequena oscilação sem reabrir ocorrência, cujo avanço circular completo é fisicamente inalcançável, conserva continuidade. Cenário de baseline circular anterior com avanço seguro preservado; a primeira rodada encontrou uma classificação excessivamente conservadora nesse controle, refinada para comparar orçamento com distância dirigida + volta completa, sem alterar o teste antigo.
+
+Atomicidade/autoridade: coluna IntegridadeCircular é lida e validada junto com Estado/Versao e gravada no mesmo UPSERT, lock de veículo, lock de linha/CAS e transação dos eventos. Comparação adicional rejeita contexto cuja extensão difira do estado durável. Estado ambíguo usa persistência semântica, inclusive sem evento; Redis não pode apagar o marker. Para estados circulares confiáveis, posição quente pode ser utilizada somente na mesma versão/identidade e com integridade hidratada do PostgreSQL; isso preserva o caminho quente antigo sem reverter posições a cada leitura. Viagens antigas confiáveis com flag false não começam a persistir âncoras novas. Logs somente na entrada em proteção e na recuperação, após commit. Array de 27 posições e codec não modificados nesta etapa. Motivo de fim opcional omitido quando nulo preserva payloads antigos; teste de round-trip legado aprovado. Down da migration bloqueado explicitamente para impedir perda automática de proteção.
+
+Validação local: primeira compilação funcional aprovada (27,75s). Uma tentativa inicial de compilar os testes novos detectou nomes incorretos do helper de parsing, corrigidos antes de validar. Rodada inicial: 199 aprovados/1 falha de controle; após refinamento, 200/200 aprovados. Rodada ampliada: 414 aprovados/zero falhas/zero ignorados, recompilando --no-restore, duração de testes3s; inclui caso lógico existente que simula indisponibilidade em 127.0.0.1:1 (não serviço real). Rodada final após auditoria do cache/CAS: 413 aprovados/zero falhas/zero ignorados, recompilando --no-restore, testes2s, excluindo explicitamente esse caso de socket indisponível. Filtros: IntegridadeCircularRegraTests, WrapDuranteCandidatoTests, CancelamentoCandidatoCursorTests, MudancaOperacionalRegraTests, MudancaOperacionalIntegracaoLogicaTests, ViagemOperacionalRegraTests, ViagemOperacionalCodecCompatibilidadeTests, TelemetriaMlIdentidadeTests, TelemetriaMlTests, GpsEnriquecimentoServiceTests, GpsPollingCadenciaTests, GpsPollingFontesTests, GpsMatchingBatchOrquestracaoTests, EtaV2FoundationTests, EtaV2HardeningTests, ViagemObservadaServiceTests e ViagemOutboxCleanupPolicyTests. Cinco avisos preexistentes CS8981/CS7022/xUnit2031; nenhuma validação exclusivamente --no-build. Compilação final da integração após ampliar snapshot de rollback registrada abaixo.
+
+Arquivos efetivamente alterados/adicionados nesta etapa: ViagemOperacional.cs, novo ViagemOperacional.Integridade.cs, ProjecaoOperacional.cs, TelemetriaMl.cs, EtaV2Shadow.cs; ViagemOperacionalRepository.cs, novo ViagemOperacionalRepository.Integridade.cs, HistoricoEventoRepository.cs; migration 20261006180000_IntegridadeCircularDuravel; novos IntegridadeCircularRegraTests/IntegridadeCircularPostgresTests; WrapDuranteCandidatoTests, WrapDuranteCandidatoIntegracaoTests, ViagemOperacionalFixture, MudancaOperacionalPontaAPontaTests (somente harness compartilhado), EtaV2FoundationTests; este HISTORICO.md. Alterações anteriores preservadas; nenhuma configuração, infraestrutura, CI/CD ou dependência alterada.
+
+Limitações/pendências: não declarar esta implementação validada em PostgreSQL até executar os seis casos reais novos e regressões duráveis/outbox/2A.2G. Prova geométrica nova/SQL não executada pelo agente: depende de geometry/matching corretos, corredor/direção e orçamento plausível; geometrias abertas, autointerseções, versões diferentes, percurso fora do corredor, intervalos longos ou múltiplas voltas possíveis seguem conservadoramente protegidos. Regra local com entradas controladas não demonstra percurso físico real. Sem trilha confiável do intervalo, contagem histórica não é reconstruída; nova execução usa volta0 relativa. Falha de enriquecimento/filtro anterior pode retardar evidência de recuperação; não libera labels. Não reprocessado histórico.
+
+Custos: um único registro JSONB limitado por veículo, com no máximo uma âncora e uma evidência de reancoragem, sem crescimento de trilha/histórico. Leitura de autoridade adicional por GPS circular; GPS confiável com flag habilitada e âncora atualizada demanda commit durável, aumentando WAL/locks. Guard ambíguo também persiste posições aceitas. Consulta geométrica por versão/PK somente em tentativa de retorno/recuperação com posição inferior à âncora, sem varrer histórico. É necessária medição de carga no ambiente de homologação antes de rollout em servidor limitado.
+
+Compatibilidade/implantação futura: migration aditiva deve preceder o novo binário (a leitura requer a coluna mesmo com flag false). Estados antigos têm NULL e não recebem evidência inventada. Distribuir consumidores de eventos que preservem motivo_fim e atualizar TODOS os escritores operacionais antes de permitir novas proteções/recuperações. Não misturar escritor antigo: ignora o marker e pode emitir identidade incorreta ou manter extensão incompatível com uma nova execução. Como candidatos antigos podem exigir proteção mesmo com flag false, realizar a troca de escritores com processamento coordenadamente interrompido/drenado, não assumir que a flag resolve mistura de versões. Retomar com flag false, executar homologação/carga e regressões, depois avaliar ativação controlada. Rollback somente para binário que compreenda integridade/motivo_fim; preservar coluna, markers e outbox. Desligar flag não elimina proteção nem desfaz eventos. Sem remoção/migration Down/reprocessamento como rollback.
+
+Comandos futuros, não executados; somente após identificar conexões descartáveis de testes (fixtures aplicarão migrations no schema exclusivo):
+
+    dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~IntegridadeCircularPostgresTests' --verbosity normal
+    dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~WrapDuranteCandidatoIntegracaoTests' --verbosity normal
+    dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~MudancaOperacionalPontaAPontaTests' --verbosity normal
+    dotnet test NoPonto/NoPonto.csproj --no-restore --filter '(FullyQualifiedName~ViagemOperacionalIntegracaoTests|FullyQualifiedName~ViagemOutboxBatchTests|FullyQualifiedName~ViagemDuravelPostgresTests)&FullyQualifiedName!~Chaos_RedisPara_ReiniciaVazio_ContinuaMesmaViagem' --verbosity normal
+
+Sem Docker/containers iniciados, conexão a PostgreSQL/PostGIS/Redis reais, migration aplicada, produção/SSH, deploy, commit, configuração de flag ativada, dados históricos reais alterados ou dependências instaladas. Testes reais permanecem pendentes de execução manual.
+
+Compilação final após incluir AtualizadoEmUtc no snapshot real de rollback: dotnet build NoPonto/NoPonto.csproj --no-restore --verbosity quiet, aprovada, zero erros/cinco avisos preexistentes, 9,56 segundos. Nenhum teste real executado. Revisão do diff e arquivos novos concluída; git diff --check sem erros de whitespace (somente avisos de normalização LF/CRLF).
+
+Reforço final da reprodução: acrescentado controle local CruzamentoOriginalDuranteProtecao_NaoConstroiEventoConflitante para o avanço .05→.25 cruzando a ocorrência .2 enquanto protegido. O teste SQL atualizado também repete exatamente esse cruzamento antes de recuperar: espera Updated protegido, zero eventos novos, histórico/payload anterior intactos; a segunda observação .30 reancora a nova execução por baseline e a primeira passagem futura .45 cruza .4 com nova identidade. Isso evita deslocar o cenário de colisão para antes da primeira ocorrência. Rodada definitiva, recompilada --no-restore com o mesmo filtro local excluindo o socket de outage: 414 aprovados, zero falhas/ignorados, testes1s; os seis casos reais atualizados também compilados, ainda NÃO EXECUTADOS. Implementação concluída no escopo local; validação SQL/geométrica real e de carga permanecem obrigatórias antes de implantação.
+
+## 2026-10-06 — Etapa 2A.2M: resultados reais informados pelo usuário
+
+Execução manual em containers locais descartáveis, não repetida pelo agente: IntegridadeCircularPostgresTests 5/0; WrapDuranteCandidatoIntegracaoTests 1/0; MudancaOperacionalPontaAPontaTests 5/0; ViagemOperacionalIntegracaoTests + ViagemOutboxBatchTests + ViagemDuravelPostgresTests 105/0. Total 116 aprovados, zero falhas. Excluído Chaos_RedisPara_ReiniciaVazio_ContinuaMesmaViagem. Esses resultados substituem a pendência de execução dos respectivos casos da etapa L; não demonstram carga nem os novos casos da etapa N.
+
+## 2026-10-06 — Etapa 2A.2N: auditoria e correção localizada do ETA shadow
+
+Consultados AGENTS.md, histórico H–M, diffs e arquivos novos, registros do Program, regras, codec, migration, polling/enriquecimento, persistência/outbox/materialização, consumidores ML/ETA e fixtures. Preservadas alterações anteriores. Identificada lacuna no TryRecord do ETA shadow: validação de versão/alvo não exigia correspondência de veículo, timestamp, padrão nem versão relacional do alvo. Quatro novos casos locais falharam antes da correção (4 falhas/0 aprovados). Acrescentadas essas validações e correspondência de snapshot/fase/código/linha/sentido/topologia quando há EstadoOperacional; sem alterar predictor, payloads, schema ou contratos persistidos. Nove casos de regressão em EtaV2FoundationTests. Primeiro filtro local ampliado após correção: 424 aprovados, zero falhas/ignorados, compilação --no-restore; resultado final após novos controles registrado abaixo.
+
+Preparados quatro casos reais em MudancaOperacionalPontaAPontaTests, NÃO EXECUTADOS: códigos distintos com geometria sobreposta ABB individual/batch, ABCBA sem compartilhar evidências, e falha durável depois do aceite GPS seguida de repetição do mesmo timestamp. Reutilizada fixture com linhas/códigos próprios e geometria real; nenhuma prova de matching injetada. Harness aceita callback opcional para hook produtivo existente, configurado no inicializador; falha ativada apenas em escopo de teste e desativada em finally. Primeira tentativa de compilar detectou atribuição indevida a hook init-only; corrigida exclusivamente no harness antes de validar. Acrescentados dois controles locais do adapter BRT para 42/43 mantendo BRT-902090. Pipeline real dos novos testes utiliza snapshot SPPO; não alegar execução ponta a ponta do HTTP/polling BRT.
+
+Bloqueadores documentados no relatório AUDITORIA_2A_2N.md: GPS Redis e viagem PostgreSQL têm commits separados; filtro de timestamp impede retry igual após falha operacional. Transação do outbox protege commits realizados, mas não garante recuperação de toda observação aceita pelo GPS. Solução exige contrato de retry/ingress e não foi implementada como refatoração ampla. Schema deve preceder novo binário; mistura de escritores antigos pode ignorar proteção e corromper identidade mesmo com flag false. Consumers antigos podem descartar motivo_fim. Carga circular precisa medição: leitura autoritativa por GPS, atualização de âncora durável aumenta escrita/WAL; sem benchmark inventado. Tempos históricos legados não são preenchidos pelo materializador atual e treino externo não está neste repositório; não certificada construção externa de labels.
+
+Nenhum Docker, serviço real, produção/SSH, migration aplicada, deploy, commit, ativação de flag, configuração/infraestrutura ou dado histórico alterado. Migration existente preservada. Classificação de prontidão: REPROVADO PARA IMPLANTAÇÃO global até resolver retry, validar novos cenários e estabelecer implantação coordenada/carga.
+
+Validação final N: filtro lógico da etapa L acrescido de GpsBrtTelemetriaTests, excluindo explicitamente Protecao_OutageGlobal_ExecutaUmaSondaEPulaChunksRestantes e sem classes reais. Todos os novos arquivos de integração foram compilados junto com o projeto via --no-restore. Uma rodada teve 425 aprovados/1 falha em Worker_FlushesAtMaximumDelay preexistente (espera assíncrona limitada a 2s); repetição isolada passou 1/1 em 57ms, e repetição integral passou 426/426, zero falhas/ignorados, testes1s. Não alterado nem suprimido esse teste; causa da intermitência não comprovada. Cinco avisos preexistentes na recompilação, nenhum erro na validação final. Os quatro casos SQL novos permanecem NÃO EXECUTADOS. git diff --check sem erros, apenas avisos de normalização LF/CRLF.
+
+Compilação explícita final: dotnet build NoPonto/NoPonto.csproj --no-restore --verbosity quiet, exit code0, zero erros/avisos nessa compilação incremental, 1,61s. Relatório completo, evidências/linhas, riscos de labels e procedimento de medição/comandos manuais acrescentados em NoPonto/AUDITORIA_2A_2N.md. Arquivos efetivamente alterados nesta etapa limitados a EtaV2Shadow.cs, EtaV2FoundationTests.cs, GpsBrtTelemetriaTests.cs, MudancaOperacionalPontaAPontaTests.cs, HISTORICO.md e novo relatório.
+
+## 2026-10-06 — Etapa 2A.2O: reprodução de recuperação e bloqueio arquitetural
+
+Resultado manual INFORMADO PELO USUÁRIO, não reexecutado pelo agente: MudancaOperacionalPontaAPontaTests, nove reais aprovados, incluindo os quatro novos N. O caso FalhaDuravelDepoisGpsAceito_RepeticaoMesmoTimestampNaoReprocessaCandidato caracteriza ausência de retry; verde não significa correção. Expectativa antiga preservada.
+
+Consultados AGENTS.md, histórico, auditoria N, polling/filtros/enriquecimento/snapshot, cache, serviço/repositório operacional/checkpoint e testes duráveis/outbox/circulares. Antes de qualquer implementação, confirmado: filtro GPS descarta duplicado antes do enriquecimento; segundo portão exige aceite Redis para chamar viagem; falha operacional não mantém snapshot; Updated pode ser somente Redis quente sem commit PG. Um watermark baseado apenas em Updated seria falsa confirmação durável. Prova MatchingOperacionalPlausivel é efêmera/JsonIgnore e precisa evidência física recuperável, não boolean fabricado no retry.
+
+Acrescentados dois casos locais RecuperacaoPendente_GpsRepetidoDepoisFalha_DeveRetentarOperacao, mesma instância/nova instância: cache controlado aceita primeiro, repositório controlado falha, repetição é rejeitada pelo cache. Chamador produtivo deveria retentar operação, mas número de chamadas esperado2/obtido1. Rodada de reprodução com --no-restore: dois vermelhos esperados, zero aprovados, código compilado sem erros/cinco avisos preexistentes. Não prova SQL nem simula desligamento real do processo; isola gate produtivo. Helper PositionCache do teste passou a permitir mudar status entre chamadas; código funcional não alterado.
+
+Preparado RecuperacaoPendente_MesmoGpsDepoisRollback_DeveRecuperarCandidatoEConfirmar em MudancaOperacionalPontaAPontaTests: fixture/harness/SQL e matching produtivos, falha pré-commit via hook existente/finally, retry do mesmo timestamp, candidato original, confirmação posterior/fim único/zero passagens artificiais. Compilado, NÃO EXECUTADO, esperado vermelho no código atual. Não modificadas expectativas do teste antigo para produzir verde.
+
+Implementação funcional INTERROMPIDA conforme cláusula do pedido sobre mudança arquitetural substancial: recuperação que inclua restart/perda Redis exige captura recuperável de GPS/predecessor antes do descarte, ACK durável distinto de estado quente, ordenação entre instâncias e política de gap/expiração/capacidade. Fila em memória ou bypass do timestamp não satisfazem essas invariantes. Relatório RECUPERACAO_GPS_2A_2O.md apresenta contrato proposto, alternativas, limites de indisponibilidade PG/fonte sem replay, matriz de oito cenários e desenho recomendado de ingress PostgreSQL aditivo; não implementados ingress, migration ou política não aprovada. Bloqueador permanece, sem alegação de recuperação garantida.
+
+Regressões locais ampliadas, recompilando --no-restore: 426 aprovados, dois vermelhos novos esperados, zero ignorados, total428, testes1s. Mesmo filtro N mais os novos casos da classe já incluída; excluído explicitamente Protecao_OutageGlobal_ExecutaUmaSondaEPulaChunksRestantes; nenhuma classe de integração real executada. Exit code1 decorre das duas reproduções, não erro de compilação. Nenhum teste declarado corrigido ou tornado verde. Filtros futuros que incluam ViagemObservadaServiceTests ou toda a classe real agora incluem reproduções vermelhas deliberadas.
+
+Arquivos efetivamente alterados nesta etapa: ViagemObservadaServiceTests.cs, MudancaOperacionalPontaAPontaTests.cs, novo RECUPERACAO_GPS_2A_2O.md e HISTORICO.md. Alterações anteriores preservadas. Sem código funcional/codec/schema/migrations/configurações/infraestrutura/ML/ETA alterados; sem produção/SSH, serviços reais/Docker, migration aplicada, reprocessamento histórico, feature flag ativada, dependências, deploy ou commit. Implantação global segue reprovada até resolver contrato e implementar/validar recuperação.
+
+Compilação explícita final O: dotnet build NoPonto/NoPonto.csproj --no-restore --verbosity quiet, exit code0, zero erros/avisos incrementais, 1,63s. git diff --check sem erros de whitespace, somente avisos LF/CRLF.
+
+## 2026-10-06 — Etapa 2A.2O.1: retry Redis leve (em validação)
+
+Decisão explícita do usuário: recuperação limitada de melhor esforço no Redis existente, sem ingress PostgreSQL/tabela/migration, aceitando perda de Redis/registro incompleto/outage prolongada. Lidos AGENTS.md/histórico e relatórios N/O; preservadas alterações anteriores.
+
+Implementados RetryOperacionalGpsService e PendenciaOperacionalGpsRepository: registro somente após falha operacional ou para aguardar pendência anterior, identidade estável/fingerprint físico, observação sem identidade derivada/prova persistida, predecessor físico completo, TTL lógico/TTL Redis de segurança, limite global/por veículo, backoff, ordenação e lease/token CAS. Processamento no ciclo existente, inclusive antes de filtro GPS; mapas não são revertidos por falha PG. Enriquecimento de retry usa instância isolada do serviço produtivo, reconsulta predecessor e GPS sem regredir histerese singleton. GPS novo aguarda pendência anterior no plano operacional, continuando aceito no mapa. Não reemite ML/ETA durante replay.
+
+Contrato de conclusão: propriedade interna PersistidoDuravelmente só no retorno pós-commit; progresso quente sem eventos conserva checkpoint normal. Directive interna/JsonIgnore ExigirPersistenciaDuravel força commit apenas no retry; array/codec/27 campos intactos. Retry consulta autoridade PG para reconhecer commit com resposta perdida ou descartar posição superada, sem repetir efeitos. Contexto alterado, predecessor insuficiente, expiração/limites ou rejeição de domínio são diagnosticados conservadoramente. Não considera Updated isolado como ACK.
+
+Primeira compilação funcional --no-restore aprovada, cinco avisos preexistentes. Dois vermelhos O adaptados para injetar store/enriquecimento de teste e predecessor completo, mantendo expectativa de duas chamadas e mesmo timestamp; passaram. Rodada inicial 13/13; após controles adicionais e revisão, rodada focada 115/115, zero falhas/ignorados, recompilando --no-restore. Sem serviços reais. Teste N de caracterização começou a ser convertido em regressão de recuperação, conforme autorização; evidência histórica preservada nas entradas N/O. Testes reais adicionais e auditoria final em preparação.
+
+Conclusão em 2026-10-07: 16 casos locais novos de retry, cobrindo ordenação/backoff, concorrência, confirmação durável, Updated sem ACK, resposta perdida, predecessor inválido, contexto superado, prazo/limites, Redis indisponível/perdido, ausência de gravação normal, prova física não revalidada, observação alterada no enriquecimento e timeout. Os dois vermelhos O passaram na mesma/nova instância; acrescentada asserção de uma única telemetria original sem identidade incerta, sem republicação no retry. Rodadas ampliadas finais recompiladas --no-restore: 444 aprovados, zero falhas/ignorados, duração dos testes 1–2s, cinco avisos preexistentes. Excluído explicitamente Protecao_OutageGlobal_ExecutaUmaSondaEPulaChunksRestantes, nenhuma classe real executada. Compilação explícita final dotnet build NoPonto/NoPonto.csproj --no-restore --verbosity quiet: aprovada, zero erros/avisos incrementais, 1,74s. git diff --check sem erros, somente avisos LF/CRLF.
+
+Concluída conversão do caso N para FalhaDuravelDepoisGpsAceito_RepeticaoMesmoTimestampRecuperaCandidato; caso real vermelho O preserva expectativa positiva de recuperação. Preparados cinco casos reais novos, SOMENTE COMPILADOS: Retry_RespostaPerdidaDepoisCommit_ReconheceDuravelSemDuplicarEventos; Retry_NovaInstanciaComRedisPreservado_RecuperaSemReplayDaFonte; Retry_CircularAposRollback_PreservaProtecaoESuprimeIdentidadeMl; Lua_OrdenacaoLimitesLeaseCasEBackoff_PreservamPayload; Lua_PendenciaExpirada_EncerraSemChamarOperacao. Reutilizada ViagemOperacionalFixture, prefixos Redis exclusivos/limpeza finally; novos harnesses compartilham fila somente no cenário explícito de troca de instância. Troca de componentes não comprova desligamento real do processo. Scripts Lua, SQL/outbox e matching geométrico desta implementação permanecem pendentes de execução manual.
+
+Revisão final acrescentou cadastro quando matching falha por infraestrutura após aceite GPS, verificação da idade GPS/configuração, timeout cooperativo por tentativa, fingerprint do predecessor, validação da identidade física após reenriquecimento e limpeza atômica de índice órfão sem remover cadastro concorrente. Backoff dos itens posteriores acompanha a cabeça para evitar que o índice global favoreça indefinidamente backlog bloqueado. Expiração lógica diagnosticada pelo polling; expiração física/evicção/perda Redis durante parada NÃO permite diagnóstico individual recuperável. Nenhuma garantia de auditoria durável ou exactly-once global. Limites padrão: TTL lógico180s, TTL físico420s, backoff20s exponencial, quatro tentativas, três itens/veículo, 2.000 globais, quatro claims com item/ciclo/instância, timeout cooperativo3s e lease60s. Caminho normal: até duas leituras Redis extras por GPS aceito e consulta limitada de prazos/ciclo; zero escritas de fila e zero novas escritas PG por GPS normal. Sem benchmark; custo/memória/latência precisam medição local/homologação.
+
+Arquivos desta etapa: novos RetryOperacionalGps.cs, PendenciaOperacionalGpsRepository.cs, RetryOperacionalGpsTests.cs, RetryOperacionalGpsRedisIntegracaoTests.cs e RETRY_OPERACIONAL_2A_2O_1.md; alterações em GpsPollingService.cs, GpsEnriquecimentoService.cs, ProjecaoOperacional.cs, ViagemObservadaService.cs, ViagemObservadaState.cs, IViagemObservadaRepository.cs, ViagemOperacionalRepository.cs, PosicaoApiDto.cs, Program.cs, ViagemObservadaServiceTests.cs, MudancaOperacionalPontaAPontaTests.cs e HISTORICO.md. Demais alterações anteriores preservadas. Relatório novo contém contrato/custos/limitações, classificação das evidências e comandos manuais. Implementação local concluída no escopo aprovado; implantação requer testes reais e carga, mantendo requisitos coordenados de schema/binários da proteção circular anterior. Ingress durável/replay integral/auditoria forte adiados para depois do TCC.
+
+Sem Docker, serviços reais, produção/SSH, migrations executadas, novas tabelas/schema/codec/array27, configuração de infraestrutura/CI/CD, algoritmos ETA/ML, dados históricos, flags ativadas, dependências instaladas, commit ou deploy. Não prometida recuperação após perda total Redis, falha anterior ao registro, limites ou indisponibilidade prolongada. Flags de mudança operacional permanecem como estavam; registro DI do retry utiliza padrões aprovados, sem editar configurações.
+
+## 2026-10-07 — Etapa 2A.2P: encerramento da estabilização para o TCC
+
+Resultados manuais INFORMADOS PELO USUÁRIO, não reexecutados pelo agente: 444 locais O.1 aprovados; dois reais Redis/Lua aprovados; cinco reais específicos de recuperação aprovados; regressão consolidada real124 aprovados/zero falhas. Baterias sobrepostas, NÃO somadas como casos únicos. Resultados fecham a pendência funcional da recuperação limitada O.1; não são benchmark nem comprovação de capacidade em4GiB. Logs/filtros individuais da consolidação não foram fornecidos; registro não atribui independentemente os124 a cenários específicos.
+
+Lidos AGENTS/histórico/relatórios N/O/O.1 e inspecionados diffs/arquivos novos, fluxo polling/cache/enriquecimento/retry/operação/transação/outbox/histórico/ML, migration e métricas existentes. Nenhum defeito funcional novo comprovado que justifique correção antes da homologação. Preservados código funcional, limites e alterações anteriores. Criado ENCERRAMENTO_OPERACIONAL_2A_2P.md com evidências/métodos/linhas, custo potencial, procedimento manual de medição PowerShell/Redis/SQL READ ONLY, gates de capacidade, implantação coordenada/recuperação e classificação A/B/C.
+
+Custo auditado: até duas leituras Redis adicionais por GPS aceito, consulta limitada de prazos/ciclo, sem gravação da fila por posição normal; limite2000 global/3 por veículo, TTL lógico180s/físico420s, quatro tentativas e quatro claims com item/ciclo/instância. Retry reconsulta autoridade/contexto e reenriquece o par físico; timeout3s cooperativo, até cerca12s de trabalho por ciclo fora de I/O Redis/dependências sem cancelamento. Principal custo a medir: contexto circular autoritativo e atualização da âncora/extensão podendo exigir commit por observação, WAL/tuplas mortas/pool. Não inventado benchmark nem teto de memória em bytes; relatório fornece estimativa condicional de JSON e comandos MEMORY USAGE. O stopwatch/counters Performance GPS começam após retry inicial; total_ms não representa toda a recuperação. Lacuna classificada desejável de observabilidade, documentada sem alteração funcional; start_to_start inclui cadência/delay e não é tempo puro de trabalho.
+
+Prontidão: AVANÇAR PARA HOMOLOGAÇÃO CONTROLADA E DESENVOLVIMENTO HISTÓRICO/ETA, sem nova arquitetura. Gates antes de implantação: capacidade medida no volume/cadência alvo do TCC, schema antes do binário, interrupção coordenada e todos escritores/consumers compatíveis, artefato de retorno compatível. Flag false não torna seguro escritor antigo nem dispensa coluna; Down da migration bloqueia remoção da integridade. Preservar PG/outbox/histórico/markers/pendências; restart só recupera Redis mantido e prazo válido. Perda Redis/outage prolongada/registro incompleto continuam limitações aceitas de melhor esforço, NÃO novos bloqueadores. Ingress SQL/replay forte/auditoria completa/otimizações avançadas ficam pós-TCC.
+
+Somente relatório novo e este registro alterados nesta etapa. Nenhum teste ou build repetido, pois não houve mudança de código/teste; validações funcionais referem-se às rodadas anteriores e resultados manuais informados. Comandos de medição/checklist NÃO EXECUTADOS. Sem Docker/serviços reais, produção/SSH, migration aplicada, infraestrutura/CI/CD, flags ativadas, ETA/ML ou dados históricos alterados, dependências instaladas, deploy ou commit. Diff documental revisado; alterações anteriores preservadas.
+
+## 2026-10-07 — Etapa 3A: componentes offline do dataset ETA/GPS
+
+Antes das edições, lidos AGENTS e histórico, inspecionados status/diffs rastreados e arquivos novos. ENCERRAMENTO_OPERACIONAL_2A_2P.md solicitado não existe no workspace desta execução; consultado registro P no histórico, ausência comunicada. Nenhum arquivo anterior sobrescrito/restaurado e nenhuma operação Git destrutiva/branch/commit. Inventariados telemetria ML/factory/publisher/worker/repository, entidades/schema/índices, operação/passagens/journal, ETA público/shadow e treino externo. AdminMlController encontra-se excluído da compilação pelo csproj: não alegar endpoint ativo. Documentação legada refere scripts Python que não estão neste checkout.
+
+Implementados componentes independentes offline novos EtaDataset.cs e EtaDatasetTests.cs: fonte paginada por execução completa, CSV invariante, label TimestampPassagem-TimestampGps, próxima ocorrência operacional explícita, mesma execução/volta/estrutura, journal real compatível, distância geography conferida, identidade incompleta/procedência não auditada/proteção rejeitadas, fronteiras temporais com purga de viagens, features por observação e allowlist sem futuro, deduplicação/conflito antes de exportar, limites de páginas/candidatos. Não registrado no Program nem ligado ao polling/ETA; não existe adapter PG automaticamente certificando procedência. SQL parametrizado de descoberta de candidatos preparado em ETA_ML_CANDIDATOS_3A.sql, somente leitura, NÃO EXECUTADO. Histórico não possui versão de qualidade nem trilha completa de intervalos protegidos; a classificação externa AuditadaSemProtecao exige manifesto/evidência e não é inferida pelo gerador. Dados legados não recebem confiança por UUID ou por data escolhida pelo agente.
+
+Primeira tentativa detectou dois erros de inferência new()/params exclusivamente nos testes; corrigidos antes de validação. Primeira suíte dataset23/23 aprovada; regressão com identidade ML/ETA/integridade126/126, depois129/129 após três controles adicionais, recompilando --no-restore. Rodada final após conferência da distância geográfica e defaults em andamento; resultado final será acrescentado. Fração geometry não foi tratada como fração métrica; consulta proposta usa ST_LineSubstring::geography, fonte deve fornecer distância conferida. Velocidades inválidas tornam-se ausentes, não labels; métricas históricas futuras não usadas. Nenhum SQL, serviço externo, Docker, produção/SSH, migration, algoritmo operacional/ETA público, treino, dependência ou histórico real alterado.
+
+Validação final3A: 131 aprovados/zero falhas/zero ignorados, incluindo28 casos novos dataset, execução227ms, recompilando --no-restore. Rodadas intermediárias130/130 também aprovadas. Corrigido aviso de nulidade no código novo; rodada final só cinco avisos preexistentes. Compilação explícita dotnet build NoPonto/NoPonto.csproj --no-restore --verbosity quiet: exit0, zero erros/avisos incrementais,1,49s. Acrescentados controles de allowlist sem labels/futuro, duplicatas conflitantes, distância geography, precisão de timestamp PG (até9ticks de100ns entre JSON/journal e timestamptz) e alinhamento aos valores produtivos ONIBUS/BRT. Nenhum teste local declarou qualidade de dados reais.
+
+Preparado EtaDatasetPostgresTests.ConsultaCandidatos_JournalGeographyEPaginacaoTimestampIgual, reutilizando fixture existente, registros sintéticos pelos repositories produtivos de telemetria/materialização, SELECT READ ONLY e limpeza exclusiva/finally. Verifica journal/label/trecho geography, candidato incompleto e keyset de timestamp igual com UUIDs distintos. Compilado, NÃO EXECUTADO; fixture exige conexões descartáveis porque cria/migra/remove schema. SQL e custos espaciais permanecem pendentes. Não preparada fonte que invente certificação do histórico; adapter/procedência dependem de manifesto/coleta prospectiva auditada ou decisão futura de marcador mínimo de qualidade, sem nova arquitetura de ingresso.
+
+Arquivos EXCLUSIVOS desta etapa: novos EtaDataset.cs, EtaDatasetTests.cs, EtaDatasetPostgresTests.cs, ETA_ML_CANDIDATOS_3A.sql e ETA_ML_DATASET_3A.md; somente acréscimos em HISTORICO.md. Mudanças anteriores rastreadas mantêm os mesmos diff/numstat; novos arquivos anteriores preservados. Sem conflitos funcionais. Relatório contém inventário real, restrição do controller admin excluído, schema/features/labels/splits, uso offline, SQL/manual, exclusões, exemplo sintético, custo/limites e menor caminho para fonte certificada. Resultado: componentes independentes funcionais/testados prontos para3B; NÃO dataset PostgreSQL automaticamente confiável nem modelo treinado. Não reprocessados dados históricos reais e não prometida ausência de proteção a partir do snapshot corrente.
+
+## 2026-10-07 — Etapa 3A.1: preparação da passagem do teste PostgreSQL
+
+Primeira execução real INFORMADA PELO USUÁRIO em PostgreSQL16/PostGIS3.4+Redis7 descartáveis, não reexecutada pelo agente: EtaDatasetPostgresTests.ConsultaCandidatos_JournalGeographyEPaginacaoTimestampIgual falhou na preparação/materialização antes da consulta SQL. EventoViagemValidator.Validar lançou FormatException Passagem estrutural incompleta. Classificação A comprovada: teste definiu TimestampEvento=GPS+70s e TimestampPassagem=GPS+60s; validator linha213 exige igualdade e lança na217. Campos estruturais/IDs estavam presentes. Produção ViagemOperacional.cs155 passa instante da passagem à fábrica Evento e ao campo TimestampPassagem, deixando TimestampGps confirmador separado. Nenhuma evidência de alteração incompatível anterior ou defeito produtivo nesta causa.
+
+Lidos AGENTS/histórico/relatório3A; inspecionado Git sujo, contrato/validator/materializador, construção produtiva e helpers existentes. Fábrica produtiva Evento privada; helpers de batch privados/dependentes de fixture não representam este cenário interpolado. Centralizada criação no helper exclusivamente de teste CriarPassagem e criada regressão local usando esse MESMO helper e validator produtivo, sem instanciar fixture/serviço externo. Antes de corrigir timestamp, regressão recompilada --no-restore falhou1/1, zero aprovados. Corrigido builder com campos nomeados explícitos e TimestampEvento=TimestampPassagem=GPS+60s, TimestampGps=GPS+70s mantido. Regressão exige validade e rejeição do formato anterior com a mesma mensagem.
+
+Arquivos desta etapa somente EtaDatasetPostgresTests.cs, EtaDatasetTests.cs, acréscimos em ETA_ML_DATASET_3A.md e HISTORICO.md. SQL, assertivas reais de dataset/journal/label/geography/paginação, limpeza finally e código funcional/validator intactos. Alterações anteriores preservadas. Nova execução real permanece pendente de execução manual; testes locais/compilação em validação. Sem produção/SSH, Docker, PostgreSQL/Redis pelo agente, migrations, histórico real, configuração, deploy, operações Git destrutivas ou commit.
+
+Validação final3A.1: dotnet test NoPonto/NoPonto.csproj --no-restore --filter '(FullyQualifiedName~EtaDatasetTests|FullyQualifiedName~TelemetriaMlIdentidadeTests|FullyQualifiedName~TelemetriaMlTests|FullyQualifiedName~EtaV2FoundationTests|FullyQualifiedName~IntegridadeCircularRegraTests)' --verbosity quiet: 132 aprovados, zero falhas/ignorados, duração3s, recompilando, cinco avisos preexistentes. Inclui regressão do builder corrigido e controle negativo do timestamp antigo. Compilação explícita --no-restore aprovada, zero erros/avisos incrementais,2,11s; git diff --check sem erros. Teste real compilado mas NÃO EXECUTADO pelo agente. Comando manual: dotnet test NoPonto/NoPonto.csproj --no-restore --filter 'FullyQualifiedName~EtaDatasetPostgresTests' --verbosity normal. Apenas no ambiente descartável já identificado. Consulta SQL ainda não comprovada por execução desta correção.
+
+## 2026-10-07 — Etapa 3A.2: preparação de release e coleta limpa
+
+Resultado manual INFORMADO PELO USUÁRIO após correção3A.1: EtaDatasetPostgresTests1 aprovado/zero falhas em PostgreSQL16/PostGIS3.4+Redis7 descartáveis. Fecha pendência de execução do cenário SQL/journal/geography/paginação, não certifica dataset inteiro/carga/procedência. Não reexecutado pelo agente. Decisão aprovada: não recuperar passado para treino, iniciar janela prospectiva e manter sampling aproximadamente10%, modelo em paralelo, sem nova arquitetura.
+
+Lidos AGENTS/histórico/ETA_ML_DATASET_3A.md agora em NoPonto/docs; inventariados status/diffs/untracked, checkpoint e caminhos atuais ignorados. Estado inicial: HEADfcad913cf6fa36a9949c5e25614cd4f13ddb39cf,22 rastreados modificados/23 untracked; versão estabilizada não está apenas no HEAD. Documentos/SQL3A movidos para docs preexistentes e ignorados por .gitignore: incluir explicitamente no checkpoint. Helper do teste ainda procura SQL na raiz/ancestrais; checkpoint offline precisa garantir esse caminho para reproduzir teste, sem alterar fonte nesta etapa. Nenhuma movimentação/cópia/Git destrutivo/commit. Relatório novo ETA_ML_COLETA_LIMPA_3A_2.md lista exatamente15 fontes runtime modificadas, seis testes rastreados, .gitignore, seis fontes runtime novas, migration nova,14 testes novos, AGENTS/HISTORICO e documentos/SQL ignorados; baseline inteira/csproj/artefato/hash necessários para reprodução.
+
+Sampling auditado: determinístico por modal/código de linha/blocoUTC de processamento, hashv1/seed, padrão10% de linhas em bloco60min, NÃO10% Bernoulli por GPS/veículo. Enabledfalse coleta tudo/fail-open; appsettings e compose local têm defaultfalse/percentage10. Valor efetivo do ambiente de destino desconhecido; confirmar override Enabledtrue/percentage10 e logs/opções antes de declarar10%, sem alterar configuração nesta execução. Conferidas métricas candidates/selected/skipped/fail_open, publisher/channel/backpressure/stream/worker/PG pós-commit ACK, DLQ/retries. Mapa saudável não comprova telemetria persistida.
+
+Manifesto proposto com schema noponto-eta-gps-v1/build/hash/schema instalado/fontes reais/sampling/versões estruturais/GTFS/flags/elegibilidade e início UTC NULL. Preencher somente após rollout/health/persistência nova, sem escolher data retroativa. Viagens iniciadas antes do marco excluídas mesmo com GPS novo; não encerrar/resetar viagens para iniciar dataset. Preservar dados operacionais/journal/outbox/estrutura/integridade e streams/chaves de retry operacional. TelemetriasVeiculoMl é candidata a purge legado somente após consultas READ ONLY/FKs/dependências/consumidores externos/backup/health e decisão final. PrevisoesEtaV2 e streams/PEL/DLQ mantidos por padrão. Modelo SQL de limpeza em batches, com ROLLBACK/sem COMMIT e condicionantes, apenas DOCUMENTADO; nenhum DELETE/TRUNCATE/SQL/Redis executado. Corte de coleta basta para começar, purge não é gate.
+
+Preparado ensaio mínimo descartável e health manual com recursos/logs/Redis group/PEL/DLQ/ML novo/PG WAL/outbox, sem thresholds inventados. Rollout exige parar/drenar incompatíveis, backup/retorno compatível, schema antes do binário e consumers/writers compatíveis. Atenção Program623 executa Migrate automaticamente ao iniciar; startup não é probe read-only. Hosted services são monolíticos: não inventada flag/container para subir consumer isolado. PerdaContinuidadeCircular/IntegridadeCircular exigem atualização coordenada mesmo com flagfalse; Down bloqueia remoção. Rollback somente binário compatível/preservando schema/markers.
+
+Somente relatório novo e este acréscimo ao HISTORICO alterados. Sampling/flags/código/ETA/infraestrutura intactos; mudanças anteriores preservadas. Sem testes/build repetidos porque execução exclusivamente documental; validações funcionais são anteriores/resultados informados. Comandos futuros/checkpoint/manifesto/ensaio/rollout/purge NÃO EXECUTADOS; marco UTC oficial não definido. Sem Docker/serviços reais/produção/SSH, migration/deploy, DELETE/TRUNCATE, dependências, reset/clean/stash/checkout/restore/rebase/branch/commit/push. Próximo passo: checkpoint e ensaio/rollout pelo operador, começar coleta limpa e3B em paralelo.
+
+## 2026-10-07 — Etapa 3A.3: revisão e preparação do checkpoint candidato ETA/ML
+
+Criado docs/RELEASE_CANDIDATA_3A_3.md com inventário explícito, revisão de segurança, dependências runtime/codec/migration/retry/ML/dataset, comandos FUTUROS de staging por path (sem glob/add geral), proposta de commit e manifesto/checklist de implantação. Base fcad913cf6fa36a9949c5e25614cd4f13ddb39cf; inventário inicial igual à 3A.2: 22 rastreados modificados e 23 untracked; índice vazio. Plano preserva 53 paths novos/modificados, incluindo oito documentos/SQL ignorados explicitamente escolhidos. Arquivos inalterados da base, inclusive csproj/config/compose e rail-schedule-architecture.md, permanecem incluídos. Excluídos das novas inclusões .env, secrets/saídas locais, bin/obj/caches/dumps/logs/lab-output e notas pessoais. Nenhum valor sensível publicado; literal ACL identificado pertence a credencial efêmera criada e removida pelo teste. Enumeração dos ignorados sinalizou caminhos longos em saídas locais, sem limpeza.
+
+Validação local com SDK 9.0.306: dotnet build NoPonto/NoPonto.csproj --no-restore --verbosity quiet aprovado (zero erros/warnings reportados; incremental, 1,96 s). dotnet test com --no-restore e compilação aprovou 492 testes, zero falhas/ignorados, duração reportada 2 s. Filtro exato registrado no relatório: dataset, retry, circularidade/cancelamento, mudança operacional/codec, ML/identity/shadow, polling e outbox lógico; excluída sonda Protecao_OutageGlobal_ExecutaUmaSondaEPulaChunksRestantes. Integrações reais somente compiladas, não repetidas. git diff --check aprovado; avisos Git LF/CRLF preexistentes. Build sem restore não comprova instalação limpa de dependências.
+
+Pendência de reprodução identificada sem correção: EtaDatasetPostgresTests.LocalizarConsulta busca ETA_ML_CANDIDATOS_3A.sql nos ancestrais, mas SQL atual está em docs. Arquivo será preservado no checkpoint; repetir teste SQL em checkout limpo exige resolver localização no harness ou disponibilizar cópia no path esperado em checkout descartável. Aprovação manual anterior não comprova a organização atual. Runtime de coleta não depende desse locator.
+
+Registrados riscos: migration IntegridadeCircularDuravel obrigatória mesmo com flag false; Program executa Migrate no startup; rollback exige binário compatível, sem remover extensão/proteções. Commit/artefato futuro/hash e configuração efetiva de destino ainda pendentes. Sampling continua deterministic hash modal+linha+blocoUTC60min, LinePercentage=10 e Enabled=true necessário; defaults locais false, destino não consultado. Não é Bernoulli por GPS. Checklist pós-deploy inclui candidatas/selecionadas por linha/modal, coverage linha/hora e telemetrias persistidas. Marco UTC somente após health/persistência, sem certificar viagens antigas.
+
+Alterações efetivas desta etapa: somente este acréscimo e novo relatório; build/testes geraram saídas locais ignoradas. Nenhum código/configuração/flag/sampling/infra alterado, nenhuma funcionalidade nova, staging/commit/push, Docker/SSH/produção, migration/serviço real/purge ou artefato de produção. Checkpoint permanece proposta revisável, sem commit automático.
+
+## 2026-10-07 — Etapa 3A.3: localização SQL resolvida e integração manual aprovada
+
+O operador restaurou manualmente ETA_ML_CANDIDATOS_3A.sql para NoPonto/ETA_ML_CANDIDATOS_3A.sql; Test-Path confirmou o arquivo. EtaDatasetPostgresTests foi reexecutado manualmente no ambiente descartável, com resultado 1 aprovado e 0 falhas. Consulta/journal/geography/paginação continuam aprovados. Não existe mais bloqueio de reprodução relacionado ao path do SQL; este registro encerra a pendência descrita na entrada anterior, preservada como histórico da investigação.
+
+Atualizado somente docs/RELEASE_CANDIDATA_3A_3.md e acrescentado este registro ao HISTORICO.md. O relatório reflete o path restaurado, a aprovação manual e os comandos futuros correspondentes, sem manter o locator como pendência. O agente confirmou a presença do arquivo com Test-Path, mas não reexecutou testes ou serviços externos. Nenhuma alteração de código, SQL, testes ou outro arquivo; nenhum git add, commit ou push. Todo o staging existente foi preservado.

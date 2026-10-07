@@ -15,6 +15,8 @@ public sealed class ViagemObservadaServiceTests
 
     private sealed class Repository : IViagemObservadaRepository
     {
+        public Task<ContextoOperacional?> LerDuravelParaRetryAsync(string ordem, CancellationToken ct) =>
+            Task.FromResult<ContextoOperacional?>(new([],null,null));
         public List<PosicaoVeiculoDto> Calls { get; } = [];
         public ViagemObservadaStatus Status { get; set; } = ViagemObservadaStatus.Updated;
         public bool Throw { get; set; }
@@ -30,18 +32,20 @@ public sealed class ViagemObservadaServiceTests
                 ? new ViagemObservadaState(Guid.NewGuid(), ordem, itinerary, ts.AddMinutes(-1),
                     ts.AddSeconds(-1), .5, Guid.Empty, 0)
                 : null;
-            return Task.FromResult(new ViagemObservadaResultado(Status, state));
+            return Task.FromResult(new ViagemObservadaResultado(Status, state)
+                { PersistidoDuravelmente = Status is ViagemObservadaStatus.Created or ViagemObservadaStatus.Updated });
         }
     }
 
     private sealed class PositionCache(PosicaoVeiculoCacheStatus status) : IPosicaoVeiculoCacheRepository
     {
+        public PosicaoVeiculoCacheStatus Status { get; set; } = status;
         public bool Confirmed { get; private set; }
         public Task<PosicaoVeiculoCacheResultado> TentarAtualizarAsync(string ordem, PosicaoVeiculoDto position,
             DateTimeOffset ts, TimeSpan active, TimeSpan recent, CancellationToken ct)
         {
             Confirmed = true;
-            return Task.FromResult(new PosicaoVeiculoCacheResultado(status));
+            return Task.FromResult(new PosicaoVeiculoCacheResultado(Status));
         }
     }
 
@@ -50,10 +54,10 @@ public sealed class ViagemObservadaServiceTests
 
     private static GpsPollingService Polling(PositionCache cache, Repository repo,
         ITelemetriaMlIngress? telemetria = null, ITelemetriaMlSamplingPolicy? sampling = null,
-        TelemetriaMlMetrics? metrics = null) =>
+        TelemetriaMlMetrics? metrics = null, IRetryOperacionalGps? retry = null) =>
         new(null!, null!, null!, NullLogger<GpsPollingService>.Instance, null!, null!,
             null!, null!, new SourceResolver(), cache, Service(repo), telemetria,
-            telemetriaMlSampling: sampling, telemetriaMlMetrics: metrics);
+            telemetriaMlSampling: sampling, telemetriaMlMetrics: metrics, retryOperacional: retry);
 
     private sealed class SourceResolver : IGpsSourceResolver
     {
@@ -160,6 +164,48 @@ public sealed class ViagemObservadaServiceTests
             (await Service(repo).AtualizarAsync(Position(), default))!.Value.Status);
     }
 
+    // Regressão 2A.2O: não tratar aceite GPS como ACK operacional.
+    // Cache/repositório controlados; executa ConfirmarPosicaoAsync produtivo, sem serviços reais.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RecuperacaoPendente_GpsRepetidoDepoisFalha_DeveRetentarOperacao(bool reiniciar)
+    {
+        var cache = new PositionCache(PosicaoVeiculoCacheStatus.Accepted);
+        var repo = new Repository { Throw = true };
+        var posicao = Position() with { LatitudeAnterior=-22.9, LongitudeAnterior=-43.2001,
+            TimestampAnterior=DateTimeOffset.UtcNow.AddSeconds(-10) };
+        var predecessor=posicao with {TimestampGps=posicao.TimestampAnterior!.Value,
+            Latitude=posicao.LatitudeAnterior.Value,Longitude=posicao.LongitudeAnterior.Value};
+        var entrada=new ResultadoEnriquecimentoGps(posicao,null,ResultadoProjecaoOperacional.NaoSolicitada())
+            {PredecessorFisico=predecessor};
+        var store=new RetryOperacionalGpsTests.Store();
+        var enriq=new RetryOperacionalGpsTests.Enriquecedor();
+        var telemetry=new Telemetria();
+        RetryOperacionalGpsService Retry()=>new(store,Service(repo),enriq,
+            Microsoft.Extensions.Options.Options.Create(new RetryOperacionalGpsOptions()),
+            Microsoft.Extensions.Options.Options.Create(new GpsPollingOptions()),
+            NullLogger<RetryOperacionalGpsService>.Instance);
+        using var polling = Polling(cache, repo, telemetria: telemetry, retry: Retry());
+        Assert.True((await polling.ConfirmarPosicaoAsync(entrada,
+            TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default)).Aceito);
+        Assert.Single(repo.Calls);
+        repo.Throw = false;
+        cache.Status = PosicaoVeiculoCacheStatus.RejectedOlderOrEqual;
+        if (reiniciar)
+        {
+            using var outro = Polling(cache, repo, telemetria: telemetry, retry: Retry());
+            await outro.ConfirmarPosicaoAsync(entrada,
+                TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
+        }
+        else await polling.ConfirmarPosicaoAsync(entrada,
+            TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
+        Assert.Equal(2, repo.Calls.Count);
+        Assert.All(repo.Calls, p => Assert.Equal(posicao.TimestampGps, p.TimestampGps));
+        var evento=Assert.Single(telemetry.Eventos);
+        Assert.Null(evento.ViagemId); Assert.Null(evento.Volta); // retry não reemite label nem altera amostra antiga
+    }
+
     [Theory]
     [InlineData(PosicaoVeiculoCacheStatus.Accepted, 1)]
     [InlineData(PosicaoVeiculoCacheStatus.RejectedOlderOrEqual, 0)]
@@ -245,6 +291,32 @@ public sealed class ViagemObservadaServiceTests
         Assert.Equal(1, metrics.SamplingSelected);
         Assert.Equal(0, metrics.SamplingSkipped);
         Assert.Equal(1, metrics.SamplingFailOpen);
+    }
+
+    [Fact]
+    public async Task Divergencia_PublicaGpsSemViagemAntigaEPreservaAceite()
+    {
+        var posicao = Position() with { ProximaOcorrenciaParadaPadraoId = Guid.NewGuid(),
+            DistanciaProximaParadaMetros = 150 };
+        var repo = new Repository { Status = ViagemObservadaStatus.ItineraryChanged,
+            ItinerarioAnterior = Guid.NewGuid() };
+        var telemetry = new Telemetria();
+
+        var result = await Polling(new(PosicaoVeiculoCacheStatus.Accepted), repo, telemetry)
+            .ConfirmarPosicaoAsync(posicao, TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
+
+        Assert.True(result.Aceito);
+        Assert.Single(repo.Calls);
+        var evento = Assert.Single(telemetry.Eventos);
+        Assert.Null(evento.ViagemId);
+        Assert.Null(evento.Volta);
+        Assert.Null(evento.ProximaOcorrenciaParadaPadraoId);
+        Assert.Equal(posicao.ProximaOcorrenciaParadaPadraoId, evento.OcorrenciaParadaPadraoId);
+        Assert.Equal(posicao.PadraoVersaoId, evento.PadraoVersaoId);
+        Assert.Equal(posicao.CodigoLinha, evento.CodigoLinha);
+        Assert.Equal(posicao.TimestampGps, evento.TimestampGps);
+        Assert.Equal(posicao.Latitude, evento.LatitudeRecebida);
+        Assert.Equal(150, evento.DistanciaProximaParadaMetros);
     }
 
     [Fact]

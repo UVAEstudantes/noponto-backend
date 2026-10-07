@@ -8,7 +8,8 @@ public sealed record ContextoOperacional(
     long VersaoDuravel = 0,
     DateTimeOffset? UltimoCheckpointUtc = null)
 {
-    public bool PodeProjetar => Estado?.Estado is EstadoViagem.Ativa or EstadoViagem.PossivelFim;
+    public bool PodeProjetar => Estado is { Estado: EstadoViagem.Ativa or EstadoViagem.PossivelFim } s
+        && ViagemOperacionalRegra.IdentidadeConfiavel(s);
 }
 
 public enum StatusProjecaoOperacional
@@ -56,7 +57,10 @@ internal sealed record ResultadoEnriquecimentoGps(
     PosicaoVeiculoDto Posicao,
     ContextoOperacional? ContextoOperacional,
     ResultadoProjecaoOperacional ProjecaoOperacional,
-    DiagnosticoEnriquecimentoGps? Diagnostico = null);
+    DiagnosticoEnriquecimentoGps? Diagnostico = null)
+{
+    internal PosicaoVeiculoDto? PredecessorFisico { get; init; }
+}
 
 // Diagnóstico efêmero: não integra API, Redis, viagem, outbox ou SignalR.
 internal enum MotivoAusenciaLinhaGps

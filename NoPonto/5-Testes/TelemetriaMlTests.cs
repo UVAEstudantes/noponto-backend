@@ -23,6 +23,8 @@ public sealed class TelemetriaMlTests
         ProximaOcorrenciaParadaPadraoId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
         LinhaId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
         SentidoId = Guid.Parse("55555555-5555-5555-5555-555555555555"),
+        PadraoOperacionalId = Guid.Parse("66666666-6666-6666-6666-666666666666"),
+        TopologiaPadrao = "LINEAR",
         PosicaoNaRota = .25, ComprimentoRotaMetros = 10_000,
         DistanciaProximaParadaMetros = 300, VelocidadeMedia = 18,
     };
@@ -33,8 +35,11 @@ public sealed class TelemetriaMlTests
         var viagem = Guid.NewGuid();
         var proxima = Guid.NewGuid();
         var resultado = new ViagemObservadaResultado(ViagemObservadaStatus.Updated,
-            new(viagem, "ML-001", Posicao().PadraoVersaoId!.Value, T, T, .25))
+            new(viagem, "ML-001", Posicao().PadraoVersaoId!.Value, T, T, .25,
+                PadraoOperacionalId: Posicao().PadraoOperacionalId!.Value))
         { ProximaOcorrenciaOperacional = new(proxima, Posicao().PadraoVersaoId!.Value, Guid.NewGuid(), 2, .3) };
+        resultado = resultado with { EstadoOperacional = new(resultado.Estado!, "10",
+            Posicao().LinhaId!.Value, Posicao().SentidoId!.Value) };
 
         var evento = EventoTelemetriaMlFactory.Criar(Posicao(), resultado, T.AddSeconds(4));
 
