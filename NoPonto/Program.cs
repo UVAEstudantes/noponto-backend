@@ -568,6 +568,14 @@ builder.Services.AddSingleton<IEtaV2Repository, EtaV2Repository>();
 builder.Services.AddSingleton<EtaV2Channel>();
 builder.Services.AddSingleton<IEtaV2Ingress>(sp => sp.GetRequiredService<EtaV2Channel>());
 builder.Services.AddSingleton<EtaV2ShadowService>();
+// Independent historical Shadow: disabled by default; never shares the public ML client.
+builder.Services.AddOptions<HistoricalEtaShadowOptions>()
+    .Bind(builder.Configuration.GetSection("HistoricalEtaShadow"))
+    .Validate(o => o.Valid(), "Invalid historical Shadow settings").ValidateOnStart();
+builder.Services.AddHttpClient("eta-history-shadow", client => client.Timeout = TimeSpan.FromSeconds(2));
+builder.Services.AddSingleton<IHistoricalEtaGeometry, HistoricalEtaGeometryQuery>();
+builder.Services.AddSingleton<HistoricalEtaShadow>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<HistoricalEtaShadow>());
 builder.Services.AddHostedService<EtaV2BatchWorker>();
 builder.Services.AddHostedService<EtaV2MaintenanceWorker>();
 builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();

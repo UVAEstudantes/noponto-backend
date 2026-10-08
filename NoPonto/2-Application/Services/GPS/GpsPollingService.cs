@@ -40,6 +40,7 @@ public sealed class GpsPollingService : BackgroundService
     private readonly IGpsStructuralHintResolver? _structuralHintResolver;
     private readonly GpsStructuralHintMetrics? _structuralHintMetrics;
     private readonly EtaV2ShadowService? _etaV2Shadow;
+    private readonly HistoricalEtaShadow? _historicalEtaShadow;
     private readonly ITelemetriaMlSamplingPolicy? _telemetriaMlSampling;
     private readonly TelemetriaMlMetrics? _telemetriaMlMetrics;
     private readonly IRetryOperacionalGps? _retryOperacional;
@@ -66,7 +67,8 @@ public sealed class GpsPollingService : BackgroundService
         EtaV2ShadowService? etaV2Shadow = null,
         ITelemetriaMlSamplingPolicy? telemetriaMlSampling = null,
         TelemetriaMlMetrics? telemetriaMlMetrics = null,
-        IRetryOperacionalGps? retryOperacional = null)
+        IRetryOperacionalGps? retryOperacional = null,
+        HistoricalEtaShadow? historicalEtaShadow = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -91,6 +93,7 @@ public sealed class GpsPollingService : BackgroundService
         _telemetriaMlSampling = telemetriaMlSampling;
         _telemetriaMlMetrics = telemetriaMlMetrics;
         _retryOperacional = retryOperacional;
+        _historicalEtaShadow = historicalEtaShadow;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -1130,6 +1133,7 @@ public sealed class GpsPollingService : BackgroundService
                 System.Diagnostics.Stopwatch.GetElapsedTime(inicioViagem));
             // Hot path estritamente não bloqueante: nenhuma conexão/query PostgreSQL ETA.
             _etaV2Shadow?.TryRecord(enriquecimento, viagem);
+            _historicalEtaShadow?.TryCapture(posicao, viagem);
             if (_telemetriaMl is not null)
             {
                 var coletar = true;
