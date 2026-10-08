@@ -55,20 +55,25 @@ class LocalFixture:
     def __init__(self):
         self.name = "noponto-eta-3b1-" + uuid.uuid4().hex[:12]
         self.created = False
+        self.network_created = False
 
     def start(self):
+        network = run(['docker','network','create','--opt','com.docker.network.bridge.enable_icc=false',self.name])
+        require(network.returncode == 0, 'Cannot create exclusive fixture network')
+        self.network_created = True
         result = run(["docker", "run", "--pull", "never", "--rm", "-d", "--name", self.name,
+                      '--network',self.name,'--memory','512m','--tmpfs','/var/lib/postgresql/data:rw,nosuid,size=256m',
                       "--label", "noponto.fixture=eta-3b1", "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
                       "-e", "POSTGRES_DB=eta_fixture", "-p", "127.0.0.1::5432", "postgis/postgis:16-3.4"])
         require(result.returncode == 0, result.stderr)
         self.created = True
-        deadline = time.monotonic() + 60
+        deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
-            result = run(["docker", "exec", self.name, "pg_isready", "-U", "postgres", "-d", "eta_fixture"])
+            result = run(["docker", "exec", self.name, "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "eta_fixture"])
             if result.returncode == 0:
                 break
             time.sleep(.5)
-        require(result.returncode == 0, "PostgreSQL não ficou pronto em 60s")
+        require(result.returncode == 0, "Fixture PostgreSQL TCP não ficou pronta em 180s")
         binding = run(["docker", "port", self.name, "5432/tcp"])
         require(binding.returncode == 0 and binding.stdout.startswith("127.0.0.1:"), "Binding não loopback")
         self.port = int(binding.stdout.strip().split(":")[-1])
@@ -104,6 +109,9 @@ class LocalFixture:
             result = run(["docker", "rm", "-f", "-v", self.name])
             require(result.returncode == 0, "Limpeza do container próprio falhou: " + result.stderr)
             print("Container próprio removido:", self.name, flush=True)
+        if self.network_created:
+            result = run(['docker','network','rm',self.name])
+            require(result.returncode == 0,'Exclusive fixture network cleanup failed')
 
 
 def seed(db, output):
@@ -111,7 +119,7 @@ def seed(db, output):
                "FimValidacao": "2026-10-12T00:00:00Z", "Fim": "2026-10-13T00:00:00Z",
                "ExecucoesPorPagina": 1, "MaxCandidatosPorExecucao": 10000, "MaxPaginas": 1000,
                "MaxLabelSegundos": 3600}
-    audit = json.loads((ROOT / "tools/EtaMl.Export/audit.example.json").read_text(encoding="utf-8-sig"))
+    audit = json.loads((ROOT / "tools/EtaMl.Export/audit.historical.example.json").read_text(encoding="utf-8-sig"))
     audit.update(SnapshotReference="fixture-docker-3b1-known-full-lifecycle", DataKind="synthetic", Trips=[])
     statements = []
     for n, geometry in ((0, "LINESTRING(-43.21 -22.9,-43.19 -22.9)"),
@@ -181,6 +189,8 @@ def seed(db, output):
             statements.append(statement)
     statements.append('''UPDATE "TelemetriasVeiculoMl" g SET "ComprimentoRotaMetros"=ST_Length(v."Geometria"::geography)
         FROM "PadroesVersoes" v WHERE v."Id"=g."PadraoVersaoId";''')
+    # Exclusive fixture: straight and curved segments preserve direct-distance semantics.
+    statements.append('UPDATE "TelemetriasVeiculoMl" g SET "DistanciaProximaParadaMetros"=ST_Distance(ST_LineInterpolatePoint(v."Geometria",g."PosicaoNaRota")::geography,ST_LineInterpolatePoint(v."Geometria",0.4)::geography) FROM "PadroesVersoes" v WHERE v."Id"=g."PadraoVersaoId" AND g."Id" IN ('+literal(uid(110000))+','+literal(uid(140000))+');')
     text = "BEGIN;\n" + "\n".join(statements) + "\nCOMMIT;\n"
     (output / "seed.sql").write_text(text, encoding="utf-8")
     db.sql(text)
@@ -227,6 +237,8 @@ def validate(db, output, audit, options, config):
     require(manifest["discovery"]["missing_label_journal_structure"] == 1, "Candidato sem passagem não contabilizado")
     require(manifest["counts"]["Exportados"] == 1004, "Contagem CSV/manifest divergente")
     require(manifest["counts"]["Descartes"] == {"IdentidadeEstruturalIncompativel": 1, "DestinoNaoAdianteOuDistanciaInvalida": 1}, "Descartes divergentes")
+    config['validation_policy']=manifest['validation_policy']
+    write_json(output/'config.json',config)
     parsed, _, discarded = load(folder / "dataset.csv", folder / "dataset.manifest.json", config)
     require(not discarded, "Loader descartou CSV já certificado pela fixture")
     features_before = matrix(parsed)
@@ -305,11 +317,14 @@ def validate(db, output, audit, options, config):
     require(volume.returncode == 2, "Gate de volume deveria ser insuficiente: " + volume.stderr)
     report = json.loads((folder / "volume.json").read_text(encoding="utf-8-sig"))
     require(report["ready"] is False and report["data_kind"] == "synthetic", "Gate/fixture incorreto")
+    comparison=json.loads(db.sql('SELECT json_agg(q) FROM (SELECT g."Id" AS id,g."DistanciaProximaParadaMetros" AS direct,ST_Length(ST_LineSubstring(v."Geometria",g."PosicaoNaRota",0.4)::geography) AS route FROM "TelemetriasVeiculoMl" g JOIN "PadroesVersoes" v ON v."Id"=g."PadraoVersaoId" WHERE g."Id" IN ('+literal(uid(110000))+','+literal(uid(140000))+')) q;').stdout)
+    semantic_rejections=sum(abs(r['direct']-r['route'])>max(10,r['route']*.1) for r in comparison)
+    require(semantic_rejections==1,'Curved fixture did not reproduce legacy semantic rejection')
     return {"status": "APROVADO", "data_kind": "synthetic", "observations": len(rows), "exported_trips": 4,
             "audit_trips": len(audit["Trips"]), "splits": {"TRAIN": 1002, "VALIDATION": 1, "TEST": 1},
             "discovery": manifest["discovery"], "counts": manifest["counts"], "samples_direct_sql": samples,
             "dataset_sha256": manifest["dataset_sha256"], "csv_deterministic": True, "negative_cases": negative,
-            "volume": report, "sql_sha256": sha(SQL)}
+            "volume": report, "sql_sha256": sha(SQL), "distance_policy_comparison": {"samples":comparison,"legacy_semantic_rejections":semantic_rejections,"current_semantic_rejections":0,"certified_real_trips":0}}
 
 
 def main(output):

@@ -3,12 +3,28 @@ import csv
 import json
 import math
 import pickle
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 import numpy as np
 from pipeline import Baselines, CUTOFF, FEATURES, load, matrix, metrics, sha, train, volume_report, write_json
 from synthetic import generate
+from collection_profiles import PROFILES, HISTORICAL, CURRENT, SYNTHETIC, dataset_profile
+
+
+def audited_manifest(manifest, profile_name):
+    p = PROFILES[profile_name]
+    manifest.update(data_kind="real", cutoff_utc=p["cutoff"], collection_profile=profile_name)
+    manifest["collection"] = {
+        "DatasetVersion": p["dataset_contract"], "CollectionStartedAtUtc": p["cutoff"],
+        "BackendCommit": p["backend_commit"], "Image": p["image"], "Migration": p["migration"],
+        "Sampling": copy.deepcopy(p["sampling"]), "DataKind": "real",
+        "Trips": [{"ViagemId": t["viagem_id"], "Inicio": t["inicio"], "Fim": t["fim"],
+                   "Qualidade": "AuditadaSemProtecao", "ReferenciaAuditoria": "synthetic-test-only"}
+                  for t in manifest["trips"]]}
+    return manifest
 
 
 class PipelineTests(unittest.TestCase):
@@ -106,6 +122,20 @@ class PipelineTests(unittest.TestCase):
         encoder = bundle["model"][0].named_transformers_["categories"]
         self.assertNotIn("NEVER_SEEN", encoder.categories_[2])
         self.assertNotIn("VALIDATION_ONLY", encoder.categories_[2])
+        command = [sys.executable, str(Path(__file__).with_name("evaluate.py")),
+                   "--dataset", str(self.csv), "--manifest", str(self.manifest),
+                   "--config", str(self.config_path), "--model", str(self.root / "a/model.pkl"),
+                   "--model-manifest", str(self.root / "a/model.manifest.json"),
+                   "--output", str(self.root / "reevaluation.json")]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads((self.root / "reevaluation.json").read_text())["metrics"], a["metrics"])
+        metadata = json.loads((self.root / "a/model.manifest.json").read_text())
+        metadata["collection_profile"] = CURRENT
+        write_json(self.root / "a/model.manifest.json", metadata)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("divergem do perfil", result.stderr)
 
     def test_real_volume_gate(self):
         rows, _, _ = load(self.csv, self.manifest, self.config)
@@ -113,11 +143,78 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse(report["ready"])
         self.assertEqual(report["trips"], {"TRAIN": 144, "VALIDATION": 48, "TEST": 48})
         m = json.loads(self.manifest.read_text())
-        m["data_kind"] = "real"
+        audited_manifest(m, HISTORICAL)
         write_json(self.manifest, m)
         with self.assertRaisesRegex(ValueError, "Volume real insuficiente"):
             train(self.csv, self.manifest, self.config_path, self.root / "forbidden")
         self.assertFalse((self.root / "forbidden").exists())
+
+    def test_official_profiles_and_legacy_fixture(self):
+        fixture = json.loads(self.manifest.read_text())
+        self.assertEqual(dataset_profile(fixture, self.config)[0], SYNTHETIC)
+        for name in (HISTORICAL, CURRENT):
+            m = audited_manifest(copy.deepcopy(fixture), name)
+            config = dict(self.config, collection_profile=name, inicio=PROFILES[name]["cutoff"])
+            write_json(self.manifest, m)
+            self.assertEqual(len(load(self.csv, self.manifest, config)[0]), 1920)
+            if name == HISTORICAL:
+                m.pop("collection_profile")
+                m["collection"]["CollectionProfile"] = None
+                write_json(self.manifest, m)
+                self.assertEqual(len(load(self.csv, self.manifest, self.config)[0]), 1920)
+
+    def test_mixed_release_and_config_fail(self):
+        original = audited_manifest(json.loads(self.manifest.read_text()), CURRENT)
+        config = dict(self.config, collection_profile=CURRENT, inicio=PROFILES[CURRENT]["cutoff"])
+        old = PROFILES[HISTORICAL]
+        mutations = [lambda m: m["collection"].update(BackendCommit=old["backend_commit"]),
+                     lambda m: m["collection"].update(Image=old["image"]),
+                     lambda m: m["collection"].update(CollectionStartedAtUtc=old["cutoff"]),
+                     lambda m: m.update(cutoff_utc=old["cutoff"]),
+                     lambda m: m["collection"].update(DatasetVersion="other"),
+                     lambda m: m["collection"].update(Migration="other"),
+                     lambda m: m["collection"]["Sampling"].update(seed="other"),
+                     lambda m: m["collection"]["Sampling"].update(enabled=1),
+                     lambda m: m["collection"]["Sampling"].update(line_percentage=10.0),
+                     lambda m: m["collection"]["Trips"][0].update(Qualidade="NaoVerificada")]
+        for mutate in mutations:
+            m = copy.deepcopy(original)
+            mutate(m)
+            write_json(self.manifest, m)
+            with self.assertRaises(ValueError):
+                load(self.csv, self.manifest, config)
+        write_json(self.manifest, original)
+        for wrong in (self.config, dict(config, collection_profile=HISTORICAL),
+                      dict(config, inicio=old["cutoff"])):
+            with self.assertRaises(ValueError):
+                load(self.csv, self.manifest, wrong)
+
+    def test_synthetic_cannot_be_relabelled_real(self):
+        m = json.loads(self.manifest.read_text())
+        m["data_kind"] = "real"
+        write_json(self.manifest, m)
+        with self.assertRaises(ValueError):
+            load(self.csv, self.manifest, self.config)
+
+    def test_current_real_cli_volume_and_train_validate_same_profile(self):
+        m = audited_manifest(json.loads(self.manifest.read_text()), CURRENT)
+        write_json(self.manifest, m)
+        config = dict(self.config, collection_profile=CURRENT, inicio=PROFILES[CURRENT]["cutoff"])
+        config_path = self.root / "current-config.json"
+        write_json(config_path, config)
+        for cli in ("check_volume.py", "train.py"):
+            command = [sys.executable, str(Path(__file__).with_name(cli)),
+                       "--dataset", str(self.csv), "--manifest", str(self.manifest),
+                       "--config", str(config_path), "--output", str(self.root / (cli + ".output"))]
+            result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 2 if cli == "check_volume.py" else 1)
+            self.assertIn('"ready": false' if cli == "check_volume.py" else "Volume real insuficiente",
+                          result.stdout if cli == "check_volume.py" else result.stderr)
+            write_json(config_path, dict(config, collection_profile=HISTORICAL))
+            result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("perfis diferentes", result.stderr)
+            write_json(config_path, config)
 
 
 if __name__ == "__main__":

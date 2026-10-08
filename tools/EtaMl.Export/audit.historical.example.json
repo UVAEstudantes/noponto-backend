@@ -1,0 +1,11 @@
+{
+  "DatasetVersion": "noponto-eta-gps-v1",
+  "DataKind": "real",
+  "CollectionStartedAtUtc": "2026-10-07T14:53:59.225082Z",
+  "SnapshotReference": "PREENCHER-identificador-snapshot-local-mais-evidencia-auditoria",
+  "BackendCommit": "3e40d92327c517a4f2e5342cfe6f84a5be9568ee",
+  "Image": "sha256:2bbb601108bfe9c7d0f7723da3bc3b2f1c696868e7dfe88f087b345d733eb0eb",
+  "Migration": "20261006180000_IntegridadeCircularDuravel",
+  "Sampling": {"enabled": true, "line_percentage": 10, "block_minutes": 60, "seed": "NOPONTO_ML_V1"},
+  "Trips": []
+}

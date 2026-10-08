@@ -11,21 +11,32 @@ var json=new JsonSerializerOptions{PropertyNameCaseInsensitive=true,WriteIndente
 json.Converters.Add(new JsonStringEnumConverter());
 var audit=JsonSerializer.Deserialize<Audit>(File.ReadAllText(args[0]),json)!;
 var options=JsonSerializer.Deserialize<OpcoesDatasetEta>(File.ReadAllText(args[1]),json)!;
-var cutoff=DateTimeOffset.Parse("2026-10-07T14:53:59.225082Z");
-if(audit.DatasetVersion!=EtaDataset.Versao || audit.CollectionStartedAtUtc!=cutoff || options.Inicio<cutoff
+using var catalogStream=System.Reflection.Assembly.GetExecutingAssembly()
+    .GetManifestResourceStream("EtaMl.CollectionProfiles.json")
+    ?? throw new InvalidOperationException("Catálogo oficial ausente.");
+using var catalog=JsonDocument.Parse(catalogStream);
+var profiles=catalog.RootElement.EnumerateObject().Where(p=>
+    DateTimeOffset.Parse(p.Value.GetProperty("cutoff").GetString()!)==audit.CollectionStartedAtUtc).ToArray();
+if(profiles.Length!=1) throw new ArgumentException("Contrato/cutoff/snapshot/auditoria inválido.");
+var profile=profiles[0];
+var cutoff=DateTimeOffset.Parse(profile.Value.GetProperty("cutoff").GetString()!);
+if(audit.DatasetVersion!=EtaDataset.Versao || options.Inicio<cutoff
     || audit.DataKind is not ("real" or "synthetic")
     || string.IsNullOrWhiteSpace(audit.SnapshotReference) || audit.SnapshotReference.StartsWith("PREENCHER")
     || audit.Trips.Length==0 || audit.Trips.Any(t=>t.ViagemId==Guid.Empty || t.Fim<=t.Inicio
         || t.Qualidade!=QualidadeExecucaoDataset.AuditadaSemProtecao || string.IsNullOrWhiteSpace(t.ReferenciaAuditoria))
     || audit.Trips.Select(t=>t.ViagemId).Distinct().Count()!=audit.Trips.Length)
     throw new ArgumentException("Contrato/cutoff/snapshot/auditoria inválido.");
-if(audit.BackendCommit!="3e40d92327c517a4f2e5342cfe6f84a5be9568ee"
-    || audit.Image!="sha256:2bbb601108bfe9c7d0f7723da3bc3b2f1c696868e7dfe88f087b345d733eb0eb"
-    || audit.Migration!="20261006180000_IntegridadeCircularDuravel"
-    || !audit.Sampling.GetProperty("enabled").GetBoolean()
-    || audit.Sampling.GetProperty("line_percentage").GetInt32()!=10
-    || audit.Sampling.GetProperty("block_minutes").GetInt32()!=60
-    || audit.Sampling.GetProperty("seed").GetString()!="NOPONTO_ML_V1")
+if((audit.CollectionProfile is not null && audit.CollectionProfile!=profile.Name)
+    || audit.BackendCommit!=profile.Value.GetProperty("backend_commit").GetString()
+    || audit.Image!=profile.Value.GetProperty("image").GetString()
+    || audit.Migration!=profile.Value.GetProperty("migration").GetString()
+    || audit.DatasetVersion!=profile.Value.GetProperty("dataset_contract").GetString()
+    || !System.Text.Json.Nodes.JsonNode.DeepEquals(
+        System.Text.Json.Nodes.JsonNode.Parse(audit.Sampling.GetRawText()),
+        System.Text.Json.Nodes.JsonNode.Parse(profile.Value.GetProperty("sampling").GetRawText()))
+    || !audit.Sampling.GetProperty("line_percentage").TryGetInt32(out _)
+    || !audit.Sampling.GetProperty("block_minutes").TryGetInt32(out _))
     throw new ArgumentException("Manifesto diverge da coleta oficial 3B.");
 if(Directory.Exists(args[3])) throw new ArgumentException("Diretório de saída já existe.");
 var cs=Environment.GetEnvironmentVariable("ETA_ML_LOCAL_CONNECTION") ?? throw new ArgumentException("Conexão local ausente.");
@@ -41,8 +52,8 @@ try {
     EstatisticasDatasetEta stats;
     await using(var writer=new StreamWriter(csv+".partial")) stats=await EtaDataset.ExportarCsvAsync(source,writer,options);
     File.Move(csv+".partial",csv);
-    var manifest=new {exporter_version="eta-export-3b-v1",dataset_version=EtaDataset.Versao,data_kind=audit.DataKind,cutoff_utc=cutoff,
-        collection=audit, bounds=options, trips=audit.Trips.Select(t=>new{viagem_id=t.ViagemId,inicio=t.Inicio,fim=t.Fim}),
+    var manifest=new {exporter_version="eta-export-3g2-v2",validation_policy=EtaDataset.PoliticaValidacao,dataset_version=EtaDataset.Versao,data_kind=audit.DataKind,cutoff_utc=cutoff,
+        collection_profile=profile.Name, collection=audit, bounds=options, trips=audit.Trips.Select(t=>new{viagem_id=t.ViagemId,inicio=t.Inicio,fim=t.Fim}),
         features=EtaDataset.Features, counts=stats, discovery=source.Discovery,
         dataset_sha256=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(csv))).ToLowerInvariant(),
         audit_sha256=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(args[0]))).ToLowerInvariant(),
@@ -55,7 +66,8 @@ try {
 record Trip(Guid ViagemId,DateTimeOffset Inicio,DateTimeOffset Fim,string CodigoLinha,
     QualidadeExecucaoDataset Qualidade,string ReferenciaAuditoria);
 record Audit(string DatasetVersion,DateTimeOffset CollectionStartedAtUtc,string SnapshotReference,
-    string BackendCommit,string Image,string Migration,JsonElement Sampling,Trip[] Trips,string DataKind="real");
+    string BackendCommit,string Image,string Migration,JsonElement Sampling,Trip[] Trips,string DataKind="real",
+    string? CollectionProfile=null);
 sealed class Source(NpgsqlConnection conn,NpgsqlTransaction tx,string sql,Audit audit,OpcoesDatasetEta options,JsonSerializerOptions json):IFonteDatasetEta
 {
     readonly Trip[] trips=audit.Trips.OrderBy(t=>t.ViagemId.ToString("D"),StringComparer.Ordinal).ToArray();
