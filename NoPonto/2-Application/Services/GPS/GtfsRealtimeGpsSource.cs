@@ -3,7 +3,8 @@ using Microsoft.Extensions.Options;
 
 namespace NoPonto.Application.GPS;
 
-public sealed record GtfsRouteMapping(string RouteId, Guid LinhaId, string Codigo, bool Brt);
+public sealed record GtfsRouteMapping(string RouteId, Guid LinhaId, string Codigo, bool Brt,
+    bool ModalValidated = true, string[]? Directions = null);
 
 public interface IGtfsRealtimeRouteLookup
 {
@@ -94,11 +95,15 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
         var observations = new List<GpsObservation>();
         var unresolved = 0;
         var invalidSpeed = 0;
+        var invalidDirection = 0;
         foreach (var r in raw)
         {
             if (!routes.TryGetValue(r.RouteId, out var line) || line.LinhaId == Guid.Empty
-                || line.Brt != (_modal == GpsModalNames.Brt) || string.IsNullOrWhiteSpace(line.Codigo)
+                || !line.ModalValidated || line.Brt != (_modal == GpsModalNames.Brt) || string.IsNullOrWhiteSpace(line.Codigo)
                 || line.Codigo == "0") { unresolved++; continue; }
+            if (r.DirectionId is not null && line.Directions is not null
+                && !line.Directions.Contains(r.DirectionId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            { invalidDirection++; continue; }
             var speed = SpeedKmh(r.SpeedRaw, _modal == GpsModalNames.Bus ? _options.BusSpeedUnit : _options.BrtSpeedUnit);
             if (speed is null) { invalidSpeed++; continue; }
             var id = r.VehicleId.Trim().ToUpperInvariant();
@@ -120,8 +125,8 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
         _mappedSnapshot = result.Snapshot;
         _mappedObservations = Array.AsReadOnly(unique);
         _mappingExpires = now.AddSeconds(30);
-        _logger.LogInformation("GTFSRT source={source} raw={raw} promoted={promoted} unresolved_route={unresolved} invalid_speed={invalidSpeed} parser_rejected={rejected} duplicates={duplicates} reused={reused}; snapshot does not prove historical coverage.",
-            Name, raw.Length, unique.Length, unresolved, invalidSpeed, result.Snapshot.Rejected,
+        _logger.LogInformation("GTFSRT source={source} raw={raw} promoted={promoted} unresolved_route={unresolved} invalid_direction={invalidDirection} invalid_speed={invalidSpeed} parser_rejected={rejected} duplicates={duplicates} reused={reused}; snapshot does not prove historical coverage.",
+            Name, raw.Length, unique.Length, unresolved, invalidDirection, invalidSpeed, result.Snapshot.Rejected,
             result.Snapshot.DuplicateVehicles, result.Reused);
         return new(unique.Length == 0 ? StatusFonteGps.Vazio : StatusFonteGps.Sucesso,
             unique, result.Duration);

@@ -4,6 +4,8 @@ using TransitRealtime;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
+using NoPonto.Application.GTFS;
+using NoPonto.Data.Repositories;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -11,6 +13,19 @@ namespace NoPonto.Tests;
 
 public sealed class GtfsRealtimeGpsTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData("20000281130", "28", "20001", "700", "BRT")]
+    [InlineData("20000671130", "67", "20001", "700", "BRT")]
+    [InlineData("20000681130", "68", "20001", "700", "BRT")]
+    [InlineData("20000EXEC1110", "ESP01", "20001", "200", "BRT")]
+    [InlineData("O0634AAA0A", "634", "20001", "700", "BUS")]
+    [InlineData("other", "28", "22003", "700", "BUS")]
+    [InlineData("other", "28", "unknown", "700", null)]
+    [InlineData("other", "28", "22003", "702", null)]
+    [InlineData("other", "28", "22003", "900", null)]
+    [InlineData("20000281130", "wrong-code", "20001", "700", null)]
+    public void OperationalOriginPreservesCommercialService(string id,string code,string agency,string type,string? expected)
+        => Assert.Equal(expected,GtfsDatarioPlanPersister.RealtimeOrigin(new GtfsRoute(id,code){AgencyId=agency,RouteType=type}));
     [Theory]
     [InlineData(1)][InlineData(10)][InlineData(50)][InlineData(200)][InlineData(2800)]
     public void ParserBoundedBatchMeasurement(int count)
@@ -271,9 +286,21 @@ public sealed class GtfsRealtimeGpsTests(ITestOutputHelper output)
     {
         var f = Feed(); var lookup = new Lookup([new("external-route", Guid.NewGuid(), "006", true)]);
         var source = Source(f, lookup, GpsModalNames.Brt);
-        Assert.Equal("BRT-00123", Assert.Single((await source.ReadAsync(default)).Observations).VehicleId);
+        var observation = Assert.Single((await source.ReadAsync(default)).Observations);
+        Assert.Equal("BRT-00123", observation.VehicleId);
+        Assert.Equal("brt", GpsObservationMapper.ToPosition(observation,"BRT").TipoRota);
         f.Entity[0].Vehicle.Position.ClearSpeed();
         Assert.Empty((await Source(f, lookup, GpsModalNames.Brt).ReadAsync(default)).Observations);
+    }
+
+    [Theory]
+    [InlineData(false, "0")]
+    [InlineData(true, "1")]
+    public async Task UnprovenAgencyOrDirectionCannotPromote(bool validated, string direction)
+    {
+        var lookup = new Lookup([new("external-route", Guid.NewGuid(), "006", false,
+            validated, [direction])]);
+        Assert.Empty((await Source(Feed(), lookup).ReadAsync(default)).Observations);
     }
 
     [Fact]

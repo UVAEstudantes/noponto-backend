@@ -147,6 +147,37 @@ public sealed class GtfsDatarioPlanPersister(TransporteDbContext db) : IGtfsData
             .Select(x=>x.ExternalId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         db.LinhasIdentidadesExternas.AddRange(ext.Where(x=>!identities.Contains(x)).Select(x=>new LinhaIdentidadeExterna
         {Id=Guid.NewGuid(),LinhaId=map[x].Id,FonteEstruturalId=source.Id,Tipo="ROUTE_ID",ExternalId=x}));
+        // Agency belongs to the versioned static source, not the commercial service type.
+        // A route-scoped key avoids conflating multiple lines belonging to the same agency.
+        var agencyKeys = routes.Values.Where(x => !string.IsNullOrWhiteSpace(x.AgencyId))
+            .ToDictionary(x => x.RouteId, x => $"{x.RouteId}:{x.AgencyId}");
+        var existingAgency = await db.LinhasIdentidadesExternas.Where(x =>
+            x.FonteEstruturalId == source.Id && x.Tipo == "ROUTE_AGENCY"
+            && agencyKeys.Values.Contains(x.ExternalId)).ToArrayAsync(ct);
+        foreach (var route in agencyKeys)
+        {
+            var identity = existingAgency.SingleOrDefault(x => x.ExternalId == route.Value);
+            if (identity is not null && identity.LinhaId != map[route.Key].Id)
+                throw new InvalidDataException("Route agency identity belongs to another line.");
+            if (identity is null) db.LinhasIdentidadesExternas.Add(new LinhaIdentidadeExterna
+            { Id = Guid.NewGuid(), LinhaId = map[route.Key].Id, FonteEstruturalId = source.Id,
+                Tipo = "ROUTE_AGENCY", ExternalId = route.Value });
+        }
+        var origins = routes.Values.Select(route => (Route:route, Origin:RealtimeOrigin(route) ?? "UNKNOWN")).ToArray();
+        var originKeys = origins.Select(x => $"{x.Route.RouteId}:{x.Origin}").ToArray();
+        var existingOrigins = await db.LinhasIdentidadesExternas.Where(x =>
+            x.FonteEstruturalId == source.Id && x.Tipo == "ROUTE_ORIGIN_V1"
+            && originKeys.Contains(x.ExternalId)).ToArrayAsync(ct);
+        foreach (var item in origins)
+        {
+            var key = $"{item.Route.RouteId}:{item.Origin}";
+            var identity = existingOrigins.SingleOrDefault(x => x.ExternalId == key);
+            if (identity is not null && identity.LinhaId != map[item.Route.RouteId].Id)
+                throw new InvalidDataException("Route origin identity belongs to another line.");
+            if (identity is null) db.LinhasIdentidadesExternas.Add(new LinhaIdentidadeExterna
+            { Id = Guid.NewGuid(), LinhaId = map[item.Route.RouteId].Id, FonteEstruturalId = source.Id,
+                Tipo = "ROUTE_ORIGIN_V1", ExternalId = key });
+        }
         await db.SaveChangesAsync(ct); return(map,new(created,reused));
     }
 
@@ -239,4 +270,21 @@ public sealed class GtfsDatarioPlanPersister(TransporteDbContext db) : IGtfsData
 
     private static string? EmptyToNull(string value)=>value.Length==0?null:value;
     private static string MapRouteType(string type)=>type switch{"702"=>"brt","200"=>"frescao",_=>"regular"};
+
+    internal static string? RealtimeOrigin(GtfsRoute route)
+    {
+        // Publisher exceptions pinned to exact route + code + agency, not prefixes or all MOBI-Rio lines.
+        var exception = (route.RouteId, route.RouteShortName, route.RouteType) is
+            ("20000281130", "28", "700") or ("20000671130", "67", "700")
+            or ("20000681130", "68", "700") or ("20000EXEC1110", "ESP01", "200");
+        if (route.AgencyId == "20001")
+        {
+            if (route.RouteType == "702" || exception) return "BRT";
+            return (route.RouteId, route.RouteShortName, route.RouteType) == ("O0634AAA0A", "634", "700")
+                ? "BUS" : null;
+        }
+        if (route.AgencyId is "22002" or "22003" or "22004" or "22005")
+            return route.RouteType is "700" or "200" ? "BUS" : null;
+        return null;
+    }
 }

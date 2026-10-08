@@ -40,9 +40,9 @@ public sealed class MudancaOperacionalPontaAPontaTests(ViagemOperacionalFixture 
         public Task<ContextoOperacional?> LerDuravelParaRetryAsync(string ordem,CancellationToken ct)=>real.LerDuravelParaRetryAsync(ordem,ct);
         public Task<ViagemObservadaResultado> TentarAtualizarAsync(string ordem,Guid versao,DateTimeOffset timestamp,double p,CancellationToken ct)=>real.TentarAtualizarAsync(ordem,versao,timestamp,p,ct);
         public async Task<ViagemObservadaResultado> TentarAtualizarAsync(PosicaoVeiculoDto gps,CancellationToken ct)
-        { Entradas.Add(gps); var r=await real.TentarAtualizarAsync(gps,ct); Resultados.Add(r); return r; }
+        { lock(Entradas) Entradas.Add(gps); var r=await real.TentarAtualizarAsync(gps,ct); lock(Resultados) Resultados.Add(r); return r; }
         public async Task<ViagemObservadaResultado> TentarAtualizarAsync(PosicaoVeiculoDto gps,ContextoOperacional? contexto,ResultadoProjecaoOperacional projecao,CancellationToken ct)
-        { Entradas.Add(gps); var r=await real.TentarAtualizarAsync(gps,contexto,projecao,ct); Resultados.Add(r); return r; }
+        { lock(Entradas) Entradas.Add(gps); var r=await real.TentarAtualizarAsync(gps,contexto,projecao,ct); lock(Resultados) Resultados.Add(r); return r; }
     }
     internal sealed class Harness : IAsyncDisposable
     {
@@ -64,30 +64,51 @@ public sealed class MudancaOperacionalPontaAPontaTests(ViagemOperacionalFixture 
         public Observador Spy {get;}
         public ViagemOperacionalRepository Repository {get;}
         public Harness(ViagemOperacionalFixture db,bool enabled=true,bool batch=false,int checkpointSegundos=0,
-            Func<Task>? afterStateWrite=null,Func<Task>? beforeProjection=null,string? ordem=null,string? retryPrefix=null)
+            Func<Task>? afterStateWrite=null,Func<Task>? beforeProjection=null,string? ordem=null,string? retryPrefix=null,
+            IGpsSourceResolver? sources=null, ITelemetriaMlIngress? telemetry=null,
+            IHubContext<GpsHub>? hub=null, HttpMessageHandler? etaHandler=null)
         {
             if(ordem is not null) Ordem=ordem;
             if(retryPrefix is not null) _retryPrefix=retryPrefix;
             _db=db;
             _options=new(){MudancaOperacionalHabilitada=enabled,EnriquecerTodasLinhas=true,CheckpointViagemSegundos=checkpointSegundos};
+            if (sources is not null) _options.IntervaloBrtSegundos = 0; // fixture clock drives HTTP cadence
             Repository=new(db.Redis,db.Source,Options.Create(_options),NullLogger<ViagemOperacionalRepository>.Instance)
                 {StreamKey=Stream,AfterDurableStateWriteAsync=afterStateWrite,BeforeDurableProjectionAsync=beforeProjection};
             Spy=new(Repository);
             var services=new ServiceCollection(); services.AddLogging(); services.AddSignalR();
             _services=services.BuildServiceProvider();
             _cache=new RedisCache(Options.Create(new RedisCacheOptions{Configuration=Environment.GetEnvironmentVariable("REDIS_TEST_CONNECTION")??"localhost:6380"}));
-            _http=new(new EtaLocal()){BaseAddress=new Uri("http://eta.test.invalid")};
+            _http=new(etaHandler ?? new EtaLocal()){BaseAddress=new Uri("http://eta.test.invalid")};
             var matching=new GpsMatchingBatchOptions{Enabled=batch};
             var enriquecedor=new GpsEnriquecimentoService(new GpsPadraoRepository(db.Source,NullLogger<GpsPadraoRepository>.Instance),Options.Create(_options),Options.Create(matching),NullLogger<GpsEnriquecimentoService>.Instance);
             var retryOptions=Options.Create(new RetryOperacionalGpsOptions());
             _retry=new RetryOperacionalGpsService(new PendenciaOperacionalGpsRepository(db.Redis,retryOptions){Prefixo=_retryPrefix},
                 new ViagemObservadaService(Spy,NullLogger<ViagemObservadaService>.Instance),enriquecedor,
                 retryOptions,Options.Create(_options),NullLogger<RetryOperacionalGpsService>.Instance);
-            _polling=new(_store,_cache,_services.GetRequiredService<IHubContext<GpsHub>>(),NullLogger<GpsPollingService>.Instance,
+            _polling=new(_store,_cache,hub ?? _services.GetRequiredService<IHubContext<GpsHub>>(),NullLogger<GpsPollingService>.Instance,
                 null!,_services.GetRequiredService<IServiceScopeFactory>(),enriquecedor,
-                new GpsEtaClient(_http,NullLogger<GpsEtaClient>.Instance),new FonteVazia(),
+                new GpsEtaClient(_http,NullLogger<GpsEtaClient>.Instance),sources ?? new FonteVazia(),
                 new PosicaoVeiculoCacheRepository(db.Redis,new PosicaoVeiculoPayloadWriter(db.Redis),NullLogger<PosicaoVeiculoCacheRepository>.Instance),
-                new ViagemObservadaService(Spy,NullLogger<ViagemObservadaService>.Instance),retryOperacional:_retry);
+                new ViagemObservadaService(Spy,NullLogger<ViagemObservadaService>.Instance),telemetriaMl:telemetry,
+                structuralHintResolver:sources is null ? null : new GpsStructuralHintResolver(new GpsStructuralHintLookup(db.Source)),
+                retryOperacional:_retry);
+        }
+        internal async Task CicloFonte(IGpsSourceResolver sources)
+        {
+            var collector = new GpsSppoCollectorService(sources, _store,
+                new CollectorMonitor(), NullLogger<GpsSppoCollectorService>.Instance);
+            using (collector) await collector.ColetarUmaVezAsync(DateTimeOffset.UtcNow);
+            var method=typeof(GpsPollingService).GetMethod("ProcessarCicloAsync",BindingFlags.Instance|BindingFlags.NonPublic)!;
+            Assert.True(await ((Task<bool>)method.Invoke(_polling,
+                [DateTimeOffset.UtcNow,_options,Stopwatch.GetTimestamp(),null,CancellationToken.None])!).WaitAsync(TimeSpan.FromMinutes(4)));
+            Assert.Null(_store.Ler());
+        }
+        private sealed class CollectorMonitor : IOptionsMonitor<GpsSppoCollectorOptions>
+        {
+            public GpsSppoCollectorOptions CurrentValue { get; } = new();
+            public GpsSppoCollectorOptions Get(string? name) => CurrentValue;
+            public IDisposable? OnChange(Action<GpsSppoCollectorOptions, string?> listener) => null;
         }
         internal Task RecuperarPendencias()=>_retry.ExecutarCicloAsync(default);
         public async Task Ciclo(int segundos,double p,bool b=false)

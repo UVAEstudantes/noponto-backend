@@ -150,6 +150,9 @@ internal static class GpsObservationMapper
     public static PosicaoVeiculoDto ToPosition(GpsObservation observation, string modal) => new()
     {
         Ordem = observation.VehicleId,
+        // Public DTO tag denotes the source family, not Linhas.TipoRota's commercial service.
+        // Keep legacy source mapping unchanged; the new BRT adapter must not inherit "onibus".
+        TipoRota = observation.Source == "GTFSRT_BRT" ? "brt" : "onibus",
         CodigoLinha = observation.ServiceCode ?? observation.RouteId ?? string.Empty,
         Latitude = observation.Latitude,
         Longitude = observation.Longitude,
