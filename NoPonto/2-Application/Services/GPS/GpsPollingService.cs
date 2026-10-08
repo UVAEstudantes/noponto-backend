@@ -40,9 +40,12 @@ public sealed class GpsPollingService : BackgroundService
     private readonly IGpsStructuralHintResolver? _structuralHintResolver;
     private readonly GpsStructuralHintMetrics? _structuralHintMetrics;
     private readonly EtaV2ShadowService? _etaV2Shadow;
+    private readonly HistoricalEtaShadow? _historicalEtaShadow;
     private readonly ITelemetriaMlSamplingPolicy? _telemetriaMlSampling;
     private readonly TelemetriaMlMetrics? _telemetriaMlMetrics;
     private readonly IRetryOperacionalGps? _retryOperacional;
+    private readonly EtaDecisionCoverageCoordinator? _coverage;
+    private readonly EtaGpsIngressCoverage? _ingress;
     private long _ultimoErroSamplingLogUnixMinute = long.MinValue;
 
     public GpsPollingService(
@@ -66,7 +69,10 @@ public sealed class GpsPollingService : BackgroundService
         EtaV2ShadowService? etaV2Shadow = null,
         ITelemetriaMlSamplingPolicy? telemetriaMlSampling = null,
         TelemetriaMlMetrics? telemetriaMlMetrics = null,
-        IRetryOperacionalGps? retryOperacional = null)
+        IRetryOperacionalGps? retryOperacional = null,
+        HistoricalEtaShadow? historicalEtaShadow = null,
+        EtaDecisionCoverageCoordinator? coverage = null,
+        EtaGpsIngressCoverage? ingress = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -91,6 +97,9 @@ public sealed class GpsPollingService : BackgroundService
         _telemetriaMlSampling = telemetriaMlSampling;
         _telemetriaMlMetrics = telemetriaMlMetrics;
         _retryOperacional = retryOperacional;
+        _historicalEtaShadow = historicalEtaShadow;
+        _coverage = coverage;
+        _ingress = ingress;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -120,6 +129,10 @@ public sealed class GpsPollingService : BackgroundService
             var agora = DateTimeOffset.UtcNow;
             var opcoes = _opcoesMonitor.CurrentValue;
             var cicloConcluidoNormalmente = false;
+            _coverage?.Tick();
+            // Source acquisition/filter/enrichment coverage is not attested by the commit admission.
+            // Keep this irreversible guard until the ingress frontier is independently demonstrable.
+            _coverage?.InvalidateAll(EtaTripEvidence.MissingDecision, "ingress-frontier-not-attested");
             try
             {
                 cicloConcluidoNormalmente = await ProcessarCicloAsync(
@@ -131,6 +144,7 @@ public sealed class GpsPollingService : BackgroundService
             }
             catch (Exception ex)
             {
+                _coverage?.InvalidateAll(EtaTripEvidence.Gap, "polling-cycle-failed");
                 _logger.LogError(ex, "Falha no ciclo de polling GPS.");
             }
 
@@ -152,6 +166,7 @@ public sealed class GpsPollingService : BackgroundService
         }
 
         _logger.LogInformation("GpsPollingService encerrado.");
+        _coverage?.InvalidateAll(EtaTripEvidence.Restart, "polling-stopped");
     }
 
     internal static TimeSpan CalcularDelayProximoCiclo(
@@ -179,6 +194,7 @@ public sealed class GpsPollingService : BackgroundService
         };
         var cicloConcluidoNormalmente = false;
         LoteSppoSnapshot? loteSppo = null;
+        EtaGpsIngressCoverage.Batch? ingressBatch = null;
 
         try
         {
@@ -216,6 +232,7 @@ public sealed class GpsPollingService : BackgroundService
 
         inicioEtapa = System.Diagnostics.Stopwatch.GetTimestamp();
         var posicoes = (loteSppo?.Posicoes ?? []).Concat(resultadoBrt.Posicoes).ToList();
+        ingressBatch = _ingress?.Begin(posicoes);
         performance.Entrada = posicoes.Count;
 
         if (posicoes.Count == 0)
@@ -232,6 +249,11 @@ public sealed class GpsPollingService : BackgroundService
             .GroupBy(p => p.Ordem, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.OrderByDescending(p => p.TimestampGps).First())
             .ToList();
+        if(ingressBatch is not null)
+        {
+            var selected=maisRecentes.Select(EtaGpsIngressCoverage.Id).ToHashSet(StringComparer.Ordinal);
+            foreach(var p in posicoes)if(!selected.Contains(EtaGpsIngressCoverage.Id(p)))ingressBatch.Reject(p,"superseded-in-acquired-batch",true);
+        }
 
         // ── Filtra posições com timestamp GPS muito antigo ────────────────────
         var idadeMaxima = TimeSpan.FromSeconds(opcoes.MaxIdadeGpsSegundos);
@@ -243,6 +265,7 @@ public sealed class GpsPollingService : BackgroundService
                 var idade = agora - p.TimestampGps;
                 if (idade <= idadeMaxima) return true;
                 descartadosPorIdade++;
+                ingressBatch?.Reject(p,"gps-age-rejection",false);
                 _logger.LogDebug(
                     "Veículo {ordem} descartado: GPS {idade:F0}s atrás (máx {max}s)",
                     p.Ordem, idade.TotalSeconds, opcoes.MaxIdadeGpsSegundos);
@@ -295,7 +318,11 @@ public sealed class GpsPollingService : BackgroundService
             }
 
             if (anterior is not null && nova.TimestampGps <= anterior.TimestampGps)
+            {
+                ingressBatch?.Reject(nova,"cached-timestamp-rejection",
+                    nova.TimestampGps==anterior.TimestampGps && EtaGpsIngressCoverage.SameRawObservation(nova,anterior));
                 continue;
+            }
 
             if (_linhaPorVeiculo.TryGetValue(nova.Ordem, out var linhaAnterior)
                 && !string.Equals(linhaAnterior, nova.CodigoLinha, StringComparison.OrdinalIgnoreCase))
@@ -675,6 +702,7 @@ public sealed class GpsPollingService : BackgroundService
         }
         finally
         {
+            ingressBatch?.Dispose();
             sw.Stop();
             var fim = DateTimeOffset.UtcNow;
             var duracaoCiclo = System.Diagnostics.Stopwatch.GetElapsedTime(inicioCicloTimestamp);
@@ -1095,6 +1123,12 @@ public sealed class GpsPollingService : BackgroundService
         CancellationToken ct, GpsCicloPerformance? performance = null)
     {
         var posicao = enriquecimento.Posicao;
+        var tracked=false;
+        var ingressAdmission=_ingress?.Claim(posicao,out tracked);
+        using var admission = tracked ? ingressAdmission : _coverage?.Enabled == true ? _coverage.Admit(posicao.Ordem,
+            TelemetriaMlContrato.ObservacaoId(posicao.ModalFonte, posicao.ProvedorFonte, posicao.Ordem, posicao.TimestampGps),
+            posicao.TimestampGps, posicao.TimestampAnterior?.ToString("O") ?? "unknown",
+            enriquecimento.ContextoOperacional?.VersaoDuravel) : null;
         var matchingIndisponivel = enriquecimento.Diagnostico?.StatusGlobal == StatusBuscaPadrao.InfrastructureFailure
             || enriquecimento.Diagnostico?.StatusDirecionado == StatusBuscaPadrao.InfrastructureFailure;
         if (_retryOperacional is not null)
@@ -1116,6 +1150,7 @@ public sealed class GpsPollingService : BackgroundService
                     await _retryOperacional.RegistrarAsync(posicao, enriquecimento.PredecessorFisico,
                         enriquecimento.ContextoOperacional, ct, aguardandoAnterior: true);
                 viagem = null;
+                admission?.LeavePending("retry-backlog");
             }
             else
             {
@@ -1125,11 +1160,15 @@ public sealed class GpsPollingService : BackgroundService
                     || (viagem is null && matchingIndisponivel)))
                     await _retryOperacional.RegistrarAsync(posicao, enriquecimento.PredecessorFisico,
                         enriquecimento.ContextoOperacional, ct);
+                if (viagem?.Status is ViagemObservadaStatus.InfrastructureFailure or ViagemObservadaStatus.Conflict
+                    || (viagem is null && matchingIndisponivel))
+                    admission?.LeavePending("operational-retry-or-unknown");
             }
             performance?.RegistrarViagem(viagem,
                 System.Diagnostics.Stopwatch.GetElapsedTime(inicioViagem));
             // Hot path estritamente não bloqueante: nenhuma conexão/query PostgreSQL ETA.
             _etaV2Shadow?.TryRecord(enriquecimento, viagem);
+            _historicalEtaShadow?.TryCapture(posicao, viagem);
             if (_telemetriaMl is not null)
             {
                 var coletar = true;
@@ -1167,6 +1206,11 @@ public sealed class GpsPollingService : BackgroundService
             }
         }
 
+        if (resultado.Status == PosicaoVeiculoCacheStatus.InfrastructureFailure)
+            _coverage?.Mark(posicao.Ordem, "map-commit-infrastructure-failure", unknown: EtaTripEvidence.RedisLost);
+        admission?.Resolve(resultado.Status.ToString(), !matchingIndisponivel
+            && resultado.Status != PosicaoVeiculoCacheStatus.InfrastructureFailure);
+        if (admission is not null) await _viagemObservada.CompleteEvidenceLocalAsync(posicao.Ordem, ct);
         return resultado;
     }
 

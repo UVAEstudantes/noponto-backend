@@ -1,0 +1,10 @@
+{
+  "Inicio": "2026-10-07T14:53:59.225082Z",
+  "FimTreino": "2026-10-18T00:00:00Z",
+  "FimValidacao": "2026-10-21T00:00:00Z",
+  "Fim": "2026-10-24T00:00:00Z",
+  "ExecucoesPorPagina": 1,
+  "MaxCandidatosPorExecucao": 10000,
+  "MaxPaginas": 1000,
+  "MaxLabelSegundos": 3600
+}

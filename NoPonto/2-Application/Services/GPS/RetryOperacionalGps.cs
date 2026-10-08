@@ -65,7 +65,7 @@ public interface IRetryOperacionalGps
 internal sealed class RetryOperacionalGpsService(IPendenciaOperacionalGpsStore store,
     ViagemObservadaService viagens, IEnriquecimentoRetryOperacionalGps enriquecimento,
     IOptions<RetryOperacionalGpsOptions> options, IOptions<GpsPollingOptions> gpsOptions,
-    ILogger<RetryOperacionalGpsService> logger) : IRetryOperacionalGps
+    ILogger<RetryOperacionalGpsService> logger, EtaDecisionCoverageCoordinator? coverage = null) : IRetryOperacionalGps
 {
     internal Func<DateTimeOffset> Agora { get; init; } = () => DateTimeOffset.UtcNow;
     private long _ultimoErro;
@@ -84,6 +84,7 @@ internal sealed class RetryOperacionalGpsService(IPendenciaOperacionalGpsStore s
         ContextoOperacional? contexto, CancellationToken ct, bool aguardandoAnterior = false)
     {
         var gps = Observacional(posicao);
+        coverage?.Mark(posicao.Ordem, "retry-registered", unknown: EtaTripEvidence.MissingDecision);
         var now = Agora();
         var id = TelemetriaMlContrato.ObservacaoId(gps.ModalFonte, gps.ProvedorFonte, gps.Ordem, gps.TimestampGps);
         var o = contexto?.Observada;
@@ -94,6 +95,8 @@ internal sealed class RetryOperacionalGpsService(IPendenciaOperacionalGpsStore s
         try
         {
             var resultado = await store.AdicionarAsync(p, ct);
+            if (resultado is not ("CRIADA" or "EXISTENTE"))
+                coverage?.ResolveRetry(posicao.Ordem, id, resultado, false);
             if (resultado != "EXISTENTE") logger.LogWarning("Pendência GPS {id}: {resultado}.", id, resultado);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -200,13 +203,19 @@ internal sealed class RetryOperacionalGpsService(IPendenciaOperacionalGpsStore s
     private async Task EncerrarAsync(LeasePendenciaOperacional lease, string motivo, CancellationToken ct)
     {
         if (await store.ConcluirAsync(lease, ct))
+        {
+            coverage?.ResolveRetry(lease.Pendencia.Gps.Ordem, lease.Pendencia.Id, motivo,
+                motivo is "CommitDuravelReconhecido" or "RecuperacaoCommitDuravel");
             logger.LogInformation("Pendência operacional GPS {id} encerrada: {motivo}.", lease.Pendencia.Id, motivo);
+        }
+        else coverage?.Mark(lease.Pendencia.Gps.Ordem, "retry-ack-not-confirmed", unknown: EtaTripEvidence.MissingDecision);
     }
     private Task<bool> ReagendarAsync(LeasePendenciaOperacional lease, CancellationToken ct) =>
         store.ReagendarAsync(lease, Agora().AddSeconds(Math.Min(options.Value.TtlSegundos,
             options.Value.BackoffSegundos * Math.Pow(2, lease.Pendencia.Tentativas))), ct);
     private void Indisponivel(Exception ex)
     {
+        coverage?.InvalidateAll(EtaTripEvidence.RedisLost, "retry-store-unavailable");
         var minuto = Agora().ToUnixTimeSeconds() / 60;
         if (Interlocked.Exchange(ref _ultimoErro, minuto) != minuto)
             logger.LogWarning(ex, "Retry operacional indisponível; mapa independente, recuperação de melhor esforço.");

@@ -500,6 +500,12 @@ builder.Services.AddSingleton<IVeiculosLinhaRuntimeReader, VeiculosLinhaRuntimeR
 builder.Services.AddSingleton<IViagemObservadaRepository, ViagemOperacionalRepository>();
 builder.Services.AddSingleton<IOcorrenciaParadaRepository, OcorrenciaParadaRepository>();
 builder.Services.AddSingleton<ViagemObservadaService>();
+// Local preparation only: no configuration binding, epoch activation or producer registration.
+builder.Services.AddOptions<EtaDecisionCoverageOptions>();
+builder.Services.AddSingleton<EtaDecisionCoverageCoordinator>();
+builder.Services.AddSingleton<EtaGpsIngressCoverage>();
+builder.Services.AddSingleton<EtaEvidenceBoundaryWriter>();
+builder.Services.AddSingleton<IEtaDecisionCoverageSource>(sp => sp.GetRequiredService<EtaDecisionCoverageCoordinator>());
 builder.Services.AddOptions<RetryOperacionalGpsOptions>()
     .Bind(builder.Configuration.GetSection("RetryOperacionalGps"))
     .Validate(x => x.Valido(), "Configuração de retry operacional inválida.").ValidateOnStart();
@@ -568,6 +574,14 @@ builder.Services.AddSingleton<IEtaV2Repository, EtaV2Repository>();
 builder.Services.AddSingleton<EtaV2Channel>();
 builder.Services.AddSingleton<IEtaV2Ingress>(sp => sp.GetRequiredService<EtaV2Channel>());
 builder.Services.AddSingleton<EtaV2ShadowService>();
+// Independent historical Shadow: disabled by default; never shares the public ML client.
+builder.Services.AddOptions<HistoricalEtaShadowOptions>()
+    .Bind(builder.Configuration.GetSection("HistoricalEtaShadow"))
+    .Validate(o => o.Valid(), "Invalid historical Shadow settings").ValidateOnStart();
+builder.Services.AddHttpClient("eta-history-shadow", client => client.Timeout = TimeSpan.FromSeconds(2));
+builder.Services.AddSingleton<IHistoricalEtaGeometry, HistoricalEtaGeometryQuery>();
+builder.Services.AddSingleton<HistoricalEtaShadow>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<HistoricalEtaShadow>());
 builder.Services.AddHostedService<EtaV2BatchWorker>();
 builder.Services.AddHostedService<EtaV2MaintenanceWorker>();
 builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();

@@ -4,17 +4,29 @@ namespace NoPonto.Application.GPS;
 
 public sealed class ViagemObservadaService
 {
+    internal async Task CompleteEvidenceLocalAsync(string vehicle, CancellationToken ct)
+    {
+        if (_repository is not NoPonto.Data.Repositories.ViagemOperacionalRepository repository) return;
+        try { await repository.CompleteEvidenceLocalAsync(vehicle, ct); }
+        catch (Exception)
+        {
+            _coverage?.Mark(vehicle, "quality-close-failed", unknown: EtaTripEvidence.CommitUncertain);
+        }
+    }
     internal Task<ContextoOperacional?> LerDuravelParaRetryAsync(string ordem, CancellationToken ct) =>
         _repository.LerDuravelParaRetryAsync(ordem, ct);
     internal Task<ContextoOperacional?> LerContextoParaRetryAsync(string ordem, CancellationToken ct) =>
         _repository.LerContextoAsync(ordem, ct);
     private readonly IViagemObservadaRepository _repository;
     private readonly ILogger<ViagemObservadaService> _logger;
+    private readonly EtaDecisionCoverageCoordinator? _coverage;
 
-    public ViagemObservadaService(IViagemObservadaRepository repository, ILogger<ViagemObservadaService> logger)
+    public ViagemObservadaService(IViagemObservadaRepository repository, ILogger<ViagemObservadaService> logger,
+        EtaDecisionCoverageCoordinator? coverage = null)
     {
         _repository = repository;
         _logger = logger;
+        _coverage = coverage;
     }
 
     /// <summary>Sem matching atual, a viagem permanece intacta, inclusive seu timestamp.</summary>
@@ -30,6 +42,7 @@ public sealed class ViagemObservadaService
         }
         catch (Exception ex)
         {
+            _coverage?.Mark(ordem, "context-read-failed", unknown: EtaTripEvidence.MissingDecision);
             _logger.LogError(ex,
                 "Falha ao ler snapshot operacional de {ordem}; fluxo seguirá sem projeção A.", ordem);
             return null;
@@ -47,7 +60,11 @@ public sealed class ViagemObservadaService
         ResultadoEnriquecimentoGps enriquecimento, CancellationToken ct)
     {
         var posicao = enriquecimento.Posicao;
-        if (posicao.PadraoVersaoId is null || posicao.PosicaoNaRota is null) return null;
+        if (posicao.PadraoVersaoId is null || posicao.PosicaoNaRota is null)
+        {
+            _coverage?.Mark(posicao.Ordem, "matching-absent", unknown: EtaTripEvidence.MissingDecision);
+            return null;
+        }
         ViagemObservadaResultado result;
         try
         {
@@ -80,6 +97,9 @@ public sealed class ViagemObservadaService
                 _logger.LogWarning("Viagem observada de {ordem} não avançou: {status}.", posicao.Ordem, result.Status);
                 break;
         }
+        if (result.Status is not (ViagemObservadaStatus.Created or ViagemObservadaStatus.Updated
+            or ViagemObservadaStatus.RejectedOlderOrEqual))
+            _coverage?.Mark(posicao.Ordem, result.Status.ToString(), unknown: EtaTripEvidence.MissingDecision);
         return result;
     }
 }

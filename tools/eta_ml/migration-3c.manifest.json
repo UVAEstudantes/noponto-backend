@@ -1,0 +1,84 @@
+{
+  "version": "eta-migration-3c-v1",
+  "source_repository": "noponto-backend",
+  "destination_repository": "ml",
+  "files": [
+    {
+      "source": "tools/eta_ml/pipeline.py",
+      "destination": "tools/eta_ml/pipeline.py",
+      "sha256": "62ee9a9166e970afa1fe12c82e061290540383542395326b7fbb8576176fce63"
+    },
+    {
+      "source": "tools/eta_ml/train.py",
+      "destination": "tools/eta_ml/train.py",
+      "sha256": "db68fdc82e95460a925115d182b83c5ebd4c251d340ae74d9ec02d38fc637f81"
+    },
+    {
+      "source": "tools/eta_ml/evaluate.py",
+      "destination": "tools/eta_ml/evaluate.py",
+      "sha256": "993b94cf54d1f3ee85aa0f6e81e705ab0cfc8c4528c6cb59e4e1ed3faabc6973"
+    },
+    {
+      "source": "tools/eta_ml/check_volume.py",
+      "destination": "tools/eta_ml/check_volume.py",
+      "sha256": "7625772fe48bd7afaf32ba16069b343704271fc28fcaed97426d043246e4a462"
+    },
+    {
+      "source": "tools/eta_ml/synthetic.py",
+      "destination": "tools/eta_ml/synthetic.py",
+      "sha256": "240bf4aa32b13469ecc56211b37cb138a2139edc1c01587429792f8704cd7ecf"
+    },
+    {
+      "source": "tools/eta_ml/collection_profiles.py",
+      "destination": "tools/eta_ml/collection_profiles.py",
+      "sha256": "905d4a824066527b5e4016eaa6185615d56df9d4c45845ed39fe93ce6464b635"
+    },
+    {
+      "source": "tools/eta_ml/requirements.txt",
+      "destination": "tools/eta_ml/requirements.txt",
+      "sha256": "e942d822567b8b8f33e8eeac17d61d73790e0167e93c8b74011cf722b15a8dfa"
+    },
+    {
+      "source": "tools/eta_ml/config.synthetic.json",
+      "destination": "tools/eta_ml/config.synthetic.json",
+      "sha256": "7bff74872a52e83e5fda75ec2e1a28f83631a22c8bf3faa47d5908f1ab882062"
+    },
+    {
+      "source": "tools/eta_ml/config.real.example.json",
+      "destination": "tools/eta_ml/config.real.example.json",
+      "sha256": "271ab76b3f15a9606765a3040e9f0451e3a74c58984fc7858bc75e1be580b3b0"
+    },
+    {
+      "source": "tools/eta_ml/config.historical.example.json",
+      "destination": "tools/eta_ml/config.historical.example.json",
+      "sha256": "7367e10fbf16ff1271cbd6fc0085ea76d4cf6cc7222a1460a52f1189b90f7e20"
+    },
+    {
+      "source": "tools/eta_ml/test_pipeline.py",
+      "destination": "tools/eta_ml/test_pipeline.py",
+      "sha256": "353697526822f4497b9e97a7b4058a68c88591b96225b53004739f6e7a932726"
+    },
+    {
+      "source": "tools/eta_ml/examples/synthetic.model.manifest.json",
+      "destination": "tools/eta_ml/examples/synthetic.model.manifest.json",
+      "sha256": "94d7c01c8629a7dce1528cff8e6c75bcd953a75ffe7831fefc622c40942095fd"
+    },
+    {
+      "source": "tools/collection_profiles.json",
+      "destination": "tools/collection_profiles.json",
+      "sha256": "1dcd1a0a3be9ac200f9ce189194eef340f7191eaea723dc373c989ed83f8573c"
+    },
+    {
+      "source": "NoPonto/docs/ETA_ML_DATASET_3A.md",
+      "destination": "contracts/ETA_ML_DATASET_3A.md",
+      "sha256": "285d71a32194cf5a4c54667536a614921f2b294c0da94b4179518d26130833f7"
+    },
+    {
+      "source": "NoPonto/ETA_ML_CANDIDATOS_3A.sql",
+      "destination": "contracts/ETA_ML_CANDIDATOS_3A.sql",
+      "sha256": "b2c5f0909d817fc57ba3942c9b2985e77dcfbf9bbaf9a1644dd3228aa77898be"
+    }
+  ],
+  "backend_copies": "retained for existing callers/tests until coordinated removal",
+  "real_dataset_certified": false
+}

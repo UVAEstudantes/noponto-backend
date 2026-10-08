@@ -553,3 +553,135 @@ Build com sucesso; **75 testes executados, 75 aprovados, 0 falhas e 0 ignorados*
 Isso fecha a principal ressalva da auditoria anterior: a integração PostgreSQL/Redis está validada no escopo dessa suíte e desse ambiente, conforme resultado fornecido pelo operador. As afirmações anteriores de integração pendente referem-se às rodadas anteriores. A correção permanece prospectiva e não implantada; **validação em produção ainda depende de observação seletiva pós-deploy**, após implantação separadamente autorizada. A política de finalização com cursor terminal/posição regredida permanece fora desta correção; não há reconstrução dos 21 GPS sem passagem, atribuição automática da causa às oito viagens ou certificação do dataset real.
 
 Este fechamento altera somente documentação/histórico, sem credenciais, connection strings completas ou UUIDs reais adicionais. Runtime, testes, SQL, migrations, sampling, infraestrutura e dataset preservados; nenhum commit, push ou deploy realizado.
+
+### 3B.2B — preparação do snapshot seletivo pós-fix
+
+Operador informou encerramento da auditoria 3B.2A e validação do fix em produção. Novo marco oficial: cutoff2026-10-07T21:00:57.997530Z, backend70d7bcb8041e167df063237b4fdcafd4971b01d6, imagesha256:42d8b78b7b683234211f0d10edf8a79ddcf5c7f6557df9fd065f2409299f5094, migration20261006180000_IntegridadeCircularDuravel, contrato noponto-eta-gps-v1 e sampling10%/60min/NOPONTO_ML_V1 habilitado. Agente não verificou produção. Os registros anteriores permanecem históricos.
+
+Procedimento, arquitetura, comandos manuais e limites em [SNAPSHOT_3B_2B.md](../../tools/eta_ml/SNAPSHOT_3B_2B.md). Nova ferramenta stdlib tools/eta_ml/snapshot.py prepara bundle offline, exige viagens fechadas explicitamente auditadas pós-cutoff, gera exportação READ ONLY seletiva e manifesto/hashes, verifica arquivos e restaura somente em loopback/banco dedicado vazio. Estrutura completa inclui Modais/FontesEstruturais e preserva ciclos por pre-data/dados/post-data, com validação das FKs originais. Não executada exportação/restore/produção/Docker/SSH/treino.
+
+Bloqueio explícito: EtaMl.Export/Program.cs e pipeline.py ainda fixam o perfil/cutoff anterior e recusam metadados pós-fix corretos. Preservados nesta tarefa; não relaxar proteção local/READ ONLY nem informar release antigo para contornar. Atualização compatível dos perfis oficiais e regressões é necessária antes do primeiro CSV/treino real pós-fix. Snapshot seletivo pode ser preparado/restaurado independentemente, sujeito à revisão de planos/tamanhos e validação conectada pelo operador.
+
+### Perfis de coleta oficiais compartilhados — bloqueio pós-fix resolvido
+
+Catálogo único em tools/collection_profiles.json: historical-pre-fix (cutoff14:53:59/commit3e40d923/image2bbb6011) e official-post-fix (cutoff21:00:57/commit70d7bcb/image42d8b78b), cada um com migration, contrato e sampling completos. EtaMl.Export incorpora esse JSON como recurso no build, sem caminho configurável pelo usuário; Python o lê a partir do módulo, independentemente do diretório corrente. Snapshot3B.2B usa o perfil atual do mesmo catálogo. Qualquer combinação misturada ou sampling/contract divergente é recusada.
+
+Os exemplos audit.example.json/options.example.json/config.real.example.json agora usam o perfil REAL pós-fix. Cópias audit.historical.example.json/options.historical.example.json/config.historical.example.json conservam os valores anteriores. Dataset manifest novo grava collection_profile e cutoff selecionados; pipeline/check_volume/train validam a tupla completa de collection, perfil/config e cutoff antes de consumir dados. Model manifest transporta o cutoff/perfil do dataset, e evaluate também confere manifesto original/hash/perfil/coleta antes de carregar pickle. Features/labels/baselines/modelo/split/gate de volume não alterados.
+
+Compatibilidade: audit/manifest históricos sem ID ainda são reconhecidos pela tupla completa oficial; ID nulo no audit legado é equivalente a ausente. Config sem ID permanece exclusivamente no contexto histórico. Para dados reais pós-fix é obrigatório collection_profile=official-post-fix na config, com início>=cutoff atual. Fixture gerada sem collection continua identificada separadamente como synthetic-fixture-3b-v1, somente data_kind=synthetic/cutoff antigo/seed conhecido; não é perfil de produção e não pode ser reclassificada como real sem procedência. Fixture PostGIS3B.1 usa explicitamente audit histórico e mantém DataKind=synthetic; construção da fixture testada com banco fake, sem Docker.
+
+Exporter preserva localhost/127.0.0.1/::1, REPEATABLE READ/READ ONLY, fronteiras reais e AuditadaSemProtecao. Loader real também exige referências/qualidade auditadas e viagens/fronteiras concordantes com collection.Trips; não certifica autenticidade da evidência. Guias de snapshot foram atualizados com o bloqueio resolvido e comando manual de exportação local. Alterações anteriores de snapshot/documentação preservadas. Sem acesso a produção/SSH/Docker/banco/treino real/commit/push.
+
+Pendências3B.2B/3B.2C: operador ainda precisa executar snapshot seletivo, transferência, restore descartável e conferência conectada de schema/geometria/FKs/contagens; preparar audit e limites completos, exportar CSV local e medir volume/representatividade. Reconhecer release não aprova automaticamente execução inteira, labels ou treino. Referência de snapshot/evidência e gate de qualidade/volume continuam obrigatórios.
+
+### 3B.2B — dependências de triggers no snapshot v2
+
+Operador informou primeiro snapshot real pós-fix de 16 viagens/11 tabelas, 775 telemetrias, 188 passagens e 220 eventos: prepare/export/seal/verify passaram, assim como pre-data e onze contagens de importação em PostgreSQL 16/PostGIS 3.4 local. Post-data falhou: pg_dump seletivo transportou os triggers de imutabilidade sem incluir suas funções. Banco parcial eta_snapshot_3b2b_real01 não deve ser reutilizado; snapshot selado anterior permanece intocado. Evidência fornecida pelo operador, sem conexão ou inspeção do bundle real pelo agente.
+
+Ferramenta passa a gerar contrato noponto-snapshot-3b2b-v2, descobrindo todos os triggers não internos das onze tabelas, suas funções via pg_get_functiondef e dependências externas dos objetos pertencentes às tabelas via pg_depend. Política conservadora exige as duas funções reais de imutabilidade, com corpos revisados contra a migration existente, assinatura/schema/linguagem/SECURITY INVOKER/propriedades preservados; nenhuma função é fabricada a partir da política. Dependências/corpos/triggers adicionais não revisados falham explicitamente. Referências PL/pgSQL do corpo não são completamente descritas por pg_depend; revisão estrita dos corpos cobre essa lacuna para estas funções, ambas referenciando PadroesOperacionais já transportada.
+
+CSV de funções/triggers/dependências, functions.sql e marcador de versão entram nas evidências/SHA256 do manifesto. Restore: pre-data → dados → funções originais → post-data → conferência de constraints/colunas/FKs/funções/triggers/dependências. Sem desabilitar triggers/FKs, sem enfraquecer imutabilidade ou alterar o contrato das onze tabelas. V1 continua verificável sem escrita; restore v1 é recusado antes de conectar, exigindo novo bundle v2 e banco descartável novo. Guia/comandos/limites em [SNAPSHOT_3B_2B.md](../../tools/eta_ml/SNAPSHOT_3B_2B.md).
+
+Validação do agente exclusivamente offline, com subprocessos mockados e regressões positivas/negativas; restore automático conectado v2 e primeiro CSV real ainda dependem do operador. Nenhum acesso a produção/SSH/Docker/banco, nenhuma mudança de API/migrations/sampling/coleta/ETA/infraestrutura/dataset, commit ou push.
+
+
+### 3B.2B — comparação de metadados e restore v2 conectado
+
+Operador informou validação MANUAL em PostgreSQL16/PostGIS3.4 local descartável, banco eta_snapshot_3b2b_real02: onze tabelas/count_guard=1, duas funções, post-data concluído,38constraints/nenhuma não validada e dois triggers habilitados vinculados corretamente. Catalog(11)/functions(2) idênticos; triggers(2)/dependencies(4) idênticos com search_path=pg_catalog. Essa evidência não foi coletada pelo agente.
+
+A diferença de qualificação public. é representação dependente de search_path, sem indicar alteração funcional. Comparação centralizada no restore/check-restored fixa contexto em cada sessão READ ONLY: catálogo com public visível, demais evidências com pg_catalog, preservando exatamente representações do bundlev2 já selado. Nenhuma remoção de qualificadores ou redução da comparação; vínculo/eventos/tabela/habilitação/propriedades/definições continuam exigidos integralmente. Novo comando check-restored permite validar SOMENTE metadados do banco existente sem reimportar/restaurar/escrever. Guia e comandos em [SNAPSHOT_3B_2B.md](../../tools/eta_ml/SNAPSHOT_3B_2B.md).
+
+27 testes offline aprovados (21snapshot+6auditoria), subprocessos mockados. Bundle existente intocado, contrato v2 preservado, sem reexportar/re-selar. Etapa3B.2B NÃO concluída: geometrias e conteúdo restaurado ainda precisam de validação final, assim como primeiroCSV/volume nas etapas seguintes. Agente não acessou produção/SSH/Docker/banco, nem alterou API/migrations/coleta/ETA; sem commit/push.
+
+
+### 3B.2C — diagnóstico exploratório real e transição para 3C
+
+Operador confirmou snapshotv2 selado/verificado, banco local descartável eta_snapshot_3b2b_real02 PostgreSQL16/PostGIS3.4,11tabelas/conteúdo integral comparado com origem (incluindo geometrias),38constraints válidas,2funções/2triggers preservados. Bundle tools/eta_ml/outputs/snapshot-3b2b-v2-real-01,16viagens,775telemetrias,188passagens,220eventos. Perfil official-post-fix/cutoff2026-10-07T21:00:57.997530Z/snapshot_end2026-10-07T22:09:24.149621Z. A pendência de conteúdo/geometrias do restore3B.2B foi encerrada pelo operador; agente não conectou em banco. Distância geography específica dos candidatos ainda requer consulta3A local.
+
+Ferramenta mínima stdlib tools/eta_ml/diagnose.py: verify do bundle existente → diagnóstico OFFLINE por viagem/global/linha/modal/faixa → SQL3A original parametrizado para execução MANUAL local → reanálise dos candidatos com distância conferida. Sem conector, subprocessos, dependências novas, CSVdataset, treinamento ou mudança de backend. Hashes normalizados de SQL3A/EtaDataset em diagnose.sources.json bloqueiam evolução silenciosa dos critérios; snapshotmanifest/script/SQL/candidatefile têm hashes no relatório. Nenhum bundle selado é modificado; relatório exige novo diretório externo.
+
+SQL gera os mesmos LEFT JOINs/distância geography/paginação do SQL3A, sem filtrar tempos/labels inválidos antes de contar. Cursores por janela/linha calculados do bundle verificado, páginas<=1000 GPS antes dos joins; viagem selecionada explicitamente. Guard de banco dedicado, READ ONLY/REPEATABLE READ/timeout60s/lock2s, execução manual exclusivamente loopback. Resultado SQL é confrontado com GPS/passagem/journal/estrutura das fontes seladas antes da reanálise; incompletude ou adulteração falham. Report por viagem contém UUIDs privados somente em outputs ignorado, qualidade=NaoVerificada/certificação não atribuída.
+
+Elegibilidade reportada é PRELIMINAR e COMPONENTE, nunca certificação/exportação EtaDataset. Diagnóstico usa critérios técnicos de identidade/journal/fronteiras/tempo/posição/distância do contrato atual, sem chamar ExportarCsvAsync: esse método exige AuditadaSemProtecao, não concedida aqui. Não inventa esse enum nem referência auditada para contornar o gate. Predicados diagnósticos têm sourcepins/regressões, mas não substituem o validador canônico: exportação final ainda exige auditoria externa, splits temporais por viagem completa e deduplicação de observações conflitantes. Horizonte diagnóstico3600s; primeiro motivo de rejeição por GPS, separado das métricas independentes identidade/associação/journal. Não avaliar modelos ou erroETA nesta amostra.
+
+Resultado REAL obtido OFFLINE dos arquivos selados:775GPS;758identidades operacionais válidas e758GPS associados a passagem/journal conferido (97,8%);17identidades inválidas e17labels ausentes (mesmos GPS, não somar os dois como34);0associações ambíguas. Entre758com label/journal,0rejeições preliminares de identidade estrutural/tempo/topologia/fronteiras/posição/comprimento;758PendenteGeographySQL3A. Não declarar758 elegíveis definitivos; contadorTecnicamenteElegivelPreliminar=0 enquanto falta a consulta geography. Zero de descartes de distância ainda não é validação dessa distância.
+
+Distribuição GPS: linha28=103;50=121;60=16;73=457;764=71;80=7. ModalBRT=704/ONIBUS=71. Distância INFORMADA (ainda não conferida):<200m=205;200-999m=297;>=1000m=256;ausente/inválida=17. Por viagem/motivo, consultar report.json privado. Report produzido em tools/eta_ml/outputs/diagnostic-3b2c-real-02/report.json e SQL no mesmo diretório; a geração é determinística para mesmos fontes/arquivos/parâmetros/versão do script.
+
+Comandos FUTUROS PowerShell, raiz do checkout, identidade via PGUSER/passfile externo, sem senha em linha, somente localreal02. SQL já foi gerado offline no diretório abaixo. Não executar automaticamente contra serviços não isolados:
+
+```powershell
+# Repetir offline em diretório NOVO se necessário:
+python tools/eta_ml/diagnose.py tools/eta_ml/outputs/snapshot-3b2b-v2-real-01 tools/eta_ml/outputs/diagnostic-3b2c-novo
+# Para o relatório já preparado:
+Push-Location tools/eta_ml/outputs/diagnostic-3b2c-real-02
+try {
+    psql -X --host=127.0.0.1 --port=55439 --dbname=eta_snapshot_3b2b_real02 --no-password -v ON_ERROR_STOP=1 -f diagnostic.sql
+    if ($LASTEXITCODE -ne 0) { throw 'Diagnóstico SQL incompleto; não analisar como concluído.' }
+} finally { Pop-Location }
+python tools/eta_ml/diagnose.py tools/eta_ml/outputs/snapshot-3b2b-v2-real-01 tools/eta_ml/outputs/diagnostic-3b2c-completo --candidates tools/eta_ml/outputs/diagnostic-3b2c-real-02/diagnostic-candidates.csv
+```
+
+Para futuros snapshots: verify/restauração/isolamento atestados, novo bundle e diretório de relatório; informar --database eta_snapshot_NOME_DEDICADO se diferente de real02, usar esse mesmo banco no comando psql local. Se SQL3A/EtaDataset mudar, revisão explícita dos critérios/pins antes de continuar. Não re-selar snapshot, não usar relatório como audit do exporter, não reutilizar nome de saída existente. Faixas finais usam distância geography conferida quando candidatos foram fornecidos. O SQL é SELECT/metadata/clienteCOPY, não modifica dados.
+
+Validação agente:33testes offline aprovados (6diagnóstico+21snapshot+6auditoria),0falhas,3,382s; fixtures/mocks sem banco, positivos/negativos de identidade/journal/label/tempo/posição/distância, pins de fontes, contexto readonly/paginação, outputforaBundle, guardbanco e resultadoSQL divergente. git diff --check aprovado; sem produção/SSH/homeserver/Docker/banco/treino real/commit/push.
+
+Fechamento rápido3B.2C: falta apenas operador executar SQL3A local e reanalisar as distâncias, registrar contagens finais/limitações e transferir código/contratos/relatório privado ao repositórioML na3C. Amostra16viagens/6linhas predominantementeBRT é exploratória; não libera treino real nem certifica representatividade. 3C tratará repositórioML próprio, serviçoinferência e Shadow com autorização/validação próprias, sem implantação nesta etapa.
+
+
+### Hotfix 3B.2C — comando psql copy em uma única linha
+
+Operador reproduziu parse error at end of line no diagnostic.sql: o metacomando psql copy terminava na primeira quebra de linha da consulta3A. Corrigido somente diagnose.py e regressões: copy_query percorre SQL por estados léxicos, remove comentários apenas fora de strings/identificadores, inclusive comentários de bloco aninhados, transforma whitespace externo em espaços e substitui parâmetros apenas fora de quotes. Preserva conteúdo/doubledquotes de literais/identificadores, filtros/cursores/LEFT JOINs/geography. Dollarquotes, literais prefixados/escapados/multiline, concatenação de strings dependente de newline e construções incompletas falham explicitamente; não são reescritos por hipótese. SQL3A e sourcepins não alterados.
+
+Novo arquivo gerado offline em outputs/diagnostic-3b2c-copy-hotfix01:11linhas,1copy completo,16consultas3A/15UNIONALL,16cálculosgeography. Mesmas contagens offline775GPS/758pendentesGeography/17labelausente. Bundles e relatórios anteriores preservados; nenhuma execuçãoSQL/Docker/banco pelo agente.
+
+Repetição manual em diretório NOVO (hotfix02 abaixo), cliente psql no PC acessando a porta55439 do Docker LOCAL descartável já isolado. Não requer nome do container nem docker exec; usuário/passfile externos, sem senha em linha:
+
+```powershell
+python tools/eta_ml/diagnose.py tools/eta_ml/outputs/snapshot-3b2b-v2-real-01 tools/eta_ml/outputs/diagnostic-3b2c-copy-hotfix02
+if ($LASTEXITCODE -ne 0) { throw 'Geração incompleta' }
+Push-Location tools/eta_ml/outputs/diagnostic-3b2c-copy-hotfix02
+try {
+    psql -X --host=127.0.0.1 --port=55439 --dbname=eta_snapshot_3b2b_real02 --no-password -v ON_ERROR_STOP=1 -f diagnostic.sql
+    if ($LASTEXITCODE -ne 0) { throw 'SQL incompleto; não continuar' }
+} finally { Pop-Location }
+python tools/eta_ml/diagnose.py tools/eta_ml/outputs/snapshot-3b2b-v2-real-01 tools/eta_ml/outputs/diagnostic-3b2c-copy-hotfix02-completo --candidates tools/eta_ml/outputs/diagnostic-3b2c-copy-hotfix02/diagnostic-candidates.csv
+```
+
+Validado offline:36testes aprovados (9diagnóstico+21snapshot+6auditoria),0falhas,5,497s; comparação de tokens da query3A parametrizada antes/depois e arquivo gerado com copy completo numa linha. git diff --check aprovado. Psql conectado/fixture descartável não executados pelo agente: não iniciado serviço/container e não acessado banco existente. A conferência sintática offline não certifica execução PostgreSQL; confirmação conectada fica com operador. GuardsREADONLY/REPEATABLEREAD/banco/timeout/paginação/qualidade e ausência de dataset de treino mantidos. 3B.2C continua aguardando execução/relatório final para transição3C.
+
+
+### 3C — ML separado em checkout acessível, inferência isolada preparada
+
+Resultado final3B.2C confirmado pelo operador e reconstituído dos arquivos locais:775GPS/758com identidade-passagem-journal/357tecnicamente elegíveis preliminares/401distâncias divergentes/17sem label. Diagnóstico exploratório encerrado; não há datasetcertificado/AuditadaSemProtecao nem autorização para treino real. Pendência401 passa a investigação separada de semântica da distância, não bloqueia separação dos componentes.
+
+Repo ML encontrado em D:/repositorio_github/NoPonto/ml (develop), não presumido. Quinze arquivos de treino/avaliação/fixtures/configs/perfis/contratos transferidos byte a byte; mapa/SHA256 em tools/eta_ml/migration-3c.manifest.json e cópia no ML. Arquivos backend mantidos para compatibilidade com CLIs/testes/documentação atuais, retirada coordenada futura; nenhuma mudança runtime/ETApúblico. Coleta/journal/EtaDataset/exporter/auditoria/SQL/snapshot/diagnóstico continuam backend. LegadoML existente preservado. Mapa exato/contrato/limites/Shadow/retreino/comandos em [MIGRACAO_3C.md](../../tools/eta_ml/MIGRACAO_3C.md), também README_ETA_3C.md no ML.
+
+Novo serviçoML separado eta_history_service.py com /eta/batch,/health,/ready, Dockerfile.eta-history e compose próprio preparados, nenhum build/deploy. PipelineExtraTrees/baselines/métricas/gates unchanged. O clienteHTTP atual usa chunks200/timeout3s/respostaarrayordem, mas não fornece modal/padrão/parada/topologia/posiçãodestino; distância é direta e hora usa relógioatual local. Serviço aceita featurescompletas, recusa payload incompleto503 e não inventa valores. Shadow exige adaptercausal separado e não poderá trocar ETApúblico. Container proposto512MiB/.5CPU/1worker/2concorrência, modelo readonly/64MiBmax, sem retreinoendpoint/cron. Realmodel ausente→ready503; syntheticopt-in somentelocal. Memória/latência não medidas.
+
+Investigação401: repository calcula DistanciaProximaParadaMetros por ST_Distance direto ao alvo matching; campo DistanciaRestanteRotaMetros separado não é transportado no ML. Factory copia distância direta mas usa IDsalvooperacional; SQL3A calcula trechoGeography da rota ao operacional. Semânticas incompatíveis confirmadas no código; amostraoffline401,400distâncias informadas próximas(até10m) de aproximação direta ao operacional,283menores que trecho. Um outlier linha764 requer alvooriginal/matching, não preservado separadamente; não declarar causaindividual completa. Amostra privada outputs/distance-evidence-3c-02. Nenhuma tolerância/label/SQL3A/factory/snapshot alterada.
+
+57testes offline aprovados:38backend/13pipelineML/5serviçoML/1migraçãoML;15hashes conferidos, git diff --check em ambos repos aprovado. Sem produção/SSH/homeserver/Docker/banco/treino real/commit/push. Próximos gates: coordenar retirada de cópias, revisar distância/contrato, datasetcertificado/volume, adapterShadow, modelo real e benchmark antes de implantação separadamente autorizada.
+
+### 3E — Shadow histórico técnico preparado
+
+Adapter causal, produtor/fila bounded, consulta geográfica por lote, cliente HTTP exclusivo, circuito e sink limitado implementados no backend, default desligado. Contrato noponto-eta-shadow-history-v1 preserva features existentes e calcula distância pela rota versionada, não direta. Hora/dia usam TimestampGps UTC−03:00; alvo deve estar à frente na mesma execução/volta. Serviço ML ecoa correlação e identifica artefato/data_kind; backend recusa modelo sintético e lotes sem metadados/ordem válidos. ETA público e Shadow legado permanecem independentes.
+
+Guia e comandos locais em [SHADOW_HISTORICO_3E.md](../../tools/eta_ml/SHADOW_HISTORICO_3E.md). 64 testes C#, seis testes de serviço ML e teste dos hashes de migração offline aprovados; consulta PostGIS real, Docker, benchmark e homologação operacional não executados. Sem dataset certificado ou modelo real, não há comparação real; 503/model_unavailable é o estado esperado. Não houve alteração dos gates/SQL3A/labels/sampling, ativação em produção, deploy ou treino real.
+
+### 3E.1 — componentes Shadow aprovados para habilitação local técnica
+
+Homologação exclusivamente em fixture descartável PostgreSQL 16.4/PostGIS 3.4.3, HTTP controlado em loopback e container ML novo sem rede/modelo. 65 testes C# offline, um teste conectado composto, seis testes ML e um de hashes de migração aprovados. Build/Docker build e smoke health/ready/batch passaram; nenhuma API ou Redis operacional foi iniciado/usado. Captura tardia após StopAsync agora registra stopped e Dispose libera cliente próprio. SQL3A, treino/gates/modelo/sampling/default OFF e ETA público preservados.
+
+Lotes 1/10/50/200: medianas 6,322/5,155/5,203/8,637ms; maior amostra 155,417ms. Pool ocupado e HTTP lento cancelaram perto de 1000ms com entrega/cleanup adicionais medidos; não declarar deadline wall-clock rígido. Memória amostrada PostgreSQL135,5MiB/ML92,24MiB; modelo ausente. Cold-start ML levou ~101s até primeiro health200; tentativa fria de consulta excedeu orçamento anteriormente. Fixture de poucos vértices não estima homeserver nem rotas reais. Relatório, rastros/limites e comandos em [HOMOLOGACAO_SHADOW_3E_1.md](../../tools/eta_ml/HOMOLOGACAO_SHADOW_3E_1.md). Aprovação técnica local, não certificação/modelo real ou autorização de produção.
+# Observabilidade histórica — 3F
+
+3F acrescenta agregações e logs limitados do worker histórico, mantendo Shadow OFF e ETA público independente. Relatório, custos efetivamente medidos, distinção entre diferença de previsões e erro de chegada e reprodução local: [OBSERVABILIDADE_SHADOW_3F.md](../../tools/eta_ml/OBSERVABILIDADE_SHADOW_3F.md). Não há modelo real certificado nem avaliação contra labels confiáveis. Imports científicos no ML foram adiados até necessidade de artefato/inferência, sem alteração dos contratos/gates/pipeline de treino; readiness continua 503 sem modelo.
+
+## Qualificação 3G.1
+
+Pré-validação e orquestração condicionada disponíveis no ML, reutilizando gates existentes. Prontidão real reprovada: ausência de evidência de proteção por viagem inteira, CSV certificado e volume suficiente. Revisão futura isolada da política de distância aprovada pelo usuário; nesta etapa comparação3A/tolerâncias/labels e401descartes preservados. Relatório/evidências/proposta prospectiva/comandos: [QUALIFICACAO_TREINO_REAL_3G_1.md](../../tools/eta_ml/QUALIFICACAO_TREINO_REAL_3G_1.md). Nenhum treino real, certificação ou ativaçãoShadow.
+
+## Revisão isolada 3G.2
+
+Política técnica local aprovada, exporter/manifest/config/modelo versionados; antiga comparação direta versus rota removida, demais gates preservados. Real offline:357→758preliminares/401→0descartessemânticos/17sem label; zero certificados. Outlier continua sem evidência individual. Relatório/comandos/limites: [REVISAO_DISTANCIA_3G_2.md](../../tools/eta_ml/REVISAO_DISTANCIA_3G_2.md). Não autoriza treino ou Shadow.

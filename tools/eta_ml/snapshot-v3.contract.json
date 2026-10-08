@@ -1,0 +1,19 @@
+{
+  "schema": "eta-snapshot-v3-design-3g3b1",
+  "status": "prepared-not-enabled",
+  "previous_contracts": ["noponto-snapshot-3b2b-v1", "noponto-snapshot-3b2b-v2"],
+  "evidence_contract": "eta-trip-evidence-v1",
+  "verifier_contract": "eta-trip-certifier-v1",
+  "migration": "20261008090000_EtaTripEvidenceFoundation",
+  "preserve_operational_sources": true,
+  "sources": {
+    "EtaEvidenceHeads": {"filter": "explicit selected ViagemId list; primary key lookup; selection is not protection certification"},
+    "EtaEvidenceJournal": {"filter": "same explicit ViagemId list; (ViagemId,Sequence) unique index"},
+    "EtaEvidenceOwners": {"filter": "scope/token referenced by heads plus overlapping intervals for those scopes only"},
+    "EtaProducerEpochs": {"filter": "EpochIds referenced by selected heads/owners only"},
+    "OutboxViagens": {"filter": "explicit quality EventIds from selected head sequences; PK lookup", "retention": "pending OR processed receipt required by foundation verifier"}
+  },
+  "required_manifest": ["evidence_contract", "verifier_contract", "policy_sha256", "profile_hash", "producer_epochs", "source_counts", "file_sha256", "snapshot_bounds", "explicit_trip_ids"],
+  "guards": ["read-only source", "sealed prior bundle immutable", "all FK dependencies closed", "catalog/functions/triggers preserved", "unknown or expired ACK receipt blocks certification", "installed policy independently authorized", "no automatic historical certification"],
+  "blockers": ["approved producer fencing and instrumentation", "prospective activation profile", "snapshot v3 exporter/restore implementation", "durable materialization receipt policy before outbox retention expires"]
+}

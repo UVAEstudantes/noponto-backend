@@ -12,9 +12,12 @@ namespace NoPonto.Data.Repositories;
 /// <summary>PostgreSQL e a autoridade; Redis recebe somente uma projecao descartavel.</summary>
 public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer redis, NpgsqlDataSource source,
     IOptions<GpsPollingOptions> options,
-    ILogger<ViagemOperacionalRepository> logger) : IViagemObservadaRepository
+    ILogger<ViagemOperacionalRepository> logger, EtaDecisionCoverageCoordinator? coverage = null,
+    EtaEvidenceBoundaryWriter? evidenceWriter = null) : IViagemObservadaRepository
 {
     public const string Stream = "noponto:viagem:eventos";
+    internal Task CompleteEvidenceLocalAsync(string vehicle, CancellationToken ct) =>
+        evidenceWriter?.CompleteLocalAsync(source, vehicle, ct) ?? Task.CompletedTask;
     public async Task<ContextoOperacional?> LerDuravelParaRetryAsync(string ordem, CancellationToken ct)
     {
         await using var connection = await source.OpenConnectionAsync(ct);
@@ -69,9 +72,12 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
+            coverage?.Mark(ordem, "redis-context-unavailable", unknown: EtaTripEvidence.RedisLost);
             logger.LogDebug(ex, "Contexto Redis de {ordem} inválido ou indisponível; usando PostgreSQL.", ordem);
         }
 
+        if (circularCache is null)
+            coverage?.Mark(ordem, "redis-context-missing-or-invalid", unknown: EtaTripEvidence.RedisLost);
         performance?.RegistrarViagemPgFallbackRead();
         await using var connection = await source.OpenConnectionAsync(ct);
         performance?.RegistrarViagemPgRead();
@@ -111,6 +117,7 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
             || !GpsLeituraValidator.TimestampValido(gps.TimestampGps, DateTimeOffset.UtcNow, out _))
             return new(ViagemObservadaStatus.InvalidState);
 
+        var commitAttempted = false;
         try
         {
             if (!snapshotFornecido)
@@ -135,6 +142,8 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                 var estruturaObservacional = await EstruturaAsync(leituraMudanca, null, gps, ct);
                 var avaliacao = ViagemOperacionalRegra.AvaliarMudancaSeHabilitada(
                     options.Value, previous, estruturaObservacional, gps)!;
+                if (previous.Candidato is not null || avaliacao.Candidato is not null)
+                    coverage?.Mark(gps.Ordem, avaliacao.Status.ToString(), negative: EtaTripEvidence.CandidateStarted);
                 if (avaliacao.Status == StatusMudancaOperacional.MudancaConfirmada)
                 {
                     baselineMudanca = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(
@@ -231,6 +240,12 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                 && decision.Estado.Integridade?.Continuidade == ContinuidadeCircular.Confiavel)
                 decision = decision with { Estado = decision.Estado with { Integridade = null } };
             foreach (var evento in decision.Eventos) EventoViagemValidator.Validar(evento);
+            if (previous?.Candidato is not null || decision.Estado.Candidato is not null)
+                coverage?.Mark(gps.Ordem, "candidate-ever", negative: EtaTripEvidence.CandidateStarted);
+            if (protegida || !ViagemOperacionalRegra.IdentidadeConfiavel(decision.Estado))
+                coverage?.Mark(gps.Ordem, "protection-ever", negative: EtaTripEvidence.Protection);
+            if (baseline && previous is not null && previous.Estado != EstadoViagem.Finalizada)
+                coverage?.Mark(gps.Ordem, "baseline-continuity-unproved", unknown: EtaTripEvidence.Reanchor);
             var checkpointSeconds = options.Value.CheckpointViagemSegundos;
             var checkpointInterval = checkpointSeconds <= 0
                 ? TimeSpan.Zero : TimeSpan.FromSeconds(checkpointSeconds);
@@ -239,6 +254,8 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                 decision.Estado, decision.Eventos, contexto?.UltimoCheckpointUtc,
                 UtcNow(), checkpointInterval);
             if (gps.ExigirPersistenciaDuravel && motivo == MotivoPersistenciaViagem.Nenhum)
+                motivo = MotivoPersistenciaViagem.Checkpoint;
+            if (motivo == MotivoPersistenciaViagem.Nenhum && coverage?.CheckpointDue(gps.Ordem) == true)
                 motivo = MotivoPersistenciaViagem.Checkpoint;
             if (motivo == MotivoPersistenciaViagem.Nenhum)
             {
@@ -263,6 +280,7 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
                 {
+                    coverage?.Mark(gps.Ordem, "redis-hot-failed", unknown: EtaTripEvidence.RedisLost);
                     LogRedisUnavailable(ex,
                         "Redis quente indisponível; persistindo checkpoints conservadores.");
                     motivo = MotivoPersistenciaViagem.Checkpoint;
@@ -303,7 +321,15 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
             await InserirOutboxAsync(connection, transaction, decision.Eventos, ct);
             if (AfterDurableOutboxWriteAsync is not null)
                 await AfterDurableOutboxWriteAsync();
+            IReadOnlyList<Guid> evidenceClosing = evidenceWriter is null || coverage?.Enabled != true ? Array.Empty<Guid>()
+                : await evidenceWriter.WriteInOperationalTransactionAsync(connection, transaction,
+                    gps.Ordem, decision, nextVersion, ct);
+            commitAttempted = true;
             await transaction.CommitAsync(ct);
+            coverage?.DurableCommit(gps.Ordem);
+            evidenceWriter?.OperationalCommitted(gps.Ordem, evidenceClosing);
+            if(evidenceWriter is not null && coverage?.Enabled==true)
+                await evidenceWriter.ConfirmProspectiveLocalAsync(connection,gps.Ordem,ct);
             if (decision.Estado.Integridade?.Continuidade == ContinuidadeCircular.Ambigua
                 && previous?.Integridade?.Continuidade != ContinuidadeCircular.Ambigua)
                 logger.LogWarning("Viagem circular {viagem} de {ordem} protegida: {motivo}.",
@@ -331,11 +357,15 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
         }
         catch (FormatException ex)
         {
+            coverage?.Mark(gps.Ordem, "durable-invalid-state", unknown:
+                commitAttempted ? EtaTripEvidence.CommitUncertain : EtaTripEvidence.Rollback);
             logger.LogWarning(ex, "Estado operacional invalido de {ordem}; nenhuma alteracao.", gps.Ordem);
             return new(ViagemObservadaStatus.InvalidState);
         }
         catch (Exception ex)
         {
+            // Includes post-COMMIT projection failures: never assert rollback without proof.
+            coverage?.Mark(gps.Ordem, "durable-commit-or-projection-uncertain", unknown: EtaTripEvidence.CommitUncertain);
             logger.LogError(ex, "Falha na transacao duravel de viagem/outbox de {ordem}.", gps.Ordem);
             return new(ViagemObservadaStatus.InfrastructureFailure);
         }
@@ -455,11 +485,13 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
         }
         catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
         {
+            coverage?.Mark(ordem, "redis-projection-cancelled-after-commit", unknown: EtaTripEvidence.CommitUncertain);
             logger.LogDebug(ex,
                 "Projecao Redis cancelada depois do commit duravel da viagem de {ordem}.", ordem);
         }
         catch (Exception ex)
         {
+            coverage?.Mark(ordem, "redis-projection-failed-after-commit", unknown: EtaTripEvidence.RedisLost);
             LogRedisUnavailable(ex,
                 "Projecao Redis indisponivel; PostgreSQL permanece autoritativo.");
         }

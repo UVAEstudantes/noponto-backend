@@ -1,8 +1,10 @@
 {
-  "inicio": "2026-10-07T14:53:59.225082Z",
+  "inicio": "2026-10-07T21:00:57.997530Z",
   "fim_treino": "2026-10-18T00:00:00Z",
   "fim_validacao": "2026-10-21T00:00:00Z",
   "fim": "2026-10-24T00:00:00Z",
   "seed": 20261007,
-  "minimum_breakdown_rows": 30
+  "minimum_breakdown_rows": 30,
+  "collection_profile": "official-post-fix",
+  "validation_policy": "eta-route-versioned-3g2-v2"
 }

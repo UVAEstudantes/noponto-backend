@@ -9,6 +9,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from statistics import median
+from collection_profiles import PROFILES, HISTORICAL, dataset_profile
+from validation_policies import policy
 
 import numpy as np
 import scipy
@@ -20,7 +22,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
 VERSION = "noponto-eta-gps-v1"
-CUTOFF = "2026-10-07T14:53:59.225082Z"
+CUTOFF = PROFILES[HISTORICAL]["cutoff"]  # Legacy synthetic fixture compatibility.
 CAT = ["modal", "linha_id", "codigo_linha", "sentido_id", "padrao_id", "versao_id",
        "ocorrencia_id", "parada_id", "topologia"]
 NUM = ["posicao_gps", "posicao_destino", "distancia_metros", "velocidade_kmh",
@@ -51,14 +53,15 @@ def write_json(path, value):
 
 def load(csv_path, manifest_path, config):
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8-sig"))
-    if manifest["dataset_version"] != VERSION or utc(manifest["cutoff_utc"]) != utc(CUTOFF):
+    if manifest["dataset_version"] != VERSION:
         raise ValueError("Contrato/cutoff incompatível")
+    _, profile = dataset_profile(manifest, config)
     if manifest["data_kind"] not in ("synthetic", "real") or manifest["dataset_sha256"] != sha(csv_path):
         raise ValueError("Tipo/hash de dataset inválido")
     if manifest["features"] != FEATURES:
         raise ValueError("Allowlist divergente")
     bounds = [utc(config[k]) for k in ("inicio", "fim_treino", "fim_validacao", "fim")]
-    if not utc(CUTOFF) <= bounds[0] < bounds[1] < bounds[2] < bounds[3]:
+    if not utc(profile["cutoff"]) <= bounds[0] < bounds[1] < bounds[2] < bounds[3]:
         raise ValueError("Limites temporais inválidos")
     trips = {}
     for trip in manifest["trips"]:
@@ -217,8 +220,10 @@ def train(csv_path, manifest_path, config_path, output):
         counts[split]["first_trip_start_utc"] = min(utc(trip_bounds[i]["inicio"]) for i in ids).isoformat()
         counts[split]["last_trip_end_utc"] = max(utc(trip_bounds[i]["fim"]) for i in ids).isoformat()
     manifest = {"pipeline_version": "eta-historical-3b-v1", "dataset_version": VERSION,
-                "data_kind": dataset["data_kind"], "real_performance_claim": False,
-                "cutoff_utc": CUTOFF, "feature_list": FEATURES, "config": config, "splits": counts,
+                "data_kind": dataset["data_kind"], "validation_policy": policy(dataset, config), "real_performance_claim": False,
+                "cutoff_utc": dataset["cutoff_utc"],
+                "collection_profile": dataset_profile(dataset, config)[0],
+                "feature_list": FEATURES, "config": config, "splits": counts,
                 "collection": dataset.get("collection"),
                 "discarded_rows": discarded, "real_volume_readiness": readiness,
                 "model": "ExtraTreesRegressor", "hyperparameters": model[-1].get_params(),

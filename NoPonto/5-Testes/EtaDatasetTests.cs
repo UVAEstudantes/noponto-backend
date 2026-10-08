@@ -88,7 +88,7 @@ public sealed class EtaDatasetTests
     [InlineData("viagem","ExecucaoDiferente")][InlineData("volta","VoltaDiferente")]
     [InlineData("sentido","IdentidadeEstruturalIncompativel")][InlineData("ocorrencia","IdentidadeEstruturalIncompativel")]
     [InlineData("tempo","TempoInvalido")][InlineData("incompleto","DadosIncompletos")]
-    [InlineData("distancia","DistanciasDivergentes")][InlineData("versao","IdentidadeEstruturalIncompativel")]
+    [InlineData("distancia","DistanciaNaoConferida")][InlineData("versao","IdentidadeEstruturalIncompativel")]
     [InlineData("atras","DestinoNaoAdianteOuDistanciaInvalida")]
     public void RejeitaIdentidadeTempoEQualidade(string caso,string motivo)
     {
@@ -98,7 +98,7 @@ public sealed class EtaDatasetTests
             case "ocorrencia":c.Passagem.OcorrenciaParadaPadraoId=Guid.NewGuid();break;
             case "tempo":c.Passagem.TimestampPassagem=c.Gps.TimestampGps.AddSeconds(-1);break;
             case "incompleto":c.Gps.ProximaOcorrenciaParadaPadraoId=null;break;
-            case "distancia":c.Gps.DistanciaProximaParadaMetros=1000;break;
+            case "distancia":c=c with{DistanciaRotaConferidaMetros=2000};break;
             case "versao":c.Passagem.PadraoVersaoId=Guid.NewGuid();break;
             case "atras":c.Gps.PosicaoNaRota=.5;break;}
         // Alterar o histórico exige journal correspondente para isolar a regra de associação GPS.
@@ -170,6 +170,21 @@ public sealed class EtaDatasetTests
     [Fact] public void PayloadJournalDivergenteNaoConfirmaPassagem()
     {var(c,e,o)=Caso();Assert.Equal("PassagemSemJournalConferido",EtaDataset.Avaliar(c with{
         Journal=c.Journal! with{TimestampPassagem=c.Passagem.TimestampPassagem!.Value.AddSeconds(1)}},e,o).Motivo);}
+    [Theory][InlineData(45.04372787)][InlineData(1000)][InlineData(200)]
+    public void DistanciaDiretaNaoSubstituiNemInvalidaTrechoOperacional(double direta)
+    {var(c,e,o)=Caso();c.Gps.DistanciaProximaParadaMetros=direta;
+        var(a,m)=EtaDataset.Avaliar(c,e,o);Assert.Null(m);Assert.Equal(200,a!.DistanciaMetros);Assert.Equal(60,a.LabelSegundos);}
+
+    [Theory][InlineData(null)][InlineData(0d)][InlineData(-1d)][InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)][InlineData(1011d)]
+    public void TrechoInvalidoPermaneceRejeitado(double? trecho)
+    {var(c,e,o)=Caso();Assert.Equal("DistanciaNaoConferida",EtaDataset.Avaliar(c with{DistanciaRotaConferidaMetros=trecho},e,o).Motivo);}
+
+    [Fact] public void MatchingDistintoNaoAutorizaAlvoOperacionalIncoerente()
+    {var(c,e,o)=Caso();c.Gps.OcorrenciaParadaPadraoId=Guid.NewGuid();
+        Assert.Equal("IdentidadeEstruturalIncompativel",EtaDataset.Avaliar(c,e,o).Motivo);
+        Assert.Equal("ProcedenciaNaoAuditadaOuProtegida",EtaDataset.Avaliar(c,e with{Qualidade=QualidadeExecucaoDataset.NaoVerificada},o).Motivo);}
+
     [Fact] public void FracaoNaoSubstituiDistanciaGeograficaConferida()
     {var(c,e,o)=Caso();Assert.Equal("DistanciaNaoConferida",EtaDataset.Avaliar(c with{DistanciaRotaConferidaMetros=null},e,o).Motivo);
         c.Gps.DistanciaProximaParadaMetros=180;

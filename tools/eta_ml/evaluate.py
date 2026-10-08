@@ -3,6 +3,8 @@ import json
 import pickle
 from pathlib import Path
 from pipeline import FEATURES, VERSION, evaluate, load, sha, write_json
+from collection_profiles import dataset_profile, instant
+from validation_policies import policy
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
@@ -14,6 +16,15 @@ if __name__ == "__main__":
     if sha(a.model) != metadata["artifact_sha256"] or sha(a.config) != metadata["config_sha256"]:
         raise ValueError("Hash de artefato/config divergente")
     rows, dataset, discarded = load(a.dataset, a.manifest, config)
+    profile_name, _ = dataset_profile(dataset, config)
+    if policy(metadata, config) != policy(dataset, config):
+        raise ValueError("Model/dataset validation policy mismatch")
+    if (metadata["dataset_manifest_sha256"] != sha(a.manifest)
+            or metadata.get("collection_profile", profile_name) != profile_name
+            or instant(metadata["cutoff_utc"]) != instant(dataset["cutoff_utc"])
+            or metadata.get("collection") != dataset.get("collection")
+            or metadata["data_kind"] != dataset["data_kind"]):
+        raise ValueError("Modelo/manifesto/config divergem do perfil ou dataset original")
     # Carregar somente artefatos locais confiáveis: pickle pode executar código.
     bundle = pickle.loads(Path(a.model).read_bytes())
     if bundle["features"] != FEATURES or bundle["dataset_version"] != VERSION:

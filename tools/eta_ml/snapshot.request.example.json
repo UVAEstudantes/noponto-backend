@@ -1,0 +1,12 @@
+{
+  "profile": {
+    "cutoff": "2026-10-07T21:00:57.997530Z",
+    "backend_commit": "70d7bcb8041e167df063237b4fdcafd4971b01d6",
+    "image": "sha256:42d8b78b7b683234211f0d10edf8a79ddcf5c7f6557df9fd065f2409299f5094",
+    "migration": "20261006180000_IntegridadeCircularDuravel",
+    "dataset_contract": "noponto-eta-gps-v1",
+    "sampling": {"enabled": true, "line_percentage": 10, "block_minutes": 60, "seed": "NOPONTO_ML_V1"}
+  },
+  "snapshot_end": "PREENCHER_LIMITE_UTC_FIXO",
+  "trips": []
+}

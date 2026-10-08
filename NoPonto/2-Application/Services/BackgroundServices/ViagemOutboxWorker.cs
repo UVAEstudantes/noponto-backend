@@ -115,12 +115,16 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
         UpdateMax(ref _batchSizeMax, items.Count);
         try
         {
-            var events = items.Select(item => JsonSerializer.Deserialize<EventoViagem>(item.Payload)
+            var qualityItems = items.Where(IsQuality).ToArray();
+            var events = items.Where(item => !IsQuality(item)).Select(item => JsonSerializer.Deserialize<EventoViagem>(item.Payload)
                 ?? throw new FormatException("Payload de outbox vazio.")).ToArray();
             foreach (var evento in events) EventoViagemValidator.Validar(evento);
             await using var connection = await source.OpenConnectionAsync(ct);
             await using var transaction = await connection.BeginTransactionAsync(ct);
             var result = await historico.PersistirLoteAsync(events, connection, transaction, ct);
+            foreach (var item in qualityItems)
+                await EtaTripEvidenceRepository.MaterializeAsync(connection, transaction, item.EventId,
+                    EtaTripEvidence.Parse<EtaEvidenceEvent>(item.Payload), ct);
             await using var completed = new NpgsqlCommand("""
                 UPDATE "OutboxViagens" SET "ProcessadoEmUtc"=now(),
                     "BloqueadoAteUtc"=NULL, "BloqueadoPor"=NULL, "UltimoErro"=NULL
@@ -158,6 +162,23 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
     {
         try
         {
+            if (IsQuality(item))
+            {
+                // Quality fallback keeps journal and lease ACK atomic too.
+                await using var connection = await source.OpenConnectionAsync(ct);
+                await using var transaction = await connection.BeginTransactionAsync(ct);
+                await EtaTripEvidenceRepository.MaterializeAsync(connection, transaction, item.EventId,
+                    EtaTripEvidence.Parse<EtaEvidenceEvent>(item.Payload), ct);
+                await using var ack = new NpgsqlCommand("""
+                    UPDATE "OutboxViagens" SET "ProcessadoEmUtc"=now(), "BloqueadoAteUtc"=NULL,
+                        "BloqueadoPor"=NULL, "UltimoErro"=NULL
+                    WHERE "EventId"=@id AND "BloqueadoPor"=@consumer AND "ProcessadoEmUtc" IS NULL
+                    """,connection,transaction);
+                ack.Parameters.AddWithValue("id",item.EventId); ack.Parameters.AddWithValue("consumer",Consumer);
+                if (await ack.ExecuteNonQueryAsync(ct) != 1) throw new OutboxLeaseLostException();
+                await transaction.CommitAsync(ct);
+                return;
+            }
             var evento = JsonSerializer.Deserialize<EventoViagem>(item.Payload)
                 ?? throw new FormatException("Payload de outbox vazio.");
             EventoViagemValidator.Validar(evento);
@@ -171,6 +192,13 @@ public sealed class ViagemOutboxWorker(NpgsqlDataSource source, IHistoricoEvento
             logger.LogWarning(ex, "Evento {EventId} do outbox falhou na tentativa {Tentativa}; retry preservado.",
                 item.EventId, item.Tentativas + 1);
         }
+    }
+
+    internal static bool IsQuality(OutboxItem item)
+    {
+        using var json = JsonDocument.Parse(item.Payload);
+        return item.EventId.StartsWith("quality:", StringComparison.Ordinal)
+            || json.RootElement.TryGetProperty("contract", out _);
     }
 
     private async Task MarcarProcessadoAsync(string eventId, CancellationToken ct)

@@ -38,6 +38,7 @@ public sealed class EstatisticasDatasetEta
 public static class EtaDataset
 {
     public const string Versao = "noponto-eta-gps-v1";
+    public const string PoliticaValidacao = "eta-route-versioned-3g2-v2";
     // Allowlist de features: IDs de viagem/observação e campos de label NÃO entram no modelo.
     public static IReadOnlyList<string> Features { get; } = Array.AsReadOnly(new[]{"modal","linha_id","codigo_linha",
         "sentido_id","padrao_id","versao_id","ocorrencia_id","parada_id","topologia","posicao_gps",
@@ -99,8 +100,8 @@ public static class EtaDataset
         // Fração de geometry não é fração de comprimento geography: não multiplicar por comprimento.
         if(c.DistanciaRotaConferidaMetros is not { } distancia||!double.IsFinite(distancia)||distancia<=0
             ||distancia>comprimento+10) return(null,"DistanciaNaoConferida");
-        if(g.DistanciaProximaParadaMetros is not { } informada||!double.IsFinite(informada)||informada<=0
-            ||Math.Abs(informada-distancia)>Math.Max(10,distancia*0.1)) return(null,"DistanciasDivergentes");
+        // DistanciaProximaParadaMetros é direta ao matching; não equivale ao trecho operacional.
+        // Mantida nas fontes para diagnóstico, nunca substitui a distância geography conferida.
         var local=g.TimestampGps.ToOffset(TimeSpan.FromHours(-3));
         var split=e.Fim<o.FimTreino?"TRAIN":e.Fim<o.FimValidacao?"VALIDATION":"TEST";
         return(new(g.ObservacaoId,e.ViagemId,g.Volta.Value,g.OrdemVeiculo,g.Modal,g.Provedor,g.TimestampGps,
