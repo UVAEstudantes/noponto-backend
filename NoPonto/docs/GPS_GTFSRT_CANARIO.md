@@ -198,3 +198,146 @@ TRXs e medição do bearing estão fora do Git, em
 Recursos desta execução são parados, preservados, sem remoção de bancos/volumes.
 Defaults permanecem legados/flagsOFF/Unknown; nenhuma migration nova, ativação,
 produção, MLrepo, ETA público, sampling, contrato de treino ou label alterados.
+
+
+## Desempenho — decomposição e correção pontual (08/10/2026)
+
+A aquisição/parser/crosswalk não foram refeitos. A carga anterior não isolava
+parser: criava3.000 viagens novas, enriquecia todas as linhas, forçava checkpoint0,
+usava matching batch e concentrava posições na geometria complexa006.
+Importação permanece fora do cronômetro, mas a memória do importador/fixture
+permanece no processo de teste. A rodada atual chegou a~1,6GiB de RSS e Windows
+com~0,5GiB livres; não comparar45,03s antigos como um A/B controlado.
+
+Configuração verificável no código/appsettings/compose: polling20s,
+EnriquecerTodasLinhas=false, checkpoint60s, paralelismo20,
+GPS_MATCHING_BATCH_ENABLED=false. O compose aceita overrides de ambiente;
+não havia .env correspondente na worktree. Valores efetivos do homeserver não
+foram consultados e não podem ser afirmados. Benchmark explicitamente usa batch,
+mudança operacional habilitada e enriquecimento integral nos casos de carga.
+Telemetry ingress é observador em memória, sem sampling, não worker SQL real
+em carga; persistência de telemetria já homologada na etapa anterior não é refeita.
+
+Reprodução concentrada atual:70,041s total, matching18,253s, commit de viagens/CAS
+44,676s, leitura inicial/contextos6,471s, ETA87ms. Parsing12,543ms medido à parte,
+crosswalk10,505ms. Matching30comandos,3.000criações duráveis,33.049comandos PG
+observados. A fase de viagens é dominante; WAL/COMMIT aguardando escrita foi
+observado em amostra local. O númeroPG inclui BEGIN/COMMIT/DISCARD e observadores,
+não somente SELECT. Tempos cumulativos de operações concorrentes não somam
+ao tempo de parede; o paralelismo permanece limitado20.
+
+Correção funcional única: ViagemOperacionalRepository reutiliza a prova estrutural
+obtida para **a mesma observação** na avaliação de mudança, evitando repetir
+EstruturaAsync na continuidade. Mantém prova de transição, caminho separado de
+projeção operacional, candidato/histerese, CAS/fencing existentes, outbox e commits.
+Não cria cache entre ciclos/veículos nem confia apenas nos hints do GTFS.
+A leitura inicial passou a constar no contador de leiturasPG (antes subcontada).
+Regressão RED esperava2leituras e encontrou3; GREEN mantém ViagemId e
+checkpoint quente, com exatamente prova estrutural+transição. Flag de mudança
+desligada preserva o caminho anterior. Não resolve custo inevitável de milhares
+de criações/transações por meio de remoção de durabilidade ou novos batches.
+
+Fixtures: observadores de telemetria agora sincronizam publicação concorrente;
+a rodada inicial perdia entradas somente no List do teste. Corrigido antes do
+comparativo final; isso não era perda no ingress produtivo. Instrumentação registra
+parsing separado, aquisição/collector, lookup, todas as etapas existentes,
+comandos via pg_stat_statements e publicação de telemetria (soma concorrente;
+fábrica permanece incluída no commit, não é contabilizada separadamente).
+
+Benchmark BUS distribuído:3.000 veículos/7 rotas oficiais/6 pontos por rota.
+BRT:370 veículos/4 rotas/6 pontos. Dois GPS sucessivos com posição preservada
+e um snapshot repetido; não é replay cinemático completo de uma frota real.
+GTFS estático pinado, importação seletiva de padrões; não repetir importação
+completa961padrões. PostgreSQL16/PostGIS3.4:1CPU/2GiB; Redis7:0,5CPU/256MiB,
+ambos exclusivos loopback; processo.NET sem teto. Não habilitar batch ou
+enriquecimento total em produção somente porque esses testes passaram.
+
+Cadências independentes: clienteGTFS limita aquisição nova a30s; polling usa20s.
+Após ciclo normal acima do intervalo, delay planejado é0; o processamento não
+se sobrepõe. BUS tem vaga única/ACK: produtor aguarda liberação, não acumula
+fila ilimitada; isso não comprova recuperação de GPS intermediários. Repetição
+sem timestamp novo não avança viagem nem produz nova telemetria no cenário.
+Ao exceder TTL40s, cache físico pode expirar durante o ciclo: no replay concentrado
+517posições reapareceram como novas no filtro, mas nenhuma viagem avançou.
+Nenhum TTL ou filtro foi relaxado para esconder o orçamento excedido.
+
+Reprodução, usando **somente novos recursos exclusivos** nas portas livres58543/58544:
+
+```powershell
+# PostgreSQL exclusivo: acrescentar ao docker run do roteiro acima:
+# Usar POSTGRES_DB=gtfsrt_fixture_perf e comando:
+# postgres -c shared_preload_libraries=pg_stat_statements
+# Aguardar inicialização completa (incluindo reinício do entrypoint) e validar TCP.
+# Nunca executar a instrução abaixo em banco operacional.
+docker exec $pg psql -U postgres -d gtfsrt_fixture_perf -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION pg_stat_statements;'
+$env:POSTGIS_TEST_CONNECTION='Host=127.0.0.1;Port=58543;Database=gtfsrt_fixture_perf;Username=postgres'
+$env:REDIS_TEST_CONNECTION='127.0.0.1:58544'
+$env:GTFSRT_INTEGRATED_FIXTURE='1'
+$env:GTFSRT_FOCUSED_REPLAY='1'
+$env:GTFSRT_PERFORMANCE='1'
+$env:GTFSRT_PERFORMANCE_COMPARISON='1' # somente BUS/BRT distribuídos
+# GTFSRT_OFFICIAL_ZIP conforme o roteiro anterior; mesmo SHA obrigatório.
+dotnet test NoPonto/NoPonto.csproj --no-restore --filter FullyQualifiedName~GtfsRealtimeIntegratedTests --verbosity normal
+# Sem COMPARISON: inclui carga concentrada e EnriquecerTodasLinhas=false sem assinantes.
+```
+
+Evidências/TRXs externas: D:\repositorio_github\NoPonto\gps-perf-local-20261008.
+A tentativa inicial foi descartada por desconexão durante inicialização do recurso
+descartável; benchmarks válidos somente após readiness. Nenhum recurso operacional
+foi lido, alterado ou parado; os recursos exclusivos são parados no fechamento.
+
+### Antes/depois efetivamente observados
+
+Mesmas rotas/pontos/quantidades, parâmetros de matching/checkpoint/paralelismo e
+limites dos recursos. Rodadas sequenciais únicas; pressão de memória/IO do host
+variou. Observador ML foi sincronizado antes da rodada final (3000/370 eventos
+completos); a perda no observador anterior invalida comparação de contagens ML.
+Não atribuir toda diferença de tempo ao patch nem prometer p90 ou throughput
+produtivo. Garantia direta da regressão: remove exatamente a segunda consulta
+estrutural da mesma observação, mantendo a consulta de transição.
+
+| Cenário | Antes s | Depois s | PG antes/depois | CPU .NET depois s |
+|---|---:|---:|---:|---:|
+| BUS3000 criação fria | 36.593 | 57.010 | 33067/33048 | 13.062 |
+| BUS3000 atualização | 42.488 | 31.046 | 16061/13423 | 7.344 |
+| BUS3000 snapshot repetido | 0.585 | 0.131 | 7/7 | 0.203 |
+| BRT370 criação fria | 4.777 | 6.371 | 4085/4085 | 1.609 |
+| BRT370 atualização | 5.484 | 3.944 | 1865/1495 | 1.359 |
+| BRT370 snapshot repetido | 0.010 | 0.022 | 1/1 | 0.000 |
+
+Depois, BUS atualização: matching8,891s, commit20,871s, leitura/contextos1,106s,
+ETA12ms; parsing10,257ms à parte, normalização1ms; publicação ML cumulativa
+4,579ms. 2503/3000 matching elegíveis, mesma contagem antes/depois; nenhum
+filtro foi alterado para fazer as497 outras posições passarem. 2175 escritas
+duráveis foram evitadas pela política existente;328 decisões ainda exigiram
+persistência semântica. São dados técnicos sintéticos, não certificação.
+
+BRT atualização: matching1,222s, commit2,624s, leitura/contextos66ms, ETA1ms,
+parsing0,680ms à parte, publicaçãoML cumulativa0,404ms;370/370 matching,
+370/370 atualizações quentes sem escrita durável. Cold continua370/370 com
+370 transações. Sem conflitos/falhas de infraestrutura nos cenários finais.
+
+Controle adicional **antes** com EnriquecerTodasLinhas=false e zero assinantes:
+BUS3000 aquisição/cache2,302s frio/1,816s atualização/0,055s repetição,
+nenhuma query de matching ou escrita durável de viagem. Esse controle mantém
+GPS no mapa, mas não oferece cobertura operacional/ML de viagens dessas linhas;
+não é uma otimização que possa substituir silenciosamente a coleta integral.
+
+RSS final1,52–1,55GiB, pico1,61GiB no processo de testes pós-importação.
+BUS atualização alocou215.150.184bytes; BRT27.326.544bytes. Esses números não
+são previsão da memória de API estável nem aprovação do orçamento agregado4GB.
+BRT não mostrou gargalo impeditivo em370veículos; BUS integral permanece
+impeditivo para o orçamento20/30s (31,046s atualização,57,010s criação).
+Criação fria não foi acelerada pelo patch:30batches de matching +3000transações
+continuam preservadas, e o tempo frio aumentou nesta rodada.
+
+Testes finais:89/89 regressões relacionadas,18/18 cadência/circular e benchmark
+pós-correção1/1 (2m50s), sem falhas/ignorados. Benchmark diagnóstico1/1(5m07s);
+RED esperado1falha(3leituras vs2). Build final e git diff --check no fechamento;
+avisos de recompilação preexistentes registrados nos TRXs. Não foram repetidos
+parser/crosswalk/clientes, homologação estrutural completa ou centenas de testes.
+
+Próxima ação objetiva: manter BUS legado, considerar somente BRT no roteiro de
+canário anterior **após** gates de identidade/procedência/rollback já registrados.
+Não aprovar BUS integral nem ativar flags para esconder essa limitação; melhoria
+adicional de bulk/estrutura exigiria escopo e prova próprios, não implementados.

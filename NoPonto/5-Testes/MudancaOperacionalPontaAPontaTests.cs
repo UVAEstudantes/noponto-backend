@@ -66,12 +66,13 @@ public sealed class MudancaOperacionalPontaAPontaTests(ViagemOperacionalFixture 
         public Harness(ViagemOperacionalFixture db,bool enabled=true,bool batch=false,int checkpointSegundos=0,
             Func<Task>? afterStateWrite=null,Func<Task>? beforeProjection=null,string? ordem=null,string? retryPrefix=null,
             IGpsSourceResolver? sources=null, ITelemetriaMlIngress? telemetry=null,
-            IHubContext<GpsHub>? hub=null, HttpMessageHandler? etaHandler=null)
+            IHubContext<GpsHub>? hub=null, HttpMessageHandler? etaHandler=null,
+            Microsoft.Extensions.Logging.ILogger<GpsPollingService>? pollingLogger=null, bool enrichAll=true)
         {
             if(ordem is not null) Ordem=ordem;
             if(retryPrefix is not null) _retryPrefix=retryPrefix;
             _db=db;
-            _options=new(){MudancaOperacionalHabilitada=enabled,EnriquecerTodasLinhas=true,CheckpointViagemSegundos=checkpointSegundos};
+            _options=new(){MudancaOperacionalHabilitada=enabled,EnriquecerTodasLinhas=enrichAll,CheckpointViagemSegundos=checkpointSegundos};
             if (sources is not null) _options.IntervaloBrtSegundos = 0; // fixture clock drives HTTP cadence
             Repository=new(db.Redis,db.Source,Options.Create(_options),NullLogger<ViagemOperacionalRepository>.Instance)
                 {StreamKey=Stream,AfterDurableStateWriteAsync=afterStateWrite,BeforeDurableProjectionAsync=beforeProjection};
@@ -86,7 +87,7 @@ public sealed class MudancaOperacionalPontaAPontaTests(ViagemOperacionalFixture 
             _retry=new RetryOperacionalGpsService(new PendenciaOperacionalGpsRepository(db.Redis,retryOptions){Prefixo=_retryPrefix},
                 new ViagemObservadaService(Spy,NullLogger<ViagemObservadaService>.Instance),enriquecedor,
                 retryOptions,Options.Create(_options),NullLogger<RetryOperacionalGpsService>.Instance);
-            _polling=new(_store,_cache,hub ?? _services.GetRequiredService<IHubContext<GpsHub>>(),NullLogger<GpsPollingService>.Instance,
+            _polling=new(_store,_cache,hub ?? _services.GetRequiredService<IHubContext<GpsHub>>(),pollingLogger ?? NullLogger<GpsPollingService>.Instance,
                 null!,_services.GetRequiredService<IServiceScopeFactory>(),enriquecedor,
                 new GpsEtaClient(_http,NullLogger<GpsEtaClient>.Instance),sources ?? new FonteVazia(),
                 new PosicaoVeiculoCacheRepository(db.Redis,new PosicaoVeiculoPayloadWriter(db.Redis),NullLogger<PosicaoVeiculoCacheRepository>.Instance),
@@ -94,11 +95,14 @@ public sealed class MudancaOperacionalPontaAPontaTests(ViagemOperacionalFixture 
                 structuralHintResolver:sources is null ? null : new GpsStructuralHintResolver(new GpsStructuralHintLookup(db.Source)),
                 retryOperacional:_retry);
         }
+        internal double CollectorMs { get; private set; }
         internal async Task CicloFonte(IGpsSourceResolver sources)
         {
             var collector = new GpsSppoCollectorService(sources, _store,
                 new CollectorMonitor(), NullLogger<GpsSppoCollectorService>.Instance);
+            var collectionWatch=Stopwatch.StartNew();
             using (collector) await collector.ColetarUmaVezAsync(DateTimeOffset.UtcNow);
+            CollectorMs=collectionWatch.Elapsed.TotalMilliseconds;
             var method=typeof(GpsPollingService).GetMethod("ProcessarCicloAsync",BindingFlags.Instance|BindingFlags.NonPublic)!;
             Assert.True(await ((Task<bool>)method.Invoke(_polling,
                 [DateTimeOffset.UtcNow,_options,Stopwatch.GetTimestamp(),null,CancellationToken.None])!).WaitAsync(TimeSpan.FromMinutes(4)));

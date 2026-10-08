@@ -125,6 +125,8 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
             if (observed is not null && gps.TimestampGps <= observed.TimestampUltimaAtualizacao)
                 return new(ViagemObservadaStatus.RejectedOlderOrEqual, observed);
 
+            EstruturaViagem? estruturaObservacional = null;
+            var estruturaObservacionalConsultada = false;
             DecisaoViagem? decisionMudanca = null;
             TransicaoParadas? baselineMudanca = null;
             var protegida = previous is not null && !ViagemOperacionalRegra.IdentidadeConfiavel(previous);
@@ -132,7 +134,9 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                 && previous?.Estado is EstadoViagem.Ativa or EstadoViagem.PossivelFim)
             {
                 await using var leituraMudanca = await source.OpenConnectionAsync(ct);
-                var estruturaObservacional = await EstruturaAsync(leituraMudanca, null, gps, ct);
+                GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
+                estruturaObservacional = await EstruturaAsync(leituraMudanca, null, gps, ct);
+                estruturaObservacionalConsultada = true;
                 var avaliacao = ViagemOperacionalRegra.AvaliarMudancaSeHabilitada(
                     options.Value, previous, estruturaObservacional, gps)!;
                 if (avaliacao.Status == StatusMudancaOperacional.MudancaConfirmada)
@@ -192,6 +196,12 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                     structure = new(previous.Observada.PadraoVersaoId, previous.LinhaId,
                         previous.SentidoId, previous.CodigoLinha, true,
                         previous.Observada.PadraoOperacionalId, previous.Observada.Topologia);
+                else if (estruturaObservacionalConsultada)
+                {
+                    // Same observation/coordinates/version already proved above; no cross-cycle cache.
+                    // The operational projection branch keeps its distinct structure semantics.
+                    structure = estruturaObservacional;
+                }
                 else
                 {
                     GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();

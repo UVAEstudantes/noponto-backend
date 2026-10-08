@@ -20,7 +20,7 @@ using Xunit.Abstractions;
 namespace NoPonto.Tests;
 
 // Opt-in: never uses API configuration and never starts the API/migrating startup.
-public sealed class GtfsRealtimeIntegratedTests(ITestOutputHelper output)
+public sealed partial class GtfsRealtimeIntegratedTests(ITestOutputHelper output)
 {
     [ExclusiveFact]
     public async Task OfficialImportCrosswalkPollingAndRestartRemainIsolated()
@@ -48,7 +48,10 @@ public sealed class GtfsRealtimeIntegratedTests(ITestOutputHelper output)
             if (focused)
             {
                 // Debug fixture only: original source/identities, selected operational geometries.
-                imported = imported with { Patterns = imported.Patterns.Where(p=>
+                var perfRoutes=Environment.GetEnvironmentVariable("GTFSRT_PERFORMANCE") == "1"
+                    ? imported.Feed.Routes.Where(r=>r.AgencyId=="22002" && r.RouteType=="700")
+                        .Take(7).Select(r=>r.RouteId).ToHashSet() : [];
+                imported = imported with { Patterns = imported.Patterns.Where(p=>perfRoutes.Contains(p.RouteId) ||
                     p.LineCode is "006" or "28" or "67" or "68" or "ESP01").ToArray() };
                 await new GtfsDatarioPlanPersister(context).PersistAsync(imported,default);
                 output.WriteLine("FOCUSED REPLAY: not full structural homologation");
@@ -86,6 +89,9 @@ public sealed class GtfsRealtimeIntegratedTests(ITestOutputHelper output)
                 Assert.Equal(line.LinhaId, Assert.Single(candidates.Shapes).LinhaId);
             }
             output.WriteLine($"identity_chains={imported.Patterns.Count}; static_routes_bus=460; static_routes_brt=34");
+
+            if (Environment.GetEnvironmentVariable("GTFSRT_PERFORMANCE") == "1")
+            { await MeasurePerformance(db,imported,lookup); return; }
 
             var telemetry = new Telemetry(); var hub = new Hub(); var eta = new Eta();
             subscriber = new GpsHub { Context=new Caller(), Groups=new Groups() };
@@ -278,7 +284,17 @@ public sealed class GtfsRealtimeIntegratedTests(ITestOutputHelper output)
         }
     }
     private sealed class Telemetry:ITelemetriaMlIngress
-    { public List<EventoTelemetriaMl> Events=[];public bool TentarPublicar(EventoTelemetriaMl e){Events.Add(e);return true;} }
+    {
+        public List<EventoTelemetriaMl> Events=[];
+        public long PublicationTicks;
+        public bool TentarPublicar(EventoTelemetriaMl e)
+        {
+            var start=Stopwatch.GetTimestamp();
+            lock(Events) Events.Add(e);
+            Interlocked.Add(ref PublicationTicks,Stopwatch.GetTimestamp()-start);
+            return true;
+        }
+    }
     private sealed class Groups:IGroupManager
     {
         public Task AddToGroupAsync(string id,string group,CancellationToken ct=default)=>Task.CompletedTask;

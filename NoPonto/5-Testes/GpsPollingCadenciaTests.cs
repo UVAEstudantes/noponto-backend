@@ -6,6 +6,29 @@ namespace NoPonto.Tests;
 
 public sealed class GpsPollingCadenciaTests
 {
+    [Fact]
+    public async Task CicloAcimaIntervalo_SnapshotMantemUmaVagaAteAck()
+    {
+        var store=new GpsSppoSnapshotStore();var now=DateTimeOffset.UtcNow;
+        var positions=new[]{new PosicaoVeiculoDto{Ordem="PERF-BACKPRESSURE",TimestampGps=now}};
+        var first=await store.PublicarAsync(null,null,now,now,null,positions);
+        var pending=store.PublicarAsync(null,null,now,now,null,positions);
+        Assert.False(pending.IsCompleted);
+        Assert.Same(first,store.Ler());
+        Assert.Equal(TimeSpan.Zero,GpsPollingService.CalcularDelayProximoCiclo(
+            TimeSpan.FromSeconds(20),TimeSpan.FromSeconds(45),true));
+        Assert.Equal(TimeSpan.Zero,GpsPollingService.CalcularDelayProximoCiclo(
+            TimeSpan.FromSeconds(30),TimeSpan.FromSeconds(45),true));
+        Assert.False(store.Confirmar(first.Geracao+1));
+        Assert.False(pending.IsCompleted);
+        Assert.True(store.Confirmar(first.Geracao));
+        var second=await pending.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(first.Geracao+1,second.Geracao);
+        Assert.Equal(now,Assert.Single(second.Posicoes).TimestampGps);
+        Assert.True(store.Confirmar(second.Geracao));
+        Assert.Null(store.Ler());
+    }
+
     [Theory]
     [InlineData(6, 9)]
     [InlineData(13, 2)]

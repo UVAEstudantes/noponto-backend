@@ -47,6 +47,28 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         MatchingOperacionalPlausivel=true };
 
     [Fact]
+    public async Task ContinuidadeMesmaObservacao_ReutilizaEstruturaSemAlterarIdentidade()
+    {
+        var repository=RepositoryMudanca();
+        var now=DateTimeOffset.UtcNow;
+        var first=G(0) with {TimestampGps=now.AddSeconds(-20)};
+        var created=await repository.TentarAtualizarAsync(first,default);
+        Assert.Equal(ViagemObservadaStatus.Created,created.Status);
+        var contexto=await repository.LerContextoAsync(_ordem,default);
+        var performance=new GpsCicloPerformance(now,20_000);
+        using(GpsCommitPerformanceContext.Push(performance))
+        {
+            var updated=await repository.TentarAtualizarAsync(first with {TimestampGps=now.AddSeconds(-10)},
+                contexto,ResultadoProjecaoOperacional.NaoSolicitada(),default);
+            Assert.Equal(ViagemObservadaStatus.Updated,updated.Status);
+            Assert.Equal(created.EstadoOperacional!.Observada.ViagemId,updated.EstadoOperacional!.Observada.ViagemId);
+            Assert.False(updated.PersistidoDuravelmente);
+        }
+        Assert.Equal(2,performance.ViagemPgReads); // one structure proof and one occurrence transition
+        Assert.Equal(1,performance.ViagemSkippedDurableWrites);
+    }
+
+    [Fact]
     public async Task MudancaHabilitada_CandidatoDuravelPerdaRedis_ConfirmacaoSemPassagens()
     {
         await RepositoryMudanca().TentarAtualizarAsync(G(0),default);
