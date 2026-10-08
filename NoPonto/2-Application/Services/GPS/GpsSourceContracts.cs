@@ -97,7 +97,12 @@ public sealed class GpsSourceResolver : IGpsSourceResolver
         _options = options.Value;
     }
 
-    public IGpsSource GetPrimary(string modal) => Resolve(PrimaryName(modal), modal, "primária");
+    public IGpsSource GetPrimary(string modal)
+    {
+        var source = Resolve(PrimaryName(modal), modal, "primária");
+        if (source is GtfsRealtimeGpsSource gtfs) gtfs.RequireOperational(modal.ToUpperInvariant());
+        return source;
+    }
 
     public IReadOnlyList<IGpsSource> GetShadows(string modal) => ShadowNames(modal)
         .Select(name => Resolve(name, modal, "shadow"))

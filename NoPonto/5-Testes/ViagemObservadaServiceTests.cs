@@ -6,6 +6,27 @@ namespace NoPonto.Tests;
 
 public sealed class ViagemObservadaServiceTests
 {
+    [Theory]
+    [InlineData("ONIBUS", "GTFSRT_BUS", "00123")]
+    [InlineData("BRT", "GTFSRT_BRT", "BRT-00123")]
+    public async Task SnapshotGtfsRepetido_NaoDuplicaViagemNemTelemetria(
+        string modal, string provider, string vehicle)
+    {
+        var position = Position() with { ModalFonte = modal, ProvedorFonte = provider, Ordem = vehicle };
+        var cache = new PositionCache(PosicaoVeiculoCacheStatus.Accepted);
+        var repository = new Repository(); var telemetry = new Telemetria();
+        var polling = Polling(cache, repository, telemetry, new Sampling(true));
+        Assert.True((await polling.ConfirmarPosicaoAsync(position, TimeSpan.FromSeconds(40),
+            TimeSpan.FromSeconds(180), default)).Aceito);
+        cache.Status = PosicaoVeiculoCacheStatus.RejectedOlderOrEqual;
+        Assert.False((await polling.ConfirmarPosicaoAsync(position, TimeSpan.FromSeconds(40),
+            TimeSpan.FromSeconds(180), default)).Aceito);
+        Assert.Single(repository.Calls);
+        var e = Assert.Single(telemetry.Eventos);
+        Assert.Equal(TelemetriaMlContrato.ObservacaoId(modal, provider, vehicle, position.TimestampGps), e.ObservacaoId);
+        Assert.NotEqual(TelemetriaMlContrato.ObservacaoId(modal, "SPPO_ZIRIX", vehicle, position.TimestampGps), e.ObservacaoId);
+    }
+
     private static PosicaoVeiculoDto Position() => new()
     {
         Ordem = "TESTE", CodigoLinha = "10", PadraoVersaoId = Guid.NewGuid(), PosicaoNaRota = .54,

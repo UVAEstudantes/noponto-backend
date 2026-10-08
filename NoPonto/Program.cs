@@ -287,6 +287,33 @@ builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<BrtCurrent
 builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<DatarioGpsSource>());
 builder.Services.AddSingleton<IGpsSourceResolver, GpsSourceResolver>();
 
+// GTFS-RT opt-in only. Existing primary defaults and operational configuration remain unchanged.
+builder.Services.AddOptions<GtfsRealtimeGpsOptions>()
+    .Bind(builder.Configuration.GetSection(GtfsRealtimeGpsOptions.Section))
+    .Validate(o => o.LimitsValid(), "Invalid GTFS-RT acquisition limits.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<IGtfsRealtimeRouteLookup, GtfsRealtimeRouteLookup>();
+builder.Services.AddHttpClient("GpsGtfsRealtime", c => c.Timeout = Timeout.InfiniteTimeSpan)
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AutomaticDecompression = System.Net.DecompressionMethods.GZip
+            | System.Net.DecompressionMethods.Deflate | System.Net.DecompressionMethods.Brotli,
+    });
+foreach (var modal in new[] { GpsModalNames.Bus, GpsModalNames.Brt })
+{
+    builder.Services.AddSingleton<IGpsSource>(sp =>
+    {
+        var options = sp.GetRequiredService<IOptions<GtfsRealtimeGpsOptions>>().Value;
+        var path = modal == GpsModalNames.Bus ? "onibus" : "brt";
+        var client = new GtfsRealtimeGpsClient(
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient("GpsGtfsRealtime"),
+            new Uri($"https://dados.mobilidade.rio/gtfs/realtime/{path}/vehicle-positions"), options);
+        return new GtfsRealtimeGpsSource(modal, client,
+            sp.GetRequiredService<IGtfsRealtimeRouteLookup>(), options,
+            sp.GetRequiredService<ILogger<GtfsRealtimeGpsSource>>());
+    });
+}
+
 // ML ETA
 var mlBaseUrl =
     builder.Configuration["ML:ETA:BASE_URL"]

@@ -7,7 +7,7 @@ namespace NoPonto.Application.GPS;
 
 public sealed class GpsSppoCollectorService : BackgroundService
 {
-    private readonly IWindowedGpsSource _source;
+    private readonly IGpsSource _source;
     private readonly GpsSppoSnapshotStore _snapshot;
     private readonly IOptionsMonitor<GpsSppoCollectorOptions> _opcoesMonitor;
     private readonly ILogger<GpsSppoCollectorService> _logger;
@@ -22,9 +22,9 @@ public sealed class GpsSppoCollectorService : BackgroundService
         ILogger<GpsSppoCollectorService> logger,
         GpsSppoCollectorMetrics? metrics = null)
     {
-        _source = sourceResolver.GetPrimary(GpsModalNames.Bus) as IWindowedGpsSource
-            ?? throw new InvalidOperationException(
-                "A fonte GPS primária BUS precisa suportar coleta por janela para preservar watermark/overlap.");
+        _source = sourceResolver.GetPrimary(GpsModalNames.Bus);
+        if (_source is not IWindowedGpsSource and not ISnapshotGpsSource)
+            throw new InvalidOperationException("A fonte GPS BUS precisa suportar janela ou snapshot explicito.");
         _snapshot = snapshot;
         _opcoesMonitor = opcoesMonitor;
         _logger = logger;
@@ -80,6 +80,23 @@ public sealed class GpsSppoCollectorService : BackgroundService
         await _coletaEmAndamento.WaitAsync(stoppingToken);
         try
         {
+            if (_source is ISnapshotGpsSource snapshotSource)
+            {
+                // Snapshot has no recoverable historical interval or source watermark.
+                // Never overwrite an unacknowledged generation or perform historical catch-up.
+                if (_snapshot.Ler() is not null) return ResultadoFonteGps.Vazio(TimeSpan.Zero);
+                var started = DateTimeOffset.UtcNow;
+                var read = await snapshotSource.GetResultAsync(stoppingToken);
+                var result = new ResultadoFonteGps(read.Status,
+                    read.Observations.Select(x => GpsObservationMapper.ToPosition(x, "ONIBUS")).ToArray(),
+                    read.Duration, read.FailureReason);
+                _logger.LogInformation("BUS current snapshot: status={status}, count={count}; historical coverage unknown, intermediate positions not recoverable.",
+                    result.Status, result.Posicoes.Count);
+                if (result.Status == StatusFonteGps.Sucesso && result.Posicoes.Count > 0)
+                    await _snapshot.PublicarAsync(null, null, started, DateTimeOffset.UtcNow, null,
+                        result.Posicoes, stoppingToken);
+                return result;
+            }
             var opcoes = _opcoesMonitor.CurrentValue;
             var watermarkAnterior = _watermarkConfirmado;
             var agora = referencia.ToUniversalTime();
@@ -105,7 +122,7 @@ public sealed class GpsSppoCollectorService : BackgroundService
             GpsSourceReadResult leitura;
             try
             {
-                leitura = await _source.GetPositionsAsync(
+                leitura = await ((IWindowedGpsSource)_source).GetPositionsAsync(
                     janelaInicio, janelaFim, timeout.Token);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

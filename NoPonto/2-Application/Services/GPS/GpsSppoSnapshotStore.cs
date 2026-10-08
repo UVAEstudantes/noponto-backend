@@ -2,12 +2,15 @@ namespace NoPonto.Application.GPS;
 
 public sealed record LoteSppoSnapshot(
     long Geracao,
-    DateTimeOffset JanelaInicio,
-    DateTimeOffset JanelaFim,
+    DateTimeOffset? JanelaInicio,
+    DateTimeOffset? JanelaFim,
     DateTimeOffset ColetaIniciadaEmUtc,
     DateTimeOffset ColetaConcluidaEmUtc,
     DateTimeOffset? WatermarkConfirmado,
-    IReadOnlyList<PosicaoVeiculoDto> Posicoes);
+    IReadOnlyList<PosicaoVeiculoDto> Posicoes)
+{
+    public bool SnapshotAtual => JanelaInicio is null && JanelaFim is null;
+}
 
 public sealed class GpsSppoSnapshotStore
 {
@@ -19,8 +22,8 @@ public sealed class GpsSppoSnapshotStore
     public LoteSppoSnapshot? Ler() => Volatile.Read(ref _atual);
 
     public async Task<LoteSppoSnapshot> PublicarAsync(
-        DateTimeOffset janelaInicio,
-        DateTimeOffset janelaFim,
+        DateTimeOffset? janelaInicio,
+        DateTimeOffset? janelaFim,
         DateTimeOffset coletaIniciadaEmUtc,
         DateTimeOffset coletaConcluidaEmUtc,
         DateTimeOffset? watermarkConfirmado,
@@ -28,6 +31,9 @@ public sealed class GpsSppoSnapshotStore
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(posicoes);
+        if ((janelaInicio is null) != (janelaFim is null)
+            || (janelaInicio is null && watermarkConfirmado is not null))
+            throw new ArgumentException("Snapshot atual nao possui janela historica nem watermark.");
         if (posicoes.Count == 0)
             throw new ArgumentException("Um lote operacional SPPO deve conter posicoes.", nameof(posicoes));
 
