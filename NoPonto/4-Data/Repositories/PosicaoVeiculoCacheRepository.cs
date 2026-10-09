@@ -55,6 +55,40 @@ public sealed class PosicaoVeiculoCacheRepository : IPosicaoVeiculoCacheReposito
         _tentativasLock = tentativasLock;
     }
 
+    // TYPE distinguishes absent from corrupt state; GET does not renew any TTL.
+    private const string ScriptLerWatermarks = """
+        local result = {}
+        for i, key in ipairs(KEYS) do
+            local kind = redis.call('TYPE', key).ok
+            if kind == 'none' then result[i] = false
+            elseif kind == 'string' then result[i] = redis.call('GET', key)
+            else return redis.error_reply('GPS watermark must be STRING') end
+        end
+        return result
+        """;
+    public async Task<long?[]> LerWatermarksAsync(IReadOnlyList<string> ordens, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (ordens.Count == 0) return [];
+        var keys = ordens.Select(ChaveVeiculoTimestamp).Select(x => (RedisKey)x).ToArray();
+        var result = (RedisResult[])(await _redis.GetDatabase()
+            .ScriptEvaluateAsync(ScriptLerWatermarks, keys).WaitAsync(ct))!;
+        if (result.Length != ordens.Count) throw new InvalidOperationException("Incomplete GPS watermark response.");
+        return result.Select(ParseWatermark).ToArray();
+    }
+
+    internal static long? ParseWatermark(RedisResult value)
+    {
+        if (value.IsNull) return null; // Unknown: bootstrap/CAS, never proven novelty.
+        var text = (string?)value;
+        if (!long.TryParse(text, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var timestamp)
+            || timestamp <= 0 || timestamp > 253402300799999L
+            || text != timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            throw new InvalidOperationException("Invalid GPS watermark.");
+        return timestamp;
+    }
+
     public async Task<PosicaoVeiculoCacheResultado> TentarAtualizarAsync(
         string ordem, PosicaoVeiculoDto posicao, DateTimeOffset timestampGps,
         TimeSpan ttlAtivo, TimeSpan ttlRecente, CancellationToken ct)

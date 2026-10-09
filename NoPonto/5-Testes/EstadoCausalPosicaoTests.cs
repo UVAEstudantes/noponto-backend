@@ -514,6 +514,8 @@ public sealed class EstadoCausalPosicaoTests
     {
         public int Writes { get; private set; }
         public bool Aceita { get; init; } = true;
+        public Task<long?[]> LerWatermarksAsync(IReadOnlyList<string> ordens, CancellationToken ct) => Task.FromResult(new long?[ordens.Count]);
+
         public Task<PosicaoVeiculoCacheResultado> TentarAtualizarAsync(
             string ordem, PosicaoVeiculoDto posicao, DateTimeOffset timestampGps,
             TimeSpan ttlAtivo, TimeSpan ttlRecente, CancellationToken ct)

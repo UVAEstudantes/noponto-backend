@@ -62,6 +62,8 @@ public sealed class ViagemObservadaServiceTests
     {
         public PosicaoVeiculoCacheStatus Status { get; set; } = status;
         public bool Confirmed { get; private set; }
+        public Task<long?[]> LerWatermarksAsync(IReadOnlyList<string> ordens, CancellationToken ct) => Task.FromResult(new long?[ordens.Count]);
+
         public Task<PosicaoVeiculoCacheResultado> TentarAtualizarAsync(string ordem, PosicaoVeiculoDto position,
             DateTimeOffset ts, TimeSpan active, TimeSpan recent, CancellationToken ct)
         {

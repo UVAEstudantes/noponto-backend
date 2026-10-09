@@ -20,6 +20,8 @@ public sealed class PostgresEstabilidadeTests
 
     private sealed class Cache : IPosicaoVeiculoCacheRepository
     {
+        public Task<long?[]> LerWatermarksAsync(IReadOnlyList<string> ordens, CancellationToken ct) => Task.FromResult(new long?[ordens.Count]);
+
         public Task<PosicaoVeiculoCacheResultado> TentarAtualizarAsync(string ordem,
             PosicaoVeiculoDto posicao, DateTimeOffset ts, TimeSpan ativo, TimeSpan recente, CancellationToken ct)
         {

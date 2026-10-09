@@ -68,6 +68,74 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
         new(_redis, writer, NullLogger<PosicaoVeiculoCacheRepository>.Instance);
 
     [Fact]
+    public async Task Watermark_BatchPreservesOrderAndMissingSlots_WithoutMutation()
+    {
+        var ts = DateTimeOffset.UtcNow; await ConfirmarInicialAsync(ts);
+        var before = await CapturarDadosAsync();
+        var values = await _repo.LerWatermarksAsync(["MISSING-" + Guid.NewGuid(), _ordem], default);
+        Assert.Null(values[0]); Assert.Equal(ts.ToUnixTimeMilliseconds(), values[1]);
+        await AssertDadosPreservadosAsync(before);
+    }
+
+    [Fact]
+    public async Task Watermark_ActiveExpires_DuplicateDoesNotRenew_ThenNewGpsUsesCas()
+    {
+        var db = _redis.GetDatabase(); var ts = DateTimeOffset.UtcNow;
+        Assert.Equal(PosicaoVeiculoCacheStatus.Accepted, (await _repo.TentarAtualizarAsync(
+            _ordem, Posicao(ts, _ordem), ts, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(6), default)).Status);
+        await Task.Delay(1200);
+        Assert.Null(await _distributedCache.GetStringAsync(GpsPollingService.ChaveVeiculoAtivo(_ordem)));
+        var recentBefore = await _distributedCache.GetStringAsync(GpsPollingService.ChaveVeiculoRecente(_ordem));
+        Assert.NotNull(recentBefore);
+        var before = await db.KeyTimeToLiveAsync(PosicaoVeiculoCacheRepository.ChaveVeiculoTimestamp(_ordem));
+        var watermark = (await _repo.LerWatermarksAsync([_ordem], default))[0];
+        Assert.Equal(ts.ToUnixTimeMilliseconds(), watermark);
+        Assert.True(GpsTimestampDeduplication.ShouldIgnore(ts, null, watermark));
+        Assert.False(GpsTimestampDeduplication.ShouldIgnore(ts.AddSeconds(1), null, watermark));
+        await Task.Delay(100);
+        Assert.True(await db.KeyTimeToLiveAsync(PosicaoVeiculoCacheRepository.ChaveVeiculoTimestamp(_ordem)) < before);
+        Assert.Equal(recentBefore, await _distributedCache.GetStringAsync(GpsPollingService.ChaveVeiculoRecente(_ordem)));
+        Assert.False(await db.KeyExistsAsync(GpsPollingService.ChaveVeiculoAtivo(_ordem)));
+        Assert.Equal(PosicaoVeiculoCacheStatus.RejectedOlderOrEqual, (await _repo.TentarAtualizarAsync(
+            _ordem, Posicao(ts, _ordem), ts, TtlAtivo, TtlRecente, default)).Status);
+        Assert.False(await db.KeyExistsAsync(GpsPollingService.ChaveVeiculoAtivo(_ordem)));
+        Assert.Equal(PosicaoVeiculoCacheStatus.Accepted, (await _repo.TentarAtualizarAsync(
+            _ordem, Posicao(ts.AddSeconds(1), _ordem), ts.AddSeconds(1), TtlAtivo, TtlRecente, default)).Status);
+    }
+
+    [Fact]
+    public async Task Watermark_MissingAndRealExpirationRemainUnknown()
+    {
+        Assert.Null((await _repo.LerWatermarksAsync([_ordem], default))[0]);
+        var ts = DateTimeOffset.UtcNow;
+        await _repo.TentarAtualizarAsync(_ordem, Posicao(ts, _ordem), ts,
+            TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), default);
+        await Task.Delay(1200);
+        Assert.Null((await _repo.LerWatermarksAsync([_ordem], default))[0]);
+        Assert.Null(await _distributedCache.GetStringAsync(GpsPollingService.ChaveVeiculoRecente(_ordem)));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("NaN")]
+    [InlineData("0")]
+    [InlineData("01")]
+    [InlineData("-1")]
+    [InlineData("253402300800000")]
+    public async Task Watermark_InvalidStringFailsClosed(string value)
+    {
+        await _redis.GetDatabase().StringSetAsync(PosicaoVeiculoCacheRepository.ChaveVeiculoTimestamp(_ordem), value);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _repo.LerWatermarksAsync([_ordem], default));
+    }
+
+    [Fact]
+    public async Task Watermark_WrongTypeFailsClosed()
+    {
+        await _redis.GetDatabase().HashSetAsync(PosicaoVeiculoCacheRepository.ChaveVeiculoTimestamp(_ordem), "data", "1");
+        await Assert.ThrowsAsync<RedisServerException>(() => _repo.LerWatermarksAsync([_ordem], default));
+    }
+
+    [Fact]
     public async Task MetricasCommit_PrimeiraTentativa_MedeSerializacaoLuaEUnlockUmaVez()
     {
         var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
@@ -710,6 +778,8 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
             (await _repo.TentarAtualizarAsync(_ordem, Posicao(t, _ordem), t,
                 TtlAtivo, TtlRecente, default)).Status);
         await AssertDadosPreservadosAsync(antes);
+        var previousWatermark = (await _repo.LerWatermarksAsync([_ordem], default))[0];
+        Assert.True(GpsTimestampDeduplication.ShouldIgnore(t, null, previousWatermark));
         Assert.False(await _redis.GetDatabase().KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
     }
 
@@ -800,6 +870,8 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
             (await NovoRepositorio(writer).TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
                 TtlAtivo, TtlRecente, default)).Status);
         Assert.Equal(1, writer.Commits);
+        var confirmed = (await _repo.LerWatermarksAsync([_ordem], default))[0];
+        Assert.True(GpsTimestampDeduplication.ShouldIgnore(t1, null, confirmed));
         await AssertEstadoIntegralAsync(t1);
         Assert.False(await _redis.GetDatabase().KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
         var antesRetry = await CapturarDadosAsync();
@@ -865,6 +937,8 @@ public class PosicaoVeiculoCacheRepositoryTests : IAsyncLifetime
             (await NovoRepositorio(writer).TentarAtualizarAsync(_ordem, Posicao(t1, _ordem), t1,
                 TtlAtivo, TtlRecente, default)).Status);
         await AssertDadosPreservadosAsync(antes);
+        var watermark = (await _repo.LerWatermarksAsync([_ordem], default))[0];
+        Assert.False(GpsTimestampDeduplication.ShouldIgnore(t1, null, watermark));
         Assert.False(await _redis.GetDatabase().KeyExistsAsync($"veiculo:{_ordem}:gps-lock"));
     }
 

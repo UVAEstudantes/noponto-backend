@@ -285,6 +285,9 @@ public sealed class GpsPollingService : BackgroundService
         var leiturasAnteriores = await Task.WhenAll(
             maisRecentesFiltrados.Select(p =>
                 _cache.GetStringAsync(ChaveVeiculoAtivo(p.Ordem), ct)));
+        var (anteriores, watermarkPorIndice, chavesWatermark) = await GpsTimestampDeduplication.ReadAsync(
+            maisRecentesFiltrados, leiturasAnteriores, _posicaoCache, ct);
+        performance.RedisLeiturasIniciais += chavesWatermark;
         performance.RedisLeituraInicialMs = (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
 
@@ -296,19 +299,8 @@ public sealed class GpsPollingService : BackgroundService
         for (int i = 0; i < maisRecentesFiltrados.Count; i++)
         {
             var nova = maisRecentesFiltrados[i];
-            PosicaoVeiculoDto? anterior = null;
-
-            if (leiturasAnteriores[i] is not null)
-            {
-                try
-                {
-                    anterior = JsonSerializer.Deserialize<PosicaoVeiculoDto>(
-                        leiturasAnteriores[i]!, JsonOptions);
-                }
-                catch { }
-            }
-
-            if (anterior is not null && nova.TimestampGps <= anterior.TimestampGps)
+            var anterior = anteriores[i];
+            if (GpsTimestampDeduplication.ShouldIgnore(nova.TimestampGps, anterior, watermarkPorIndice[i]))
             {
                 performance.MatchingDiagnostics.RegisterStage(nova.ModalFonte, MatchingStage.TimestampIgnored);
                 continue;
