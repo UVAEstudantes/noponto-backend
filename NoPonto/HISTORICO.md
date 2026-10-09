@@ -865,3 +865,33 @@ Custo previsto por operações, não benchmark Debian: zero leitura adicional qu
 Build aprovado (zero erros, cinco avisos preexistentes). 304 testes aprovados, zero falhas/ignorados (~14 s): deduplicação, ciclo real polling reutilizando gate BRT individual/batch, matching/diagnósticos/cadência, ETA OFF, estado causal e viagens, CAS/fencing/commit ambíguo e expiração real Redis. Fixture Redis7 descartável existente em loopback reutilizada com chaves sintéticas por teste, sem usar Redis operacional ou PostgreSQL; primeira tentativa sem autenticação teve 200 aprovados/96 NOAUTH, repetição com autenticação já existente passou (credencial não registrada). Regressores provam filtro seletivo, GPS novo, bootstrap desconhecido, tipo/valor inválido, cancelamento, ausência de predecessor físico e não renovação/republicação do duplicado. git diff --check no fechamento.
 
 Ressalva preservada: enriquecedor ainda atualiza memória antes do commit. Se commit executou mas resposta se perdeu, watermark confirma e evita repetir; se commit não executou, watermark antigo/ausente permite tentativa sob CAS e memória pode rejeitar matching. Nenhum relaxamento do validador ou alteração transacional improvisada. Sem homologação integral PostgreSQL/SignalR real nem benchmark produtivo. Pronto para revisão da correção delimitada, não autorização de release/deploy. Sem SSH, produção, imagem nova, commit/push/merge.
+
+## 2026-10-09 — Modernização CI/CD, Etapa 1: validação offline antes da publicação
+
+### Objetivo, base e isolamento do trabalho
+
+Implementar somente CI de PRs destinados à main e de pushes na main, condicionando publicação GHCR aos testes. AGENTS.md, histórico, workflow, projeto/testes e dependências consultados. Fetch de origin/main confirmou aff181dedeb7ea41301f27c054923bcab22bb787. Criada branch ci/validacao-etapa1 em worktree própria noponto-backend-ci-etapa1; main e demais worktrees preservadas. Produção build-102 e fallback local03 são informações do operador, sem inspeção remota.
+
+### Problema e alterações efetivas
+
+- .github/workflows/deploy.yml: novo job validate para pull_request/main e push/main; build/push exige validate aprovado e evento push na refs/heads/main. Preservados autenticação GHCR existente, contexto/Dockerfile, plataforma linux/amd64, cache GHA e tags latest, timestamp-SHA curto e build-N. Nome do workflow/resumo agora explicitam CI/publicação sem deploy. PRs podem consumir números de execução, produzindo lacunas normais em build-N.
+- Removidos workflow_dispatch e job deploy legado (Tailscale/SCP/SSH), pois sobrescreviam Compose base e acionavam caminho incompatível com a configuração GTFS-RT informada. Não criado deploy substituto, não removidos secrets da conta e não alterado script/servidor. Fluxo anterior permanece no histórico Git; mudanças locais ainda não bloqueiam refs/execuções antigas no GitHub.
+- .ci/offline-tests.json: allowlist de 16 classes investigadas; exclusão do replay extenso de matching. HTTP fake, cache/spies em memória, parser sintético, regras e codec. Modelo_SnapshotSincronizado configura Npgsql sintético somente para metadados, sem abrir conexão/aplicar migration. Fixtures PostGIS/ViagemOperacional, Redis real, auditorias externas e integrações conectadas não selecionadas. Inventário e justificativas em .ci/README.md.
+- .ci/test-offline.sh: VSTest na DLL Release previamente compilada, sem restore/build/reavaliação MSBuild. Container --network none, capacidades removidas, no-new-privileges, workspace somente leitura e resultados descartáveis; guarda recusa interfaces diferentes de loopback. Sem secrets, conexões herdadas, Docker socket ou portas publicadas. Restore/build anteriores têm rede para NuGet em container separado sem credenciais produtivas. Mesma imagem SDK por Image ID dentro da execução.
+- .ci/offline_tests.py e .ci/test_offline_tests.py: filtro delimitado por classe e avaliação TRX exigindo todos Passed, resultados não vazios, presença das 16 classes e ausência de testes fora da allowlist. Seis regressões do avaliador; não imprime payloads nem publica logs/configuração/TRX.
+- .ci/README.md: comportamento, inventário, isolamento, reprodução, limites e pendências. Este histórico atualizado somente por acréscimo.
+
+### Testes e resultados
+
+- dotnet restore e dotnet build NoPonto/NoPonto.csproj -c Release --no-restore no Windows/.NET SDK 9.0.306: aprovados, zero erros e cinco avisos preexistentes CS8981/CS7022/xUnit2031.
+- Filtro gerado por python -B .ci/offline_tests.py filter; VSTest na DLL Release: Windows 358 aprovados/0 falhas/0 ignorados, duração dos testes 25 s; container Linux SDK 9.0.318 sem rede externa 358 aprovados/0 falhas/0 ignorados, 7 s. Avaliador aceitou ambos os TRX e comprovou todas as 16 classes presentes.
+- Teste Linux utilizou DLL portátil compilada no Windows; não certifica restore/build completo Linux. Tentativas locais de preparação/build Linux no Docker Desktop foram interrompidas por lentidão; restore offline com cache existente registrou NU1900 por auditoria NuGet sem rede. Não contabilizadas como build Linux aprovado nem como falha funcional dos testes. Containers SDK descartáveis encerrados.
+- Container bridge recusado pela guarda com exit 1 antes da descoberta/execução. Nenhum PostgreSQL/Redis ou serviço da API iniciado; testes selecionados usam dependências simuladas e não acessaram produção.
+- python -B -m unittest discover -s .ci -p 'test_*.py' -v: 6/6 aprovados (sucesso, classe ausente, classe conectada extra, failed/skipped, TRX vazio, filtro/exclusão).
+- actionlint 1.7.7: sem diagnósticos. Parser YAML local confirmou eventos main/PR, gate needs/if, preservação das tags e isolamento sem secrets/socket. git diff --check aprovado; somente aviso de normalização LF/CRLF. Arquivos novos revisados separadamente.
+
+### Limites e pendências
+
+Ainda exigem GitHub Actions após integração autorizada: restore/build Linux completo no runner, eventos PR interno/fork e push/main, publicação GHCR/cache/tags e comprovação operacional do bloqueio de publicação quando validate falha. Proteção da main/check obrigatório não foi alterada. Suíte completa, integração PostgreSQL/Redis e feeds reais não executados. Algumas suítes offline usam temporização; nenhuma falha foi observada nesta seleção, sem promessa de ausência de flakiness futura. SDK/Actions mantêm tags de versão; reprodutibilidade e migração de plataforma ficam para etapa própria.
+
+Não modificados GPS/ETA/domínio, Program.cs, migrations, Dockerfile ou Compose. Nenhuma chamada SSH/Tailscale, configuração produtiva, banco real, migration, deploy, build/push de imagem da API, commit, push ou merge. Etapa 1 pronta para revisão; migrations, script de deploy, rollback e ativação automática permanecem fora do escopo.

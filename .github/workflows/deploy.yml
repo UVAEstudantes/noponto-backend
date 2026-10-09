@@ -1,19 +1,74 @@
-name: 🚌 NoPonto — Build e Deploy
+name: 🚌 NoPonto — CI e Publicação
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+# workflow_dispatch/deploy legado removidos: Compose simples é incompatível
+# com a configuração GTFS-RT produtiva. Esta etapa não possui deploy.
+permissions:
+  contents: read
 
 jobs:
+  validate:
+    name: CI offline (.NET 9)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SDK_IMAGE: mcr.microsoft.com/dotnet/sdk:9.0-bookworm-slim
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verifica seleção e avaliador de resultados
+        run: python3 -B -m unittest discover -s .ci -p 'test_*.py' -v
+
+      - name: Prepara SDK e diretórios descartáveis
+        run: |
+          docker pull "$SDK_IMAGE"
+          echo "sdk=$(docker image inspect --format '{{.Id}}' "$SDK_IMAGE")" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/noponto-ci/nuget" "$RUNNER_TEMP/noponto-ci/results"
+
+      - name: Restore e build sem segredos
+        run: |
+          docker run --rm --cap-drop ALL --security-opt no-new-privileges \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --volume "$RUNNER_TEMP/noponto-ci/nuget:/nuget" \
+            --workdir /workspace --env NUGET_PACKAGES=/nuget \
+            --env DOTNET_CLI_TELEMETRY_OPTOUT=1 "$sdk" \
+            sh -ec 'dotnet restore NoPonto/NoPonto.csproj && dotnet build NoPonto/NoPonto.csproj -c Release --no-restore'
+
+      - name: Testes sem acesso à rede externa
+        run: |
+          filter=$(python3 -B .ci/offline_tests.py filter)
+          docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP/noponto-ci/results:/results" \
+            --workdir /workspace \
+            --env DOTNET_CLI_TELEMETRY_OPTOUT=1 --env "NOPONTO_TEST_FILTER=$filter" \
+            "$sdk" sh .ci/test-offline.sh /results
+
+      - name: Exige resultados aprovados de todas as classes selecionadas
+        run: python3 -B .ci/offline_tests.py verify "$RUNNER_TEMP/noponto-ci/results/offline.trx"
+
   build:
     name: 🐳 Build e Push
     runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,46 +107,7 @@ jobs:
 
       - name: Resumo
         run: |
-          echo "## 🚌 NoPonto Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚌 NoPonto — imagem publicada (sem deploy)" >> $GITHUB_STEP_SUMMARY
           echo "**Versão:** \`${{ steps.meta.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Build:** \`#${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
-
-  deploy:
-    name: 🚀 Deploy
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Conecta no Tailscale
-        uses: tailscale/github-action@v2
-        with:
-          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          tags: tag:ci
-
-      - name: Copia compose pro servidor
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_TAILSCALE_IP }}
-          port: 22
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          source: NoPonto/docker-compose.yml
-          target: /opt/stacks/noponto/
-          overwrite: true
-          strip_components: 1
-
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_TAILSCALE_IP }}
-          port: 22
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            bash /home/guilherme/deploy.sh noponto api noponto_api
