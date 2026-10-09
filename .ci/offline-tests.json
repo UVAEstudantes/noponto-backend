@@ -1,0 +1,23 @@
+{
+  "classes": [
+    "GpsLeituraValidatorTests",
+    "GpsTimestampDeduplicationTests",
+    "NoPonto.Tests.GpsEtaClientTests",
+    "NoPonto.Tests.GpsBrtTelemetriaTests",
+    "NoPonto.Tests.GpsSourceAbstractionTests",
+    "NoPonto.Tests.GpsPollingFontesTests",
+    "NoPonto.Tests.GpsPollingCadenciaTests",
+    "NoPonto.Tests.GpsPerformanceMetricsTests",
+    "NoPonto.Tests.GpsMatchingDiagnosticsTests",
+    "NoPonto.Tests.GtfsRealtimeGpsTests",
+    "NoPonto.Tests.TelemetriaMlIdentidadeTests",
+    "NoPonto.Tests.TelemetriaMlSamplingTests",
+    "NoPonto.Tests.ViagemOperacionalRegraTests",
+    "NoPonto.Tests.ViagemOperacionalCodecCompatibilidadeTests",
+    "NoPonto.Tests.CancelamentoCandidatoCursorTests",
+    "NoPonto.Tests.EstadoCausalPosicaoTests"
+  ],
+  "excluded_methods": [
+    "NoPonto.Tests.GpsMatchingDiagnosticsTests.DeterministicAggregationReplay_MeasuresIncrementalCostOnly"
+  ]
+}
