@@ -16,6 +16,8 @@ internal enum ResultadoRequisicaoEta
 /// </summary>
 internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloConfiguradoMs)
 {
+    public GpsMatchingDiagnostics MatchingDiagnostics { get; } = new();
+
     private long _matchingGlobalTicks;
     private long _matchingDirecionadoTicks;
     private long _matchingMaxTicks;

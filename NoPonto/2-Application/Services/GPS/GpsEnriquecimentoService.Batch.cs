@@ -56,7 +56,7 @@ public sealed partial class GpsEnriquecimentoService
         // A concorrência aqui é apenas da decisão C# por posição. O executor
         // emite no máximo um grupo simple, um combined e um directed, nessa ordem;
         // não existem batches concorrentes nem batch de tamanho 1 dentro de foreach.
-        var resultados = await Task.WhenAll(entradas.Select(async (entrada, indice) =>
+        var resultados = await GpsMatchingDiagnostics.AwaitAll(entradas.Select(async (entrada, indice) =>
         {
             try
             {
@@ -68,7 +68,7 @@ public sealed partial class GpsEnriquecimentoService
                 executor.Abortar(ex);
                 throw;
             }
-        }));
+        }), performance?.MatchingDiagnostics);
         performance?.RegistrarProtecaoBatch(executor.Protecao);
         return resultados;
     }

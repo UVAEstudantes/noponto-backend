@@ -180,6 +180,27 @@ public sealed class EstadoCausalPosicaoTests
     }
 
     [Fact]
+    public async Task Polling_commit_GPS_continua_sem_previsao_quando_ML_off()
+    {
+        var cache = new PositionCacheSpy();
+        var polling = new GpsPollingService(null!, null!, null!,
+            NullLogger<GpsPollingService>.Instance, null!, null!, null!, null!, Sources(),
+            cache, new ViagemObservadaService(new ViagemRepositorySpy(),
+                NullLogger<ViagemObservadaService>.Instance));
+        using var http = new HttpClient(); // Sem BaseAddress: qualquer HTTP faria o teste falhar.
+        var client = new GpsEtaClient(http, NullLogger<GpsEtaClient>.Instance,
+            Microsoft.Extensions.Options.Options.Create(new GpsEtaOptions { Enabled = false }));
+        var gps = Posicao() with { CodigoLinha = "100", VelocidadeMedia = 20,
+            PosicaoNaRota = .2, DistanciaProximaParadaMetros = 100 };
+        Assert.Empty(await client.PredizirLoteAsync([gps], default));
+        Assert.Null(gps.EtaProximaParadaSegundos);
+        var commit = await polling.ConfirmarPosicaoAsync(gps,
+            TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
+        Assert.True(commit.Aceito);
+        Assert.Equal(1, cache.Writes);
+    }
+
+    [Fact]
     public async Task Polling_flag_off_nao_prepara_causal_e_fluxo_B_continua_aceitando()
     {
         var causal = new RepositorySpy();
@@ -188,7 +209,7 @@ public sealed class EstadoCausalPosicaoTests
         var cacheB = new PositionCacheSpy();
         var viagem = new ViagemRepositorySpy();
         var polling = new GpsPollingService(null!, null!, null!,
-            NullLogger<GpsPollingService>.Instance, null!, null!, null!, null!, null!,
+            NullLogger<GpsPollingService>.Instance, null!, null!, null!, null!, Sources(),
             cacheB, new ViagemObservadaService(
                 viagem, NullLogger<ViagemObservadaService>.Instance), null, coordinator);
         var posicao = Posicao();
@@ -380,10 +401,23 @@ public sealed class EstadoCausalPosicaoTests
         PositionCacheSpy cache, ShadowIngressSpy ingress,
         IOptionsMonitor<CorrecaoTemporalPosicaoOptions> options) =>
         new(null!, null!, null!, NullLogger<GpsPollingService>.Instance,
-            null!, null!, null!, null!, null!, cache,
+            null!, null!, null!, null!, Sources(), cache,
             new ViagemObservadaService(new ViagemRepositorySpy(),
                 NullLogger<ViagemObservadaService>.Instance), null, coordinator, ingress,
             options);
+
+    private static IGpsSourceResolver Sources() => new GpsSourceResolver(
+        [new UnusedSource(GpsSourceNames.BrtCurrent), new UnusedSource(GpsSourceNames.ZirixDirect)],
+        Microsoft.Extensions.Options.Options.Create(new GpsSourcesOptions()));
+
+    private sealed class UnusedSource(string name) : IStatusGpsSource
+    {
+        public string Name => name;
+        public Task<IReadOnlyList<GpsObservation>> GetPositionsAsync(CancellationToken ct) =>
+            throw new InvalidOperationException("Unexpected GPS acquisition in unit fixture");
+        public Task<GpsSourceReadResult> GetResultAsync(CancellationToken ct) =>
+            throw new InvalidOperationException("Unexpected GPS acquisition in unit fixture");
+    }
 
     private sealed class ShadowIngressSpy : IPositionCorrectionShadowIngress
     {

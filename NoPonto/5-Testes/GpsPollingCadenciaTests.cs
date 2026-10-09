@@ -6,6 +6,17 @@ namespace NoPonto.Tests;
 
 public sealed class GpsPollingCadenciaTests
 {
+    [Theory]
+    [InlineData(6, true, false, 14)]
+    [InlineData(20, true, false, 5)]
+    [InlineData(45, true, false, 5)]
+    [InlineData(45, false, false, 20)]
+    [InlineData(45, true, true, 0)]
+    public void GtfsOverrunRestsWithoutChangingFailureOrCancellation(
+        int elapsed, bool success, bool cancelled, int expected)
+        => Assert.Equal(TimeSpan.FromSeconds(expected), GpsPollingService.CalcularDelayProximoCiclo(
+            TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(elapsed), success, cancelled, TimeSpan.FromSeconds(5)));
+
     [Fact]
     public async Task CicloAcimaIntervalo_SnapshotMantemUmaVagaAteAck()
     {

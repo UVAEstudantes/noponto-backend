@@ -331,6 +331,35 @@ public sealed class GtfsRealtimeGpsTests(ITestOutputHelper output)
         Assert.Null(collector.WatermarkConfirmado);
     }
 
+    [Fact]
+    public async Task JointSelectionNeverCallsLegacySourcesOnHttpFailure()
+    {
+        var options = new GtfsRealtimeGpsOptions { BusEnabled=true, BrtEnabled=true,
+            BusSpeedUnit=GtfsSpeedUnit.KilometresPerHour, BrtSpeedUnit=GtfsSpeedUnit.KilometresPerHour,
+            CrosswalkValidated=true, IntervalSeconds=30 };
+        var handler = new Handler((_,_) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)));
+        var lookup = new Lookup([]);
+        var bus = new GtfsRealtimeGpsSource(GpsModalNames.Bus, Client(handler,options),lookup,options,NullLogger<GtfsRealtimeGpsSource>.Instance);
+        var brt = new GtfsRealtimeGpsSource(GpsModalNames.Brt, Client(handler,options),lookup,options,NullLogger<GtfsRealtimeGpsSource>.Instance);
+        var legacyBus = new ForbiddenLegacy(GpsSourceNames.ZirixDirect);
+        var legacyBrt = new ForbiddenLegacy(GpsSourceNames.BrtCurrent);
+        var resolver = new GpsSourceResolver([bus,brt,legacyBus,legacyBrt], Microsoft.Extensions.Options.Options.Create(
+            new GpsSourcesOptions { BusPrimarySource="GTFSRT_BUS",BrtPrimarySource="GTFSRT_BRT" }));
+        Assert.Same(bus,resolver.GetPrimary(GpsModalNames.Bus));
+        Assert.Same(brt,resolver.GetPrimary(GpsModalNames.Brt));
+        Assert.Equal(StatusFonteGps.Falha,(await bus.ReadAsync(default)).Status);
+        Assert.Equal(StatusFonteGps.Falha,(await brt.ReadAsync(default)).Status);
+        Assert.Equal(0,legacyBus.Calls); Assert.Equal(0,legacyBrt.Calls); Assert.Equal(0,lookup.Calls);
+        Assert.Equal(2,handler.Calls);
+    }
+    private sealed class ForbiddenLegacy(string name) : IGpsSource
+    {
+        public string Name => name;
+        public int Calls;
+        public Task<IReadOnlyList<GpsObservation>> GetPositionsAsync(CancellationToken ct)
+        { Calls++; throw new InvalidOperationException("Legacy must not be called"); }
+    }
+
     private static GtfsRealtimeGpsSource Source(FeedMessage feed, Lookup lookup, string modal = GpsModalNames.Bus)
     {
         var options = new GtfsRealtimeGpsOptions { BusEnabled = true, BrtEnabled = true,

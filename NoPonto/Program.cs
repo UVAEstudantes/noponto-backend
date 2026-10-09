@@ -319,6 +319,7 @@ var mlBaseUrl =
     builder.Configuration["ML:ETA:BASE_URL"]
     ?? "http://localhost:5200";
 
+builder.Services.AddSingleton(Options.Create(GpsEtaOptions.FromConfiguration(builder.Configuration)));
 builder.Services.AddHttpClient<GpsEtaClient>(client =>
 {
     client.BaseAddress = new Uri(mlBaseUrl);

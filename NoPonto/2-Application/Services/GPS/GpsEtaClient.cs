@@ -1,20 +1,23 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace NoPonto.Application.GPS;
 
 public sealed class GpsEtaClient
 {
     private readonly HttpClient _http;
+    private readonly bool _enabled;
     private readonly ILogger<GpsEtaClient> _logger;
 
     private DateTimeOffset _proximaTentativa = DateTimeOffset.MinValue;
     private static readonly TimeSpan _intervaloRetry = TimeSpan.FromSeconds(30);
     private const int ChunkSize = 200;
 
-    public GpsEtaClient(HttpClient http, ILogger<GpsEtaClient> logger)
+    public GpsEtaClient(HttpClient http, ILogger<GpsEtaClient> logger, IOptions<GpsEtaOptions>? options = null)
     {
+        _enabled = options?.Value.Enabled ?? true;
         _http   = http;
         _logger = logger;
     }
@@ -29,6 +32,9 @@ public sealed class GpsEtaClient
         GpsCicloPerformance? performance)
     {
         var resultado = new Dictionary<string, (double, string)>(StringComparer.OrdinalIgnoreCase);
+
+        // OFF precede enumeração, preparação, HTTP e cooldown. Não fabrica previsões.
+        if (!_enabled) return resultado;
 
         if (DateTimeOffset.UtcNow < _proximaTentativa)
         {

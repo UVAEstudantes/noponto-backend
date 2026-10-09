@@ -559,7 +559,7 @@ public sealed partial class GpsEnriquecimentoService : IEnriquecimentoRetryOpera
         PosicaoVeiculoDto posicao, EnriquecimentoRotaDto atual)
     {
         if (!RotaValida(atual)) return ResultadoValidacaoTemporal.Rejeitado(
-            MotivoValidacaoTemporalGps.OtherTemporal, posicao, atual);
+            MotivoValidacaoTemporalGps.GeometryInvalid, posicao, atual);
         if (!_padraoAtual.TryGetValue(posicao.Ordem, out var confirmado)
             || confirmado.Rota is not { } anterior
             || anterior.PadraoVersaoId != atual.PadraoVersaoId)

@@ -87,6 +87,7 @@ internal enum MotivoValidacaoTemporalGps
     TemporalTimestampInvalid,
     TemporalCircularWrap,
     OtherTemporal,
+    GeometryInvalid,
 }
 
 internal sealed record DiagnosticoEnriquecimentoGps(

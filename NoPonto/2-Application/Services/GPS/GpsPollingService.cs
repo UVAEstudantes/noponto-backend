@@ -29,6 +29,7 @@ public sealed class GpsPollingService : BackgroundService
         new(StringComparer.OrdinalIgnoreCase);
     private readonly GpsEtaClient _etaClient;
     private readonly IStatusGpsSource _brtSource;
+    private readonly bool _gtfsRealtimeSelected;
     private readonly GpsBrtPollingGate _brtGate = new();
 
     private readonly IPosicaoVeiculoCacheRepository _posicaoCache;
@@ -79,6 +80,8 @@ public sealed class GpsPollingService : BackgroundService
         _brtSource = sourceResolver.GetPrimary(GpsModalNames.Brt) as IStatusGpsSource
             ?? throw new InvalidOperationException(
                 "A fonte GPS primária BRT precisa expor status para preservar o cache/fail-open operacional.");
+        _gtfsRealtimeSelected = _brtSource is GtfsRealtimeGpsSource
+            || sourceResolver.GetPrimary(GpsModalNames.Bus) is GtfsRealtimeGpsSource;
         _posicaoCache = posicaoCache;
         _viagemObservada = viagemObservada;
         _telemetriaMl = telemetriaMl;
@@ -137,7 +140,12 @@ public sealed class GpsPollingService : BackgroundService
             var duracao = System.Diagnostics.Stopwatch.GetElapsedTime(inicioCiclo);
             var delay = CalcularDelayProximoCiclo(
                 TimeSpan.FromSeconds(opcoes.IntervaloSegundos), duracao,
-                cicloConcluidoNormalmente, stoppingToken.IsCancellationRequested);
+                cicloConcluidoNormalmente, stoppingToken.IsCancellationRequested,
+                _gtfsRealtimeSelected ? TimeSpan.FromSeconds(5) : TimeSpan.Zero);
+            if (_gtfsRealtimeSelected && cicloConcluidoNormalmente
+                && duracao >= TimeSpan.FromSeconds(opcoes.IntervaloSegundos))
+                _logger.LogWarning("GTFSRT polling exceeded cadence: elapsed_ms={elapsed}, recovery_rest_ms={rest}; no overlapping cycle or historical catch-up.",
+                    duracao.TotalMilliseconds, delay.TotalMilliseconds);
             if (delay <= TimeSpan.Zero)
                 continue;
 
@@ -155,12 +163,14 @@ public sealed class GpsPollingService : BackgroundService
     }
 
     internal static TimeSpan CalcularDelayProximoCiclo(
-        TimeSpan intervalo, TimeSpan duracao, bool cicloConcluidoNormalmente, bool cancelado = false)
+        TimeSpan intervalo, TimeSpan duracao, bool cicloConcluidoNormalmente, bool cancelado = false,
+        TimeSpan descansoAposExcesso = default)
     {
         if (cancelado) return TimeSpan.Zero;
         if (!cicloConcluidoNormalmente) return intervalo;
         var restante = intervalo - duracao;
-        return restante > TimeSpan.Zero ? restante : TimeSpan.Zero;
+        return restante > TimeSpan.Zero ? restante
+            : descansoAposExcesso > TimeSpan.Zero ? descansoAposExcesso : TimeSpan.Zero;
     }
 
     private async Task<bool> ProcessarCicloAsync(
@@ -222,6 +232,7 @@ public sealed class GpsPollingService : BackgroundService
         {
             performance.NormalizacaoMs = (long)System.Diagnostics.Stopwatch
                 .GetElapsedTime(inicioEtapa).TotalMilliseconds;
+            performance.MatchingDiagnostics.EnrichmentComplete = true;
             ConfirmarSnapshotProcessado(loteSppo);
             cicloConcluidoNormalmente = !falhaBrtSemCache;
             return cicloConcluidoNormalmente;
@@ -240,9 +251,11 @@ public sealed class GpsPollingService : BackgroundService
         var maisRecentesFiltrados = maisRecentes
             .Where(p =>
             {
+                performance.MatchingDiagnostics.RegisterStage(p.ModalFonte, MatchingStage.Input);
                 var idade = agora - p.TimestampGps;
                 if (idade <= idadeMaxima) return true;
                 descartadosPorIdade++;
+                performance.MatchingDiagnostics.RegisterStage(p.ModalFonte, MatchingStage.AgeRejected);
                 _logger.LogDebug(
                     "Veículo {ordem} descartado: GPS {idade:F0}s atrás (máx {max}s)",
                     p.Ordem, idade.TotalSeconds, opcoes.MaxIdadeGpsSegundos);
@@ -260,6 +273,7 @@ public sealed class GpsPollingService : BackgroundService
 
         if (maisRecentesFiltrados.Count == 0)
         {
+            performance.MatchingDiagnostics.EnrichmentComplete = true;
             ConfirmarSnapshotProcessado(loteSppo);
             cicloConcluidoNormalmente = !falhaBrtSemCache;
             return cicloConcluidoNormalmente;
@@ -295,7 +309,10 @@ public sealed class GpsPollingService : BackgroundService
             }
 
             if (anterior is not null && nova.TimestampGps <= anterior.TimestampGps)
+            {
+                performance.MatchingDiagnostics.RegisterStage(nova.ModalFonte, MatchingStage.TimestampIgnored);
                 continue;
+            }
 
             if (_linhaPorVeiculo.TryGetValue(nova.Ordem, out var linhaAnterior)
                 && !string.Equals(linhaAnterior, nova.CodigoLinha, StringComparison.OrdinalIgnoreCase))
@@ -341,6 +358,8 @@ public sealed class GpsPollingService : BackgroundService
         ResultadoEnriquecimentoGps[] enriquecimentos;
         PosicaoVeiculoDto[] resultadosEnriquecidos;
         performance.EnriquecimentoSolicitado = paraEnriquecer.Count;
+        foreach (var entrada in paraEnriquecer)
+            performance.MatchingDiagnostics.RegisterStage(entrada.Nova.ModalFonte, MatchingStage.Requested);
         ContextoOperacional?[] contextosOperacionais;
         if (paraEnriquecer.Count == 0)
             contextosOperacionais = [];
@@ -382,7 +401,7 @@ public sealed class GpsPollingService : BackgroundService
                 var grau = Math.Min(paraEnriquecer.Count, opcoes.GrauParalelismoEnriquecimento);
                 var semaforo = new SemaphoreSlim(grau, grau);
 
-                enriquecimentos = await Task.WhenAll(
+                enriquecimentos = await GpsMatchingDiagnostics.AwaitAll(
                     paraEnriquecer.Select(async (x, indice) =>
                     {
                         await semaforo.WaitAsync(ct);
@@ -393,7 +412,7 @@ public sealed class GpsPollingService : BackgroundService
                                 contextosOperacionais[indice], ct, performance);
                         }
                         finally { semaforo.Release(); }
-                    }));
+                    }), performance.MatchingDiagnostics);
             }
             enriquecimentos = enriquecimentos.Select((x, i) => x with
                 { PredecessorFisico = paraEnriquecer[i].Anterior }).ToArray();
@@ -402,6 +421,7 @@ public sealed class GpsPollingService : BackgroundService
         performance.MatchingEtapaMs = (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
         performance.Enriquecidas = resultadosEnriquecidos.Count(p => p.PosicaoNaRota.HasValue);
+        performance.MatchingDiagnostics.EnrichmentComplete = true;
 
         await RegistrarDiagnosticosEstruturaisAsync(resultadosEnriquecidos, ct);
 
@@ -680,6 +700,7 @@ public sealed class GpsPollingService : BackgroundService
             var duracaoCiclo = System.Diagnostics.Stopwatch.GetElapsedTime(inicioCicloTimestamp);
             var totalMs = (long)duracaoCiclo.TotalMilliseconds;
             performance.CicloConcluidoNormalmente = cicloConcluidoNormalmente;
+            performance.MatchingDiagnostics.Log(_logger, agora, cicloConcluidoNormalmente);
             performance.DelayPlanejadoMs = (long)CalcularDelayProximoCiclo(
                 TimeSpan.FromSeconds(opcoes.IntervaloSegundos), duracaoCiclo,
                 cicloConcluidoNormalmente, ct.IsCancellationRequested).TotalMilliseconds;
