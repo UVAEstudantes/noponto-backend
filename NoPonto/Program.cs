@@ -642,19 +642,26 @@ var gpsMatchingBatch = app.Services
 app.Logger.LogInformation("GPS matching batch: {estado}",
     gpsMatchingBatch.Enabled ? "enabled" : "disabled");
 
-// migrations automáticas
+// Política de schema separada do bootstrap Redis, antes dos HostedServices.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider
         .GetRequiredService<TransporteDbContext>();
 
-    db.Database.Migrate();
-
     // Bootstrap idempotente de "veiculo:{ordem}:ts" a partir de "veiculo:{ordem}:ativo"
     // já existentes. DEVE rodar antes do GpsPollingService começar a escrever,
     // para que o CAS nunca encontre um :ativo sem :ts correspondente.
-    var bootstrapper = scope.ServiceProvider.GetRequiredService<PosicaoVeiculoTsBootstrapper>();
-    await bootstrapper.ExecutarAsync(CancellationToken.None);
+    await DatabaseStartupPolicy.ExecuteAsync(
+        app.Environment.EnvironmentName,
+        ct => db.Database.GetPendingMigrationsAsync(ct),
+        ct => db.Database.MigrateAsync(ct),
+        async ct =>
+        {
+            var bootstrapper = scope.ServiceProvider.GetRequiredService<PosicaoVeiculoTsBootstrapper>();
+            await bootstrapper.ExecutarAsync(ct);
+        },
+        app.Logger,
+        CancellationToken.None);
 }
 
 // --------------------------------------------------------------------

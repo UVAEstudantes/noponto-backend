@@ -15,7 +15,8 @@
     "NoPonto.Tests.ViagemOperacionalRegraTests",
     "NoPonto.Tests.ViagemOperacionalCodecCompatibilidadeTests",
     "NoPonto.Tests.CancelamentoCandidatoCursorTests",
-    "NoPonto.Tests.EstadoCausalPosicaoTests"
+    "NoPonto.Tests.EstadoCausalPosicaoTests",
+    "NoPonto.Tests.DatabaseStartupPolicyTests"
   ],
   "excluded_methods": [
     "NoPonto.Tests.GpsMatchingDiagnosticsTests.DeterministicAggregationReplay_MeasuresIncrementalCostOnly"
