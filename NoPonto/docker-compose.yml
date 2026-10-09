@@ -182,6 +182,7 @@ services:
       GpsSppoCollector__CatchupChunkSegundos: ${GpsSppoCollector__CatchupChunkSegundos:-60}
       GpsSppoCollector__MaxLagRecuperavelSegundos: ${GpsSppoCollector__MaxLagRecuperavelSegundos:-300}
       GpsSppoCollector__IntervaloEntreColetasSegundos: ${GpsSppoCollector__IntervaloEntreColetasSegundos:-10}
+      GpsPolling__GrauParalelismoViagemObservada: ${GpsPolling__GrauParalelismoViagemObservada:-20}
       GpsPolling__GrauParalelismoEnriquecimento: ${GpsPolling__GrauParalelismoEnriquecimento}
       GpsPolling__MaxIdadeGpsSegundos: ${GpsPolling__MaxIdadeGpsSegundos}
       GpsPolling__VelocidadeMinimaBearingKmh: ${GpsPolling__VelocidadeMinimaBearingKmh}
@@ -190,6 +191,12 @@ services:
       GpsSources__BrtPrimarySource: ${GpsSources__BrtPrimarySource:-BRT_CURRENT}
       GpsSources__BusShadowSources__0: ${GpsSources__BusShadowSources__0:-DATARIO}
       GpsSources__BrtShadowSources__0: ${GpsSources__BrtShadowSources__0:-DATARIO}
+      GtfsRealtimeGps__BusEnabled: ${GtfsRealtimeGps__BusEnabled:-false}
+      GtfsRealtimeGps__BrtEnabled: ${GtfsRealtimeGps__BrtEnabled:-false}
+      GtfsRealtimeGps__BusSpeedUnit: ${GtfsRealtimeGps__BusSpeedUnit:-Unknown}
+      GtfsRealtimeGps__BrtSpeedUnit: ${GtfsRealtimeGps__BrtSpeedUnit:-Unknown}
+      GtfsRealtimeGps__CrosswalkValidated: ${GtfsRealtimeGps__CrosswalkValidated:-false}
+      GtfsRealtimeGps__IntervalSeconds: ${GtfsRealtimeGps__IntervalSeconds:-30}
 
       GpsHistorico__Habilitado: ${GpsHistorico__Habilitado}
       GpsHistorico__DistanciaRegistroMetros: ${GpsHistorico__DistanciaRegistroMetros}

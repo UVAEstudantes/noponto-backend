@@ -11,7 +11,7 @@ RUN dotnet restore "NoPonto.csproj"
 COPY . .
 RUN dotnet publish "NoPonto.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:9.0-bookworm-slim AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet@sha256:0712631f86d30f5290544fd97d37bd281e44aed8ebe1ba436f2ddb1dd0d4983f AS runtime
 WORKDIR /app
 
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080
