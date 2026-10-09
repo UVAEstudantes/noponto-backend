@@ -53,6 +53,16 @@ O job de validação usa runner hospedado Ubuntu, token somente de leitura e
 checkout sem credenciais persistentes. Não referencia secrets, não conecta
 Tailscale e não inicia a API/Program.cs nem serviços PostgreSQL/Redis.
 
+Restore/build e testes usam `--user "$(id -u):$(id -g)"`, alinhando o usuário do
+container ao proprietário dos diretórios criados pelo runner. Com `--cap-drop
+ALL`, root não consegue ignorar permissões dos volumes de outro usuário; usar o
+proprietário evita alterar modos ou conceder capacidades. `HOME` e
+`DOTNET_CLI_HOME` apontam para `/ci-home`, montado de diretório descartável criado
+pelo runner. O preflight `check-volume-permissions.sh` recusa UID root e testa
+escrita efetiva em `/nuget`, workspace de build, `/results` e `/ci-home` nas etapas
+correspondentes. Workspace de testes continua somente leitura. Não há chmod 777,
+chown no workflow, Docker privilegiado ou capacidade adicional.
+
 Restore/build usam container SDK .NET 9 com rede para baixar NuGet, sem segredos
 produtivos. A execução dos testes usa a mesma imagem SDK por Image ID capturado
 após pull e mesmos outputs Release somente leitura, com
@@ -119,3 +129,30 @@ fora desta implementação. A suite offline não certifica integração nem prod
   migrations, Dockerfile, Compose ou código funcional. Sem produção, deploy,
   build/push de imagem da API, commit ou push. Containers SDK desta verificação
   são descartáveis e foram encerrados; nenhum PostgreSQL/Redis foi iniciado.
+
+## Hotfix de permissões — 2026-10-09
+
+Base remota `e5507aa` (PR #60). Reproduzido em filesystem Linux: root com
+`--cap-drop ALL` recebeu Permission denied em diretório 0755 de UID/GID 1001.
+O proprietário 1001 escreveu normalmente; UID diferente e diretório sem escrita
+foram recusados. Nenhum modo permissivo foi necessário no workflow.
+
+Restore com cache novo e build Release Linux SDK 9.0.318 passaram como 1001:1001,
+com os caminhos `/workspace`, `/nuget` e `/ci-home` em volumes descartáveis Linux
+equivalentes (owner 1001:1001, modo 0755), capacidades removidas e
+no-new-privileges. Restore: 2,52 min; build: 4 min 13 s, zero erros e cinco avisos
+preexistentes. Inicialização do SDK emitiu aviso de verificação de workloads,
+sem impedir restore/build; não foi executado workload update.
+
+A DLL compilada no Linux passou os 358 testes offline como 1001:1001, sem rede,
+com workspace somente leitura e HOME gravável: zero falhas/ignorados, 2 s.
+TRX criado como 1001:1001, modo 0644, aceito pelo avaliador com as 16 classes.
+Dez testes auxiliares passaram no Linux não root; no Windows os seis existentes
+passaram e os quatro POSIX foram ignorados por plataforma. Actionlint 1.7.7 e
+git diff --check aprovados. Fonte Windows foi copiada para o volume Linux,
+normalizando apenas scripts da fixture para LF; arquivos originais preservados.
+
+Ainda requer execução real no GitHub: bind mounts do runner Ubuntu com UID/GID
+dinâmicos, eventos PR/main e publicação GHCR após validate. Não executados
+deploy, produção, integrações de banco/Redis, commit ou push. Volume/containers
+da fixture local foram removidos; o TRX sintético de testes permanece fora do Git.

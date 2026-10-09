@@ -895,3 +895,32 @@ Implementar somente CI de PRs destinados à main e de pushes na main, condiciona
 Ainda exigem GitHub Actions após integração autorizada: restore/build Linux completo no runner, eventos PR interno/fork e push/main, publicação GHCR/cache/tags e comprovação operacional do bloqueio de publicação quando validate falha. Proteção da main/check obrigatório não foi alterada. Suíte completa, integração PostgreSQL/Redis e feeds reais não executados. Algumas suítes offline usam temporização; nenhuma falha foi observada nesta seleção, sem promessa de ausência de flakiness futura. SDK/Actions mantêm tags de versão; reprodutibilidade e migração de plataforma ficam para etapa própria.
 
 Não modificados GPS/ETA/domínio, Program.cs, migrations, Dockerfile ou Compose. Nenhuma chamada SSH/Tailscale, configuração produtiva, banco real, migration, deploy, build/push de imagem da API, commit, push ou merge. Etapa 1 pronta para revisão; migrations, script de deploy, rollback e ativação automática permanecem fora do escopo.
+
+## 2026-10-09 — Hotfix CI/CD Etapa 1: usuário e permissões dos volumes
+
+### Objetivo e base
+
+Corrigir exclusivamente a falha de restore por Permission denied relatada após integração do PR #60. Consultados AGENTS.md, histórico, workflow e scripts .ci. Fetch confirmou origin/main e5507aab1a46fa0a86b886044465e46250477817. Criada branch fix/ci-volume-permissions em nova worktree noponto-backend-ci-permissions, sem modificar main local ou outras worktrees.
+
+### Causa e alterações
+
+SDK inicia como root por padrão; diretórios de cache/resultados/workspace são do runner. Com --cap-drop ALL, root perde a capacidade de ignorar permissões DAC dos volumes 0755 de outro UID. A validação anterior sobre mounts Windows não certificava essa condição POSIX; a causa foi reproduzida agora em volume Linux.
+
+- .github/workflows/deploy.yml: restore/build e testes passam --user com id -u/id -g do runner. Criado HOME descartável no RUNNER_TEMP, montado em /ci-home, com HOME e DOTNET_CLI_HOME explícitos nos dois containers. Mantidos network none nos testes, cap-drop ALL, no-new-privileges e workspace de testes somente leitura. Nenhum chmod 777, chown no workflow ou capacidade adicional.
+- .ci/check-volume-permissions.sh: preflight recusa root e verifica escrita efetiva com probe temporário em /nuget/workspace/home no build e /results/home nos testes, removendo apenas o próprio probe. Falha antes de restore/testes quando diretório inexiste ou não permite escrita.
+- .ci/test_volume_permissions.py: quatro regressões POSIX não root para diretórios graváveis (incluindo espaços e ausência de probes remanescentes), diretório readonly, inexistente e lista vazia. Seleção/testes .NET e avaliador TRX existentes não alterados.
+- .ci/README.md: mecanismo de ownership, HOME, testes locais e limites. Este histórico atualizado somente por acréscimo.
+
+### Validação
+
+- Fixture Linux descartável, diretórios owner 1001:1001/modo 0755: root com capacidades removidas recebeu Permission denied em cache NuGet; UID 1001 escreveu; UID 1002 e diretório sem escrita recusados pelo preflight. Setup da fixture atribuiu proprietário somente em seu volume local; não fez alterações de permissões no servidor ou nas worktrees.
+- Restore Linux com cache novo, SDK 9.0.318 e UID/GID 1001:1001: aprovado em 2,52 min. Build Release completo Linux aprovado em 4 min 13 s, zero erros e cinco avisos preexistentes CS8981/CS7022/xUnit2031. Caminhos /workspace, /nuget e /ci-home montados de subdiretórios do volume Linux, com cap-drop ALL e no-new-privileges. Aviso inicial de verificação de workloads não impediu conclusão; nenhum workload update executado.
+- DLL desta compilação Linux: 358 testes offline aprovados, zero falhas/ignorados, 2 s, como 1001:1001, network none e workspace readonly. /results/offline.trx criado com owner 1001:1001/modo 0644; avaliador existente aprovou resultados e presença das 16 classes. Não foram usados binários de outra worktree.
+- python -B -m unittest discover -s .ci -p 'test_*.py' -v: dez aprovados/zero ignorados no Linux não root; no Windows seis aprovados/quatro POSIX ignorados por plataforma.
+- actionlint 1.7.7: sem diagnósticos. Parser YAML verificou UID/GID, HOME, ausência de privilégios extras/secrets no validate, eventos PR/main, needs validate e gate push/main. git diff --check aprovado, incluindo novos arquivos; somente avisos LF/CRLF. Scripts copiados para fixture Linux normalizados para LF, sem mudar arquivos originais.
+
+### Pendências e escopo preservado
+
+Ainda exige GitHub Actions após integração autorizada: UID/GID dinâmicos e bind mounts reais do runner Ubuntu, eventos PR/main e publicação GHCR/cache/tags condicionada ao validate. Localmente foram comprovadas permissões POSIX, restore/build Linux completo e execução offline não privilegiada. Containers/volume exclusivos da fixture removidos, resultado TRX fora do Git. Integrações PostgreSQL/Redis não executadas; nenhum serviço API/banco/Redis iniciado.
+
+Build/push GHCR continua condicionado ao validate; tags/auth/cache/eventos preservados. Sem workflow_dispatch ou deploy legado. Nenhuma alteração em backend/Program.cs/migrations/Dockerfile/Compose/GPS/ETA/domínio, produção, credenciais ou servidor. Sem deploy, SSH/Tailscale, build/push de imagem da API, commit, push ou merge. Pronto para revisão do hotfix.

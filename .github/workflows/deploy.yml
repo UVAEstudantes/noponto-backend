@@ -33,26 +33,32 @@ jobs:
         run: |
           docker pull "$SDK_IMAGE"
           echo "sdk=$(docker image inspect --format '{{.Id}}' "$SDK_IMAGE")" >> "$GITHUB_ENV"
-          mkdir -p "$RUNNER_TEMP/noponto-ci/nuget" "$RUNNER_TEMP/noponto-ci/results"
+          mkdir -p "$RUNNER_TEMP/noponto-ci/nuget" "$RUNNER_TEMP/noponto-ci/results" "$RUNNER_TEMP/noponto-ci/home"
 
       - name: Restore e build sem segredos
         run: |
           docker run --rm --cap-drop ALL --security-opt no-new-privileges \
+            --user "$(id -u):$(id -g)" \
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --volume "$RUNNER_TEMP/noponto-ci/nuget:/nuget" \
+            --volume "$RUNNER_TEMP/noponto-ci/home:/ci-home" \
             --workdir /workspace --env NUGET_PACKAGES=/nuget \
+            --env HOME=/ci-home --env DOTNET_CLI_HOME=/ci-home \
             --env DOTNET_CLI_TELEMETRY_OPTOUT=1 "$sdk" \
-            sh -ec 'dotnet restore NoPonto/NoPonto.csproj && dotnet build NoPonto/NoPonto.csproj -c Release --no-restore'
+            sh -ec 'sh .ci/check-volume-permissions.sh /nuget /workspace /ci-home && dotnet restore NoPonto/NoPonto.csproj && dotnet build NoPonto/NoPonto.csproj -c Release --no-restore'
 
       - name: Testes sem acesso à rede externa
         run: |
           filter=$(python3 -B .ci/offline_tests.py filter)
           docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+            --user "$(id -u):$(id -g)" \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --volume "$RUNNER_TEMP/noponto-ci/results:/results" \
+            --volume "$RUNNER_TEMP/noponto-ci/home:/ci-home" \
             --workdir /workspace \
+            --env HOME=/ci-home --env DOTNET_CLI_HOME=/ci-home \
             --env DOTNET_CLI_TELEMETRY_OPTOUT=1 --env "NOPONTO_TEST_FILTER=$filter" \
-            "$sdk" sh .ci/test-offline.sh /results
+            "$sdk" sh -ec 'sh .ci/check-volume-permissions.sh /results /ci-home && sh .ci/test-offline.sh /results'
 
       - name: Exige resultados aprovados de todas as classes selecionadas
         run: python3 -B .ci/offline_tests.py verify "$RUNNER_TEMP/noponto-ci/results/offline.trx"
