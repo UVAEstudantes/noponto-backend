@@ -924,3 +924,35 @@ SDK inicia como root por padrão; diretórios de cache/resultados/workspace são
 Ainda exige GitHub Actions após integração autorizada: UID/GID dinâmicos e bind mounts reais do runner Ubuntu, eventos PR/main e publicação GHCR/cache/tags condicionada ao validate. Localmente foram comprovadas permissões POSIX, restore/build Linux completo e execução offline não privilegiada. Containers/volume exclusivos da fixture removidos, resultado TRX fora do Git. Integrações PostgreSQL/Redis não executadas; nenhum serviço API/banco/Redis iniciado.
 
 Build/push GHCR continua condicionado ao validate; tags/auth/cache/eventos preservados. Sem workflow_dispatch ou deploy legado. Nenhuma alteração em backend/Program.cs/migrations/Dockerfile/Compose/GPS/ETA/domínio, produção, credenciais ou servidor. Sem deploy, SSH/Tailscale, build/push de imagem da API, commit, push ou merge. Pronto para revisão do hotfix.
+
+## 2026-10-09 — CI/CD Etapa 2: segurança de migrations no startup
+
+### Base e diagnóstico
+
+Consultados AGENTS.md e este histórico antes das edições. Fetch de origin/main confirmou 33fb8fdd774ad8194723270aafa32b06ed3ada9b (PR #61). Criada branch fix/startup-migrations-policy na nova worktree noponto-backend-startup-migrations; outras worktrees preservadas.
+
+Program.cs aplicava Database.Migrate incondicionalmente no startup normal, antes do bootstrap Redis de timestamps. Auditoria encontrou três MigrateAsync adicionais somente nos comandos administrativos explícitos structural-import, trem-structural-import e rail-schedule-import, que são tratados antes da criação do host web. Permanecem inalterados e não foram executados. Não encontrados EnsureCreated/EnsureDeleted ou DDL de inicialização de schema no fluxo normal auditado. Contexto EF, registro Npgsql e HostedServices examinados.
+
+### Alterações efetivas
+
+- NoPonto/1-API/Configuration/DatabaseStartupPolicy.cs: somente ambiente Development explícito permite MigrateAsync. Em Production e demais ambientes, inclusive ausente/inválido, consulta pendências EF sem aplicar migrations; pendências ou falha de consulta/enumeração bloqueiam startup. Diagnóstico de falha não transporta mensagem/InnerException do provider. Não adicionada flag permissiva.
+- NoPonto/Program.cs: delega verificação/migration e bootstrap à política. Bootstrap Redis permanece após sucesso da política e antes de app.Run/HostedServices; implementação original preservada.
+- NoPonto/5-Testes/DatabaseStartupPolicyTests.cs: 21 regressões com callbacks e proxies em memória, sem conexões PostgreSQL/Redis. Cobrem pendências, schema em dia, ambientes ausentes/inválidos, falha Npgsql, enumeração, desenvolvimento e falhas de migration/bootstrap; executam bootstrap real STRING/HASH preservando TTL, When.NotExists e idempotência.
+- .ci/offline-tests.json: inclui somente a nova classe na seleção offline; scripts, workflow e regras de publicação não alterados.
+- docs/05-infraestrutura/09-startup-e-migrations-manuais.md: política, auditoria, limites, compatibilidade e procedimento futuro de SQL revisado aplicado por processo administrativo separado. Tooling de design time/migration-only não implementado. Este histórico atualizado somente por acréscimo.
+
+### Validação
+
+- Restore .NET 9 e build Release locais aprovados. Testes relacionados executados com recompilação: 21 aprovados, zero falhas/ignorados. A recompilação apresentou apenas cinco avisos preexistentes CS8981/CS7022/xUnit2031; build incremental final sem erros/avisos.
+- EnvironmentIsolationConfigurationTests existentes: 16 aprovados, zero falhas/ignorados; confirma guardas de configuração sem acessar infraestrutura.
+- Seleção offline Linux SDK 9.0.318: 379 aprovados, zero falhas/ignorados, duração dos testes 27 s. Container descartável com UID/GID 1001:1001, network none, cap-drop ALL, no-new-privileges e workspace readonly. Avaliador TRX aprovou todas as 17 classes. Usada DLL portátil Release compilada no Windows; não contabilizado como build Linux desta etapa. Aviso de verificação de workloads não impediu testes; nenhum workload update executado.
+- Testes auxiliares .ci no Linux não root e sem rede: 10 aprovados, zero ignorados. No Windows: seis aprovados/quatro POSIX ignorados. Scripts normalizados para LF somente na cópia temporária do container; fontes intactas. Resultados TRX fora do Git.
+- git diff --check aprovado (avisos de normalização LF/CRLF não são erros). Diff e arquivos novos inspecionados. Dockerfile e Compose inspecionados, sem alterações: produção seleciona Production e override local Development.
+
+### Limites e pendências
+
+A versão build-102 e o servidor permanecem sem alterações. Compatibilidade da nova política depende de histórico EF em dia e permissão de consulta, sem comprovação contra produção. A verificação não detecta drift físico nem garante compatibilidade com schema mais novo; startup bloqueado pode provocar reinícios pela política existente. Configurar deliberadamente o ambiente efetivo como Development ainda permite migrations locais: conferir ASPNETCORE_ENVIRONMENT/DOTNET_ENVIRONMENT em implantação futura.
+
+Não iniciado host API completo nem executada suíte conectada PostgreSQL/Redis. Fakes comprovam decisão/ordem e bootstrap real sobre Redis simulado; integração com infraestrutura descartável e execução da seleção ampliada no GitHub Actions permanecem pendentes de etapas/revisão apropriadas. Procedimento manual futuro requer tooling separado, SQL revisado, ensaio isolado, backup e autorização operacional. Não usar Development nem comandos de importação como atalho produtivo.
+
+Sem alterações em migrations, schemas, dados, GPS/ETA/domínio, Dockerfile, Compose ou workflows. Sem acesso Debian/produção, SSH/Tailscale, migrations reais, deploy, build/push de imagem da API, commit, push ou merge. Etapa 2 pronta para revisão.
