@@ -1,4 +1,4 @@
-name: 🚌 NoPonto — CI e Publicação
+name: 🚌 NoPonto — CI, Publicação e Deploy API
 
 on:
   push:
@@ -8,8 +8,7 @@ on:
     branches:
       - main
 
-# workflow_dispatch/deploy legado removidos: Compose simples é incompatível
-# com a configuração GTFS-RT produtiva. Esta etapa não possui deploy.
+# Sem workflow_dispatch ou deploy legado; promoção exclusivamente por digest.
 permissions:
   contents: read
 
@@ -28,6 +27,11 @@ jobs:
 
       - name: Verifica seleção e avaliador de resultados
         run: python3 -B -m unittest discover -s .ci -p 'test_*.py' -v
+
+      - name: Valida scripts e regressões do deploy com fakes
+        run: |
+          for script in .deploy/*.sh; do bash -n "$script"; done
+          python3 -B -m unittest discover -s .deploy -p 'test_*.py' -v
 
       - name: Prepara SDK e diretórios descartáveis
         run: |
@@ -69,6 +73,8 @@ jobs:
     needs: validate
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 30
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -101,6 +107,7 @@ jobs:
           echo "version=build-${{ github.run_number }}-${SHORT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Build e push
+        id: publish
         uses: docker/build-push-action@v5
         with:
           context: ./NoPonto
@@ -112,8 +119,58 @@ jobs:
           platforms: linux/amd64
 
       - name: Resumo
+        env:
+          PUBLISHED_DIGEST: ${{ steps.publish.outputs.digest }}
         run: |
-          echo "## 🚌 NoPonto — imagem publicada (sem deploy)" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚌 NoPonto — imagem publicada" >> $GITHUB_STEP_SUMMARY
           echo "**Versão:** \`${{ steps.meta.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Build:** \`#${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** \`$PUBLISHED_DIGEST\`" >> $GITHUB_STEP_SUMMARY
+
+  deploy:
+    name: Deploy exclusivamente da API
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.NOPONTO_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: noponto-production-api
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Valida requisitos de acesso
+        env:
+          SERVER_TAILSCALE_IP: ${{ secrets.SERVER_TAILSCALE_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+          TAILSCALE_OAUTH_CLIENT_ID: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          TAILSCALE_OAUTH_SECRET: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          NOPONTO_DEPLOY_ENV_FILE: ${{ vars.NOPONTO_DEPLOY_ENV_FILE }}
+          NOPONTO_DEPLOY_STATE_DIR: ${{ vars.NOPONTO_DEPLOY_STATE_DIR }}
+        run: |
+          for name in SERVER_TAILSCALE_IP SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_SECRET NOPONTO_DEPLOY_ENV_FILE NOPONTO_DEPLOY_STATE_DIR; do
+            if [ -z "${!name}" ]; then echo "Requisito ausente: $name" >&2; exit 1; fi
+          done
+      - name: Conecta no Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:ci
+      - name: Executa artefato versionado via SSH
+        env:
+          IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
+          RELEASE_SEQUENCE: ${{ github.run_number }}
+          SERVER_TAILSCALE_IP: ${{ secrets.SERVER_TAILSCALE_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+          NOPONTO_DEPLOY_ENV_FILE: ${{ vars.NOPONTO_DEPLOY_ENV_FILE }}
+          NOPONTO_DEPLOY_STATE_DIR: ${{ vars.NOPONTO_DEPLOY_STATE_DIR }}
+        run: bash .deploy/ssh-deploy.sh
