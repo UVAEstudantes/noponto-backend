@@ -25,7 +25,7 @@ public sealed class LinhaDetalhesDTO
     /// <summary>
     /// Tarifa vigente para a linha.
     /// </summary>
-    public TarifaResumoDTO? TarifaAtual { get; set; }
+    public TarifaResposta? TarifaAtual { get; set; }
 
     /// <summary>
     /// Sentidos e itinerários associados à linha.

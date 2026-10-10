@@ -80,6 +80,7 @@ public sealed class LinhaRepository : ILinhaRepository
             .Select(item => new
             {
                 LinhaId = item.Id,
+                ModalId = item.ModalId,
                 LinhaNome = item.Nome,
                 Codigo = item.Codigo
             })
@@ -138,21 +139,10 @@ public sealed class LinhaRepository : ILinhaRepository
             })
             .ToList();
 
-        var agora = DateTime.UtcNow;
-
-        var tarifaAtual = await _contexto.Tarifas
-            .AsNoTracking()
-            .Where(tarifa => tarifa.LinhaId == linhaId
-                && tarifa.ValidoDe <= agora
-                && (tarifa.ValidoAte == null || tarifa.ValidoAte >= agora))
-            .OrderByDescending(tarifa => tarifa.ValidoDe)
-            .Select(tarifa => new TarifaResumoDTO
-            {
-                Tarifa = tarifa.Valor,
-                ValidoDe = tarifa.ValidoDe,
-                ValidoAte = tarifa.ValidoAte,
-                Fonte = tarifa.Fonte
-            })
+        var tarifaAtual = await _contexto.Tarifas.AsNoTracking()
+            .Where(t => t.LinhaId == linhaId || t.ModalId == linha.ModalId)
+            .OrderByDescending(t => t.LinhaId != null)
+            .Select(t => new TarifaResposta(t.Valor, t.LinhaId == null ? "MODAL" : "LINHA", t.Fonte, "BRL"))
             .FirstOrDefaultAsync(cancellationToken);
 
         return new LinhaDetalhesDTO

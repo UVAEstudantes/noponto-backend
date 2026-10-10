@@ -25,6 +25,8 @@ public class TransporteDbContext : DbContext
     public DbSet<PositionCorrectionShadowOrigin> PositionCorrectionShadowOrigins => Set<PositionCorrectionShadowOrigin>();
     public DbSet<PoiParada> PoiParadas => Set<PoiParada>();
     public DbSet<Tarifa> Tarifas => Set<Tarifa>();
+    public DbSet<FormaPagamento> FormasPagamento => Set<FormaPagamento>();
+    public DbSet<FormaPagamentoVinculo> FormasPagamentoVinculos => Set<FormaPagamentoVinculo>();
     public DbSet<FonteEstrutural> FontesEstruturais => Set<FonteEstrutural>();
     public DbSet<ImportacaoEstrutural> ImportacoesEstruturais => Set<ImportacaoEstrutural>();
     public DbSet<LinhaIdentidadeExterna> LinhasIdentidadesExternas => Set<LinhaIdentidadeExterna>();
@@ -115,18 +117,7 @@ public class TransporteDbContext : DbContext
             .HasIndex(x => new { x.ParadaId, x.PoiId })
             .IsUnique();
 
-        modelBuilder.Entity<Tarifa>()
-            .Property(tarifa => tarifa.Valor)
-            .HasColumnName("Tarifa");
-
-        modelBuilder.Entity<Tarifa>()
-            .HasIndex(x => x.LinhaId);
-
-        modelBuilder.Entity<Tarifa>()
-            .HasIndex(x => x.ModalId);
-
-        modelBuilder.Entity<Tarifa>()
-            .HasIndex(x => new { x.LinhaId, x.ValidoDe });
+        NoPonto.Data.Tarifas.TarifasModelConfiguration.Configure(modelBuilder);
 
         // Índices para consultas de ML e diagnóstico
         modelBuilder.Entity<HistoricoPassagem>()

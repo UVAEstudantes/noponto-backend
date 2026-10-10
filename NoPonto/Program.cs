@@ -34,6 +34,12 @@ using NoPonto.Application.TremSchedule;
 
 Env.NoClobber().Load();
 
+if (NoPonto.Application.Tarifas.TarifasImportCommand.IsRequested(args))
+{
+    Environment.ExitCode = await NoPonto.Application.Tarifas.TarifasImportCommand.ExecuteAsync(args);
+    return;
+}
+
 if (StructuralImportCommand.IsRequested(args))
 {
     Environment.ExitCode = await StructuralImportCommand.ExecuteAsync(args);
@@ -81,6 +87,8 @@ if (!gpsHubRoute.StartsWith('/'))
     gpsHubRoute = $"/{gpsHubRoute}";
 
 builder.Services.AddControllers();
+builder.Services.AddScoped<NoPonto.Data.Tarifas.TarifasStore>();
+builder.Services.AddScoped<NoPonto.Application.Tarifas.TarifaService>();
 
 builder.Services.AddEndpointsApiExplorer();
 
@@ -354,7 +362,6 @@ builder.Services.AddHttpClient("arcgis-trem", client =>
 });
 builder.Services.AddScoped<ISentidoRepository, SentidoRepository>();
 builder.Services.AddScoped<IModalRepository, ModalRepository>();
-builder.Services.AddScoped<ITarifaRepository, TarifaRepository>();
 
 builder.Services.AddScoped<IModalService, ModalService>();
 
@@ -627,7 +634,6 @@ builder.Services.AddHostedService<GpsPollingService>();
 
 builder.Services.AddScoped<ISentidoRepository, SentidoRepository>();
 builder.Services.AddScoped<IModalRepository, ModalRepository>();
-builder.Services.AddScoped<ITarifaRepository, TarifaRepository>();
 
 builder.Services.AddScoped<IModalService, ModalService>();
 
