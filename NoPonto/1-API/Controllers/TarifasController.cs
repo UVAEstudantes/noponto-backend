@@ -1,59 +1,51 @@
 using Microsoft.AspNetCore.Mvc;
-using NoPonto.Application.DTOs.Compartilhado;
+using Microsoft.AspNetCore.Mvc.Filters;
 using NoPonto.Application.DTOs.Tarifas;
-using NoPonto.Application.Interfaces;
+using NoPonto.Application.Tarifas;
 
 namespace NoPonto.API.Controllers;
 
-/// <summary>
-/// Endpoints de consulta e cadastro de tarifas.
-/// </summary>
-[ApiController]
-[Route("tarifas")]
-public class TarifasController : ControllerBase
+public sealed class TarifasErrorFilter : ExceptionFilterAttribute
 {
-    private readonly ITarifaService _service;
-
-    public TarifasController(ITarifaService service)
+    public override void OnException(ExceptionContext context)
     {
-        _service = service;
+        if (context.Exception is not TarifasException error) return;
+        context.Result = new ObjectResult(new ProblemDetails { Status = error.Status, Title = error.Message })
+            { StatusCode = error.Status };
+        context.ExceptionHandled = true;
     }
+}
 
-    /// <summary>
-    /// Lista tarifas com filtro opcional por codigo ou id da linha e paginação.
-    /// </summary>
-    /// <param name="codigoLinha">Filtro parcial e case-insensitive pelo codigo da linha.</param>
-    /// <param name="linhaId">Identificador da linha.</param>
-    /// <param name="page">Página desejada (inicia em 1).</param>
-    /// <param name="pageSize">Quantidade de itens por página.</param>
-    /// <param name="cancellationToken">Token de cancelamento da requisição.</param>
-    [HttpGet]
-    [ProducesResponseType(typeof(PaginacaoRespostaDTO<TarifaConsultaDTO>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> ListarTarifas(
-        [FromQuery] string? codigoLinha,
-        [FromQuery] Guid? linhaId,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 50,
-        CancellationToken cancellationToken = default)
-    {
-        var resposta = await _service.ListarAsync(codigoLinha, linhaId, page, pageSize, cancellationToken);
-        return Ok(resposta);
-    }
+/// <summary>Valores atuais em BRL. A linha substitui a tarifa padrão do modal.</summary>
+[ApiController, Route("tarifas"), TarifasErrorFilter]
+[ProducesResponseType(typeof(ProblemDetails), 400)]
+[ProducesResponseType(typeof(ProblemDetails), 404)]
+[ProducesResponseType(typeof(ProblemDetails), 409)]
+public sealed class TarifasController(TarifaService service) : ControllerBase
+{
+    /// <summary>Resolve tarifa e união dos métodos do modal e da linha. Ausência de valor retorna null.</summary>
+    [HttpGet("resolver"), ProducesResponseType(typeof(TarifasResolvidasResposta), 200)]
+    public async Task<ActionResult<TarifasResolvidasResposta>> Resolver(
+        [FromQuery] Guid? modalId, [FromQuery] Guid? linhaId, CancellationToken ct) =>
+        Ok(await service.ResolverAsync(modalId, linhaId, ct));
 
-    /// <summary>
-    /// Cadastra uma tarifa (endpoint simples para testes).
-    /// </summary>
-    [HttpPost]
-    [ProducesResponseType(typeof(TarifaConsultaDTO), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> CriarTarifa(
-        [FromBody] TarifaCriarDTO tarifa,
-        CancellationToken cancellationToken = default)
-    {
-        var resposta = await _service.CriarAsync(tarifa, cancellationToken);
-        return Ok(resposta);
-    }
+    /// <summary>Define tarifa padrão MANUAL; repetir o mesmo valor não altera timestamps.</summary>
+    [HttpPut("modais/{modalId:guid}"), ProducesResponseType(204)]
+    public async Task<IActionResult> DefinirModal(Guid modalId, TarifaValorRequest body, CancellationToken ct)
+    { await service.DefinirAsync(modalId, null, body.Valor, ct); return NoContent(); }
+
+    /// <summary>Define tarifa específica MANUAL, com prioridade sobre o modal.</summary>
+    [HttpPut("linhas/{linhaId:guid}"), ProducesResponseType(204)]
+    public async Task<IActionResult> DefinirLinha(Guid linhaId, TarifaValorRequest body, CancellationToken ct)
+    { await service.DefinirAsync(null, linhaId, body.Valor, ct); return NoContent(); }
+
+    /// <summary>Remove somente a tarifa padrão. Repetição é idempotente.</summary>
+    [HttpDelete("modais/{modalId:guid}"), ProducesResponseType(204)]
+    public async Task<IActionResult> RemoverModal(Guid modalId, CancellationToken ct)
+    { await service.RemoverAsync(modalId, null, ct); return NoContent(); }
+
+    /// <summary>Remove tarifa específica; consultas passam a herdar o modal.</summary>
+    [HttpDelete("linhas/{linhaId:guid}"), ProducesResponseType(204)]
+    public async Task<IActionResult> RemoverLinha(Guid linhaId, CancellationToken ct)
+    { await service.RemoverAsync(null, linhaId, ct); return NoContent(); }
 }

@@ -1,15 +1,14 @@
-namespace NoPonto.Domain.Entities
-{
-    public class Tarifa : BaseEntity
-    {
-        public Guid LinhaId { get; set; }
-        public Guid ModalId { get; set; }
-        public decimal Valor { get; set; }
-        public DateTime ValidoDe { get; set; }
-        public DateTime? ValidoAte { get; set; }
-        public string Fonte { get; set; } = null!;
+namespace NoPonto.Domain.Entities;
 
-        public Linha Linha { get; set; } = null!;
-        public Modal Modal { get; set; } = null!;
-    }
+public sealed class Tarifa
+{
+    public Guid Id { get; set; }
+    public Guid? ModalId { get; set; }
+    public Guid? LinhaId { get; set; }
+    public decimal Valor { get; set; }
+    public string Fonte { get; set; } = "MANUAL";
+    public DateTime CriadoEmUtc { get; set; }
+    public DateTime AtualizadoEmUtc { get; set; }
+    public Modal? Modal { get; set; }
+    public Linha? Linha { get; set; }
 }

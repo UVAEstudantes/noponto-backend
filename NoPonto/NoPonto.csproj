@@ -67,7 +67,6 @@
     <Compile Remove="2-Application/Helper/OrdenacaoHelper.cs" />
     <Compile Remove="2-Application/Services/BackgroundServices/Importacoes/ImportacaoParadasService.cs" />
     <Compile Remove="2-Application/Services/SentidoService.cs" />
-    <Compile Remove="2-Application/Services/TarifaService.cs" />
     <Compile Remove="3-Domain/Entities/itinerario.cs" />
     <Compile Remove="3-Domain/Entities/paradaItinerario.cs" />
     <Compile Remove="4-Data/Interfaces/IItinerarioRepository.cs" />
