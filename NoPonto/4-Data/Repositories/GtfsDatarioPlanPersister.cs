@@ -136,7 +136,8 @@ public sealed class GtfsDatarioPlanPersister(TransporteDbContext db) : IGtfsData
             {
                 line = new Linha { Id=Guid.NewGuid(), Codigo=route.RouteShortName,
                     Nome=route.RouteLongName.Length>0?route.RouteLongName:route.RouteShortName,
-                    ModalId=modal.Id, TipoRota=MapRouteType(route.RouteType) };
+                    ModalId=await GtfsLinhaModal.ParaNovaLinhaAsync(db, route.RouteType, modal.Id, ct),
+                    TipoRota=GtfsLinhaModal.TipoRota(route.RouteType) };
                 db.Linhas.Add(line); byCode.Add(line.Codigo,line); created++;
             } else reused++;
             map[route.RouteId]=line;
@@ -269,7 +270,6 @@ public sealed class GtfsDatarioPlanPersister(TransporteDbContext db) : IGtfsData
     }
 
     private static string? EmptyToNull(string value)=>value.Length==0?null:value;
-    private static string MapRouteType(string type)=>type switch{"702"=>"brt","200"=>"frescao",_=>"regular"};
 
     internal static string? RealtimeOrigin(GtfsRoute route)
     {

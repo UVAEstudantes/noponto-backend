@@ -2,10 +2,10 @@ using NoPonto.Application.GPS;
 
 namespace NoPonto.Application.LegacyCompatibility.DTOs;
 
-/// <summary>TEMPORARY FRONTEND COMPATIBILITY: presentation-only modal identities.</summary>
+/// <summary>Identificador histórico do frontend, coincidente com o BRT hoje persistido.</summary>
 public static class FrontendLegacyModalIds
 {
-    // Never persisted or used as a domain/FK identity.
+    // Importadores resolvem o modal persistido; esta constante não cria modais.
     public static readonly Guid Brt = Guid.Parse("b47b0000-0000-4000-8000-000000000001");
 }
 

@@ -80,15 +80,18 @@ public sealed class FrontendLegacyCompatibilityTests
         }
     }
 
-    [Fact]
-    public async Task Modais_AdicionaBrtVirtualSemPersistir()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Modais_RetornaSomentePersistidosSemDuplicarBrt(bool incluirBrt)
     {
-        var busId = Guid.NewGuid();
-        var repository = new FakeModalRepository([new() { Id = busId, Nome = "Ônibus" }]);
+        var persisted = new List<ModalConsultaDTO> { new() { Id = Guid.NewGuid(), Nome = "Ônibus" } };
+        if (incluirBrt) persisted.Add(new() { Id = FrontendLegacyModalIds.Brt, Nome = "BRT" });
+        var repository = new FakeModalRepository(persisted);
         var result = await new ModalService(repository, NullLogger<ModalService>.Instance).ListarAsync(default);
-        Assert.Contains(result, x => x.Id == busId && x.Nome == "Ônibus");
-        Assert.Contains(result, x => x.Id == FrontendLegacyModalIds.Brt && x.Nome == "BRT");
-        Assert.Single(repository.Persisted);
+        Assert.Equal(persisted.OrderBy(x => x.Nome, StringComparer.Ordinal).Select(x => x.Id), result.Select(x => x.Id));
+        Assert.Equal(incluirBrt ? 1 : 0, result.Count(x => x.Nome == "BRT"));
+        Assert.Equal(persisted.Count, repository.Persisted.Count);
     }
 
     [Fact]
@@ -162,8 +165,8 @@ public sealed class FrontendLegacyCompatibilityTests
         var repository = new EstruturaLeituraV2Repository(db);
         var byCode = await repository.ListarLinhasAsync(null, "b42", null, null, null, 1, 10, default);
         var brt = Assert.Single(byCode.Itens);
-        Assert.Equal(ids.BusModal, brt.ModalId);
-        Assert.Equal("Ônibus", brt.Modal);
+        Assert.Equal(FrontendLegacyModalIds.Brt, brt.ModalId);
+        Assert.Equal("BRT", brt.Modal);
         Assert.Equal("brt", brt.TipoRota);
         var byName = await repository.ListarLinhasAsync(null, "terminal teste", null, null, null, 1, 1, default);
         Assert.Equal(1, byName.TotalRegistros);
@@ -180,7 +183,7 @@ public sealed class FrontendLegacyCompatibilityTests
         Assert.Equal("884", Assert.Single((await repository.ListarLinhasAsync(null, "sepetiba",
             ids.BusModal, null, "brt", 1, 10, default)).Itens).Codigo);
         Assert.Equal("10", Assert.Single((await repository.ListarLinhasAsync(null, "10",
-            ids.BusModal, "brt", null, 1, 10, default)).Itens).Codigo);
+            FrontendLegacyModalIds.Brt, "brt", null, 1, 10, default)).Itens).Codigo);
         Assert.DoesNotContain((await repository.ListarLinhasAsync(null, "10", ids.BusModal,
             null, "brt", 1, 10, default)).Itens, x => x.TipoRota == "brt");
 
@@ -201,7 +204,9 @@ public sealed class FrontendLegacyCompatibilityTests
         var tremItinerary = Assert.Single(tremMap!.Itinerarios);
         Assert.Equal(ids.TremCurrentVersion, tremItinerary.ItinerarioId);
         Assert.Equal("Estação Teste", Assert.Single(tremItinerary.Paradas!).Nome);
-        Assert.False(await db.Modais.AnyAsync(x => x.Id == FrontendLegacyModalIds.Brt));
+        Assert.True(await db.Modais.AnyAsync(x => x.Id == FrontendLegacyModalIds.Brt));
+        Assert.Empty((await repository.ListarLinhasAsync(null, null, ids.BusModal, "brt", null, 1, 10, default)).Itens);
+        Assert.Empty((await repository.ListarLinhasAsync(null, null, FrontendLegacyModalIds.Brt, null, "brt", 1, 10, default)).Itens);
         Assert.Equal(before, await CountsAsync(db));
         Assert.DoesNotContain(db.ChangeTracker.Entries(), x => x.State != EntityState.Unchanged);
     }
@@ -210,9 +215,10 @@ public sealed class FrontendLegacyCompatibilityTests
     {
         var factory = NtsGeometryServices.Instance.CreateGeometryFactory(4326);
         var modal = new Modal { Id = Guid.NewGuid(), Nome = "Ônibus" };
+        var brtModal = new Modal { Id = FrontendLegacyModalIds.Brt, Nome = "BRT" };
         var tremModal = new Modal { Id = Guid.NewGuid(), Nome = "Trem" };
         var brt = new Linha { Id = Guid.NewGuid(), Codigo = "B42", Nome = "Terminal Teste",
-            ModalId = modal.Id, TipoRota = "brt" };
+            ModalId = brtModal.Id, TipoRota = "brt" };
         var regular = new Linha { Id = Guid.NewGuid(), Codigo = "R10", Nome = "Regular",
             ModalId = modal.Id, TipoRota = "regular" };
         var trem = new Linha { Id = Guid.NewGuid(), Codigo = "TREM-DEODORO", Nome = "Deodoro",
@@ -222,7 +228,7 @@ public sealed class FrontendLegacyCompatibilityTests
         var bus884 = new Linha { Id = Guid.NewGuid(), Codigo = "884", Nome = "Sepetiba - Terminal Campo Grande",
             ModalId = modal.Id, TipoRota = "regular" };
         var brt10 = new Linha { Id = Guid.NewGuid(), Codigo = "10", Nome = "Santa Cruz - Terminal Alvorada",
-            ModalId = modal.Id, TipoRota = "brt" };
+            ModalId = brtModal.Id, TipoRota = "brt" };
         var direction = new Sentido { Id = Guid.NewGuid(), LinhaId = brt.Id, Nome = "IDA (1)" };
         var preferred = new PadraoOperacional { Id = Guid.NewGuid(), SentidoId = direction.Id,
             Chave = "a-principal", TipoServico = "brt" };
@@ -241,7 +247,7 @@ public sealed class FrontendLegacyCompatibilityTests
             Localizacao = factory.CreatePoint(new NetTopologySuite.Geometries.Coordinate(-43.05, -22.05)), TipoLocal = TiposLocalParada.Estacao };
         var station = new Parada { Id = Guid.NewGuid(), Codigo = "T1", Nome = "Estação Teste",
             Localizacao = factory.CreatePoint(new NetTopologySuite.Geometries.Coordinate(-43, -22)), TipoLocal = TiposLocalParada.Estacao };
-        db.AddRange(modal, tremModal, brt, regular, trem, santa, bus884, brt10, direction, tremDirection, preferred,
+        db.AddRange(modal, brtModal, tremModal, brt, regular, trem, santa, bus884, brt10, direction, tremDirection, preferred,
             other, tremPattern, historical, current, otherVersion, tremVersion, repeated, middle, station);
         await db.SaveChangesAsync();
         preferred.VersaoAtualId = current.Id;
