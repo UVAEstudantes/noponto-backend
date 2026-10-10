@@ -26,6 +26,13 @@ public sealed class GtfsDatarioPersistenceIntegrationTests
         await using var db = new TransporteDbContext(options);
         await db.Database.MigrateAsync();
 
+        var brtModalId = Guid.Parse("b47b0000-0000-4000-8000-000000000001");
+        if (!await db.Modais.AnyAsync(x => x.Nome == "BRT"))
+        {
+            db.Modais.Add(new Modal { Id = brtModalId, Nome = "BRT" });
+            await db.SaveChangesAsync();
+        }
+
         var zip = Environment.GetEnvironmentVariable("GTFS_TEST_ZIP");
         Assert.False(string.IsNullOrWhiteSpace(zip), "GTFS_TEST_ZIP é obrigatório quando GTFS_TEST_CONNECTION existe.");
         var service = new GtfsDatarioImportService(new GtfsFeedParser(), new GtfsDatarioPlanPersister(db));
@@ -69,6 +76,12 @@ public sealed class GtfsDatarioPersistenceIntegrationTests
         var brtRoutes = first.Feed.Routes.Where(x => x.RouteType == "702").Select(x => x.RouteId).ToHashSet();
         var brtPatterns = first.Patterns.Where(x => brtRoutes.Contains(x.RouteId)).ToArray();
         Assert.Equal(30, brtRoutes.Count);
+        var brtLines = await db.LinhasIdentidadesExternas.Include(x => x.Linha)
+            .Where(x => x.FonteEstruturalId == source.Id && x.Tipo == "ROUTE_ID"
+                && brtRoutes.Contains(x.ExternalId)).ToArrayAsync();
+        Assert.All(brtLines, x => { Assert.Equal(brtModalId, x.Linha.ModalId); Assert.Equal("brt", x.Linha.TipoRota); });
+        var classificationBefore = await db.Linhas.OrderBy(x => x.Id)
+            .Select(x => new { x.Id, x.ModalId, x.TipoRota }).ToArrayAsync();
         Assert.Equal(60, brtPatterns.Select(x => (x.RouteId, x.DirectionId)).Distinct().Count());
         Assert.Equal(78, brtPatterns.Length);
         Assert.Equal(341, brtPatterns.SelectMany(x => x.Occurrences).Select(x => x.StopId).Distinct().Count());
@@ -108,6 +121,8 @@ public sealed class GtfsDatarioPersistenceIntegrationTests
             Patterns = await db.PadroesOperacionais.CountAsync(), Versions = await db.PadroesVersoes.CountAsync(),
             Stops = await db.Paradas.CountAsync(), Occurrences = await db.OcorrenciasParadasPadroes.CountAsync() };
         Assert.Equal(before, after);
+        Assert.Equal(classificationBefore, await db.Linhas.OrderBy(x => x.Id)
+            .Select(x => new { x.Id, x.ModalId, x.TipoRota }).ToArrayAsync());
         Assert.Equal(961, await db.PadroesIdentidadesExternas.CountAsync(x =>
             x.FonteEstruturalId == source.Id && x.Tipo == "STRUCTURAL_KEY"));
         Assert.Equal(961, await db.PadroesIdentidadesExternas.CountAsync(x =>
@@ -176,6 +191,17 @@ public sealed class GtfsDatarioPersistenceIntegrationTests
         {
             Id = Guid.NewGuid(), Codigo = x, Nome = x, ModalId = modal.Id, TipoRota = "regular"
         }, StringComparer.OrdinalIgnoreCase);
+        var brtModal = new Modal { Id = Guid.Parse("b47b0000-0000-4000-8000-000000000001"), Nome = "BRT" };
+        db.Modais.Add(brtModal);
+        var brtCodes = dryRun.Feed.Routes.Where(x => x.RouteType == "702")
+            .Select(x => x.RouteShortName).ToArray();
+        Assert.Equal(30, brtCodes.Length);
+        foreach (var code in brtCodes)
+        {
+            initialLines[code].ModalId = brtModal.Id;
+            initialLines[code].TipoRota = "brt";
+        }
+        initialLines[expectedPreserved[0]].TipoRota = "desconhecido";
         db.Linhas.AddRange(initialLines.Values);
         await db.SaveChangesAsync();
 
@@ -191,6 +217,12 @@ public sealed class GtfsDatarioPersistenceIntegrationTests
         Assert.Equal(494, identities.Length);
         Assert.Equal(488, identities.Count(x => initialLines.Values.Any(y => y.Id == x.LinhaId)));
         Assert.Equal(502, await db.Linhas.CountAsync());
+        foreach (var original in initialLines.Values)
+        {
+            var persisted = await db.Linhas.SingleAsync(x => x.Id == original.Id);
+            Assert.Equal(original.ModalId, persisted.ModalId);
+            Assert.Equal(original.TipoRota, persisted.TipoRota);
+        }
 
         foreach (var alias in dryRun.Crosswalk)
         {

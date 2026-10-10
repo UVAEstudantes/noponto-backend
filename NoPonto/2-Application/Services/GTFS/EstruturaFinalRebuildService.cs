@@ -294,7 +294,9 @@ public sealed class EstruturaFinalRebuildService(
             var identity = await db.LinhasIdentidadesExternas.Include(x => x.Linha).SingleOrDefaultAsync(x =>
                 x.FonteEstruturalId == source.Id && x.Tipo == "ROUTE_ID" && x.ExternalId == route.RouteId, ct);
             var line = identity?.Linha ?? new Linha { Id = DeterministicGuid("line", source.Codigo, route.RouteId),
-                ModalId = modal.Id, Codigo = route.RouteShortName, Nome = route.RouteShortName };
+                ModalId = await GtfsLinhaModal.ParaNovaLinhaAsync(db, route.RouteType, modal.Id, ct),
+                TipoRota = GtfsLinhaModal.TipoRota(route.RouteType),
+                Codigo = route.RouteShortName, Nome = route.RouteShortName };
             if (identity is null) { db.Linhas.Add(line); db.LinhasIdentidadesExternas.Add(new() {
                 Id = DeterministicGuid("line-identity", source.Codigo, route.RouteId), LinhaId = line.Id,
                 FonteEstruturalId = source.Id, Tipo = "ROUTE_ID", ExternalId = route.RouteId, Confianca = 1 }); }

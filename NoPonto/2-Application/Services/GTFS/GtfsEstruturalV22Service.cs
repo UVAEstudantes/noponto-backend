@@ -227,7 +227,9 @@ public sealed class GtfsEstruturalV22Service(
         foreach (var route in feed.Routes)
         {
             if (existing.TryGetValue(route.RouteId, out var identity)) { result[route.RouteId] = identity.Linha; c.LinhasReutilizadas++; continue; }
-            var line = new Linha { Id = Guid.NewGuid(), ModalId = modal.Id, Codigo = route.RouteShortName,
+            var line = new Linha { Id = Guid.NewGuid(),
+                ModalId = await GtfsLinhaModal.ParaNovaLinhaAsync(db, route.RouteType, modal.Id, ct),
+                TipoRota = GtfsLinhaModal.TipoRota(route.RouteType), Codigo = route.RouteShortName,
                 Nome = route.RouteShortName };
             db.Linhas.Add(line);
             db.LinhasIdentidadesExternas.Add(new() { Id = Guid.NewGuid(), LinhaId = line.Id,

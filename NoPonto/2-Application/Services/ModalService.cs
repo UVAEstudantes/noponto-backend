@@ -1,6 +1,5 @@
 using NoPonto.Application.DTOs.Modais;
 using NoPonto.Application.Interfaces;
-using NoPonto.Application.LegacyCompatibility.DTOs;
 using NoPonto.Data.Interfaces;
 
 namespace NoPonto.Application.Services;
@@ -20,11 +19,6 @@ public sealed class ModalService : IModalService
     {
         _logger.LogInformation("Consultando modais via service.");
         var persisted = await _modalRepository.ListarAsync(cancellationToken);
-        // TEMPORARY FRONTEND COMPATIBILITY: BRT is a presentation identity only.
-        return persisted.Append(new ModalConsultaDTO
-        {
-            Id = FrontendLegacyModalIds.Brt,
-            Nome = "BRT"
-        }).OrderBy(x => x.Nome, StringComparer.Ordinal).ToArray();
+        return persisted.OrderBy(x => x.Nome, StringComparer.Ordinal).ToArray();
     }
 }
