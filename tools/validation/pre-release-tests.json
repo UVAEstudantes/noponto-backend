@@ -1,0 +1,42 @@
+{
+  "classes": [
+    "GpsLeituraValidatorTests",
+    "GpsTimestampDeduplicationTests",
+    "NoPonto.Tests.GpsEtaClientTests",
+    "NoPonto.Tests.GpsBrtTelemetriaTests",
+    "NoPonto.Tests.GpsSourceAbstractionTests",
+    "NoPonto.Tests.GpsPollingFontesTests",
+    "NoPonto.Tests.GpsPollingCadenciaTests",
+    "NoPonto.Tests.GpsPerformanceMetricsTests",
+    "NoPonto.Tests.GpsMatchingDiagnosticsTests",
+    "NoPonto.Tests.GtfsRealtimeGpsTests",
+    "NoPonto.Tests.TelemetriaMlIdentidadeTests",
+    "NoPonto.Tests.TelemetriaMlSamplingTests",
+    "NoPonto.Tests.ViagemOperacionalRegraTests",
+    "NoPonto.Tests.ViagemOperacionalCodecCompatibilidadeTests",
+    "NoPonto.Tests.CancelamentoCandidatoCursorTests",
+    "NoPonto.Tests.EstadoCausalPosicaoTests",
+    "NoPonto.Tests.DatabaseStartupPolicyTests",
+    "NoPonto.Tests.TarifasRegrasTests",
+    "NoPonto.Tests.PhysicalEtaMvpTests",
+    "NoPonto.Tests.PhysicalEtaSelectedStopTests",
+    "NoPonto.Tests.TerminalPresenceContractTests",
+    "NoPonto.Tests.EventosParadaProjectionTests",
+    "NoPonto.Tests.FrontendLegacyCompatibilityTests",
+    "NoPonto.Tests.GpsCorrelatedDiagnosticsTests",
+    "NoPonto.Tests.GpsCursor4C8Tests",
+    "NoPonto.Tests.GpsCursor4C9Tests",
+    "NoPonto.Tests.GpsPassagens4C6Tests",
+    "NoPonto.Tests.GpsFunilLogsTests",
+    "NoPonto.Tests.GpsFunilOperacionalTests",
+    "NoPonto.Tests.GpsEnriquecimentoServiceTests",
+    "NoPonto.Tests.GpsSppoCollectorTests",
+    "NoPonto.Tests.RetryOperacionalGpsTests",
+    "NoPonto.Tests.ViagemObservadaServiceTests",
+    "NoPonto.Tests.MudancaOperacionalRegraTests",
+    "NoPonto.Tests.IntegridadeCircularRegraTests"
+  ],
+  "excluded_methods": [
+    "NoPonto.Tests.GpsMatchingDiagnosticsTests.DeterministicAggregationReplay_MeasuresIncrementalCostOnly"
+  ]
+}
