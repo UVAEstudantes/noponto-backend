@@ -12,7 +12,7 @@ public sealed class GpsEtaClientTests
     [Theory]
     [InlineData("false", 0)]
     [InlineData("true", 1)]
-    [InlineData(null, 1)]
+    [InlineData(null, 0)]
     public async Task Flag_explicita_e_default_preservam_contrato(string? value, int calls)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(

@@ -1061,3 +1061,7 @@ Consultados AGENTS.md e histórico antes da edição. Usuário informou build ap
 - Revisados os outros testes alterados na separação BRT: FrontendLegacyCompatibilityTests e GtfsDatarioPersistenceIntegrationTests configuram UseNpgsql nos contextos de integração; não encontrado o mesmo problema. Importadores, helper de produção e listagem de modais preservados.
 
 Validação desta correção: revisão estática somente. Testes e builds NÃO executados, conforme restrição; resultado anterior é informado pelo usuário, não valida esta correção. Sem Docker, rede, migrations, banco, commit, push ou deploy. Histórico acrescentado sem sobrescrever entradas anteriores.
+
+
+### 2026-10-14 — B1 candidata — ML legado fail-closed
+- Opções/configuração/construtor ausentes ficam OFF; físico prevalece em conflito. Opt-in explícito permanece possível. Testes de métricas passam a opt-in deliberado; teste da matriz física será incluído atomicamente com suas fixtures em B3. Nenhuma configuração de produção ou CI/CD alterada.

@@ -17,7 +17,7 @@ public sealed class GpsEtaClient
 
     public GpsEtaClient(HttpClient http, ILogger<GpsEtaClient> logger, IOptions<GpsEtaOptions>? options = null)
     {
-        _enabled = options?.Value.Enabled ?? true;
+        _enabled = options?.Value.Enabled ?? false;
         _http   = http;
         _logger = logger;
     }
