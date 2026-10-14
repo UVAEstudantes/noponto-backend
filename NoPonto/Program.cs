@@ -419,6 +419,8 @@ builder.Services.AddHttpClient("docker", client =>
 // --------------------------------------------------------------------
 
 // Optional bounded diagnostic logging only; absent/false never activates capture.
+builder.Services.AddOptions<PhysicalEtaOptions>().Bind(builder.Configuration.GetSection("PhysicalEta"))
+    .Validate(x => x.Valid(), "PhysicalEta bounds");
 builder.Services.AddOptions<GpsCorrelatedDiagnosticsOptions>()
     .Bind(builder.Configuration.GetSection(GpsCorrelatedDiagnosticsOptions.Section));
 builder.Services.AddSingleton<GpsCorrelatedDiagnostics>();
@@ -570,6 +572,8 @@ builder.Services.AddHostedService<GpsStructuralHintMetricsReporter>();
 
 builder.Services.AddSingleton<GpsEnriquecimentoService>();
 builder.Services.AddScoped<IEstruturaLeituraV2Repository, EstruturaLeituraV2Repository>();
+builder.Services.AddScoped<NoPonto.Application.Services.EventosParada.IRoadEtaDistances,
+    NoPonto.Application.Services.EventosParada.RoadEtaDistances>();
 builder.Services.AddScoped<NoPonto.Application.EventosParada.IEventosParadaService,
     NoPonto.Application.Services.EventosParada.EventosParadaService>();
 builder.Services.AddScoped<RailScheduleRepository>();

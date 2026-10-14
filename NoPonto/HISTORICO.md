@@ -1230,3 +1230,22 @@ A revisão local anterior 487e28e76f95, nunca transferida, fica preservada como 
 
 ### 2026-10-14 — B2 candidata — diagnósticos existentes isolados
 - Transportados somente fontes/testes/documentos aprovados, com hunks de diagnóstico no Program/polling. Física ficará em B3. 4C.9 não demonstra correção das passagens. Cotas e flag correlacionada OFF mantidas.
+
+### 2026-10-14 — ETA físico MVP local e visibilidade no terminal
+- Reutilizados baseline longitudinal puro existente e distância da geometria do matching. Novos PhysicalEta.cs/PhysicalEtaMvpTests.cs; hook opcional em GpsPollingService, binding em Program e consumo no endpoint existente EventosParadaService. PhysicalEta OFF por padrão; ON recusa ausência/ambiguidade/regressão/velocidade zero/GPS antigo e dispensa inferência pública legada. Mantidas regras operacionais, contratos de campos, TTL, dados e flags produtivas.
+- Demonstração sintética: 1000m a média causal36km/h resulta100s; consulta5s após GPS retorna95s. Enriquecedor real com matching-fixture e HTTP real efêmero usando controller existente, sem inicialização operacional. Relatório docs/09-validacao/09-eta-fisico-mvp-20261014.md registra escopo de próxima ocorrência e pendências de dados/modelo real.
+- Executados 250 testes C# finais offline/HTTP isolado, 64 Shadow na candidata existente e 41 Python de pipeline/serviço/gates: todos aprovados. Primeira execução Python teve sete erros de importação, resolvidos por PYTHONPATH, sem editar código ML.
+- Ressalva: os filtros C# iniciais incluíram indevidamente quatro testes de Redis local existente localhost:6380 antes de comprovar descartabilidade; usam chaves TEST com UUID e limpeza própria. Reconhecido erro de seleção e excluídos da validação final. Sem PostgreSQL, homeserver ou produção. Não declarada integração de banco descartável.
+- Visibilidade: filtro frontend por versão estrutural visível e remoção de marcadores ausentes são condições concretas, mas não comprovada causa no terminal observado. Fonte admite velocidade zero; não alterados filtros/TTL por hipótese. Nenhuma nova janela diagnóstica.
+- Git inicial fix/gps com17 arquivos rastreados modificados e nenhum staged, hashes preservados no inventário externo. GpsPollingService/Program/HISTORICO eram sujos; acréscimos desta tarefa separados no relatório. Sem mudança de branch/worktree, commit, push, merge, migrations, build Docker, deploy ou alteração de configuração produtiva.
+
+### 2026-10-14 — ETA físico até a parada consultada
+- Reutilizado MVP físico e endpoint /paradas/{id}/eventos para destinos posteriores à próxima ocorrência. RoadEtaDistances novo resolve distância geográfica na versão exata em lotes200, até1000 candidatos, com transação READ ONLY e timeouts. Sem aproximação por fração×comprimento no modo físico, sem consultas por veículo e sem dependência de PassagemParada.
+- PhysicalEta recupera velocidade congelada da previsão física causal; EventosParadaService valida destino/estrutura, consome distâncias em lote e desconta idade GPS; Program registra resolver. Mantidos contratos de campos, flag OFF, matching, TTL, cursor, persistência, ETA/ML e demais trabalhos anteriores.
+- 265 testes C# finais aprovados (15 novos), incluindo HTTP real efêmero para terceira parada e dois veículos; distâncias/observações sintéticas. 7 cenários SQL aprovados em PostGIS novo sem rede/portas, PGDATA tmpfs, removido ao término. Tentativas anteriores de ambiente descartável falharam em timeout/prontidão e não são contabilizadas como sucesso; nenhum banco local preexistente ou produção acessados.
+- Exemplo sintético: terceira parada a4100m e velocidade causal36km/h →410s; após5s,405s. Demonstração de geometria não uniforme distingue distância real de fração×comprimento. Sem prova de precisão real ou treino/labels novos.
+- Novos PhysicalEtaSelectedStopTests.cs, tools/eta_ml/test_selected_stop_postgis.py e relatório docs/09-validacao/10-eta-parada-consultada-20261014.md. Histórico somente por acréscimo. Sem mudança de branch/worktree, build de imagem, deploy, commit, push, merge ou CI/CD.
+
+
+### 2026-10-14 — B3 candidata — ETA físico e matriz de segurança
+- Distância longitudinal em lote, endpoint existente, opções físicas OFF. EtaFlagSafetyTests veio de B1 nesta fronteira porque depende de PhysicalEtaMvpTests/PhysicalEta. Sem mudança nas regras GPS ou flags produtivas.

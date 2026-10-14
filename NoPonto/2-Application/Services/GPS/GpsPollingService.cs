@@ -45,6 +45,7 @@ public sealed class GpsPollingService : BackgroundService
     private readonly TelemetriaMlMetrics? _telemetriaMlMetrics;
     private readonly IRetryOperacionalGps? _retryOperacional;
     private readonly GpsCorrelatedDiagnostics? _correlatedDiagnostics;
+    private readonly IOptions<PhysicalEtaOptions>? _physicalEtaOptions;
     private long _ultimoErroSamplingLogUnixMinute = long.MinValue;
 
     public GpsPollingService(
@@ -69,7 +70,8 @@ public sealed class GpsPollingService : BackgroundService
         ITelemetriaMlSamplingPolicy? telemetriaMlSampling = null,
         TelemetriaMlMetrics? telemetriaMlMetrics = null,
         IRetryOperacionalGps? retryOperacional = null,
-        GpsCorrelatedDiagnostics? correlatedDiagnostics = null)
+        GpsCorrelatedDiagnostics? correlatedDiagnostics = null,
+        IOptions<PhysicalEtaOptions>? physicalEtaOptions = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -97,6 +99,7 @@ public sealed class GpsPollingService : BackgroundService
         _telemetriaMlMetrics = telemetriaMlMetrics;
         _retryOperacional = retryOperacional;
         _correlatedDiagnostics = correlatedDiagnostics;
+        _physicalEtaOptions = physicalEtaOptions;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -435,7 +438,7 @@ public sealed class GpsPollingService : BackgroundService
             .ToList();
 
         // ── 4.5. Predição de ETA via modelo ML ───────────────────────────────
-        if (resultadosEnriquecidos.Length > 0)
+        if (resultadosEnriquecidos.Length > 0 && _physicalEtaOptions?.Value.Enabled != true)
         {
             inicioEtapa = System.Diagnostics.Stopwatch.GetTimestamp();
             var predicoes = await _etaClient.PredizirLoteAsync(resultadosEnriquecidos, ct, performance);
@@ -471,6 +474,12 @@ public sealed class GpsPollingService : BackgroundService
             .Concat(resultadosSemEnriquecimento.Select(x => new ResultadoEnriquecimentoGps(
                 x, null, ResultadoProjecaoOperacional.NaoSolicitada())))
             .ToList();
+
+        if (_physicalEtaOptions?.Value is { Enabled: true } physicalOptions)
+        {
+            var physicalNow = DateTimeOffset.UtcNow;
+            todosProcessados = todosProcessados.Select(x => PhysicalEta.Apply(x, physicalNow, physicalOptions)).ToList();
+        }
 
         // C é estritamente auxiliar: com a flag OFF não há leitura, serialização
         // ou cálculo causal. O candidato é preparado antes do CAS B, mas só pode
