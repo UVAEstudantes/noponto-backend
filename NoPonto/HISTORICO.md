@@ -1249,3 +1249,14 @@ A revisão local anterior 487e28e76f95, nunca transferida, fica preservada como 
 
 ### 2026-10-14 — B3 candidata — ETA físico e matriz de segurança
 - Distância longitudinal em lote, endpoint existente, opções físicas OFF. EtaFlagSafetyTests veio de B1 nesta fronteira porque depende de PhysicalEtaMvpTests/PhysicalEta. Sem mudança nas regras GPS ou flags produtivas.
+
+### 2026-10-14 — Presença BUS/BRT em terminais, flag visual OFF
+- Reproduzido RED no filtro real do frontend: posição recente parada da linha selecionada, sem versão, era removida. Corrigido somente o caminho visual sob EXPO_PUBLIC_ROAD_PRESENCE_ENABLED (OFF por padrão), incluindo filtros posteriores, payload e popup da WebView. Versões/sentidos explicitamente incompatíveis continuam excluídos; nunca inventa identidade ou ETA.
+- Estados de apresentação conservadores e temporários: em viagem, fim de percurso, aguardando saída somente com chegada prévia e novo sentido confirmado em duas observações, indeterminado e GPS desatualizado. Prazo visual 60s/180s, sem renovar timestamp/TTL; histerese de proximidade e memória limitada, sem estado persistente.
+- 24 testes frontend aprovados (12 novos e12 regressões), TypeScript --noEmit e sintaxe do JavaScript gerado da WebView aprovados. 110 C# aprovados, incluindo HTTP real efêmero com cache em memória, parada sem matching e fallback recente/SemSinal; movimento causal restaura ETA. Nenhum Redis/PostgreSQL existente, Docker ou produção acessados nesta tarefa.
+- Backend funcional, ETA físico, matching, cursor, passagens, TTL, ML/Shadow, migrations e CI/CD não alterados. Novo TerminalPresenceContractTests.cs; relatório docs/09-validacao/11-visibilidade-terminais-20261014.md. Alterações frontend e histórico próprio documentados; trabalhos sujos de startup e GPS preservados. Sem commit/push/merge/deploy ou troca de branch/worktree.
+- Causa real em produção não comprovada: demonstrada apenas condição sintética. Homologação visual/dispositivo e disponibilidade real do GPS/sentido no terminal continuam pendentes.
+
+
+### 2026-10-14 — B4 candidata — contrato terminal
+- Contrato HTTP/cache em memória para veículo parado sem matching e retomada física, com documentação aprovada. Sem alteração funcional ou inferência ML.
