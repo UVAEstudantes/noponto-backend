@@ -14,7 +14,7 @@ internal enum ResultadoRequisicaoEta
 /// Agregador observacional de baixo custo, criado uma vez por ciclo GPS.
 /// Tempos acumulados por operação podem superar o tempo de parede quando há concorrência.
 /// </summary>
-internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloConfiguradoMs)
+internal sealed partial class GpsCicloPerformance(DateTimeOffset inicio, long intervaloConfiguradoMs)
 {
     public GpsMatchingDiagnostics MatchingDiagnostics { get; } = new();
 
@@ -775,8 +775,24 @@ internal sealed class GpsCicloPerformance(DateTimeOffset inicio, long intervaloC
 internal static class GpsCommitPerformanceContext
 {
     private static readonly AsyncLocal<GpsCicloPerformance?> Atual = new();
+    private static readonly AsyncLocal<(GpsCicloPerformance? Performance, bool Retry)> Diagnostico = new();
 
     public static GpsCicloPerformance? Current => Atual.Value;
+    // Escopo separado somente para a extensão: o retry inicial continua fora dos contadores legados.
+    public static GpsCicloPerformance? DiagnosticCurrent => Diagnostico.Value.Performance ?? Current;
+    public static bool IsRetry => Diagnostico.Value.Retry;
+
+    public static IDisposable PushDiagnostic(GpsCicloPerformance? performance, bool retry)
+    {
+        var anterior = Diagnostico.Value;
+        Diagnostico.Value = (performance, retry);
+        return new DiagnosticScope(anterior);
+    }
+
+    private sealed class DiagnosticScope((GpsCicloPerformance? Performance, bool Retry) anterior) : IDisposable
+    {
+        public void Dispose() => Diagnostico.Value = anterior;
+    }
 
     public static IDisposable Push(GpsCicloPerformance? performance)
     {

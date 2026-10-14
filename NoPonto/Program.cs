@@ -418,6 +418,11 @@ builder.Services.AddHttpClient("docker", client =>
 // OPTIONS
 // --------------------------------------------------------------------
 
+// Optional bounded diagnostic logging only; absent/false never activates capture.
+builder.Services.AddOptions<GpsCorrelatedDiagnosticsOptions>()
+    .Bind(builder.Configuration.GetSection(GpsCorrelatedDiagnosticsOptions.Section));
+builder.Services.AddSingleton<GpsCorrelatedDiagnostics>();
+
 builder.Services
     .AddOptions<GpsPollingOptions>()
     .Bind(builder.Configuration.GetSection(GpsPollingOptions.Secao))

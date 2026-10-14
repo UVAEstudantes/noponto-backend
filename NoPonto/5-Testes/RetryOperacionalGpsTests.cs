@@ -99,6 +99,45 @@ public sealed class RetryOperacionalGpsTests
         Options.Create(opt??new()),Options.Create(new GpsPollingOptions()),NullLogger<RetryOperacionalGpsService>.Instance)
         {Agora=clock??(()=>DateTimeOffset.UtcNow)};
 
+    [Fact]
+    public async Task FunilRetryInicialNaoEntraNaPopulacaoNovaNemNosContadoresLegados()
+    {
+        var store = new Store(); var repo = new Repo(); var enriquecedor = new Enriquecedor();
+        var service = Service(store, repo, enriquecedor);
+        var gps = Gps(T);
+        await service.RegistrarAsync(gps, Anterior(gps), null, default);
+        var metrics = new GpsCicloPerformance(T, 15000);
+        using (GpsCommitPerformanceContext.PushDiagnostic(metrics, retry: true))
+        {
+            await service.ExecutarCicloAsync(default);
+            await service.ExecutarCicloAsync(default);
+        }
+        Assert.Equal(1, metrics.Funil(ContadorFunilOperacional.RetryClaim, retry: true));
+        Assert.Equal(1, metrics.ResultadoOperacional(ResultadoFunilOperacional.Updated, retry: true));
+        Assert.Equal(0, metrics.ResultadoOperacional(ResultadoFunilOperacional.Updated));
+        Assert.Equal(0, metrics.ViagemProcessadas);
+        Assert.Equal(0, metrics.ViagemDurableWrites);
+        Assert.Equal(1, repo.Chamadas);
+        Assert.Null(GpsCommitPerformanceContext.DiagnosticCurrent);
+    }
+
+    [Fact]
+    public async Task FunilRetryDescartadoTemDenominadorSemResultadoDeViagem()
+    {
+        var agora = T; var store = new Store(); var repo = new Repo(); var enriquecedor = new Enriquecedor();
+        var service = Service(store, repo, enriquecedor, clock: () => agora);
+        var gps = Gps(agora);
+        await service.RegistrarAsync(gps, Anterior(gps), null, default);
+        agora = agora.AddSeconds(181);
+        var metrics = new GpsCicloPerformance(T, 15000);
+        using var scope = GpsCommitPerformanceContext.PushDiagnostic(metrics, retry: true);
+        await service.ExecutarCicloAsync(default);
+        Assert.Equal(1, metrics.Funil(ContadorFunilOperacional.RetryClaim, retry: true));
+        Assert.Equal(1, metrics.Funil(ContadorFunilOperacional.RetryNaoProcessado, retry: true));
+        Assert.Equal(0, metrics.ResultadoOperacional(ResultadoFunilOperacional.Updated, retry: true));
+        Assert.Equal(0, repo.Chamadas);
+    }
+
     [Fact] public async Task FalhaTransitoria_RegistroSemProvaSerializada_RecalculaEConfirmaUmaVez()
     {
         var s=new Store(); var r=new Repo(); var e=new Enriquecedor(); var service=Service(s,r,e); var p=Gps(T) with{MatchingOperacionalPlausivel=true};

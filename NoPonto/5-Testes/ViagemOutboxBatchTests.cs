@@ -73,10 +73,12 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         Assert.Equal(100, await CountCompleted(events));
     }
 
-    [Fact]
-    public async Task LeasePerdidoDepoisDaMaterializacao_FazRollbackCompleto()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LeasePerdidoDepoisDaMaterializacao_FazRollbackCompleto(bool passagem)
     {
-        var events = Enumerable.Range(0, 10).Select(StartEvent).ToArray();
+        var events = passagem ? await PassageEvents(1) : Enumerable.Range(0, 10).Select(StartEvent).ToArray();
         await Enqueue(events);
         var worker = Worker();
         var claimed = await worker.ClaimAsync(default);
@@ -93,6 +95,31 @@ public sealed class ViagemOutboxBatchTests(ViagemOperacionalFixture db)
         Assert.Equal(0, await Count("EventosViagem", events));
         Assert.Equal(0, await CountCompleted(events));
         Assert.Equal(1, worker.BatchFailures);
+        Assert.Equal(0, await CountHistory(events[0].ViagemId));
+        await using (var command = db.Source.CreateCommand("""
+            SELECT count(*) FROM "OutboxViagens"
+            WHERE "EventId"=ANY(@ids) AND "ProcessadoEmUtc" IS NULL
+            """))
+        {
+            command.Parameters.AddWithValue("ids", events.Select(x => x.EventId).ToArray());
+            Assert.Equal(events.Length, Convert.ToInt32(await command.ExecuteScalarAsync()));
+        }
+        // O proprietário atual ainda pode processar; simular somente a expiração
+        // do lease no Outbox exclusivo, sem mudar o worker ou aguardar dois minutos.
+        await using (var command = db.Source.CreateCommand("""
+            UPDATE "OutboxViagens" SET "BloqueadoAteUtc"=now()-interval '1 second'
+            WHERE "EventId"=ANY(@ids) AND "ProcessadoEmUtc" IS NULL
+            """))
+        {
+            command.Parameters.AddWithValue("ids", events.Select(x => x.EventId).ToArray());
+            Assert.Equal(events.Length, await command.ExecuteNonQueryAsync());
+        }
+        var posterior = await worker.ClaimAsync(default);
+        Assert.Equal(events.Select(e => e.EventId).Order(), posterior.Select(i => i.EventId).Order());
+        await worker.ProcessarLoteAsync(posterior, default);
+        Assert.Equal(events.Length, await Count("EventosViagem", events));
+        Assert.Equal(events.Length, await CountCompleted(events));
+        Assert.Equal(passagem ? 1 : 0, await CountHistory(events[0].ViagemId));
     }
 
     [Fact]

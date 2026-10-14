@@ -47,7 +47,11 @@ public sealed class ViagemObservadaService
         ResultadoEnriquecimentoGps enriquecimento, CancellationToken ct)
     {
         var posicao = enriquecimento.Posicao;
-        if (posicao.PadraoVersaoId is null || posicao.PosicaoNaRota is null) return null;
+        if (posicao.PadraoVersaoId is null || posicao.PosicaoNaRota is null)
+        {
+            GpsCommitPerformanceContext.DiagnosticCurrent?.RegistrarResultadoOperacional(null);
+            return null;
+        }
         ViagemObservadaResultado result;
         try
         {
@@ -63,6 +67,7 @@ public sealed class ViagemObservadaService
             result = new(ViagemObservadaStatus.InfrastructureFailure);
         }
 
+        GpsCommitPerformanceContext.DiagnosticCurrent?.RegistrarResultadoOperacional(result);
         switch (result.Status)
         {
             case ViagemObservadaStatus.Created:

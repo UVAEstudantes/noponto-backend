@@ -101,6 +101,16 @@ public static partial class ViagemOperacionalRegra
         PosicaoVeiculoDto gps, TransicaoParadas transicao, Guid novaId, bool adocaoLegado = false,
         ProvaGeometricaCircular? provaCircular = null, GpsPollingOptions? opcoes = null)
     {
+        var decisao = DecidirInterno(anterior, estrutura, gps, transicao, novaId, adocaoLegado, provaCircular, opcoes);
+        GpsCommitPerformanceContext.DiagnosticCurrent?.RegistrarDecisaoRegra(
+            anterior, estrutura, gps, transicao, decisao, adocaoLegado);
+        return decisao;
+    }
+
+    private static DecisaoViagem DecidirInterno(ViagemOperacionalState? anterior, EstruturaViagem estrutura,
+        PosicaoVeiculoDto gps, TransicaoParadas transicao, Guid novaId, bool adocaoLegado = false,
+        ProvaGeometricaCircular? provaCircular = null, GpsPollingOptions? opcoes = null)
+    {
         if (transicao.Status != ViagemObservadaStatus.Updated || gps.PadraoVersaoId != estrutura.PadraoVersaoId
             || gps.PosicaoNaRota is not { } p || !double.IsFinite(p) || p is < 0 or > 1)
             throw new InvalidOperationException("Matching/estrutura inválidos.");

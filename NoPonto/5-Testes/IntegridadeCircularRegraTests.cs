@@ -87,6 +87,8 @@ public sealed class IntegridadeCircularRegraTests
     public void ReancoragemSustentada_NovaExecucaoSemPassagens_IndependeDaFlag(bool flag)
     {
         var s=Retorno(Candidato()).Estado;
+        var metrics = new GpsCicloPerformance(T, 15000);
+        using var scope = GpsCommitPerformanceContext.Push(metrics);
         var primeira=ViagemOperacionalRegra.Decidir(s,A,G(10,.06),Baseline(),Guid.NewGuid(),opcoes:new(){MudancaOperacionalHabilitada=flag});
         Assert.Empty(primeira.Eventos);
         var d=ViagemOperacionalRegra.Decidir(primeira.Estado,A,G(20,.08),Baseline(),Guid.NewGuid(),opcoes:new(){MudancaOperacionalHabilitada=flag});
@@ -96,15 +98,25 @@ public sealed class IntegridadeCircularRegraTests
         foreach(var e in d.Eventos) EventoViagemValidator.Validar(e);
         var fim=Assert.Single(d.Eventos,e=>e.Tipo=="ViagemFinalizada");
         Assert.Equal(fim,EventoViagemValidator.Parse(ViagemOperacionalRepository.Fields(fim)));
+        Assert.Equal(2, metrics.Funil(ContadorFunilOperacional.Decisoes));
+        Assert.Equal(1, metrics.Funil(ContadorFunilOperacional.ProtecaoCircular));
+        Assert.Equal(1, metrics.Funil(ContadorFunilOperacional.Recuperacao));
+        Assert.Equal(0, metrics.Funil(ContadorFunilOperacional.BaselineNova));
+        Assert.Equal(1, metrics.Funil(ContadorFunilOperacional.SelecionadoInicio));
+        Assert.Equal(1, metrics.Funil(ContadorFunilOperacional.SelecionadoFim));
     }
     [Fact]
     public void RecuperacaoOriginal_ComProvaAindaValida_PreservaExecucao()
     {
         var s=Retorno(Candidato(),2).Estado;
+        var metrics = new GpsCicloPerformance(T, 15000);
+        using var scope = GpsCommitPerformanceContext.Push(metrics);
         var d=Retorno(s,5,Prova);
         Assert.True(ViagemOperacionalRegra.IdentidadeConfiavel(d.Estado));
         Assert.Equal(s.Observada.ViagemId,d.Estado.Observada.ViagemId); Assert.Equal(1,d.Estado.Observada.Volta);
         Assert.Empty(d.Eventos);
+        Assert.Equal(1, metrics.Funil(ContadorFunilOperacional.Recuperacao));
+        Assert.Equal(0, metrics.Funil(ContadorFunilOperacional.NormalAvaliada));
     }
     [Fact]
     public void RetornoComRuidoSemReabrirCursor_NaoCriaAmbiguidade()
