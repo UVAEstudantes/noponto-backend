@@ -215,6 +215,10 @@ public sealed record PosicaoVeiculoDto
     internal bool MatchingOperacionalPlausivel { get; init; }
     [JsonIgnore]
     internal bool ExigirPersistenciaDuravel { get; init; }
+    // Read-only provenance: active key expired, but recent payload was captured active.
+    // Never serialized or accepted as evidence from a public/Redis payload.
+    [JsonIgnore]
+    internal bool PhysicalEtaRecentActiveCapture { get; init; }
     public Guid? ProximaOcorrenciaParadaPadraoId { get; init; }
 
     /// <summary>

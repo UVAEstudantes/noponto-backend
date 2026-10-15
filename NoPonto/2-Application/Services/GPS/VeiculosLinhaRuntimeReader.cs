@@ -66,7 +66,11 @@ public sealed class VeiculosLinhaRuntimeReader(IDistributedCache cache)
             {
                 var dto = JsonSerializer.Deserialize<PosicaoVeiculoDto>(value, JsonOptions);
                 if (dto is not null)
-                    positions.Add(active ? dto : dto with { Status = StatusVeiculo.SemSinal });
+                    positions.Add(active ? dto : dto with
+                    {
+                        Status = StatusVeiculo.SemSinal,
+                        PhysicalEtaRecentActiveCapture = dto.Status == StatusVeiculo.Ativo,
+                    });
             }
             catch (JsonException)
             {

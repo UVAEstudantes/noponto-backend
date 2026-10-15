@@ -18,7 +18,10 @@ internal static class PhysicalEta
     {
         var age = (now - p.TimestampGps).TotalSeconds;
         if (!options.Enabled || !options.Valid() || p.TimestampGps <= DateTimeOffset.UnixEpoch
-            || age < 0 || age > options.MaxAgeSeconds || p.Status == StatusVeiculo.SemSinal
+            || age < 0 || age > options.MaxAgeSeconds
+            // Cache liveness is not GPS freshness. Only the official reader can
+            // attest that SemSinal came from fallback of an originally active capture.
+            || (p.Status == StatusVeiculo.SemSinal && !p.PhysicalEtaRecentActiveCapture)
             || p.EtaConfianca != Prefix + "estimativa_fisica"
             || p.TopologiaPadrao is not ("LINEAR" or "CIRCULAR")
             || !double.IsFinite(p.Velocidade) || p.Velocidade is < 1 or > 160
