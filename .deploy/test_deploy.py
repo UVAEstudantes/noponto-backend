@@ -43,13 +43,25 @@ elif args[0]=='compose':
  if 'config' in args:
   env={'ASPNETCORE_ENVIRONMENT':'Production','GpsSources__BusPrimarySource':'GTFSRT_BUS','GpsSources__BrtPrimarySource':'GTFSRT_BRT','ML__ETA__Enabled':'false','EtaV2__Enabled':'false','EtaV2__ShadowEnabled':'false','GtfsRealtimeGps__BusEnabled':'true','GtfsRealtimeGps__BrtEnabled':'true','GtfsRealtimeGps__CrosswalkValidated':'true'}
   if os.environ.get('FAIL')=='config': env['ASPNETCORE_ENVIRONMENT']='Development'
-  print(json.dumps({'services':{'api':{'image':image,'environment':env,'cpus':1.0,'mem_limit':'805306368','pids_limit':256}}}))
+  services={'api':{'image':image,'environment':env,'cpus':1.0,'mem_limit':'805306368','pids_limit':256},'postgres':{'image':'fixture-postgres'},'redis':{'image':'fixture-redis'}}
+  files=[args[i+1] for i,x in enumerate(args) if x=='-f']
+  if len(files)==3:
+   env.update(json.loads(Path(files[2]).read_text()))
+   if os.environ.get('FAIL')=='extra-service': services['redis']['image']='forbidden'
+   if os.environ.get('FAIL')=='extra-env': env['UNRELATED']='forbidden'
+  print(json.dumps({'services':services}))
  elif 'up' in args:
   project=Path(args[args.index('--project-directory')+1])
   base=Path(args[args.index('-f')+1])
   for line in base.read_text().splitlines():
    if line.startswith('relative-file: '):
     if not (project/line.split(': ',1)[1]).is_file(): sys.exit(98)
+  files=[args[i+1] for i,x in enumerate(args) if x=='-f']
+  physical=json.loads(Path(files[2]).read_text())
+  assert physical=={'PhysicalEta__Enabled':'true','PhysicalEta__MaxAgeSeconds':'90'}
+  if os.environ.get('FAIL')=='mutate-override' and image.startswith('ghcr.io'):
+   (p/'physical-eta.override.yml').write_text('tampered')
+   sys.exit(1)
   (p/'image').write_text(previous if image.startswith('noponto-api:rollback-') else candidate)
   if os.environ.get('FAIL')=='up' and image.startswith('ghcr.io'): sys.exit(1)
  else: sys.exit(99)
@@ -72,14 +84,16 @@ class DeployTests(unittest.TestCase):
         (self.path / 'image').write_text(PREVIOUS)
         for name in ('base.yml', 'overlay.yml', 'runtime.env'):
             (self.path / name).write_text('fixture-only\n')
+        (self.path/'physical-eta.override.yml').write_text(json.dumps({'PhysicalEta__Enabled':'true','PhysicalEta__MaxAgeSeconds':'90'}))
         self.env = dict(os.environ, PATH=str(binaries)+':'+os.environ['PATH'],
                         FIXTURE=str(self.path), NOPONTO_BASE_COMPOSE=str(self.path/'base.yml'),
                         NOPONTO_OVERLAY_COMPOSE=str(self.path/'overlay.yml'), NOPONTO_HEALTH_TIMEOUT='10')
 
-    def run_deploy(self, failure='', candidate=CANDIDATE, sequence='109'):
+    def run_deploy(self, failure='', candidate=CANDIDATE, sequence='109', check=False):
         self.env['FAIL'] = failure
         return subprocess.run(['bash', str(ROOT/'deploy-api.sh'), candidate, sequence,
-                               str(self.path/'runtime.env'), str(self.path/'state')],
+                               str(self.path/'runtime.env'), str(self.path/'state'),
+                               str(self.path/'physical-eta.override.yml')]+(['--check'] if check else []),
                               env=self.env, text=True, capture_output=True, timeout=45)
 
     def calls(self):
@@ -95,6 +109,8 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(['up','-d','--no-deps','--no-build','--pull','never','api'], ups[0][-7:])
         self.assertIn(str(self.path/'base.yml'), ups[0])
         self.assertIn(str(self.path/'overlay.yml'), ups[0])
+        self.assertIn(str(self.path/'physical-eta.override.yml'), ups[0])
+        self.assertEqual((self.path/'physical-eta.override.yml').read_bytes(),(self.path/'state/previous/physical-eta.override.yml').read_bytes())
         self.assertFalse(any(x in ('down','restart','rm','prune') for c in calls for x in c))
         self.assertNotEqual(0, self.run_deploy(sequence='108').returncode)
 
@@ -211,6 +227,42 @@ class DeployTests(unittest.TestCase):
             self.assertNotEqual(0, self.run_deploy().returncode)
         self.assertFalse((self.path/'calls').exists())
 
+    def test_preflight_is_read_only_and_accepts_same_sequence(self):
+        self.seed_active()
+        result=self.run_deploy(sequence='108',check=True)
+        self.assertEqual(0,result.returncode,result.stderr)
+        self.assertFalse((self.path/'state/deploy.lock').exists())
+        self.assertFalse((self.path/'state/previous').exists())
+        self.assertFalse(any('up' in c or 'pull' in c or 'tag' in c for c in self.calls()))
+        self.assertEqual('108\n',(self.path/'state/active.run').read_text())
+
+    def test_preflight_does_not_create_state(self):
+        self.assertEqual(0,self.run_deploy(check=True).returncode)
+        self.assertFalse((self.path/'state').exists())
+
+    def test_physical_override_required_and_exact_policy(self):
+        physical=self.path/'physical-eta.override.yml'
+        for settings in ({'PhysicalEta__Enabled':'false','PhysicalEta__MaxAgeSeconds':'90'},
+                         {'PhysicalEta__Enabled':'true','PhysicalEta__MaxAgeSeconds':'30'}):
+            physical.write_text(json.dumps(settings))
+            self.assertNotEqual(0,self.run_deploy().returncode)
+            self.assertFalse(any('up' in c or 'pull' in c for c in self.calls()))
+        physical.unlink()
+        self.assertNotEqual(0,self.run_deploy().returncode)
+
+    def test_override_cannot_change_other_services_or_environment(self):
+        for reason in ('extra-service','extra-env'):
+            self.assertNotEqual(0,self.run_deploy(reason).returncode)
+            self.assertFalse(any('up' in c or 'pull' in c for c in self.calls()))
+
+    def test_rollback_uses_frozen_physical_override_despite_original_mutation(self):
+        result=self.run_deploy('mutate-override')
+        self.assertNotEqual(0,result.returncode)
+        self.assertIn('Rollback confirmado',result.stderr)
+        ups=[c for c in self.calls() if 'up' in c]
+        self.assertIn(str(self.path/'state/previous/physical-eta.override.yml'),ups[-1])
+        self.assertEqual(PREVIOUS,(self.path/'image').read_text())
+
     def test_ssh_launcher_preserves_host_verification_and_cleans_key(self):
         ssh = self.path/'bin/ssh'
         ssh.write_text('#!/usr/bin/env python3\nimport os,sys,json\nfrom pathlib import Path\n'
@@ -224,7 +276,8 @@ class DeployTests(unittest.TestCase):
         env = dict(self.env, IMAGE_DIGEST='sha256:'+'c'*64, RELEASE_SEQUENCE='109',
                    SERVER_TAILSCALE_IP='100.64.0.1', SERVER_USER='fixture',
                    SERVER_SSH_KEY='fake-only', SERVER_SSH_KNOWN_HOSTS='fake-only',
-                   NOPONTO_DEPLOY_ENV_FILE='/fixture/runtime.env', NOPONTO_DEPLOY_STATE_DIR='/fixture/state')
+                   NOPONTO_DEPLOY_ENV_FILE='/fixture/runtime.env', NOPONTO_DEPLOY_STATE_DIR='/fixture/state',
+                   NOPONTO_PHYSICAL_ETA_OVERRIDE='/fixture/physical-eta.override.yml')
         result = subprocess.run(['bash', str(ROOT/'ssh-deploy.sh')], env=env,
                                 cwd=ROOT.parent, text=True, capture_output=True, timeout=10)
         self.assertEqual(0, result.returncode, result.stderr)

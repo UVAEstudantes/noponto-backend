@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
-# Usage: candidate digest-reference, workflow run number, real env file, state directory.
-[[ $# == 4 ]] || { echo 'Deploy: quatro argumentos obrigatórios.' >&2; exit 2; }
-candidate=$1 sequence=$2 env_file=$3 state=$4
+# Usage: digest, sequence, env, state, physical override, optional --check.
+[[ $# == 5 || ( $# == 6 && $6 == --check ) ]] || { echo 'Deploy: cinco argumentos obrigatorios e --check opcional.' >&2; exit 2; }
+candidate=$1 sequence=$2 env_file=$3 state=$4 physical_override=$5
+check_only=0; [[ $# == 5 ]] || check_only=1
+[[ $physical_override == /* ]] || exit 2
 [[ $candidate =~ ^ghcr\.io/guilhermedesales/noponto-api@sha256:[a-f0-9]{64}$ ]] || exit 2
 [[ $sequence =~ ^[1-9][0-9]{0,8}$ && $env_file == /* && $state == /* ]] || exit 2
 base=${NOPONTO_BASE_COMPOSE:-/opt/stacks/noponto/docker-compose.yml}
@@ -14,7 +16,8 @@ readonly project_dir
 health_timeout=${NOPONTO_HEALTH_TIMEOUT:-180}
 [[ $health_timeout =~ ^[1-9][0-9]{0,3}$ ]] || exit 2
 for tool in docker flock curl python3; do command -v "$tool" >/dev/null || exit 2; done
-[[ -r $base && -r $overlay && -r $env_file ]] || exit 2
+[[ -r $base && -r $overlay && -r $env_file && -r $physical_override ]] || exit 2
+if (( ! check_only )); then
 mkdir -p "$state"
 exec 9>"$state/deploy.lock"
 flock -n 9 || { echo 'Deploy já em andamento.' >&2; exit 1; }
@@ -23,36 +26,61 @@ if [[ -f $state/active.run ]]; then
     [[ $last =~ ^[0-9]+$ ]] || exit 2
     (( sequence > last )) || { echo 'Release antiga ou já processada recusada.' >&2; exit 1; }
 fi
+fi
 compose() {
     GTFSRT_API_IMAGE=$1 docker compose --project-name noponto --project-directory "$project_dir" \
-        --env-file "$env_file" -f "$base" -f "$overlay" "${@:2}"
+        --env-file "$env_file" -f "$base" -f "$overlay" -f "$physical_override" "${@:2}"
 }
 # Não publicar configuração renderizada nem erros do provider/Compose.
-compose "$candidate" config --format json 2>/dev/null | python3 -c '
-import json,sys
+python3 - "$candidate" "$env_file" "$base" "$overlay" "$physical_override" "$project_dir" <<'PY'
+import copy,json,os,subprocess,sys
 try:
- a=json.load(sys.stdin)["services"]["api"]; e=a.get("environment",{})
- assert a["image"]==sys.argv[1]
- assert e.get("ASPNETCORE_ENVIRONMENT")=="Production"
- assert e.get("DOTNET_ENVIRONMENT","Production")=="Production"
- assert not a.get("build") and not a.get("command") and not a.get("entrypoint")
- assert e.get("GpsSources__BusPrimarySource")=="GTFSRT_BUS"
- assert e.get("GpsSources__BrtPrimarySource")=="GTFSRT_BRT"
- assert float(a.get("cpus",0))==1 and int(a.get("mem_limit",0))==805306368 and int(a.get("pids_limit",0))==256
- for k in ("GtfsRealtimeGps__BusEnabled","GtfsRealtimeGps__BrtEnabled","GtfsRealtimeGps__CrosswalkValidated"):
-  assert str(e.get(k)).lower()=="true"
- for k in ("ML__ETA__Enabled","EtaV2__Enabled","EtaV2__ShadowEnabled"):
-  assert str(e.get(k)).lower()=="false"
-except Exception: sys.exit(1)
-' "$candidate" || { echo 'Composição produtiva inválida.' >&2; exit 1; }
+ image,env_file,base,overlay,physical,project=sys.argv[1:]
+ command=['docker','compose','--project-name','noponto','--project-directory',project,
+          '--env-file',env_file,'-f',base,'-f',overlay]
+ env=dict(os.environ,GTFSRT_API_IMAGE=image)
+ def render(extra):
+  result=subprocess.run(command+extra+['config','--format','json'],env=env,capture_output=True,check=True)
+  return json.loads(result.stdout)
+ original=render([]); rendered=render(['-f',physical])
+ # The third file may change exactly the two PhysicalEta settings, no other value/service.
+ normalized=copy.deepcopy(rendered)
+ original_env=original['services']['api'].get('environment',{})
+ for key in ('PhysicalEta__Enabled','PhysicalEta__MaxAgeSeconds'):
+  if key in original_env: normalized['services']['api']['environment'][key]=original_env[key]
+  else: normalized['services']['api']['environment'].pop(key,None)
+ assert normalized==original
+ a=rendered['services']['api']; e=a.get('environment',{})
+ assert a['image']==image
+ assert e.get('ASPNETCORE_ENVIRONMENT')=='Production'
+ assert e.get('DOTNET_ENVIRONMENT','Production')=='Production'
+ assert not a.get('build') and not a.get('command') and not a.get('entrypoint')
+ assert e.get('GpsSources__BusPrimarySource')=='GTFSRT_BUS'
+ assert e.get('GpsSources__BrtPrimarySource')=='GTFSRT_BRT'
+ assert float(a.get('cpus',0))==1 and int(a.get('mem_limit',0))==805306368 and int(a.get('pids_limit',0))==256
+ assert str(e.get('PhysicalEta__Enabled')).lower()=='true'
+ assert str(e.get('PhysicalEta__MaxAgeSeconds'))=='90'
+ for k in ('GtfsRealtimeGps__BusEnabled','GtfsRealtimeGps__BrtEnabled','GtfsRealtimeGps__CrosswalkValidated'):
+  assert str(e.get(k)).lower()=='true'
+ for k in ('ML__ETA__Enabled','EtaV2__Enabled','EtaV2__ShadowEnabled'):
+  assert str(e.get(k)).lower()=='false'
+except Exception:
+ print('Composicao produtiva invalida; valores omitidos.',file=sys.stderr)
+ sys.exit(1)
+PY
 previous_id=$(docker inspect --format '{{.Image}}' noponto_api 2>/dev/null)
 [[ $previous_id =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
 [[ $(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}/{{index .Config.Labels "com.docker.compose.service"}}' noponto_api 2>/dev/null) == noponto/api ]] || exit 1
+if (( check_only )); then
+    echo 'Preflight READ ONLY aprovado: digest, tres Compose, PhysicalEta=true/90 e ML/EtaV2 OFF.'
+    exit 0
+fi
 previous="noponto-api:rollback-${previous_id#sha256:}"
 docker image tag "$previous_id" "$previous" >/dev/null 2>&1
 mkdir -p "$state/previous"
 cp "$base" "$state/previous/base.yml"
 cp "$overlay" "$state/previous/overlay.yml"
+cp "$physical_override" "$state/previous/physical-eta.override.yml"
 cp "$env_file" "$state/previous/runtime.env"
 printf '%s\n' "$previous" > "$state/previous/image"
 if [[ -f $state/active.env ]]; then
@@ -86,6 +114,7 @@ finish() {
     if [[ ${armed:-0} == 1 ]]; then
         echo 'Candidata falhou; tentando rollback da API.' >&2
         base="$state/previous/base.yml" overlay="$state/previous/overlay.yml" env_file="$state/previous/runtime.env"
+        physical_override="$state/previous/physical-eta.override.yml"
         if compose "$previous" up -d --no-deps --no-build --pull never api >/dev/null 2>&1 && healthy "$previous_id"; then
             echo 'Rollback confirmado.' >&2
         else echo 'ROLLBACK FALHOU: intervenção do operador necessária.' >&2; fi

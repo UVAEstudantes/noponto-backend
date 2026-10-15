@@ -6,7 +6,7 @@ umask 077
 [[ ${SERVER_TAILSCALE_IP:-} =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || exit 2
 [[ ${SERVER_USER:-} =~ ^[a-z_][a-z0-9_-]*$ ]] || exit 2
 # Caminhos explícitos, sem interpolação executável no shell remoto.
-for path in "${NOPONTO_DEPLOY_ENV_FILE:-}" "${NOPONTO_DEPLOY_STATE_DIR:-}"; do
+for path in "${NOPONTO_DEPLOY_ENV_FILE:-}" "${NOPONTO_DEPLOY_STATE_DIR:-}" "${NOPONTO_PHYSICAL_ETA_OVERRIDE:-}"; do
     [[ $path =~ ^/[a-zA-Z0-9_./-]+$ ]] || exit 2
 done
 [[ -n ${SERVER_SSH_KEY:-} && -n ${SERVER_SSH_KNOWN_HOSTS:-} ]] || exit 2
@@ -18,5 +18,5 @@ ssh -i "$private/key" -o BatchMode=yes -o IdentitiesOnly=yes \
     -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$private/known_hosts" \
     -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
     "$SERVER_USER@$SERVER_TAILSCALE_IP" \
-    "bash -s -- ghcr.io/guilhermedesales/noponto-api@$IMAGE_DIGEST $RELEASE_SEQUENCE $NOPONTO_DEPLOY_ENV_FILE $NOPONTO_DEPLOY_STATE_DIR" \
+    "bash -s -- ghcr.io/guilhermedesales/noponto-api@$IMAGE_DIGEST $RELEASE_SEQUENCE $NOPONTO_DEPLOY_ENV_FILE $NOPONTO_DEPLOY_STATE_DIR $NOPONTO_PHYSICAL_ETA_OVERRIDE" \
     < .deploy/deploy-api.sh
