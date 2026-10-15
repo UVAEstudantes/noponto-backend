@@ -112,7 +112,7 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                 if (physicalOptions.Valid() && age > physicalOptions.MaxAgeSeconds)
                     quality = "gps_desatualizado";
                 else if (physicalOptions.Valid() && age >= 0
-                    && position.Status != StatusVeiculo.SemSinal
+                    && PhysicalEta.CapturedSpeed(position, now, physicalOptions).HasValue
                     && position.LinhaId == stop.LinhaId && position.SentidoId == stop.SentidoId
                     && position.PadraoOperacionalId == stop.PadraoOperacionalId
                     && position.CodigoLinha == stop.CodigoLinha
