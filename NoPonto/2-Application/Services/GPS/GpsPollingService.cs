@@ -44,6 +44,8 @@ public sealed class GpsPollingService : BackgroundService
     private readonly ITelemetriaMlSamplingPolicy? _telemetriaMlSampling;
     private readonly TelemetriaMlMetrics? _telemetriaMlMetrics;
     private readonly IRetryOperacionalGps? _retryOperacional;
+    private readonly GpsCorrelatedDiagnostics? _correlatedDiagnostics;
+    private readonly IOptions<PhysicalEtaOptions>? _physicalEtaOptions;
     private long _ultimoErroSamplingLogUnixMinute = long.MinValue;
 
     public GpsPollingService(
@@ -67,7 +69,9 @@ public sealed class GpsPollingService : BackgroundService
         EtaV2ShadowService? etaV2Shadow = null,
         ITelemetriaMlSamplingPolicy? telemetriaMlSampling = null,
         TelemetriaMlMetrics? telemetriaMlMetrics = null,
-        IRetryOperacionalGps? retryOperacional = null)
+        IRetryOperacionalGps? retryOperacional = null,
+        GpsCorrelatedDiagnostics? correlatedDiagnostics = null,
+        IOptions<PhysicalEtaOptions>? physicalEtaOptions = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -94,6 +98,8 @@ public sealed class GpsPollingService : BackgroundService
         _telemetriaMlSampling = telemetriaMlSampling;
         _telemetriaMlMetrics = telemetriaMlMetrics;
         _retryOperacional = retryOperacional;
+        _correlatedDiagnostics = correlatedDiagnostics;
+        _physicalEtaOptions = physicalEtaOptions;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -180,13 +186,17 @@ public sealed class GpsPollingService : BackgroundService
         TimeSpan? startToStart,
         CancellationToken ct)
     {
-        if (_retryOperacional is not null) await _retryOperacional.ExecutarCicloAsync(ct);
-        var sw = System.Diagnostics.Stopwatch.StartNew();
         var performance = new GpsCicloPerformance(
             agora, (long)opcoes.IntervaloSegundos * 1000)
         {
             StartToStartMs = startToStart.HasValue ? (long)startToStart.Value.TotalMilliseconds : null,
         };
+        if (_retryOperacional is not null)
+        {
+            using var diagnosticoRetry = GpsCommitPerformanceContext.PushDiagnostic(performance, retry: true);
+            await _retryOperacional.ExecutarCicloAsync(ct);
+        }
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var cicloConcluidoNormalmente = false;
         LoteSppoSnapshot? loteSppo = null;
 
@@ -300,7 +310,11 @@ public sealed class GpsPollingService : BackgroundService
         {
             var nova = maisRecentesFiltrados[i];
             var anterior = anteriores[i];
-            if (GpsTimestampDeduplication.ShouldIgnore(nova.TimestampGps, anterior, watermarkPorIndice[i]))
+            var ignorarTimestamp = GpsTimestampDeduplication.ShouldIgnore(nova.TimestampGps, anterior, watermarkPorIndice[i]);
+            if (_correlatedDiagnostics?.Active == true)
+                _correlatedDiagnostics.BrtRead(nova, leiturasAnteriores[i], anterior, watermarkPorIndice[i], ignorarTimestamp,
+                    performance.CycleId);
+            if (ignorarTimestamp)
             {
                 performance.MatchingDiagnostics.RegisterStage(nova.ModalFonte, MatchingStage.TimestampIgnored);
                 continue;
@@ -424,7 +438,7 @@ public sealed class GpsPollingService : BackgroundService
             .ToList();
 
         // ── 4.5. Predição de ETA via modelo ML ───────────────────────────────
-        if (resultadosEnriquecidos.Length > 0)
+        if (resultadosEnriquecidos.Length > 0 && _physicalEtaOptions?.Value.Enabled != true)
         {
             inicioEtapa = System.Diagnostics.Stopwatch.GetTimestamp();
             var predicoes = await _etaClient.PredizirLoteAsync(resultadosEnriquecidos, ct, performance);
@@ -460,6 +474,12 @@ public sealed class GpsPollingService : BackgroundService
             .Concat(resultadosSemEnriquecimento.Select(x => new ResultadoEnriquecimentoGps(
                 x, null, ResultadoProjecaoOperacional.NaoSolicitada())))
             .ToList();
+
+        if (_physicalEtaOptions?.Value is { Enabled: true } physicalOptions)
+        {
+            var physicalNow = DateTimeOffset.UtcNow;
+            todosProcessados = todosProcessados.Select(x => PhysicalEta.Apply(x, physicalNow, physicalOptions)).ToList();
+        }
 
         // C é estritamente auxiliar: com a flag OFF não há leitura, serialização
         // ou cálculo causal. O candidato é preparado antes do CAS B, mas só pode
@@ -693,6 +713,7 @@ public sealed class GpsPollingService : BackgroundService
             var totalMs = (long)duracaoCiclo.TotalMilliseconds;
             performance.CicloConcluidoNormalmente = cicloConcluidoNormalmente;
             performance.MatchingDiagnostics.Log(_logger, agora, cicloConcluidoNormalmente);
+            _correlatedDiagnostics?.Report(performance.CycleId);
             performance.DelayPlanejadoMs = (long)CalcularDelayProximoCiclo(
                 TimeSpan.FromSeconds(opcoes.IntervaloSegundos), duracaoCiclo,
                 cicloConcluidoNormalmente, ct.IsCancellationRequested).TotalMilliseconds;
@@ -973,6 +994,7 @@ public sealed class GpsPollingService : BackgroundService
                 performance.CatchupGapMsMax, performance.CatchupGapGt180s,
                 performance.ItineraryChangedOcorrencias,
                 performance.LinhasPublicadas, performance.VeiculosEnviados);
+            performance.EmitirFunilOperacional(_logger);
         }
     }
 
@@ -1107,6 +1129,7 @@ public sealed class GpsPollingService : BackgroundService
         ResultadoEnriquecimentoGps enriquecimento, TimeSpan ttlAtivo, TimeSpan ttlRecente,
         CancellationToken ct, GpsCicloPerformance? performance = null)
     {
+        using var diagnostico = GpsCommitPerformanceContext.PushDiagnostic(performance, retry: false);
         var posicao = enriquecimento.Posicao;
         var matchingIndisponivel = enriquecimento.Diagnostico?.StatusGlobal == StatusBuscaPadrao.InfrastructureFailure
             || enriquecimento.Diagnostico?.StatusDirecionado == StatusBuscaPadrao.InfrastructureFailure;
@@ -1119,6 +1142,9 @@ public sealed class GpsPollingService : BackgroundService
             System.Diagnostics.Stopwatch.GetElapsedTime(inicioCommit));
         if (resultado.Aceito)
         {
+            if (_correlatedDiagnostics?.Active == true)
+                _correlatedDiagnostics.BrtAccepted(posicao, ttlAtivo);
+            performance?.RegistrarPredecessor(posicao);
             performance?.RegistrarViagemChamada();
             var inicioViagem = System.Diagnostics.Stopwatch.GetTimestamp();
             ViagemObservadaResultado? viagem;
@@ -1129,6 +1155,7 @@ public sealed class GpsPollingService : BackgroundService
                     await _retryOperacional.RegistrarAsync(posicao, enriquecimento.PredecessorFisico,
                         enriquecimento.ContextoOperacional, ct, aguardandoAnterior: true);
                 viagem = null;
+                performance?.RegistrarResultadoOperacional(null, ResultadoFunilOperacional.NaoProcessadoPendencia);
             }
             else
             {

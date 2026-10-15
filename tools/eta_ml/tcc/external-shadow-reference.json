@@ -1,0 +1,22 @@
+{
+  "schema": "noponto-tcc-external-reference-v1",
+  "source_worktree": "D:\\repositorio_github\\NoPonto\\noponto-backend-eta-shadow-gps-current",
+  "branch": "feature/eta-shadow-gps-current",
+  "head": "6f64538b47cb3987c5bf023d9878931b69228dac",
+  "working_tree_sources_not_in_head": true,
+  "sha256": {
+    "NoPonto/2-Application/Services/GPS/HistoricalEtaShadow.cs": "16c43a17fe5dc46f8816d644a26b195bfe0068c05852fe3c04de5866d30c11ae",
+    "NoPonto/2-Application/Services/GPS/HistoricalEtaOperationalStatistics.cs": "c800530b61decbbf8f56afc994a227360e2b78a70275f25da96dee52f61f301b",
+    "NoPonto/2-Application/Services/GPS/HistoricalEtaOfflineExport.cs": "4a8e91a8a9f6a1f2c3bc7c664b54479973a4eefdbd0a1af582651028a9570019",
+    "NoPonto/5-Testes/HistoricalEtaShadowTests.cs": "61ed7c3e30c287dee4fb8fd8bfd78430de04c5469b1fea548aad170ac0f8ffff"
+  },
+  "local_frozen_source_snapshot": "D:\\repositorio_github\\NoPonto\\mvp-materialized-20261014-01\\shadow-source-reference",
+  "clean_clone_self_sufficient": false,
+  "snapshot_is_not_a_git_worktree": true,
+  "instructions": [
+    "Original worktrees were not modified. Snapshot contains only three reused Shadow services and their tests, no GPS polling source.",
+    "Pass --shadow-root pointing to a compatible separate Git worktree with these exact files. The lab also reads Git HEAD metadata; the raw four-file snapshot alone is not a runnable shadow-root.",
+    "For another machine, obtain approved ML repo and Shadow source reference separately; validate hashes. Never replace active GPS with an older source tree.",
+    "Shadow services are only compiled by explicit Lab.targets. No runtime registration, synthetic model acceptance or public ML activation."
+  ]
+}

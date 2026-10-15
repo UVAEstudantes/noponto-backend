@@ -4,11 +4,12 @@ namespace NoPonto.Application.GPS;
 
 public sealed class GpsEtaOptions
 {
-    // Ausente = ON por compatibilidade. OFF deve ser configurado explicitamente.
-    public bool Enabled { get; init; } = true;
+    // Legacy public inference requires explicit opt-in; absence is fail-closed.
+    public bool Enabled { get; init; }
 
     public static GpsEtaOptions FromConfiguration(IConfiguration configuration) => new()
     {
-        Enabled = configuration.GetValue<bool?>("ML:ETA:Enabled") ?? true,
+        Enabled = (configuration.GetValue<bool?>("ML:ETA:Enabled") ?? false)
+            && !configuration.GetValue<bool>("PhysicalEta:Enabled"),
     };
 }

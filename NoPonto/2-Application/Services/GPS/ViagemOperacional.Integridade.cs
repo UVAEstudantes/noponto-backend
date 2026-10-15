@@ -157,7 +157,7 @@ public static partial class ViagemOperacionalRegra
             && (gps.PosicaoNaRota!.Value - c.Posicao) * gps.ComprimentoRotaMetros!.Value
                 <= GpsEnriquecimentoService.OrcamentoProjecaoMetros((gps.TimestampGps - c.Timestamp).TotalSeconds, opcoes))
         {
-            var inicio = Decidir(null, e, gps, baseline with { Volta = 0, HouveWrap = false }, novaId, opcoes: opcoes);
+            var inicio = DecidirInterno(null, e, gps, baseline with { Volta = 0, HouveWrap = false }, novaId, opcoes: opcoes);
             var fim = Evento(s, "ViagemFinalizada", gps.TimestampGps) with {
                 OcorrenciaParadaPadraoId = null, MotivoFim = "PerdaContinuidadeCircular" };
             return new(inicio.Estado, new[] { fim }.Concat(inicio.Eventos).ToArray());

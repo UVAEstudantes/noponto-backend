@@ -375,6 +375,72 @@ public sealed class ViagemDuravelPostgresTests(ViagemOperacionalFixture db)
         Assert.False(await Redis.KeyExistsAsync(Key));
     }
 
+    // Preparados, não executar sem PostgreSQL/PostGIS e Redis inteiramente descartáveis.
+    // A fixture existente cria schema e executa migrations; nunca apontar para banco existente de operação.
+    [Fact]
+    public async Task Funil_CommitRealSeparaInicioPassagensEFim()
+    {
+        var repository = Repository();
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15000);
+        using var scope = GpsCommitPerformanceContext.Push(metrics);
+        await repository.TentarAtualizarAsync(G(0), default);
+        await repository.TentarAtualizarAsync(G(10, .7), default);
+        await repository.TentarAtualizarAsync(G(20, .7), default);
+        var fim = await repository.TentarAtualizarAsync(G(30, .7), default);
+        Assert.True(fim.PersistidoDuravelmente);
+        Assert.Equal(EstadoViagem.Finalizada, fim.EstadoOperacional!.Estado);
+        Assert.Equal(1, metrics.Funil(ContadorFunilOperacional.CommitInicio));
+        Assert.Equal(3, metrics.Funil(ContadorFunilOperacional.CommitPassagem));
+        Assert.Equal(1, metrics.Funil(ContadorFunilOperacional.CommitFim));
+        Assert.Equal(5, metrics.ViagemOutboxEvents);
+        Assert.Equal(3, metrics.CatchupPassagensTotal);
+        Assert.Equal(3, await ScalarAsync("""
+            SELECT count(*) FROM "OutboxViagens" WHERE "Payload"->>'ordem_veiculo'=@ordem AND "Tipo"='PassagemParada'
+            """));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Funil_FalhaAntesCommitNaoConfirmaPassagens(bool depoisOutbox)
+    {
+        await Repository().TentarAtualizarAsync(G(0), default);
+        static Task Fail() => Task.FromException(new InvalidOperationException("fault injection"));
+        var repository = new ViagemOperacionalRepository(db.Redis, db.Source,
+            Options.Create(new GpsPollingOptions()), NullLogger<ViagemOperacionalRepository>.Instance)
+        {
+            StreamKey = _stream,
+            AfterDurableStateWriteAsync = depoisOutbox ? null : Fail,
+            AfterDurableOutboxWriteAsync = depoisOutbox ? Fail : null,
+        };
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15000);
+        using var scope = GpsCommitPerformanceContext.Push(metrics);
+        var result = await repository.TentarAtualizarAsync(G(10, .5), default);
+        Assert.Equal(ViagemObservadaStatus.InfrastructureFailure, result.Status);
+        Assert.Equal(2, metrics.Funil(ContadorFunilOperacional.SelecionadoPassagem));
+        Assert.Equal(0, metrics.Funil(ContadorFunilOperacional.CommitPassagem));
+        Assert.Equal(0, metrics.ViagemOutboxEvents);
+        Assert.Equal(2, metrics.CatchupPassagensTotal);
+        Assert.Equal(0, await ScalarAsync("""
+            SELECT count(*) FROM "OutboxViagens" WHERE "Payload"->>'ordem_veiculo'=@ordem AND "Tipo"='PassagemParada'
+            """));
+        var worker = new ViagemOutboxWorker(db.Source, new HistoricoEventoRepository(db.Source),
+            NullLogger<ViagemOutboxWorker>.Instance);
+        var pendentes = (await worker.ClaimAsync(default))
+            .Where(x => System.Text.Json.JsonSerializer.Deserialize<EventoViagem>(x.Payload)!.OrdemVeiculo == _ordem).ToArray();
+        Assert.Single(pendentes);
+        Assert.Equal("ViagemIniciada", System.Text.Json.JsonSerializer.Deserialize<EventoViagem>(pendentes[0].Payload)!.Tipo);
+        await worker.ProcessarLoteAsync(pendentes, default);
+        Assert.Equal(1, await ScalarAsync("""
+            SELECT count(*) FROM "EventosViagem" WHERE "Payload"->>'ordem_veiculo'=@ordem AND "Tipo"='ViagemIniciada'
+            """));
+        Assert.Equal(0, await ScalarAsync("""
+            SELECT count(*) FROM "EventosViagem" WHERE "Payload"->>'ordem_veiculo'=@ordem AND "Tipo"='PassagemParada'
+            """));
+        Assert.Equal(0, await ScalarAsync("""SELECT count(*) FROM "HistoricoPassagens" WHERE "Ordem"=@ordem"""));
+        Assert.Equal(0, metrics.Funil(ContadorFunilOperacional.CommitPassagem));
+    }
+
     [Fact]
     public async Task RedisIndisponivel_CommitPostgresContinuaDuravel()
     {
@@ -455,12 +521,16 @@ public sealed class ViagemDuravelPostgresTests(ViagemOperacionalFixture db)
         var worker = new ViagemOutboxWorker(db.Source, new HistoricoEventoRepository(db.Source),
             NullLogger<ViagemOutboxWorker>.Instance);
         var claimed = await worker.ClaimAsync(default);
-        var mine = claimed.Where(x => x.Payload.Contains(_ordem, StringComparison.Ordinal)).ToArray();
+        var mine = claimed.Where(x => System.Text.Json.JsonSerializer.Deserialize<EventoViagem>(x.Payload)!.OrdemVeiculo == _ordem).ToArray();
         Assert.Equal(4, mine.Length);
         foreach (var item in mine) await worker.ProcessarAsync(item, default);
-        // Reexecucao apos commit do efeito e segura pelo EventId/journal.
-        foreach (var item in mine) await new HistoricoEventoRepository(db.Source)
-            .PersistirAsync(System.Text.Json.JsonSerializer.Deserialize<EventoViagem>(item.Payload)!, default);
+        var passagens = mine.Select(x => System.Text.Json.JsonSerializer.Deserialize<EventoViagem>(x.Payload)!)
+            .Where(e => e.Tipo == "PassagemParada").ToArray();
+        Assert.Equal(3, passagens.Length);
+        foreach (var evento in passagens) await ConferirPassagemPersistidaAsync(evento);
+        // Reentrega pelo mesmo caminho produtivo, inclusive validação e persistência.
+        foreach (var item in mine) await worker.ProcessarAsync(item, default);
+        foreach (var evento in passagens) await ConferirPassagemPersistidaAsync(evento);
 
         Assert.Equal(0, await ScalarAsync("""
             SELECT count(*) FROM "OutboxViagens"
@@ -571,6 +641,48 @@ public sealed class ViagemDuravelPostgresTests(ViagemOperacionalFixture db)
         if (!process.WaitForExit(30_000) || process.ExitCode != 0)
             throw new InvalidOperationException(
                 $"docker {operation} falhou: {process.StandardError.ReadToEnd()}");
+    }
+
+    private async Task ConferirPassagemPersistidaAsync(EventoViagem original)
+    {
+        await using var command = db.Source.CreateCommand("""
+            SELECT o."Payload"::text, j."Payload"::text,
+                   h."ViagemId", h."Volta", h."OcorrenciaParadaPadraoId",
+                   h."TimestampPassagem", h."TimestampGps"
+            FROM "OutboxViagens" o
+            JOIN "EventosViagem" j ON j."EventId"=o."EventId"
+            JOIN "HistoricoPassagens" h ON h."ViagemId"=@viagem
+              AND h."Volta"=@volta AND h."OcorrenciaParadaPadraoId"=@ocorrencia
+              AND h."Ordem"=@ordem
+            WHERE o."EventId"=@evento AND o."Tipo"='PassagemParada' AND j."Tipo"='PassagemParada'
+            """);
+        command.Parameters.AddWithValue("viagem", original.ViagemId);
+        command.Parameters.AddWithValue("volta", original.Volta!.Value);
+        command.Parameters.AddWithValue("ocorrencia", original.OcorrenciaParadaPadraoId!.Value);
+        command.Parameters.AddWithValue("ordem", _ordem);
+        command.Parameters.AddWithValue("evento", original.EventId);
+        await using var reader = await command.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        for (var i = 0; i < 2; i++)
+        {
+            var persistido = System.Text.Json.JsonSerializer.Deserialize<EventoViagem>(reader.GetString(i))!;
+            Assert.Equal(original.ViagemId, persistido.ViagemId);
+            Assert.Equal(original.Volta, persistido.Volta);
+            Assert.Equal(original.OcorrenciaParadaPadraoId, persistido.OcorrenciaParadaPadraoId);
+            // JSONB preserva o instante completo de 100 ns do contrato .NET.
+            Assert.Equal(original.TimestampPassagem, persistido.TimestampPassagem);
+            Assert.Equal(original.TimestampGps, persistido.TimestampGps);
+        }
+        Assert.Equal(original.ViagemId, reader.GetGuid(2));
+        Assert.Equal(original.Volta!.Value, reader.GetInt32(3));
+        Assert.Equal(original.OcorrenciaParadaPadraoId!.Value, reader.GetGuid(4));
+        // Npgsql/PostgreSQL armazenam timestamptz em microssegundos: truncamento,
+        // não uma tolerância arbitrária em milissegundos ou segundos.
+        static DateTimeOffset Microssegundos(DateTimeOffset value) =>
+            new(value.UtcTicks - value.UtcTicks % 10, TimeSpan.Zero);
+        Assert.Equal(Microssegundos(original.TimestampPassagem!.Value), reader.GetFieldValue<DateTimeOffset>(5));
+        Assert.Equal(Microssegundos(original.TimestampGps!.Value), reader.GetFieldValue<DateTimeOffset>(6));
+        Assert.False(await reader.ReadAsync());
     }
 
     private async Task<long> ScalarAsync(string sql)

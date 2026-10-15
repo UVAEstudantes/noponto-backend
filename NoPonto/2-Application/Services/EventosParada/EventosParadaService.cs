@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using NoPonto.Application.EventosParada;
 using NoPonto.Application.GPS;
 using NoPonto.Application.TremRealtime.RailRuntime;
@@ -7,7 +8,9 @@ using NoPonto.Application.TremSchedule;
 namespace NoPonto.Application.Services.EventosParada;
 
 public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaRuntimeReader roadRuntime,
-    IExpectedRunService expectedRuns, IRailPublishedSnapshotProvider railSnapshot)
+    IExpectedRunService expectedRuns, IRailPublishedSnapshotProvider railSnapshot,
+    IOptions<PhysicalEtaOptions>? physicalEtaOptions = null,
+    IRoadEtaDistances? roadEtaDistances = null)
     : IEventosParadaService
 {
     public async Task<IReadOnlyList<EventoParadaDto>?> ListarAsync(Guid paradaId,
@@ -43,11 +46,48 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
         if (road.Length == 0) return [];
         var lineCodes = road.Select(x => x.CodigoLinha.ToUpperInvariant()).Distinct().ToArray();
         var positions = (await roadRuntime.ListarAsync(lineCodes, ct)).Posicoes;
-        return ProjectRoadEvents(road, positions, now);
+        return await ProjectRoadEventsAsync(road, positions, now, physicalEtaOptions?.Value, roadEtaDistances, ct);
     }
 
+    internal static async Task<IReadOnlyList<EventoParadaDto>> ProjectRoadEventsAsync(
+        StopContext[] road, IEnumerable<PosicaoVeiculoDto> positions, DateTimeOffset now,
+        PhysicalEtaOptions? options, IRoadEtaDistances? resolver, CancellationToken ct)
+    {
+        if (options?.Enabled != true) return ProjectRoadEvents(road, positions, now, options);
+        var snapshot = positions.ToArray();
+        var distances = new Dictionary<(string, Guid), double>();
+        var requests = snapshot.Where(p => PhysicalEta.CapturedSpeed(p, now, options).HasValue)
+            .Select(p => (Position:p, Stop:SelectRoadTarget(road, p)))
+            .Where(x => x.Stop is not null && Compatible(x.Position, x.Stop))
+            .Take(1000).Select(x => new RoadEtaDistanceRequest(x.Position, x.Stop!.Id, x.Stop.ParadaId, x.Stop.Ordem)).ToArray();
+        if (resolver is not null)
+            foreach (var chunk in requests.Chunk(200))
+            {
+                try {
+                    var values = await resolver.ResolveAsync(chunk, ct);
+                    if (values.Count != chunk.Length) continue;
+                    for (var i=0; i<chunk.Length; i++)
+                        if (values[i] is { } metres && double.IsFinite(metres) && metres > 0)
+                            distances[(chunk[i].Position.Ordem,chunk[i].TargetId)] = metres;
+                }
+                catch (Exception) when (!ct.IsCancellationRequested) { /* Capture unavailable, no fabricated fallback. */ }
+            }
+        return ProjectRoadEvents(road, snapshot, now, options, distances);
+    }
+
+    private static bool Compatible(PosicaoVeiculoDto p, StopContext s) =>
+        p.LinhaId == s.LinhaId && p.SentidoId == s.SentidoId && p.CodigoLinha == s.CodigoLinha
+        && p.PadraoOperacionalId == s.PadraoOperacionalId && p.PadraoVersaoId == s.PadraoVersaoId;
+
+    private static StopContext? SelectRoadTarget(StopContext[] road, PosicaoVeiculoDto p) =>
+        p.PosicaoNaRota is not { } progress ? null : road
+            .Where(x => x.PadraoVersaoId == p.PadraoVersaoId && x.PosicaoTracado + 1e-7 >= progress)
+            .OrderBy(x => x.PosicaoTracado).ThenBy(x => x.Ordem).FirstOrDefault();
+
     internal static IReadOnlyList<EventoParadaDto> ProjectRoadEvents(
-        StopContext[] road, IEnumerable<PosicaoVeiculoDto> positions, DateTimeOffset now)
+        StopContext[] road, IEnumerable<PosicaoVeiculoDto> positions, DateTimeOffset now,
+        PhysicalEtaOptions? physicalOptions = null,
+        IReadOnlyDictionary<(string, Guid), double>? resolvedDistances = null)
     {
         var events = new List<EventoParadaDto>();
         foreach (var position in positions)
@@ -58,15 +98,59 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
             // Repetições/circulares: somente a primeira ocorrência futura desta parada.
             var stop = candidates.FirstOrDefault();
             if (stop is null) continue;
-            var remaining = Math.Max(0, (stop.PosicaoTracado - progress) * stop.ComprimentoMetros);
-            var seconds = EstimateRoadSeconds(position, stop, remaining);
+            var legacyRemaining = Math.Max(0, (stop.PosicaoTracado - progress) * stop.ComprimentoMetros);
+            double? remaining = physicalOptions?.Enabled == true ? null : legacyRemaining;
+            var seconds = physicalOptions?.Enabled == true ? null : EstimateRoadSeconds(position, stop, legacyRemaining);
+            var quality = position.EtaConfianca ?? "OperationalEstimate";
+            var source = "RealtimeEstimated";
+            if (physicalOptions?.Enabled == true)
+            {
+                seconds = null;
+                quality = "previsao_indisponivel";
+                source = "PhysicalCausal";
+                var age = (now - position.TimestampGps).TotalSeconds;
+                if (physicalOptions.Valid() && age > physicalOptions.MaxAgeSeconds)
+                    quality = "gps_desatualizado";
+                else if (physicalOptions.Valid() && age >= 0
+                    && position.Status != StatusVeiculo.SemSinal
+                    && position.LinhaId == stop.LinhaId && position.SentidoId == stop.SentidoId
+                    && position.PadraoOperacionalId == stop.PadraoOperacionalId
+                    && position.CodigoLinha == stop.CodigoLinha
+                    && position.ProximaOcorrenciaParadaPadraoId == stop.Id
+                    && position.EtaConfianca == PhysicalEta.Prefix + "estimativa_fisica"
+                    && position.EtaProximaParadaSegundos is { } eta && double.IsFinite(eta) && eta >= age
+                    && position.DistanciaRestanteRotaMetros is { } metres && double.IsFinite(metres) && metres > 0)
+                {
+                    seconds = eta - age;
+                    remaining = metres;
+                    quality = "estimativa_fisica";
+                }
+                if (resolvedDistances is not null)
+                {
+                    seconds = null;
+                    remaining = null;
+                    if (Compatible(position, stop) && PhysicalEta.CapturedSpeed(position, now, physicalOptions) is { } speed
+                        && resolvedDistances.TryGetValue((position.Ordem,stop.Id), out var routeDistance))
+                    {
+                        var targetEta = EtaV2LongitudinalSpeedV0.Predict(routeDistance, speed, 1).EtaSegundos;
+                        if (targetEta is { } value && value >= age)
+                        {
+                            seconds = value - age;
+                            remaining = routeDistance;
+                        }
+                    }
+                    quality = seconds.HasValue ? "estimativa_fisica"
+                        : physicalOptions.Valid() && age > physicalOptions.MaxAgeSeconds
+                            ? "gps_desatualizado" : "previsao_indisponivel";
+                }
+            }
             DateTimeOffset? estimated = seconds is null ? null : now.AddSeconds(seconds.Value);
             var routeType = string.Equals(stop.TipoRota, "brt", StringComparison.OrdinalIgnoreCase) ? "brt" : "onibus";
             events.Add(new($"road:{position.Ordem}:{stop.Id:D}", stop.Ordem == 1 ? TiposEventoParada.Departure : TiposEventoParada.Arrival,
                 stop.LinhaId, stop.CodigoLinha, "onibus", routeType, stop.SentidoId, stop.PadraoOperacionalId,
                 stop.PadraoVersaoId, stop.ParadaId, stop.Id, position.Ordem, null, null, position.Ordem, null,
-                null, estimated, seconds is null ? null : (long?)Math.Round(seconds.Value), "RealtimeEstimated",
-                position.EtaConfianca ?? "OperationalEstimate", position.TimestampGps, true, remaining,
+                null, estimated, seconds is null ? null : (long?)Math.Round(seconds.Value), source,
+                quality, position.TimestampGps, true, remaining,
                 stop.Ordem == 1 ? PapeisEstacaoEvento.Origin : PapeisEstacaoEvento.Intermediate,
                 stop.Ordem == 1 ? ModosProximosVeiculos.Departures : ModosProximosVeiculos.Arrivals));
         }

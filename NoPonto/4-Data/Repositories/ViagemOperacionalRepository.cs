@@ -12,7 +12,8 @@ namespace NoPonto.Data.Repositories;
 /// <summary>PostgreSQL e a autoridade; Redis recebe somente uma projecao descartavel.</summary>
 public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer redis, NpgsqlDataSource source,
     IOptions<GpsPollingOptions> options,
-    ILogger<ViagemOperacionalRepository> logger) : IViagemObservadaRepository
+    ILogger<ViagemOperacionalRepository> logger,
+    GpsCorrelatedDiagnostics? correlatedDiagnostics = null) : IViagemObservadaRepository
 {
     public const string Stream = "noponto:viagem:eventos";
     public async Task<ContextoOperacional?> LerDuravelParaRetryAsync(string ordem, CancellationToken ct)
@@ -152,7 +153,11 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                 // Não deixar Decidir limpar candidatos em observações sem prova positiva.
                 if (decisionMudanca is null && previous.Candidato is not null
                     && avaliacao.Status == StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente)
+                {
+                    correlatedDiagnostics?.Rejection(GpsCorrelatedReason.ChangeEvidenceInsufficientWithCandidate,
+                        gps, previous, projecao);
                     return new(ViagemObservadaStatus.ItineraryChanged, observed);
+                }
             }
 
             var gpsOperacional = gps;
@@ -162,21 +167,33 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
             if (!protegida && decisionMudanca is null && divergente && projecao.Status != StatusProjecaoOperacional.NaoSolicitada)
             {
                 if (projecao.Status == StatusProjecaoOperacional.FalhaInfraestrutura)
+                {
+                    correlatedDiagnostics?.Rejection(GpsCorrelatedReason.ProjectionInfrastructureFailure, gps, previous!, projecao);
                     return new(ViagemObservadaStatus.InfrastructureFailure, observed);
+                }
                 if (projecao.Status != StatusProjecaoOperacional.Encontrada
                     || projecao.Projecao is not { } op || op.PadraoVersaoId != observed!.PadraoVersaoId
                     || !double.IsFinite(op.PosicaoNaRota) || op.PosicaoNaRota is < 0 or > 1
                     || op.PosicaoNaRota < observed.PosicaoNaRotaConfirmada
                     || !double.IsFinite(op.ComprimentoRotaMetros) || op.ComprimentoRotaMetros <= 0)
+                {
+                    if (correlatedDiagnostics?.Active == true)
+                        correlatedDiagnostics.Rejection(GpsCorrelatedDiagnostics.ProjectionRejection(observed!, projecao),
+                            gps, previous!, projecao);
                     return Divergencia(observed!);
+                }
                 gpsOperacional = gps with { CodigoLinha = previous!.CodigoLinha,
                     PadraoVersaoId = previous.Observada.PadraoVersaoId, PosicaoNaRota = op.PosicaoNaRota,
                     PadraoOperacionalId = previous.Observada.PadraoOperacionalId,
                     ComprimentoRotaMetros = op.ComprimentoRotaMetros };
                 itinerary = op.PadraoVersaoId; p = op.PosicaoNaRota; usandoProjecao = true;
+                GpsCommitPerformanceContext.DiagnosticCurrent?.RegistrarFunil(ContadorFunilOperacional.ProjecaoPinadaAdotada);
             }
             if (!protegida && decisionMudanca is null && previous?.Estado == EstadoViagem.Ativa && observed!.PadraoVersaoId != itinerary)
+            {
+                correlatedDiagnostics?.Rejection(GpsCorrelatedReason.VersionDivergentProjectionNotRequested, gps, previous!, projecao);
                 return Divergencia(observed);
+            }
 
             await using var connection = await source.OpenConnectionAsync(ct);
             TransicaoParadas transition;
@@ -214,11 +231,12 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                     || (previous.Candidato is not null && (options.Value.MudancaOperacionalHabilitada
                         || previous.Observada.Topologia == "CIRCULAR"));
                 GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
-                transition = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(connection, null,
-                    itinerary, protegida || (baseline && previous?.Candidato is not null
+                var posicaoInicialTransicao = protegida || (baseline && previous?.Candidato is not null
                         && previous.Observada.Topologia == "CIRCULAR") ? p
                         : PosicaoInicialTransicao(previous, itinerary, p, baseline,
-                            options.Value.MudancaOperacionalHabilitada), p,
+                            options.Value.MudancaOperacionalHabilitada);
+                transition = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(connection, null,
+                    itinerary, posicaoInicialTransicao, p,
                     baseline ? Guid.Empty : previous!.Observada.UltimaOcorrenciaParadaPadraoId,
                     baseline ? 0 : previous!.Observada.UltimaParadaOrdem, baseline, ct,
                     structure.Topologia, previous is null || previous.Estado == EstadoViagem.Finalizada
@@ -230,6 +248,7 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                 decision = ViagemOperacionalRegra.Decidir(previous, structure, gpsOperacional,
                     transition, Guid.NewGuid(), adocaoLegado: options.Value.MudancaOperacionalHabilitada
                         && previous?.Candidato is not null, provaCircular: provaCircular, opcoes: options.Value);
+                correlatedDiagnostics?.Transition(gps, previous, structure, transition, posicaoInicialTransicao, p, baseline, decision);
                 if (previous is not null && transition.Ultrapassadas.Count > 0)
                     GpsCommitPerformanceContext.Current?.RegistrarCatchupPassagens(
                         transition.Ultrapassadas.Count,
@@ -314,6 +333,7 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
             if (AfterDurableOutboxWriteAsync is not null)
                 await AfterDurableOutboxWriteAsync();
             await transaction.CommitAsync(ct);
+            GpsCommitPerformanceContext.DiagnosticCurrent?.RegistrarEventosCommit(decision.Eventos);
             if (decision.Estado.Integridade?.Continuidade == ContinuidadeCircular.Ambigua
                 && previous?.Integridade?.Continuidade != ContinuidadeCircular.Ambigua)
                 logger.LogWarning("Viagem circular {viagem} de {ordem} protegida: {motivo}.",

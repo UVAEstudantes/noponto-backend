@@ -210,8 +210,9 @@ public sealed class ViagemObservadaServiceTests
             Microsoft.Extensions.Options.Options.Create(new GpsPollingOptions()),
             NullLogger<RetryOperacionalGpsService>.Instance);
         using var polling = Polling(cache, repo, telemetria: telemetry, retry: Retry());
+        var performance = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
         Assert.True((await polling.ConfirmarPosicaoAsync(entrada,
-            TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default)).Aceito);
+            TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default, performance)).Aceito);
         Assert.Single(repo.Calls);
         repo.Throw = false;
         cache.Status = PosicaoVeiculoCacheStatus.RejectedOlderOrEqual;
@@ -219,14 +220,65 @@ public sealed class ViagemObservadaServiceTests
         {
             using var outro = Polling(cache, repo, telemetria: telemetry, retry: Retry());
             await outro.ConfirmarPosicaoAsync(entrada,
-                TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
+                TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default, performance);
         }
         else await polling.ConfirmarPosicaoAsync(entrada,
-            TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default);
+            TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default, performance);
         Assert.Equal(2, repo.Calls.Count);
         Assert.All(repo.Calls, p => Assert.Equal(posicao.TimestampGps, p.TimestampGps));
         var evento=Assert.Single(telemetry.Eventos);
         Assert.Null(evento.ViagemId); Assert.Null(evento.Volta); // retry não reemite label nem altera amostra antiga
+        Assert.Equal(1, performance.ResultadoOperacional(ResultadoFunilOperacional.InfrastructureFailure));
+        Assert.Equal(0, performance.ResultadoOperacional(ResultadoFunilOperacional.Updated));
+        Assert.Equal(1, performance.ResultadoOperacional(ResultadoFunilOperacional.Updated, retry: true));
+        Assert.Equal(1, performance.Funil(ContadorFunilOperacional.RetryClaim, retry: true));
+        Assert.Equal(0, performance.Funil(ContadorFunilOperacional.RetryNaoProcessado, retry: true));
+        Assert.Equal(1, performance.ViagemProcessadas);
+    }
+
+    [Theory]
+    [InlineData("ONIBUS", false, 0)]
+    [InlineData("BUS", true, 0)]
+    [InlineData("BRT", false, 1)]
+    [InlineData("BRT", true, 1)]
+    [InlineData(null, false, 2)]
+    public async Task FunilPredecessorPorModalNoPollingProdutivo(string? modal, bool historico, int grupo)
+    {
+        var posicao = Position() with { ModalFonte = modal ?? string.Empty, MatchingOperacionalPlausivel = historico };
+        if (historico) posicao = posicao with { LatitudeAnterior = -22.9, LongitudeAnterior = -43.2001,
+            TimestampAnterior = posicao.TimestampGps.AddSeconds(-60) };
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
+        using var polling = Polling(new PositionCache(PosicaoVeiculoCacheStatus.Accepted), new Repository());
+        await polling.ConfirmarPosicaoAsync(posicao, TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default, metrics);
+        Assert.Equal(1, metrics.Predecessor(grupo, 0));
+        Assert.Equal(1, metrics.Predecessor(grupo, historico ? 1 : 2));
+        Assert.Equal(historico ? 1 : 0, metrics.Predecessor(grupo, 4));
+        Assert.Equal(1, metrics.Predecessor(grupo, historico ? 7 : 8));
+        Assert.Equal(1, metrics.ResultadoOperacional(ResultadoFunilOperacional.Updated));
+        Assert.Contains($"predecessor_{(historico ? "valido" : "ausente_invalido")}=1", metrics.FormatarFunilOperacional());
+    }
+
+    [Fact]
+    public async Task PendenciaTemCategoriaExclusivaSemChamarServico()
+    {
+        var repo = new Repository();
+        var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
+        using var polling = Polling(new PositionCache(PosicaoVeiculoCacheStatus.Accepted), repo, retry: new RetryPendente());
+        await polling.ConfirmarPosicaoAsync(Position(), TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(180), default, metrics);
+        Assert.Empty(repo.Calls);
+        Assert.Equal(1, metrics.ResultadoOperacional(ResultadoFunilOperacional.NaoProcessadoPendencia));
+        Assert.Equal(0, metrics.ResultadoOperacional(ResultadoFunilOperacional.NuloSemMatching));
+        Assert.Equal(1, metrics.ViagemChamadas);
+        Assert.Equal(0, metrics.ViagemProcessadas);
+    }
+
+    private sealed class RetryPendente : IRetryOperacionalGps
+    {
+        public Task RegistrarAsync(PosicaoVeiculoDto gps, PosicaoVeiculoDto? predecessor, ContextoOperacional? contexto,
+            CancellationToken ct, bool aguardandoAnterior = false) => Task.CompletedTask;
+        public Task<bool> TemPendenciaAsync(string ordem, CancellationToken ct) => Task.FromResult(true);
+        public Task RecuperarVeiculoAsync(string ordem, CancellationToken ct) => Task.CompletedTask;
+        public Task ExecutarCicloAsync(CancellationToken ct) => Task.CompletedTask;
     }
 
     [Theory]

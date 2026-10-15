@@ -122,11 +122,15 @@ internal sealed class RetryOperacionalGpsService(IPendenciaOperacionalGpsStore s
     public async Task RecuperarVeiculoAsync(string ordem, CancellationToken ct)
     {
         if (Interlocked.Decrement(ref _restantes) < 0) return;
+        using var diagnostico = GpsCommitPerformanceContext.PushDiagnostic(
+            GpsCommitPerformanceContext.DiagnosticCurrent, retry: true);
         try
         {
             // Um item por veículo/chamada: sem loop agressivo, ordem é definida pelo store.
             var lease = await store.ClaimAsync(ordem, Agora(), ct);
             if (lease is null) { Interlocked.Increment(ref _restantes); return; }
+            GpsCommitPerformanceContext.DiagnosticCurrent?.RegistrarFunil(ContadorFunilOperacional.RetryClaim);
+            var chamouViagem = false;
             var p = lease.Pendencia;
             using var limite = CancellationTokenSource.CreateLinkedTokenSource(ct);
             limite.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutTentativaSegundos));
@@ -174,12 +178,14 @@ internal sealed class RetryOperacionalGpsService(IPendenciaOperacionalGpsStore s
 
                 logger.LogInformation("Retry operacional GPS {id}, tentativa {tentativa}.", p.Id, p.Tentativas + 1);
                 var refeito = await enriquecimento.RecalcularAsync(p, contexto, tentativaCt);
+                GpsCommitPerformanceContext.DiagnosticCurrent?.RegistrarPredecessor(refeito.Posicao);
                 if (refeito.Posicao.Ordem != gps.Ordem || refeito.Posicao.TimestampGps != gps.TimestampGps
                     || refeito.Posicao.CodigoLinha != gps.CodigoLinha || refeito.Posicao.Latitude != gps.Latitude
                     || refeito.Posicao.Longitude != gps.Longitude)
                 { await EncerrarAsync(lease, "ReenriquecimentoAlterouObservacao", ct); return; }
                 if (!refeito.Posicao.MatchingOperacionalPlausivel)
                 { await ReagendarAsync(lease, ct); return; } // Ausência de matching também pode ser infraestrutura.
+                chamouViagem = true;
                 var resultado = await viagens.AtualizarAsync(refeito with
                 { Posicao = refeito.Posicao with { ExigirPersistenciaDuravel = true } }, tentativaCt);
                 if (resultado is { PersistidoDuravelmente: true })
@@ -192,6 +198,11 @@ internal sealed class RetryOperacionalGpsService(IPendenciaOperacionalGpsStore s
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) { Indisponivel(ex); await ReagendarAsync(lease, ct); }
+            finally
+            {
+                if (!chamouViagem)
+                    GpsCommitPerformanceContext.DiagnosticCurrent?.RegistrarFunil(ContadorFunilOperacional.RetryNaoProcessado);
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex) { Indisponivel(ex); } // Lease expira se Redis caiu; pendência não vira sucesso.

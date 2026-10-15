@@ -22,13 +22,25 @@ public static partial class ViagemOperacionalRegra
         AvaliacaoMudancaOperacional avaliacao, PosicaoVeiculoDto gps,
         TransicaoParadas? baseline = null, Guid novaId = default)
     {
+        var decisao = AplicarAvaliacaoMudancaInterno(anterior, avaliacao, gps, baseline, novaId);
+        if (decisao is not null)
+            GpsCommitPerformanceContext.DiagnosticCurrent?.RegistrarRamo(anterior,
+                avaliacao.Status == StatusMudancaOperacional.MudancaConfirmada
+                    ? ContadorFunilOperacional.BaselineMudanca : ContadorFunilOperacional.CandidatoEspera, decisao);
+        return decisao;
+    }
+
+    private static DecisaoViagem? AplicarAvaliacaoMudancaInterno(ViagemOperacionalState anterior,
+        AvaliacaoMudancaOperacional avaliacao, PosicaoVeiculoDto gps,
+        TransicaoParadas? baseline = null, Guid novaId = default)
+    {
         if (avaliacao.Status == StatusMudancaOperacional.MudancaConfirmada)
         {
             if (baseline is null || baseline.Status != ViagemObservadaStatus.Updated
                 || baseline.Ultrapassadas.Count != 0 || baseline.Volta != 0
                 || avaliacao.EstruturaConfirmada is null || novaId == Guid.Empty)
                 throw new InvalidOperationException("Confirmação exige baseline novo válido.");
-            var inicio = Decidir(null, avaliacao.EstruturaConfirmada, gps, baseline, novaId);
+            var inicio = DecidirInterno(null, avaliacao.EstruturaConfirmada, gps, baseline, novaId);
             // Fim lógico no instante da confirmação; não afirmar passagem/chegada a uma parada.
             var fim = Evento(anterior, "ViagemFinalizada", gps.TimestampGps) with { OcorrenciaParadaPadraoId = null };
             return new(inicio.Estado, new[] { fim }.Concat(inicio.Eventos).ToArray());

@@ -438,7 +438,7 @@ public sealed class GpsPerformanceMetricsTests
                 Encoding.UTF8, "application/json"),
         }));
         var client = new GpsEtaClient(new HttpClient(handler) { BaseAddress = new Uri("http://eta") },
-            NullLogger<GpsEtaClient>.Instance);
+            NullLogger<GpsEtaClient>.Instance, Options.Create(new GpsEtaOptions { Enabled = true }));
         var metrics = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
 
         var resultado = await client.PredizirLoteAsync([PosicaoElegivel()], default, metrics);
@@ -467,7 +467,7 @@ public sealed class GpsPerformanceMetricsTests
             };
         });
         var client = new GpsEtaClient(new HttpClient(handler) { BaseAddress = new Uri("http://eta") },
-            NullLogger<GpsEtaClient>.Instance);
+            NullLogger<GpsEtaClient>.Instance, Options.Create(new GpsEtaOptions { Enabled = true }));
         var versao = Guid.NewGuid();
         var ocorrencia = Guid.NewGuid();
         var sentido = Guid.NewGuid();
@@ -494,7 +494,7 @@ public sealed class GpsPerformanceMetricsTests
     {
         var handler = new Handler((_, _) => throw new TaskCanceledException("timeout"));
         var client = new GpsEtaClient(new HttpClient(handler) { BaseAddress = new Uri("http://eta") },
-            NullLogger<GpsEtaClient>.Instance);
+            NullLogger<GpsEtaClient>.Instance, Options.Create(new GpsEtaOptions { Enabled = true }));
         var primeira = new GpsCicloPerformance(DateTimeOffset.UtcNow, 15_000);
 
         Assert.Empty(await client.PredizirLoteAsync([PosicaoElegivel()], default, primeira));
