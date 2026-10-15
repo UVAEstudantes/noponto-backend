@@ -1,0 +1,6 @@
+# Production policy, API only. Install at an operator-confirmed private path.
+services:
+  api:
+    environment:
+      PhysicalEta__Enabled: "true"
+      PhysicalEta__MaxAgeSeconds: "90"
