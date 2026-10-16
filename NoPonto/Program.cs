@@ -336,17 +336,6 @@ builder.Services.AddHttpClient<GpsEtaClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(3);
 });
 
-// ML ADMIN
-var mlAdminBaseUrl =
-    builder.Configuration["ML:ADMIN:BASE_URL"]
-    ?? "http://ml:5200";
-
-builder.Services.AddHttpClient("ml-admin", client =>
-{
-    client.BaseAddress = new Uri(mlAdminBaseUrl);
-    client.Timeout = TimeSpan.FromSeconds(10);
-});
-
 builder.Services.AddHttpClient("arcgis-trem", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
@@ -377,9 +366,6 @@ builder.Services.AddScoped<ArcGisEstruturalRegularService>();
 builder.Services.AddSingleton<ArcGisParadasReconciliador>();
 builder.Services.AddScoped<ArcGisParadasPersistenciaService>();
 
-// BRT
-builder.Services.AddScoped<ImportacaoParadasBrtService>();
-
 // ArcGIS trem
 builder.Services.AddHttpClient("arcgis-trem", client =>
 {
@@ -389,30 +375,6 @@ builder.Services.AddHttpClient("arcgis-trem", client =>
         "User-Agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
 });
-
-// Docker socket
-builder.Services.AddHttpClient("docker", client =>
-{
-    client.BaseAddress = new Uri("http://docker-socket");
-    client.Timeout = TimeSpan.FromSeconds(10);
-})
-.ConfigurePrimaryHttpMessageHandler(() =>
-    new SocketsHttpHandler
-    {
-        ConnectCallback = async (context, ct) =>
-        {
-            var socket = new Socket(
-                AddressFamily.Unix,
-                SocketType.Stream,
-                ProtocolType.Unspecified);
-
-            await socket.ConnectAsync(
-                new UnixDomainSocketEndPoint("/var/run/docker.sock"),
-                ct);
-
-            return new NetworkStream(socket, ownsSocket: true);
-        }
-    });
 
 // --------------------------------------------------------------------
 // OPTIONS
