@@ -511,17 +511,6 @@ builder.Services
         "TelemetriaMlRetention:MaxDeadLetterEntries inválido")
     .ValidateOnStart();
 
-builder.Services
-    .AddOptions<HistoricoStreamRetentionOptions>()
-    .Bind(builder.Configuration.GetSection(HistoricoStreamRetentionOptions.Section))
-    .Validate(o => o.MainStreamSafetyMarginMinutes is > 0 and <= 10_080,
-        "HistoricoStreamRetention:MainStreamSafetyMarginMinutes inválido")
-    .Validate(o => o.DeadLetterRetentionDays is > 0 and <= 365,
-        "HistoricoStreamRetention:DeadLetterRetentionDays inválido")
-    .Validate(o => o.TrimLimit is > 0 and <= 10_000_000,
-        "HistoricoStreamRetention:TrimLimit inválido")
-    .ValidateOnStart();
-
 // --------------------------------------------------------------------
 // REDIS
 // --------------------------------------------------------------------
@@ -616,7 +605,6 @@ builder.Services.AddSingleton<EtaV2ShadowService>();
 builder.Services.AddHostedService<EtaV2BatchWorker>();
 builder.Services.AddHostedService<EtaV2MaintenanceWorker>();
 builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();
-builder.Services.AddSingleton(new HistoricoStreamOptions(redisConnection));
 builder.Services.AddHostedService<ViagemOutboxWorker>();
 
 builder.Services.AddSingleton<TelemetriaMlMetrics>();
