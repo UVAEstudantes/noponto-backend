@@ -1,10 +1,12 @@
 <Project>
   <!-- Explicit lab build only. Never imported by the application's normal build. -->
-  <ItemGroup Condition="'$(MSBuildProjectName)' == 'NoPonto'">
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'NoPonto' and !Exists('$(MSBuildProjectDirectory)/2-Application/Services/GPS/HistoricalEtaShadow.cs')">
     <Compile Include="$(ShadowRoot)/NoPonto/2-Application/Services/GPS/HistoricalEtaShadow.cs" />
     <Compile Include="$(ShadowRoot)/NoPonto/2-Application/Services/GPS/HistoricalEtaOperationalStatistics.cs" />
     <Compile Include="$(ShadowRoot)/NoPonto/2-Application/Services/GPS/HistoricalEtaOfflineExport.cs" />
     <Compile Include="$(ShadowRoot)/NoPonto/5-Testes/HistoricalEtaShadowTests.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'NoPonto'">
     <Compile Include="$(MSBuildThisFileDirectory)ShadowTccTests.cs" />
   </ItemGroup>
 </Project>

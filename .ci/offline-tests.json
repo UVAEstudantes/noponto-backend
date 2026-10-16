@@ -17,7 +17,12 @@
     "NoPonto.Tests.CancelamentoCandidatoCursorTests",
     "NoPonto.Tests.EstadoCausalPosicaoTests",
     "NoPonto.Tests.DatabaseStartupPolicyTests",
-    "NoPonto.Tests.TarifasRegrasTests"
+    "NoPonto.Tests.TarifasRegrasTests",
+    "NoPonto.Tests.HistoricalEtaShadowTests",
+    "NoPonto.Tests.HistoricalEtaOfflineExportTests",
+    "NoPonto.Tests.HistoricalEtaGtfsPollingTests",
+    "NoPonto.Tests.HistoricalEtaRuntimeTests",
+    "NoPonto.Tests.PhysicalEtaIntermittenceTests"
   ],
   "excluded_methods": [
     "NoPonto.Tests.GpsMatchingDiagnosticsTests.DeterministicAggregationReplay_MeasuresIncrementalCostOnly"

@@ -46,6 +46,7 @@ public sealed class GpsPollingService : BackgroundService
     private readonly IRetryOperacionalGps? _retryOperacional;
     private readonly GpsCorrelatedDiagnostics? _correlatedDiagnostics;
     private readonly IOptions<PhysicalEtaOptions>? _physicalEtaOptions;
+    private readonly HistoricalEtaShadow? _historicalEtaShadow;
     private long _ultimoErroSamplingLogUnixMinute = long.MinValue;
 
     public GpsPollingService(
@@ -71,7 +72,8 @@ public sealed class GpsPollingService : BackgroundService
         TelemetriaMlMetrics? telemetriaMlMetrics = null,
         IRetryOperacionalGps? retryOperacional = null,
         GpsCorrelatedDiagnostics? correlatedDiagnostics = null,
-        IOptions<PhysicalEtaOptions>? physicalEtaOptions = null)
+        IOptions<PhysicalEtaOptions>? physicalEtaOptions = null,
+        HistoricalEtaShadow? historicalEtaShadow = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -100,6 +102,7 @@ public sealed class GpsPollingService : BackgroundService
         _retryOperacional = retryOperacional;
         _correlatedDiagnostics = correlatedDiagnostics;
         _physicalEtaOptions = physicalEtaOptions;
+        _historicalEtaShadow = historicalEtaShadow;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -1170,6 +1173,9 @@ public sealed class GpsPollingService : BackgroundService
                 System.Diagnostics.Stopwatch.GetElapsedTime(inicioViagem));
             // Hot path estritamente não bloqueante: nenhuma conexão/query PostgreSQL ETA.
             _etaV2Shadow?.TryRecord(enriquecimento, viagem);
+            // Auxiliary bounded TryWrite only, after accepted GPS and operational decision.
+            // Never let Shadow exceptions change polling/CAS/passages/public ETA.
+            try { _historicalEtaShadow?.TryCapture(posicao, viagem); } catch { }
             if (_telemetriaMl is not null)
             {
                 var coletar = true;

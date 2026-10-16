@@ -102,10 +102,16 @@ def report(pairs, metrics):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ml-root", required=True, type=Path)
-    parser.add_argument("--shadow-root", required=True, type=Path)
+    parser.add_argument("--shadow-root", type=Path, help="Legacy source override; integrated backends use their bundled Shadow")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-    ml, shadow, output = args.ml_root.resolve(), args.shadow_root.resolve(), args.output.resolve()
+    ml, output = args.ml_root.resolve(), args.output.resolve()
+    if (BACKEND / "NoPonto/2-Application/Services/GPS/HistoricalEtaShadow.cs").exists():
+        shadow = BACKEND
+    elif args.shadow_root is not None:
+        shadow = args.shadow_root.resolve()
+    else:
+        parser.error("Legacy backend requires --shadow-root")
     # Never overwrite previous evidence or run against externally supplied real data.
     output.mkdir(parents=True, exist_ok=False)
     sys.path[:0] = [str(ml / "tools/eta_ml"), str(ml)]
