@@ -25,7 +25,7 @@ public sealed class HistoricalEtaGtfsPollingTests
     {
         foreach (var modal in new[] { GpsModalNames.Bus, GpsModalNames.Brt })
         foreach (var batch in new[] { false, true })
-        foreach (var failure in new[] { "off", "http", "no_model", "transport", "blocked", "full", "public_off", "export_failure", "export_full", "physical" })
+        foreach (var failure in new[] { "off", "http", "no_model", "transport", "blocked", "full", "public_off", "export_failure", "export_full", "physical", "capture_only", "capture_without_active_predecessor" })
             yield return [modal, batch, failure];
     }
 
@@ -33,6 +33,9 @@ public sealed class HistoricalEtaGtfsPollingTests
     [MemberData(nameof(Cases))]
     public async Task PollingContinuesWithIndependentShadow(string modal, bool batch, string failure)
     {
+        var physical = failure is "physical" or "capture_only" or "capture_without_active_predecessor";
+        var captureOnly = failure is "capture_only" or "capture_without_active_predecessor";
+        var missingActivePredecessor = failure == "capture_without_active_predecessor";
         var time = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddMinutes(-1).ToUnixTimeSeconds());
         var clock = new Clock { Now = time.AddSeconds(10) };
         var geometry = new Geometry();
@@ -43,9 +46,10 @@ public sealed class HistoricalEtaGtfsPollingTests
         if (failure == "export_failure") await File.WriteAllTextAsync(exportPath, "fixture obstruction");
         using var export = new HistoricalEtaOfflineExport(Options.Create(new HistoricalEtaOfflineExportOptions
         {
-            Enabled = failure.StartsWith("export_", StringComparison.Ordinal), Fixture = true, QueueCapacity = 1,
+            Enabled = captureOnly || failure.StartsWith("export_", StringComparison.Ordinal), Fixture = true, QueueCapacity = 1,
             DirectoryPath = failure == "export_failure" ? Path.Combine(exportPath, "capture") : exportPath,
         }), Options.Create(new HistoricalEtaShadowOptions { Enabled = failure != "off" }), clock);
+        if (captureOnly) await export.StartAsync(default);
         if (failure == "export_failure")
         {
             await export.StartAsync(default);
@@ -53,7 +57,7 @@ public sealed class HistoricalEtaGtfsPollingTests
         }
         using var shadow = new HistoricalEtaShadow(Options.Create(new HistoricalEtaShadowOptions
         {
-            Enabled = failure != "off", MlEnabled = true, QueueCapacity = 1, BatchSize = 1, TimeoutMs = 2000,
+            Enabled = failure != "off", MlEnabled = !captureOnly, HistoricalEnabled = false, QueueCapacity = 1, BatchSize = 1, TimeoutMs = 2000,
             MetricsLogEnabled = false,
         }), geometry, new Factory(new Handler(async (request, ct) =>
         {
@@ -104,16 +108,18 @@ public sealed class HistoricalEtaGtfsPollingTests
                 NullLogger<GpsPollingService>.Instance, null!, services.GetRequiredService<IServiceScopeFactory>(),
                 new GpsEnriquecimentoService(matching, Options.Create(options),
                     Options.Create(new GpsMatchingBatchOptions { Enabled = batch }), NullLogger<GpsEnriquecimentoService>.Instance),
-                new GpsEtaClient(publicHttp, NullLogger<GpsEtaClient>.Instance, Options.Create(new GpsEtaOptions { Enabled = failure is not ("public_off" or "physical") })),
+                new GpsEtaClient(publicHttp, NullLogger<GpsEtaClient>.Instance, Options.Create(new GpsEtaOptions { Enabled = failure != "public_off" && !physical })),
                 resolver, cas, new ViagemObservadaService(trips, NullLogger<ViagemObservadaService>.Instance),
                 telemetriaMl: telemetry, historicalEtaShadow: shadow,
-                physicalEtaOptions:Options.Create(new PhysicalEtaOptions{Enabled=failure=="physical",MaxAgeSeconds=90}));
+                physicalEtaOptions:Options.Create(new PhysicalEtaOptions{Enabled=physical,MaxAgeSeconds=90}));
             using var collector = new GpsSppoCollectorService(resolver, store, new Monitor<GpsSppoCollectorOptions>(),
                 NullLogger<GpsSppoCollectorService>.Instance);
             try
             {
                 for (cycle = 0; cycle < 2; cycle++)
                 {
+                    if (cycle == 1 && missingActivePredecessor)
+                        await cache.RemoveAsync(GpsPollingService.ChaveVeiculoAtivo(cas.Accepted[0].Ordem));
                     sourceClock.Now = time.AddSeconds(10 + cycle * 31);
                     matching.Respostas.Enqueue(trips.Route(.1 + cycle * .001));
                     await collector.ColetarUmaVezAsync(DateTimeOffset.UtcNow);
@@ -125,7 +131,8 @@ public sealed class HistoricalEtaGtfsPollingTests
                     Assert.Equal(cycle + 1, cas.Accepted.Count);
                     Assert.Equal(cycle + 1, trips.Calls);
                     Assert.Equal(cycle + 1, telemetry.Events.Count);
-                    if (cycle == 0 && running && failure != "off")
+                    if (captureOnly) await Until(() => shadow.Results.Count == cycle + 1);
+                    if (cycle == 0 && running && failure != "off" && !captureOnly)
                     {
                         await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
                         if (failure != "blocked") await Until(() => shadow.Results.Count > 0);
@@ -137,12 +144,21 @@ public sealed class HistoricalEtaGtfsPollingTests
                     Assert.Equal(modal == GpsModalNames.Bus ? "GTFSRT_BUS" : "GTFSRT_BRT", gps.ProvedorFonte);
                     Assert.Equal(trips.Version, gps.PadraoVersaoId);
                     Assert.Equal(45, gps.DistanciaProximaParadaMetros);
-                    if(failure!="physical")Assert.Equal(failure == "public_off" ? null : (double?)80, gps.EtaProximaParadaSegundos);
+                    if(!physical)Assert.Equal(failure == "public_off" ? null : (double?)80, gps.EtaProximaParadaSegundos);
                 });
-                if(failure=="physical") {
+                if(physical) {
                     Assert.Null(cas.Accepted[0].EtaProximaParadaSegundos);
-                    Assert.Equal(57.6,cas.Accepted[1].EtaProximaParadaSegundos!.Value,5);
-                    Assert.Equal(PhysicalEta.Prefix+"estimativa_fisica",cas.Accepted[1].EtaConfianca);
+                    if (missingActivePredecessor)
+                    {
+                        Assert.Null(cas.Accepted[1].EtaProximaParadaSegundos);
+                        Assert.False(cas.Accepted[1].MatchingOperacionalPlausivel);
+                        Assert.True(cas.Accepted[1].DistanciaRestanteRotaMetros > 0);
+                    }
+                    else
+                    {
+                        Assert.Equal(57.6,cas.Accepted[1].EtaProximaParadaSegundos!.Value,5);
+                        Assert.Equal(PhysicalEta.Prefix+"estimativa_fisica",cas.Accepted[1].EtaConfianca);
+                    }
                 }
                 Assert.Equal(time, cas.Accepted[0].TimestampGps);
                 Assert.Equal(time.AddSeconds(1), cas.Accepted[1].TimestampGps);
@@ -153,7 +169,38 @@ public sealed class HistoricalEtaGtfsPollingTests
                     Assert.Equal(2, export.Metrics["unavailable_drop"]);
                 }
                 if (failure == "export_full") Assert.Equal(1, export.Metrics["queue_full_drop"]);
-                if (failure == "off")
+                if (captureOnly)
+                {
+                    Assert.Empty(requests); // Capture-only must not call the model service.
+                    Assert.Equal(2, geometry.Observations.Count);
+                    var first = geometry.Observations[0];
+                    var second = geometry.Observations[1];
+                    Assert.Null(first.PublicEta); // First observation has no causal predecessor.
+                    Assert.Equal("physical_causal:previsao_indisponivel", first.Gps.EtaConfianca);
+                    Assert.Equal(cas.Accepted[1].EtaConfianca, second.Gps.EtaConfianca);
+                    Assert.Equal(cas.Accepted[1].EtaProximaParadaSegundos, second.PublicEta);
+                    if (missingActivePredecessor) Assert.Null(second.PublicEta);
+                    else Assert.Equal(57.6, second.PublicEta!.Value, 5);
+                    Assert.Equal(cas.Accepted[1].TimestampGps, second.Gps.TimestampGps);
+                    Assert.Equal(cas.Accepted[1].ProximaOcorrenciaParadaPadraoId, second.Target.Id);
+                    Assert.Equal(telemetry.Events[1].ObservacaoId, second.ObservationId);
+                    await export.StopAsync(default);
+                    var records = Directory.GetFiles(exportPath, "*.jsonl").SelectMany(File.ReadLines)
+                        .Select(line => JsonSerializer.Deserialize<JsonElement>(line))
+                        .Where(row => row.TryGetProperty("physical_status", out _)).ToArray();
+                    Assert.Equal(2, records.Length);
+                    Assert.Equal("physical_unavailable", records[0].GetProperty("physical_status").GetString());
+                    Assert.Equal(JsonValueKind.Null, records[0].GetProperty("public_eta").ValueKind);
+                    Assert.Equal(missingActivePredecessor ? "physical_unavailable" : "success", records[1].GetProperty("physical_status").GetString());
+                    if (missingActivePredecessor) Assert.Equal(JsonValueKind.Null, records[1].GetProperty("public_eta").ValueKind);
+                    else Assert.Equal(57.6, records[1].GetProperty("public_eta").GetDouble(), 5);
+                    Assert.All(records, row => Assert.Equal("physical-causal-v1", row.GetProperty("physical_version").GetString()));
+                    Assert.Equal("predecessor_absent", records[0].GetProperty("physical_apply_reason").GetString());
+                    Assert.Equal(missingActivePredecessor ? "predecessor_absent" : "available", records[1].GetProperty("physical_apply_reason").GetString());
+                    Assert.Equal(missingActivePredecessor ? 2 : 1, shadow.Metrics["physical.apply.predecessor_absent"]);
+                    if (!missingActivePredecessor) Assert.Equal(1, shadow.Metrics["physical.apply.available"]);
+                }
+                else if (failure == "off")
                 {
                     Assert.Empty(requests); Assert.Equal(0, geometry.Calls);
                     Assert.Equal(0, shadow.Metrics["queue_depth"]); Assert.False(shadow.Metrics.ContainsKey("eligible"));
@@ -186,6 +233,7 @@ public sealed class HistoricalEtaGtfsPollingTests
             if (running) await shadow.StopAsync(default).WaitAsync(TimeSpan.FromSeconds(3));
             await export.StopAsync(default);
             if (File.Exists(exportPath)) File.Delete(exportPath);
+            if (captureOnly && Directory.Exists(exportPath)) Directory.Delete(exportPath, recursive: true);
             release.TrySetResult();
         }
     }

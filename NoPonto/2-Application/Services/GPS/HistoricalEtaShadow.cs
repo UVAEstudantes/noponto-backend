@@ -46,6 +46,7 @@ public sealed record HistoricalEtaObservation(string RequestId, string Observati
     public string? HistoricalDigest { get; init; }
     public DateTimeOffset? TrainingEndUtc { get; init; }
     public string MlUnavailableReason { get; init; } = "not_evaluated";
+    internal PhysicalEtaReason? PhysicalApplyReason { get; init; }
 }
 public sealed record HistoricalEtaGeometry(Guid TargetId, Guid StopId, Guid VersionId, Guid PatternId,
     Guid LineId, Guid DirectionId, string LineCode, string Topology, double Destination, double Distance);
@@ -233,7 +234,11 @@ public sealed class HistoricalEtaShadow : BackgroundService
             o.Gps.TimestampGps,o.Target.Id,o.Target.PadraoVersaoId,o.Lap,status,model,prediction,o.PublicEta,latency,clock.GetUtcNow()));}
         finally{Monitor.Exit(gate);}
     }
-    public bool TryCapture(PosicaoVeiculoDto gps,ViagemObservadaResultado? trip)
+    internal bool CapturePhysicalDiagnostics => options.Enabled;
+    public bool TryCapture(PosicaoVeiculoDto gps,ViagemObservadaResultado? trip) => TryCaptureCore(gps,trip,null);
+    internal bool TryCapture(ResultadoEnriquecimentoGps input,ViagemObservadaResultado? trip)
+        => TryCaptureCore(input.Posicao,trip,input.PhysicalCalculation);
+    private bool TryCaptureCore(PosicaoVeiculoDto gps,ViagemObservadaResultado? trip,PhysicalEtaCalculation? calculation)
     {
         if(!options.Enabled) return false;
         try {
@@ -242,6 +247,11 @@ public sealed class HistoricalEtaShadow : BackgroundService
                 gps.TimestampGps>clock.GetUtcNow()||gps.TimestampGps<=DateTimeOffset.UnixEpoch?"rejected.gps_time":
                 gps.PosicaoNaRota is not { } p||!double.IsFinite(p)||p<0||p>=trip.Value.ProximaOcorrenciaOperacional!.PosicaoLinha?"rejected.position_or_wrap":"rejected.identity");return false;}
             Count("eligible");
+            var reason = calculation is not null && ReferenceEquals(calculation.Position,gps) && Enum.IsDefined(calculation.Reason)
+                ? calculation.Reason : PhysicalEtaReason.not_recorded;
+            o=o with {PhysicalApplyReason=reason};
+            Count("physical.apply."+reason);
+            Count("physical.capture."+(o.PublicEta.HasValue?"available":reason==PhysicalEtaReason.available?"proof_rejected":"unavailable"));
             if(Volatile.Read(ref accepting)==0){Record(o,"stopped");return false;}
             if(clock.GetUtcNow().ToUnixTimeMilliseconds()<Interlocked.Read(ref circuitUntil)){Record(o,"circuit_open");return false;}
             Interlocked.Increment(ref depth);

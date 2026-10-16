@@ -36,7 +36,8 @@ internal sealed record HistoricalEtaOfflineRecord(string Schema, string DataKind
     double? MlEta, double? PublicEta, double PredictionDurationMs,
     double? HistoricalEta, string HistoricalStatus, string? HistoricalDigest,
     string PhysicalStatus, double? DistanceMetres, DateTimeOffset? TrainingEndUtc, string MlUnavailableReason,
-    string PhysicalVersion, string HistoricalVersion, DateTimeOffset? PhysicalArrivalUtc, DateTimeOffset? HistoricalArrivalUtc, DateTimeOffset? MlArrivalUtc);
+    string PhysicalVersion, string HistoricalVersion, DateTimeOffset? PhysicalArrivalUtc, DateTimeOffset? HistoricalArrivalUtc, DateTimeOffset? MlArrivalUtc,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? PhysicalApplyReason = null);
 
 /// <summary>Explicit opt-in local bounded JSONL export. The GPS caller only uses TryWrite.</summary>
 public sealed class HistoricalEtaOfflineExport : BackgroundService
@@ -100,7 +101,8 @@ public sealed class HistoricalEtaOfflineExport : BackgroundService
                 status == "success" ? prediction : null, o.PublicEta, latency,
                 o.HistoricalBaseline,o.HistoricalStatus,o.HistoricalDigest,
                 o.PublicEta.HasValue?"success":"physical_unavailable",gps.DistanciaRestanteRotaMetros,o.TrainingEndUtc,o.MlUnavailableReason,
-                "physical-causal-v1","train-group-median-v1",Arrival(o.PublicEta),Arrival(o.HistoricalBaseline),status=="success"?Arrival(prediction):null);
+                "physical-causal-v1","train-group-median-v1",Arrival(o.PublicEta),Arrival(o.HistoricalBaseline),status=="success"?Arrival(prediction):null,
+                o.PhysicalApplyReason is {} reason && Enum.IsDefined(reason)?reason.ToString():null);
             Interlocked.Increment(ref depth);
             if (queue.Writer.TryWrite(record)) { Count("enqueued"); return true; }
             Interlocked.Decrement(ref depth); Count("queue_full_drop"); return false;

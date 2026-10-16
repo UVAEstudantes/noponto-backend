@@ -60,6 +60,7 @@ internal sealed record ResultadoEnriquecimentoGps(
     DiagnosticoEnriquecimentoGps? Diagnostico = null)
 {
     internal PosicaoVeiculoDto? PredecessorFisico { get; init; }
+    internal PhysicalEtaCalculation? PhysicalCalculation { get; init; }
 }
 
 // Diagnóstico efêmero: não integra API, Redis, viagem, outbox ou SignalR.
