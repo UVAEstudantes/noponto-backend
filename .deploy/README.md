@@ -94,3 +94,9 @@ Checklist final do operador antes de reativar:
 Consulta publica desta preparacao: environment production expoe regra required_reviewers. Variavel NOPONTO_DEPLOY_ENABLED e protecao da main retornaram HTTP 401; valores/controles nao foram inferidos. A confirmacao final e feita pelo operador na UI autenticada. Nao foram impressos secrets ou conteudo de .env.
 
 Valor proposto para a variavel GitHub `NOPONTO_PHYSICAL_ETA_OVERRIDE`: `/home/guilherme/.noponto-deploy/physical-eta.override.yml`, informado pelo operador. O conteudo remoto nao foi acessado; a renderizacao --check deve comprovar true/90 antes da ativacao.
+
+## Quarto override Shadow (preparação posterior à PR69)
+
+O contrato e a assinatura atuais acrescentam um sexto argumento obrigatório ao `deploy-api.sh`: o arquivo Shadow. Os exemplos anteriores de cinco argumentos descrevem a etapa PhysicalEta e devem agora acrescentar esse arquivo antes de `--check`. O terceiro override permanece intacto. O quarto aceita OFF ou captura sem inferência, nunca ML/histórico habilitados. O launcher deriva seu caminho do diretório de estado se `NOPONTO_SHADOW_OVERRIDE` não estiver definido. Instalar o modelo OFF antes de autorizar merge com deploy automático habilitado; não há envio automático de configuração nesta PR.
+
+Roteiro completo de instalação privada, ativação/desativação com mesma imagem/sequência, quotas/retenção, health e rollback: [SHADOW-CAPTURE.md](SHADOW-CAPTURE.md). Todos os comandos de servidor ali são futuros e não executados.
