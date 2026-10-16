@@ -29,11 +29,13 @@ if tool=='curl':
  print('503' if os.environ.get('FAIL') in ('boot','rollback') and current==candidate or os.environ.get('FAIL')=='rollback' else '200',end=''); sys.exit(0)
 if args[0]=='inspect':
  fmt=args[2]
- if 'Labels' in fmt: print('noponto/api')
+ if 'Config.Env' in fmt: print(json.dumps([k+'='+v for k,v in json.loads((p/'running-shadow').read_text()).get('environment',{}).items()]))
+ elif 'Mounts' in fmt: print(json.dumps([{'Type':'bind','Source':v['source'],'Destination':v['target'],'RW':True} for v in json.loads((p/'running-shadow').read_text()).get('volumes',[])]))
+ elif 'Labels' in fmt: print('noponto/api')
  elif 'Running' in fmt: print(current+'/true/false/0')
  else: print(current)
 elif args[:2]==['image','inspect']: print(candidate)
-elif args[:2]==['image','tag']: pass
+elif args[:2]==['image','tag']: (p/'tagged-previous').write_text(current)
 elif args[0]=='pull':
  active=p/'state/active.env'
  (p/'env-at-pull').write_text(active.read_text() if active.exists() else 'absent')
@@ -45,10 +47,16 @@ elif args[0]=='compose':
   if os.environ.get('FAIL')=='config': env['ASPNETCORE_ENVIRONMENT']='Development'
   services={'api':{'image':image,'environment':env,'cpus':1.0,'mem_limit':'805306368','pids_limit':256},'postgres':{'image':'fixture-postgres'},'redis':{'image':'fixture-redis'}}
   files=[args[i+1] for i,x in enumerate(args) if x=='-f']
-  if len(files)==3:
+  if len(files)>=3:
    env.update(json.loads(Path(files[2]).read_text()))
    if os.environ.get('FAIL')=='extra-service': services['redis']['image']='forbidden'
    if os.environ.get('FAIL')=='extra-env': env['UNRELATED']='forbidden'
+  if len(files)==4:
+   shadow=json.loads(Path(files[3]).read_text())['services']['api']
+   env.update(shadow.get('environment',{}))
+   if 'volumes' in shadow: services['api']['volumes']=shadow['volumes']
+   if os.environ.get('FAIL')=='shadow-extra-env': env['UNRELATED']='SECRET_NOT_TO_PRINT'
+   if os.environ.get('FAIL')=='shadow-extra-service': services['redis']['image']='forbidden'
   print(json.dumps({'services':services}))
  elif 'up' in args:
   project=Path(args[args.index('--project-directory')+1])
@@ -62,7 +70,15 @@ elif args[0]=='compose':
   if os.environ.get('FAIL')=='mutate-override' and image.startswith('ghcr.io'):
    (p/'physical-eta.override.yml').write_text('tampered')
    sys.exit(1)
-  (p/'image').write_text(previous if image.startswith('noponto-api:rollback-') else candidate)
+  shadow=json.loads(Path(files[3]).read_text())['services']['api']
+  (p/'running-shadow').write_text(json.dumps(shadow))
+  if os.environ.get('FAIL')=='runtime-shadow' and image.startswith('ghcr.io'):
+   shadow['environment']['HistoricalEtaShadow__MlEnabled']='true'
+   (p/'running-shadow').write_text(json.dumps(shadow))
+  if os.environ.get('FAIL')=='mutate-shadow' and image.startswith('ghcr.io'):
+   Path(files[3]).write_text('tampered')
+   (p/'image').write_text(candidate); sys.exit(1)
+  (p/'image').write_text((p/'tagged-previous').read_text() if image.startswith('noponto-api:rollback-') else candidate)
   if os.environ.get('FAIL')=='up' and image.startswith('ghcr.io'): sys.exit(1)
  else: sys.exit(99)
 else: sys.exit(99)
@@ -82,18 +98,22 @@ class DeployTests(unittest.TestCase):
             file.write_text(FAKE)
             file.chmod(0o700)
         (self.path / 'image').write_text(PREVIOUS)
+        (self.path/'running-shadow').write_text('{}')
+        (self.path/'shadow.override.yml').write_bytes((ROOT/'historical-eta-shadow.off.yml').read_bytes())
         for name in ('base.yml', 'overlay.yml', 'runtime.env'):
             (self.path / name).write_text('fixture-only\n')
         (self.path/'physical-eta.override.yml').write_text(json.dumps({'PhysicalEta__Enabled':'true','PhysicalEta__MaxAgeSeconds':'90'}))
         self.env = dict(os.environ, PATH=str(binaries)+':'+os.environ['PATH'],
                         FIXTURE=str(self.path), NOPONTO_BASE_COMPOSE=str(self.path/'base.yml'),
-                        NOPONTO_OVERLAY_COMPOSE=str(self.path/'overlay.yml'), NOPONTO_HEALTH_TIMEOUT='10')
+                        NOPONTO_OVERLAY_COMPOSE=str(self.path/'overlay.yml'), NOPONTO_HEALTH_TIMEOUT='10',
+                        NOPONTO_SHADOW_OVERRIDE=str(self.path/'managed-shadow.yml'))
+        (self.path/'managed-shadow.yml').write_bytes((ROOT/'historical-eta-shadow.off.yml').read_bytes())
 
-    def run_deploy(self, failure='', candidate=CANDIDATE, sequence='109', check=False):
+    def run_deploy(self, failure='', candidate=CANDIDATE, sequence='109', check=False, configure=False):
         self.env['FAIL'] = failure
         return subprocess.run(['bash', str(ROOT/'deploy-api.sh'), candidate, sequence,
                                str(self.path/'runtime.env'), str(self.path/'state'),
-                               str(self.path/'physical-eta.override.yml')]+(['--check'] if check else []),
+                               str(self.path/'physical-eta.override.yml'),str(self.path/'shadow.override.yml')]+(['--check'] if check else ['--configure-shadow'] if configure else []),
                               env=self.env, text=True, capture_output=True, timeout=45)
 
     def calls(self):
@@ -263,6 +283,170 @@ class DeployTests(unittest.TestCase):
         self.assertIn(str(self.path/'state/previous/physical-eta.override.yml'),ups[-1])
         self.assertEqual(PREVIOUS,(self.path/'image').read_text())
 
+    def shadow(self, capture=False):
+        value=json.loads((ROOT/('historical-eta-shadow.capture.yml' if capture else 'historical-eta-shadow.off.yml')).read_text())
+        if capture:
+            directory=self.path/'state/shadow-capture-v2'
+            directory.mkdir(parents=True,exist_ok=True,mode=0o700)
+            directory.chmod(0o700)
+            value['services']['api']['volumes'][0]['source']=str(directory)
+        (self.path/'shadow.override.yml').write_text(json.dumps(value))
+        return value['services']['api']
+
+    def test_capture_only_success_and_private_snapshot(self):
+        candidate=self.shadow(True)
+        result=self.run_deploy()
+        self.assertEqual(0,result.returncode,result.stderr)
+        self.assertEqual(candidate,json.loads((self.path/'running-shadow').read_text()))
+        previous=self.path/'state/previous/shadow.override.json'
+        returned=json.loads(previous.read_text())['services']['api']
+        self.assertEqual('false',returned['environment']['HistoricalEtaShadow__Enabled'])
+        self.assertNotIn('volumes',returned)
+        self.assertEqual(0o600,previous.stat().st_mode & 0o777)
+        ups=[c for c in self.calls() if 'up' in c]
+        self.assertEqual(1,len(ups))
+        self.assertEqual('api',ups[0][-1])
+
+    def test_first_capture_failure_returns_absent_shadow_not_requested_on(self):
+        self.shadow(True)
+        result=self.run_deploy('up')
+        self.assertNotEqual(0,result.returncode)
+        self.assertIn('Rollback confirmado',result.stderr)
+        returned=json.loads((self.path/'running-shadow').read_text())
+        self.assertEqual('false',returned['environment']['HistoricalEtaShadow__Enabled'])
+        self.assertNotIn('volumes',returned)
+        self.assertEqual(PREVIOUS,(self.path/'image').read_text())
+
+    def test_rollback_preserves_actual_previous_mode_in_both_directions(self):
+        for previous_on in (False,True):
+            with self.subTest(previous_on=previous_on):
+                prior=self.shadow(previous_on)
+                (self.path/'running-shadow').write_text(json.dumps(prior))
+                self.shadow(not previous_on)
+                result=self.run_deploy('up')
+                self.assertIn('Rollback confirmado',result.stderr)
+                self.assertEqual(prior,json.loads((self.path/'running-shadow').read_text()))
+
+    def test_rollback_does_not_reread_mutated_candidate_shadow_file(self):
+        self.shadow(True)
+        result=self.run_deploy('mutate-shadow')
+        self.assertIn('Rollback confirmado',result.stderr)
+        self.assertEqual('false',json.loads((self.path/'running-shadow').read_text())['environment']['HistoricalEtaShadow__Enabled'])
+
+    def test_shadow_rejects_inference_partial_modes_fixture_and_unsafe_limits(self):
+        invalid={'MlEnabled':'true','HistoricalEnabled':'true','OfflineExport__Fixture':'true',
+                 'QueueCapacity':'1000','BatchSize':'200','SinkCapacity':'500','TimeoutMs':'1000',
+                 'MaxAgeSeconds':'300','OfflineExport__QueueCapacity':'1024',
+                 'OfflineExport__MaxFileBytes':'8388608','OfflineExport__MaxTotalBytes':'268435456',
+                 'OfflineExport__MaxFiles':'256','OfflineExport__RetentionHours':'168',
+                 'OfflineExport__DirectoryPath':'/tmp/public','Enabled':'true','OfflineExport__Enabled':'true'}
+        for key,value in invalid.items():
+            with self.subTest(key=key):
+                api=self.shadow()
+                api['environment']['HistoricalEtaShadow__'+key]=value
+                (self.path/'shadow.override.yml').write_text(json.dumps({'services':{'api':api}}))
+                result=self.run_deploy(check=True)
+                self.assertNotEqual(0,result.returncode)
+        self.assertFalse(any('up' in c or 'pull' in c for c in self.calls()))
+
+    def test_shadow_cannot_change_other_services_environment_or_hide_aliases(self):
+        for failure in ('shadow-extra-service','shadow-extra-env'):
+            result=self.run_deploy(failure,check=True)
+            self.assertNotEqual(0,result.returncode)
+            self.assertNotIn('SECRET_NOT_TO_PRINT',result.stderr+result.stdout)
+        api=self.shadow()
+        api['environment']['historicaletashadow:mlenabled']='true'
+        (self.path/'shadow.override.yml').write_text(json.dumps({'services':{'api':api}}))
+        self.assertNotEqual(0,self.run_deploy(check=True).returncode)
+
+    def test_capture_refuses_missing_public_or_symlinked_directory(self):
+        api=self.shadow(True)
+        directory=Path(api['volumes'][0]['source'])
+        directory.chmod(0o755)
+        self.assertNotEqual(0,self.run_deploy(check=True).returncode)
+        directory.rmdir()
+        self.assertNotEqual(0,self.run_deploy(check=True).returncode)
+        other=self.path/'private'; other.mkdir(mode=0o700)
+        directory.symlink_to(other,target_is_directory=True)
+        self.assertNotEqual(0,self.run_deploy(check=True).returncode)
+
+    def test_capture_refuses_extra_mount_or_automatic_host_creation(self):
+        for field,value in (('read_only',True),('source','/tmp/untrusted')):
+            api=self.shadow(True); api['volumes'][0][field]=value
+            (self.path/'shadow.override.yml').write_text(json.dumps({'services':{'api':api}}))
+            self.assertNotEqual(0,self.run_deploy(check=True).returncode)
+        api=self.shadow(True); api['volumes'][0]['bind']['create_host_path']=True
+        (self.path/'shadow.override.yml').write_text(json.dumps({'services':{'api':api}}))
+        self.assertNotEqual(0,self.run_deploy(check=True).returncode)
+
+    def test_unknown_running_inference_or_mount_blocks_before_pull(self):
+        for prior in ({'environment':{'HistoricalEtaShadow__MlEnabled':'true'}},
+                      {'volumes':[{'type':'bind','source':'/untrusted','target':'/var/lib/noponto-shadow'}]}):
+            (self.path/'running-shadow').write_text(json.dumps(prior))
+            self.assertNotEqual(0,self.run_deploy().returncode)
+        self.assertFalse(any('up' in c or 'pull' in c for c in self.calls()))
+
+    def test_configure_shadow_requires_same_active_digest_sequence_and_local_image(self):
+        self.shadow(True)
+        self.assertNotEqual(0,self.run_deploy(sequence='108',configure=True).returncode)
+        (self.path/'state/active.run').write_text('108\n')
+        (self.path/'state/active.env').write_text('GTFSRT_API_IMAGE='+CANDIDATE+'\n')
+        self.assertNotEqual(0,self.run_deploy(sequence='109',configure=True).returncode)
+        self.assertNotEqual(0,self.run_deploy(sequence='108',configure=True).returncode)
+        (self.path/'image').write_text(CANDIDATE_ID)
+        result=self.run_deploy(sequence='108',configure=True)
+        self.assertEqual(0,result.returncode,result.stderr)
+        self.assertEqual('108\n',(self.path/'state/active.run').read_text())
+        self.assertFalse(any('pull' in c for c in self.calls()))
+        self.assertEqual((self.path/'shadow.override.yml').read_bytes(),(self.path/'managed-shadow.yml').read_bytes())
+
+    def test_configure_failure_restores_off_and_release_sequence(self):
+        self.shadow(True)
+        (self.path/'state/active.run').write_text('108\n')
+        (self.path/'state/active.env').write_text('GTFSRT_API_IMAGE='+CANDIDATE+'\n')
+        (self.path/'image').write_text(CANDIDATE_ID)
+        result=self.run_deploy('up',sequence='108',configure=True)
+        self.assertIn('Rollback confirmado',result.stderr)
+        self.assertEqual('false',json.loads((self.path/'running-shadow').read_text())['environment']['HistoricalEtaShadow__Enabled'])
+        self.assertEqual('108\n',(self.path/'state/active.run').read_text())
+        self.assertFalse(any('pull' in c for c in self.calls()))
+        self.assertEqual('false',json.loads((self.path/'managed-shadow.yml').read_text())['services']['api']['environment']['HistoricalEtaShadow__Enabled'])
+
+    def test_configure_persistence_failure_restores_active_file_and_actual_mode(self):
+        self.shadow(True)
+        original=(self.path/'managed-shadow.yml').read_bytes()
+        (self.path/'state/active.run').write_text('108\n')
+        (self.path/'state/active.env').write_text('GTFSRT_API_IMAGE='+CANDIDATE+'\n')
+        (self.path/'image').write_text(CANDIDATE_ID)
+        result=self.run_deploy('persist-env',sequence='108',configure=True)
+        self.assertNotEqual(0,result.returncode)
+        self.assertIn('Rollback confirmado',result.stderr)
+        self.assertEqual(original,(self.path/'managed-shadow.yml').read_bytes())
+        self.assertEqual('false',json.loads((self.path/'running-shadow').read_text())['environment']['HistoricalEtaShadow__Enabled'])
+        self.assertEqual('108\n',(self.path/'state/active.run').read_text())
+        self.assertEqual(CANDIDATE_ID,(self.path/'image').read_text())
+
+    def test_runtime_shadow_divergence_is_detected_and_rolled_back(self):
+        self.shadow(True)
+        result=self.run_deploy('runtime-shadow')
+        self.assertNotEqual(0,result.returncode)
+        self.assertIn('Estado Shadow do container diverge',result.stderr)
+        self.assertIn('Rollback confirmado',result.stderr)
+        self.assertEqual('false',json.loads((self.path/'running-shadow').read_text())['environment']['HistoricalEtaShadow__Enabled'])
+
+    def test_python_optimization_cannot_disable_safety_gates(self):
+        self.env['PYTHONOPTIMIZE']='1'
+        self.assertNotEqual(0,self.run_deploy('shadow-extra-env',check=True).returncode)
+
+    def test_configure_refuses_drift_between_managed_file_and_running_mode(self):
+        self.shadow(True)
+        (self.path/'managed-shadow.yml').write_bytes((self.path/'shadow.override.yml').read_bytes())
+        (self.path/'state/active.run').write_text('108\n')
+        (self.path/'state/active.env').write_text('GTFSRT_API_IMAGE='+CANDIDATE+'\n')
+        (self.path/'image').write_text(CANDIDATE_ID)
+        self.assertNotEqual(0,self.run_deploy(sequence='108',configure=True).returncode)
+        self.assertFalse(any('up' in c or 'pull' in c for c in self.calls()))
+
     def test_ssh_launcher_preserves_host_verification_and_cleans_key(self):
         ssh = self.path/'bin/ssh'
         ssh.write_text('#!/usr/bin/env python3\nimport os,sys,json\nfrom pathlib import Path\n'
@@ -270,6 +454,7 @@ class DeployTests(unittest.TestCase):
                        'assert key.stat().st_mode & 0o777 == 0o600\n'
                        'assert "StrictHostKeyChecking=yes" in args\n'
                        'assert "BatchMode=yes" in args\n'
+                       'assert args[-1].endswith(" /fixture/state/historical-eta-shadow.override.yml")\n'
                        'data=sys.stdin.read(); assert "flock -n 9" in data\n'
                        'Path(os.environ["FIXTURE"],"ssh-key-path").write_text(str(key))\n')
         ssh.chmod(0o700)
@@ -277,7 +462,7 @@ class DeployTests(unittest.TestCase):
                    SERVER_TAILSCALE_IP='100.64.0.1', SERVER_USER='fixture',
                    SERVER_SSH_KEY='fake-only', SERVER_SSH_KNOWN_HOSTS='fake-only',
                    NOPONTO_DEPLOY_ENV_FILE='/fixture/runtime.env', NOPONTO_DEPLOY_STATE_DIR='/fixture/state',
-                   NOPONTO_PHYSICAL_ETA_OVERRIDE='/fixture/physical-eta.override.yml')
+                   NOPONTO_PHYSICAL_ETA_OVERRIDE='/fixture/physical-eta.override.yml',NOPONTO_SHADOW_OVERRIDE='')
         result = subprocess.run(['bash', str(ROOT/'ssh-deploy.sh')], env=env,
                                 cwd=ROOT.parent, text=True, capture_output=True, timeout=10)
         self.assertEqual(0, result.returncode, result.stderr)

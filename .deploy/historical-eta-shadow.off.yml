@@ -1,0 +1,24 @@
+{
+  "services": {
+    "api": {
+      "environment": {
+        "HistoricalEtaShadow__Enabled": "false",
+        "HistoricalEtaShadow__MlEnabled": "false",
+        "HistoricalEtaShadow__HistoricalEnabled": "false",
+        "HistoricalEtaShadow__QueueCapacity": "64",
+        "HistoricalEtaShadow__BatchSize": "16",
+        "HistoricalEtaShadow__SinkCapacity": "128",
+        "HistoricalEtaShadow__TimeoutMs": "500",
+        "HistoricalEtaShadow__MaxAgeSeconds": "90",
+        "HistoricalEtaShadow__OfflineExport__Enabled": "false",
+        "HistoricalEtaShadow__OfflineExport__DirectoryPath": "/var/lib/noponto-shadow",
+        "HistoricalEtaShadow__OfflineExport__Fixture": "false",
+        "HistoricalEtaShadow__OfflineExport__QueueCapacity": "128",
+        "HistoricalEtaShadow__OfflineExport__MaxFileBytes": "1048576",
+        "HistoricalEtaShadow__OfflineExport__MaxTotalBytes": "16777216",
+        "HistoricalEtaShadow__OfflineExport__MaxFiles": "32",
+        "HistoricalEtaShadow__OfflineExport__RetentionHours": "24"
+      }
+    }
+  }
+}
