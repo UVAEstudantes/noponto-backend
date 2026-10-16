@@ -478,10 +478,12 @@ public sealed class GpsPollingService : BackgroundService
                 x, null, ResultadoProjecaoOperacional.NaoSolicitada())))
             .ToList();
 
-        if (_physicalEtaOptions?.Value is { Enabled: true } physicalOptions)
+        var capturePhysicalDiagnostic = _historicalEtaShadow?.CapturePhysicalDiagnostics == true;
+        if (_physicalEtaOptions?.Value.Enabled == true || capturePhysicalDiagnostic)
         {
             var physicalNow = DateTimeOffset.UtcNow;
-            todosProcessados = todosProcessados.Select(x => PhysicalEta.Apply(x, physicalNow, physicalOptions)).ToList();
+            var physicalOptions = _physicalEtaOptions?.Value ?? new PhysicalEtaOptions();
+            todosProcessados = todosProcessados.Select(x => PhysicalEta.Apply(x, physicalNow, physicalOptions, capturePhysicalDiagnostic)).ToList();
         }
 
         // C é estritamente auxiliar: com a flag OFF não há leitura, serialização
@@ -1175,7 +1177,7 @@ public sealed class GpsPollingService : BackgroundService
             _etaV2Shadow?.TryRecord(enriquecimento, viagem);
             // Auxiliary bounded TryWrite only, after accepted GPS and operational decision.
             // Never let Shadow exceptions change polling/CAS/passages/public ETA.
-            try { _historicalEtaShadow?.TryCapture(posicao, viagem); } catch { }
+            try { _historicalEtaShadow?.TryCapture(enriquecimento, viagem); } catch { }
             if (_telemetriaMl is not null)
             {
                 var coletar = true;

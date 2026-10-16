@@ -34,6 +34,42 @@ public sealed class HistoricalEtaRuntimeTests(ITestOutputHelper output)
         private sealed class Handler(HttpFactory owner):HttpMessageHandler
         {protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r,CancellationToken ct){owner.Calls++;return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));}}
     }
+    [Theory]
+    [InlineData("valid", true)]
+    [InlineData("unavailable", false)]
+    [InlineData("outdated_quality", false)]
+    [InlineData("legacy_quality", false)]
+    [InlineData("zero_speed", false)]
+    [InlineData("missing_distance", false)]
+    [InlineData("older_than_300", false)]
+    [InlineData("older_than_90", true)]
+    public void CapturePreservesPhysicalEtaOnlyWithCapturedProof(string reason, bool available)
+    {
+        var(g,trip)=Fixture();
+        var now=T.AddSeconds(reason=="older_than_300"?301:reason=="older_than_90"?91:1);
+        g=reason switch {
+            "unavailable"=>g with {EtaConfianca=PhysicalEta.Prefix+"previsao_indisponivel",EtaProximaParadaSegundos=null},
+            "outdated_quality"=>g with {EtaConfianca=PhysicalEta.Prefix+"gps_desatualizado",EtaProximaParadaSegundos=null},
+            "legacy_quality"=>g with {EtaConfianca="alta"},
+            "zero_speed"=>g with {Velocidade=0},
+            "missing_distance"=>g with {DistanciaRestanteRotaMetros=null},
+            _=>g};
+        var observation=Assert.IsType<HistoricalEtaObservation>(HistoricalEtaAdapter.Capture(g,trip,now));
+        Assert.Equal(available,observation.PublicEta.HasValue);
+        if(available)Assert.Equal(g.EtaProximaParadaSegundos,observation.PublicEta);
+        Assert.Equal(g.EtaConfianca,observation.Gps.EtaConfianca);
+        Assert.Equal(g.TimestampGps,observation.Gps.TimestampGps);
+        if(reason=="older_than_90")
+            Assert.Null(PhysicalEta.CapturedSpeed(g,now,new(){Enabled=true,MaxAgeSeconds=90}));
+    }
+
+    [Fact] public void CaptureRejectsAnotherTargetInsteadOfLabellingItsPhysicalEtaUnavailable()
+    {
+        var(g,trip)=Fixture();
+        Assert.NotNull(g.EtaProximaParadaSegundos);
+        Assert.Null(HistoricalEtaAdapter.Capture(g with {ProximaOcorrenciaParadaPadraoId=Guid.NewGuid()},trip,T.AddSeconds(1)));
+    }
+
     [Fact] public void IndependentOffFlags_DoNotRegisterOrContactAnything()
     {
         var services=new ServiceCollection();
