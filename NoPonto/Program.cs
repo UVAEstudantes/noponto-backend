@@ -642,10 +642,7 @@ builder.Services.AddSingleton<GpsSppoCollectorMetrics>();
 builder.Services.AddHostedService<GpsSppoCollectorService>();
 builder.Services.AddHostedService<GpsPollingService>();
 
-builder.Services.AddScoped<ISentidoRepository, SentidoRepository>();
-builder.Services.AddScoped<IModalRepository, ModalRepository>();
 
-builder.Services.AddScoped<IModalService, ModalService>();
 
 // --------------------------------------------------------------------
 // BUILD
