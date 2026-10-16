@@ -611,6 +611,7 @@ builder.Services.AddSingleton<EtaV2Metrics>();
 builder.Services.AddSingleton<IEtaV2Repository, EtaV2Repository>();
 builder.Services.AddSingleton<EtaV2Channel>();
 builder.Services.AddSingleton<IEtaV2Ingress>(sp => sp.GetRequiredService<EtaV2Channel>());
+builder.Services.AddHistoricalEtaShadow(builder.Configuration,builder.Environment.IsProduction());
 builder.Services.AddSingleton<EtaV2ShadowService>();
 builder.Services.AddHostedService<EtaV2BatchWorker>();
 builder.Services.AddHostedService<EtaV2MaintenanceWorker>();

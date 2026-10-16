@@ -32,6 +32,7 @@ jobs:
         run: |
           for script in .deploy/*.sh; do bash -n "$script"; done
           python3 -B -m unittest discover -s .deploy -p 'test_*.py' -v
+          python3 -B -m unittest discover -s tools/eta_ml -p 'test_evaluate_shadow.py' -v
 
       - name: Prepara SDK e diretórios descartáveis
         run: |
