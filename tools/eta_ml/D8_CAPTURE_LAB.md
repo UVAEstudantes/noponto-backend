@@ -1,5 +1,15 @@
 # D8 — captura descartável, exclusivamente sintética
 
+**Encerramento em 19/10/2026:** a sexta tentativa
+`d8-run-257a2c6bc48a479ab33bbcedb98c5e88` passou com exit 0, preparo 1/1,
+captura 1/1 e duas observações fixture exportadas. Limpeza e preservação dos quatro
+containers protegidos foram confirmadas. D8 concluída como integração sintética;
+`CalculatedAt`/`FeatureCutoffUtc` desconhecidos continuam nulos, sem validade
+científica. Evidências e plano D9 em
+[D9_PLANO_COLETA_CAUSAL_GROUND_TRUTH_ETA_TCC_20261019.md](../../D9_PLANO_COLETA_CAUSAL_GROUND_TRUTH_ETA_TCC_20261019.md).
+As referências abaixo a ensaios ainda futuros descrevem o estado histórico da
+preparação; não substituem este fechamento nem autorizam outra execução.
+
 O modo `-CaptureD8` estende `test_shadow_disposable.ps1`. Não usa Compose,
 `Program.cs`, appsettings, `.env`, API ou loops de serviços GPS. Reutiliza as
 fixtures Protobuf/HTTP de `HistoricalEtaGtfsPollingTests` e chama duas coletas
