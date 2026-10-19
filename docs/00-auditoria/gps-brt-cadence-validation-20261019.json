@@ -1,0 +1,76 @@
+{
+  "audit_commit": "a934884",
+  "scope": "BRT GTFS acquisition gate only; no production access",
+  "runner": "SDK 9.0.306 / xUnit / VSTest 17.14.1",
+  "runs": {
+    "brt-cadence-reproduction.trx": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0,
+      "sha256": "d6ebcd485794946ec213ef07fc5b95c45f29a5573204c87843f48f53ba24cc92"
+    },
+    "brt-cadence-red.trx": {
+      "total": 1,
+      "passed": 0,
+      "failed": 1,
+      "sha256": "6c8510a9f13f91ee06930a4e066246b2bcb26082479eb5b8ee085de3f77112ac"
+    },
+    "brt-cadence-targeted.trx": {
+      "total": 40,
+      "passed": 40,
+      "failed": 0,
+      "sha256": "5e114efb39d90d122c7f09d4523f1669f06f03ab3139931ae45acdc21fb2055e"
+    },
+    "brt-cadence-offline-release.trx": {
+      "total": 635,
+      "passed": 635,
+      "failed": 0,
+      "sha256": "4154103ef5205a739f41e49db4963e65c925010719b4654d8ee4302765d5c5dc"
+    }
+  },
+  "root_cause": {
+    "legacy_gate_request_starts_seconds": [
+      0,
+      60,
+      120
+    ],
+    "desired_regression_red_actual": [
+      0,
+      60,
+      120
+    ],
+    "desired_regression_red_expected": [
+      0,
+      45,
+      90
+    ],
+    "fixed_polling_request_starts_seconds": [
+      0,
+      45,
+      90,
+      135
+    ],
+    "poll_seconds": 15,
+    "legacy_gate_seconds": 20,
+    "cache_max_age_seconds": 30,
+    "simulated_header_latency_seconds": 1
+  },
+  "unchanged_source_sha256_lf_normalized": {
+    "NoPonto/2-Application/Services/GPS/GpsBrtPollingGate.cs": "d51be59ba410fbb2de79cbf6650ebb07f3f068c6ea716750f54bd56a1856ae96",
+    "NoPonto/2-Application/Services/GPS/GtfsRealtimeGps.cs": "f789be8c3963d463cb614b43aa3904ad5110453635bf0cafc5be30edb8cd50fd",
+    "NoPonto/2-Application/Services/GPS/GtfsRealtimeGpsSource.cs": "b0018f98713d40fa2b4030bd1cccc93c9b5b35e11492f55f0e2944fc4c2ae8e2",
+    "NoPonto/2-Application/Services/GPS/GpsSppoCollectorService.cs": "05faad726904b940151df8d27af35d12de187cf87dcb924845e563b4be029c4b",
+    "NoPonto/2-Application/Services/GPS/GpsSppoSnapshotStore.cs": "2d5b37eaab1f9a00215f4137dfacc3cd18169440edb05846751bf44f71073388",
+    "NoPonto/2-Application/Services/GPS/GpsTimestampDeduplication.cs": "7059238bea8c0d919a9aaa5321fe3ebfd8ae9a30604eab1147633c13c182ca0c",
+    "NoPonto/2-Application/Services/GPS/GpsSourceContracts.cs": "41960c0f605e68c44e991db99ad95629197e9ca150e556691ddedb6870027e1a",
+    "NoPonto/2-Application/Services/GPS/GpsPoolingOptions.cs": "9752cc38c41f1cdd679ed57257d4c28fd8b2212007dc727e5cb10bf8d2880e09",
+    "NoPonto/2-Application/Services/GPS/GpsEnriquecimentoService.cs": "1abc73bf9d485a1afe78d490fdf5de6834d49342d62b75f057d5e443a1c86ecc",
+    "NoPonto/4-Data/Repositories/PosicaoVeiculoCacheRepository.cs": "e306e2ff07877d81812712b72ac900accf3494e50da74af3756dfce54609f7d1",
+    "NoPonto/4-Data/Repositories/PosicaoVeiculoPayloadWriter.cs": "f0c434cd0bc2818c58a4c81bd55225d25616785b8a81f3145be4434b3d813e17"
+  },
+  "limitations": [
+    "deterministic synthetic HTTP; not a production timing measurement",
+    "Redis/Postgres integration and deployment not run",
+    "40s active TTL is unchanged; predecessor availability not certified"
+  ]
+}

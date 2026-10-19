@@ -4,7 +4,7 @@ using Xunit;
 
 namespace NoPonto.Tests;
 
-public sealed class GpsPollingCadenciaTests
+public sealed partial class GpsPollingCadenciaTests
 {
     [Theory]
     [InlineData(6, true, false, 14)]

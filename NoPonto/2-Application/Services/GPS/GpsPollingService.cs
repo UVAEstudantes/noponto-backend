@@ -212,9 +212,7 @@ public sealed class GpsPollingService : BackgroundService
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
 
         inicioEtapa = System.Diagnostics.Stopwatch.GetTimestamp();
-        var brtPolling = await _brtGate.ObterAsync(
-            TimeSpan.FromSeconds(opcoes.IntervaloBrtSegundos),
-            BuscarResultadoBrtAsync, ct);
+        var brtPolling = await ObterBrtAsync(opcoes, ct);
         var resultadoBrt = brtPolling.ResultadoEfetivo;
         performance.BrtConsultasHttp = brtPolling.ConsultaHttpReal ? 1 : 0;
         performance.BrtCacheReutilizacoes = brtPolling.CacheReutilizado ? 1 : 0;
@@ -1015,6 +1013,15 @@ public sealed class GpsPollingService : BackgroundService
         return await ConfirmarLoteDetalhadoAsync(detalhadas, ttlAtivo, ttlRecente,
             grauParalelismo, ct, performance);
     }
+
+    internal Task<ResultadoBrtPolling> ObterBrtAsync(
+        GpsPollingOptions opcoes, CancellationToken ct, long? timestampAtual = null)
+        // GTFS-RT already owns acquisition cadence (HTTP freshness/rate limit).
+        // A second interval restarts on client cache hits and can skip the next
+        // eligible poll. Keep gate serialization/fail-open and the legacy interval.
+        => _brtGate.ObterAsync(_brtSource is GtfsRealtimeGpsSource
+                ? TimeSpan.Zero : TimeSpan.FromSeconds(opcoes.IntervaloBrtSegundos),
+            BuscarResultadoBrtAsync, ct, timestampAtual);
 
     private async Task<ResultadoFonteGps> BuscarResultadoBrtAsync(CancellationToken ct)
     {
