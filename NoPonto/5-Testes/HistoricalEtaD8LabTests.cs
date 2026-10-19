@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Google.Protobuf;
 using Microsoft.AspNetCore.SignalR;
@@ -24,6 +26,13 @@ namespace NoPonto.Tests;
 
 public sealed partial class HistoricalEtaGtfsPollingTests
 {
+    private static string D8ExpectedObservationId(PosicaoVeiculoDto source)
+    {
+        var canonical = $"{source.ModalFonte.Trim().ToUpperInvariant()}|{source.ProvedorFonte.Trim().ToUpperInvariant()}|" +
+                        $"{source.Ordem.Trim().ToUpperInvariant()}|{source.TimestampGps.ToUniversalTime():O}";
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
+    }
+
     [Theory]
     [InlineData("postgres_host")]
     [InlineData("postgres_database")]
@@ -111,6 +120,7 @@ public sealed partial class HistoricalEtaGtfsPollingTests
         cas.OnAttempt = () => attempts++;
         var trips = new Trips();
         var telemetry = new Telemetry();
+        var sourceObservations = new List<PosicaoVeiculoDto>();
         var matching = new FakeGpsPadraoRepository();
         var options = new GpsPollingOptions { EnriquecerTodasLinhas = true, IntervaloBrtSegundos = 0 };
         var gtfs = new GtfsRealtimeGpsOptions { BusEnabled = true, BrtEnabled = true, CrosswalkValidated = true,
@@ -157,6 +167,12 @@ public sealed partial class HistoricalEtaGtfsPollingTests
                 matching.Respostas.Enqueue(trips.Route(.1 + cycle * .001));
                 var collected = await collector.ColetarUmaVezAsync(DateTimeOffset.UtcNow);
                 var gps = Assert.Single(collected.Posicoes);
+                sourceObservations.Add(gps);
+                Assert.NotEmpty(gps.ModalFonte);
+                Assert.NotEmpty(gps.ProvedorFonte);
+                var expectedObservationId = D8ExpectedObservationId(gps);
+                Assert.Equal(expectedObservationId, TelemetriaMlContrato.ObservacaoId(
+                    gps.ModalFonte, gps.ProvedorFonte, gps.Ordem, gps.TimestampGps));
                 var expectedTimestamp = time.AddSeconds(advanceSourceClock ? cycle * 10 : 0);
                 Assert.Equal(expectedTimestamp, gps.TimestampGps);
                 Assert.Equal("00123", gps.Ordem);
@@ -172,24 +188,47 @@ public sealed partial class HistoricalEtaGtfsPollingTests
                 Assert.Equal(expectedCount, trips.Calls);
                 Assert.Equal(expectedCount, telemetry.Events.Count);
                 Assert.Equal(expectedTimestamp.ToUnixTimeMilliseconds(), Assert.Single(await cas.LerWatermarksAsync([gps.Ordem], default)));
+                var matchingEvent = Assert.Single(telemetry.Events, e => e.TimestampGps == expectedTimestamp);
+                Assert.Equal(expectedObservationId, matchingEvent.ObservacaoId);
+                if (expectedCount == cycle + 1) // Only newly accepted observations have a current Redis DTO.
+                {
+                    var rehydrated = JsonSerializer.Deserialize<PosicaoVeiculoDto>(
+                        (await cache.GetStringAsync(GpsPollingService.ChaveVeiculoAtivo(gps.Ordem)))!)!;
+                    Assert.Empty(rehydrated!.ModalFonte);
+                    Assert.Empty(rehydrated.ProvedorFonte);
+                    Assert.NotEqual(expectedObservationId, TelemetriaMlContrato.ObservacaoId(
+                        rehydrated.ModalFonte, rehydrated.ProvedorFonte, rehydrated.Ordem, rehydrated.TimestampGps));
+                }
                 await Until(() => shadow.Results.Count == expectedCount);
                 Assert.Equal(expectedCount, shadow.Metrics["enqueued"]);
                 for (var i = 0; i < expectedCount; i++)
                 {
                     var accepted = cas.Accepted[i];
+                    var original = sourceObservations[i];
                     var e = telemetry.Events[i];
+                    var originalId = D8ExpectedObservationId(original);
+                    Assert.Equal(originalId, TelemetriaMlContrato.ObservacaoId(
+                        original.ModalFonte, original.ProvedorFonte, original.Ordem, original.TimestampGps));
                     Assert.Equal(time.AddSeconds(i * 10), e.TimestampGps);
+                    Assert.Equal(original.ModalFonte, e.Modal);
+                    Assert.Equal(original.ProvedorFonte, e.Provedor);
+                    Assert.Equal(original.Ordem, e.OrdemVeiculo);
+                    Assert.Equal(original.TimestampGps, e.TimestampGps);
                     Assert.Equal(accepted.Ordem, e.OrdemVeiculo);
                     Assert.Equal(trips.Version, e.PadraoVersaoId);
                     Assert.NotNull(e.ViagemId);
                     Assert.Equal(telemetry.Events[0].ViagemId, e.ViagemId);
-                    Assert.Equal(TelemetriaMlContrato.ObservacaoId(accepted.ModalFonte, accepted.ProvedorFonte, accepted.Ordem, accepted.TimestampGps), e.ObservacaoId);
+                    Assert.Equal(originalId, e.ObservacaoId);
                     Assert.Single(shadow.Results, r => r.ObservationId == e.ObservacaoId);
                     var row = Assert.Single(geometry.Observations, r => r.ObservationId == e.ObservacaoId);
+                    Assert.Equal(originalId, row.ObservationId);
                     Assert.Equal(e.ViagemId, row.TripId);
                     Assert.Equal(accepted.ProximaOcorrenciaParadaPadraoId, row.Target.Id);
                     Assert.Equal(80, row.OperationalDto!.Dto!.EtaProximaParadaSegundos);
                     Assert.Equal(i + 1, row.OperationalDto.SpeedAverage!.Samples.Count);
+                    Assert.Equal(originalId, row.OperationalDto.SpeedAverage.ObservationId);
+                    Assert.Contains(row.OperationalDto.SpeedAverage.Samples, sample => sample.ObservationId == originalId);
+                    Assert.Null(row.OperationalDto.FeatureCutoffUtc);
                 }
                 Assert.Equal(expectedCount, telemetry.Events.Select(e => e.ObservacaoId).Distinct().Count());
             }
@@ -250,6 +289,7 @@ public sealed partial class HistoricalEtaGtfsPollingTests
             telemetriaMl: telemetry, historicalEtaShadow: shadow);
         using var collector = new GpsSppoCollectorService(resolver, store, new Monitor<GpsSppoCollectorOptions>(), NullLogger<GpsSppoCollectorService>.Instance);
         var accepted = new List<PosicaoVeiculoDto>();
+        var sourceObservations = new List<PosicaoVeiculoDto>();
         try
         {
             await export.StartAsync(default); await shadow.StartAsync(default);
@@ -259,15 +299,29 @@ public sealed partial class HistoricalEtaGtfsPollingTests
                 // Both receipt instants remain in the past relative to the real capture clock.
                 sourceClock.Now = t.AddSeconds(10 + cycle * 31);
                 var collected = await collector.ColetarUmaVezAsync(DateTimeOffset.UtcNow);
-                Assert.Equal(t.AddSeconds(cycle * 10), Assert.Single(collected.Posicoes).TimestampGps);
+                var originalGps = Assert.Single(collected.Posicoes);
+                sourceObservations.Add(originalGps);
+                Assert.NotEmpty(originalGps.ModalFonte);
+                Assert.NotEmpty(originalGps.ProvedorFonte);
+                var expectedObservationId = D8ExpectedObservationId(originalGps);
+                Assert.Equal(expectedObservationId, TelemetriaMlContrato.ObservacaoId(
+                    originalGps.ModalFonte, originalGps.ProvedorFonte, originalGps.Ordem, originalGps.TimestampGps));
+                Assert.Equal(t.AddSeconds(cycle * 10), originalGps.TimestampGps);
                 var method = typeof(GpsPollingService).GetMethod("ProcessarCicloAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 Assert.True(await ((Task<bool>)method.Invoke(polling, [DateTimeOffset.UtcNow, options, Stopwatch.GetTimestamp(), null, CancellationToken.None])!).WaitAsync(TimeSpan.FromSeconds(15)));
                 Assert.Equal(cycle + 1, telemetry.Events.Count);
                 var entry = telemetry.Events[cycle];
                 var gps = JsonSerializer.Deserialize<PosicaoVeiculoDto>((await cache.GetStringAsync(GpsPollingService.ChaveVeiculoAtivo(entry.OrdemVeiculo)))!)!;
                 Assert.Equal(t.AddSeconds(cycle * 10), gps.TimestampGps);
+                Assert.Empty(gps.ModalFonte);
+                Assert.Empty(gps.ProvedorFonte);
+                Assert.NotEqual(expectedObservationId, TelemetriaMlContrato.ObservacaoId(
+                    gps.ModalFonte, gps.ProvedorFonte, gps.Ordem, gps.TimestampGps));
+                Assert.Equal(originalGps.ModalFonte, entry.Modal);
+                Assert.Equal(originalGps.ProvedorFonte, entry.Provedor);
+                Assert.Equal(originalGps.Ordem, entry.OrdemVeiculo);
                 Assert.Equal(gps.TimestampGps, entry.TimestampGps);
-                Assert.Equal(TelemetriaMlContrato.ObservacaoId(gps.ModalFonte, gps.ProvedorFonte, gps.Ordem, gps.TimestampGps), entry.ObservacaoId);
+                Assert.Equal(expectedObservationId, entry.ObservacaoId);
                 Assert.Equal(telemetry.Events[0].ViagemId, entry.ViagemId);
                 Assert.Equal(gps.TimestampGps.ToUnixTimeMilliseconds(), (await cas.LerWatermarksAsync([gps.Ordem], default)).Single());
                 Assert.Equal(80, gps.EtaProximaParadaSegundos); Assert.Equal("alta", gps.EtaConfianca);
@@ -282,6 +336,7 @@ public sealed partial class HistoricalEtaGtfsPollingTests
                 Assert.Equal(gps.TimestampGps, current!.Estado!.Observada.TimestampUltimaAtualizacao);
                 accepted.Add(gps);
                 await Until(() => shadow.Results.Count == cycle + 1);
+                Assert.Single(shadow.Results, row => row.ObservationId == expectedObservationId);
             }
             var count = shadow.Results.Count;
             Assert.Equal(PosicaoVeiculoCacheStatus.RejectedOlderOrEqual,
@@ -304,19 +359,32 @@ public sealed partial class HistoricalEtaGtfsPollingTests
             .Where(line => JsonSerializer.Deserialize<JsonElement>(line).TryGetProperty("observation_id", out _))
             .Select(OperationalEtaCaptureContract.Read).ToArray();
         Assert.Equal(2, rows.Length);
-        var byIdentity = accepted.ToDictionary(gps => TelemetriaMlContrato.ObservacaoId(
-            gps.ModalFonte, gps.ProvedorFonte, gps.Ordem, gps.TimestampGps));
+        var byIdentity = accepted.Select((gps, index) =>
+        {
+            var original = sourceObservations[index];
+            var id = D8ExpectedObservationId(original);
+            Assert.Equal(id, TelemetriaMlContrato.ObservacaoId(
+                original.ModalFonte, original.ProvedorFonte, original.Ordem, original.TimestampGps));
+            return (id, Original: original, Persisted: gps);
+        }).ToDictionary(item => item.id);
         foreach (var (row, capture) in rows)
         {
-            var gps = byIdentity[row.ObservationId];
+            var pair = byIdentity[row.ObservationId];
+            var original = pair.Original;
+            var gps = pair.Persisted;
             Assert.Equal("fixture", row.DataKind);
-            Assert.Equal(TelemetriaMlContrato.ObservacaoId(gps.ModalFonte, gps.ProvedorFonte, gps.Ordem, gps.TimestampGps), row.ObservationId);
-            Assert.Equal(telemetry.Events.Single(e => e.ObservacaoId == row.ObservationId).ViagemId, row.TripId);
+            Assert.Equal(D8ExpectedObservationId(original), row.ObservationId);
+            var telemetryEvent = Assert.Single(telemetry.Events, e => e.ObservacaoId == row.ObservationId);
+            Assert.Equal(row.ObservationId, telemetryEvent.ObservacaoId);
+            Assert.Equal(original.ModalFonte, telemetryEvent.Modal);
+            Assert.Equal(original.ProvedorFonte, telemetryEvent.Provedor);
+            Assert.Equal(telemetryEvent.ViagemId, row.TripId);
             Assert.Equal(gps.PadraoVersaoId, row.VersionId); Assert.Equal(gps.ProximaOcorrenciaParadaPadraoId, row.TargetId);
             Assert.Equal(gps.EtaProximaParadaSegundos, capture!.Dto!.EtaProximaParadaSegundos);
             Assert.Equal(gps.EtaConfianca, capture.Dto.EtaConfianca);
             Assert.Null(capture.CalculatedAt); Assert.Null(capture.FeatureCutoffUtc);
             Assert.Equal(row.ObservationId, capture.SpeedAverage!.ObservationId);
+            Assert.Contains(capture.SpeedAverage.Samples, sample => sample.ObservationId == row.ObservationId);
             Assert.Equal(gps.TimestampGps == t ? 1 : 2, capture.SpeedAverage.Samples.Count);
             Assert.Equal(20, capture.SpeedAverage.MeanKmh);
             Assert.Equal("calculation_time_missing", capture.SpeedAverageEvidence);
