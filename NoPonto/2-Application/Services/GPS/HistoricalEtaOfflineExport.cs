@@ -37,7 +37,8 @@ internal sealed record HistoricalEtaOfflineRecord(string Schema, string DataKind
     double? HistoricalEta, string HistoricalStatus, string? HistoricalDigest,
     string PhysicalStatus, double? DistanceMetres, DateTimeOffset? TrainingEndUtc, string MlUnavailableReason,
     string PhysicalVersion, string HistoricalVersion, DateTimeOffset? PhysicalArrivalUtc, DateTimeOffset? HistoricalArrivalUtc, DateTimeOffset? MlArrivalUtc,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? PhysicalApplyReason = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? PhysicalApplyReason = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] OperationalDtoCapture? OperationalDto = null);
 
 /// <summary>Explicit opt-in local bounded JSONL export. The GPS caller only uses TryWrite.</summary>
 public sealed class HistoricalEtaOfflineExport : BackgroundService
@@ -50,6 +51,7 @@ public sealed class HistoricalEtaOfflineExport : BackgroundService
     private readonly HistoricalEtaOfflineExportOptions options;
     private readonly TimeProvider clock;
     private readonly bool enabled;
+    private readonly bool captureOperationalDto;
     private readonly Channel<HistoricalEtaOfflineRecord> queue;
     private readonly ConcurrentDictionary<string, long> counters = new();
     private readonly string instance = Guid.NewGuid().ToString("N");
@@ -64,6 +66,7 @@ public sealed class HistoricalEtaOfflineExport : BackgroundService
         this.options = options.Value;
         if (!this.options.Valid()) throw new ArgumentException("Invalid offline Shadow export limits/directory.");
         enabled = this.options.Enabled && shadow.Value.Enabled;
+        captureOperationalDto = enabled && shadow.Value.OperationalDtoCaptureEnabled;
         this.clock = clock ?? TimeProvider.System;
         queue = Channel.CreateBounded<HistoricalEtaOfflineRecord>(new BoundedChannelOptions(this.options.QueueCapacity)
             { FullMode = BoundedChannelFullMode.Wait, SingleReader = true, SingleWriter = false });
@@ -102,7 +105,8 @@ public sealed class HistoricalEtaOfflineExport : BackgroundService
                 o.HistoricalBaseline,o.HistoricalStatus,o.HistoricalDigest,
                 o.PublicEta.HasValue?"success":"physical_unavailable",gps.DistanciaRestanteRotaMetros,o.TrainingEndUtc,o.MlUnavailableReason,
                 "physical-causal-v1","train-group-median-v1",Arrival(o.PublicEta),Arrival(o.HistoricalBaseline),status=="success"?Arrival(prediction):null,
-                o.PhysicalApplyReason is {} reason && Enum.IsDefined(reason)?reason.ToString():null);
+                o.PhysicalApplyReason is {} reason && Enum.IsDefined(reason)?reason.ToString():null,
+                captureOperationalDto ? o.OperationalDto : null);
             Interlocked.Increment(ref depth);
             if (queue.Writer.TryWrite(record)) { Count("enqueued"); return true; }
             Interlocked.Decrement(ref depth); Count("queue_full_drop"); return false;
@@ -186,7 +190,8 @@ public sealed class HistoricalEtaOfflineExport : BackgroundService
 
     private async Task<bool> WriteAsync(object value, bool reserve, CancellationToken ct)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(value, Json);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(value,
+            value is HistoricalEtaOfflineRecord { OperationalDto: not null } ? OperationalEtaCapture.Json : Json);
         if (bytes.Length + 1 > ReserveBytes) { Count("oversized_record_drop"); return false; }
         var files = Inventory();
         var reserved = reserve ? ReserveBytes : 0;

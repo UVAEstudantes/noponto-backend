@@ -47,6 +47,21 @@ localhost:6380 e chaves canônicas; não se deve executar a suíte completa supo
 que todos os testes sejam offline. Testes antigos compilados fora do csproj
 tampouco constituem cobertura deste check.
 
+Adição em 18/10/2026: `OperationalEtaReplayTests` usa exclusivamente snapshots
+sintéticos em memória, relógio explícito e a projeção estática do endpoint.
+Não instancia serviço/DbContext, não abre HTTP e não lê o bundle privado.
+Verifica o núcleo de replay offline; não certifica labels nem precisão real.
+
+Extensão D4: a mesma classe parcial valida o contrato privado em laboratório
+usando também o exportador existente com `Fixture=true`, relógio fixo e uma
+pasta temporária exclusiva. Só há IO local de fixtures, com limpeza dessa pasta;
+sem HTTP, Redis, PostgreSQL, dados históricos ou captura ativa. Allowlist intacta.
+
+Etapa D5: a fixture de polling cobre também a opção privada de captura causal
+desligada por padrão. As variantes com a opção ativa usam somente fontes,
+handlers, repositórios e relógios de teste, mais exportação `Fixture=true` em
+diretório temporário. Não alteram a configuração real nem conectam serviços.
+
 ## Isolamento e resultados
 
 O job de validação usa runner hospedado Ubuntu, token somente de leitura e

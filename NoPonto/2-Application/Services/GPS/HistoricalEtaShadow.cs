@@ -15,6 +15,7 @@ public sealed class HistoricalEtaShadowOptions
     public bool Enabled { get; set; }
     public bool MlEnabled { get; set; }
     public bool HistoricalEnabled { get; set; }
+    public bool OperationalDtoCaptureEnabled { get; set; }
     public string? QualificationManifestPath { get; set; }
     public string? QualificationManifestSha256 { get; set; }
     public string? ExpectedModelDigest { get; set; }
@@ -47,6 +48,7 @@ public sealed record HistoricalEtaObservation(string RequestId, string Observati
     public DateTimeOffset? TrainingEndUtc { get; init; }
     public string MlUnavailableReason { get; init; } = "not_evaluated";
     internal PhysicalEtaReason? PhysicalApplyReason { get; init; }
+    internal OperationalDtoCapture? OperationalDto { get; init; }
 }
 public sealed record HistoricalEtaGeometry(Guid TargetId, Guid StopId, Guid VersionId, Guid PatternId,
     Guid LineId, Guid DirectionId, string LineCode, string Topology, double Destination, double Distance);
@@ -235,10 +237,29 @@ public sealed class HistoricalEtaShadow : BackgroundService
         finally{Monitor.Exit(gate);}
     }
     internal bool CapturePhysicalDiagnostics => options.Enabled;
-    public bool TryCapture(PosicaoVeiculoDto gps,ViagemObservadaResultado? trip) => TryCaptureCore(gps,trip,null);
+    internal bool CaptureOperationalDto => options.Enabled && options.OperationalDtoCaptureEnabled;
+    internal ResultadoEnriquecimentoGps PrepareOperationalCapture(ResultadoEnriquecimentoGps input,
+        DateTimeOffset physicalNow, PhysicalEtaOptions physicalOptions)
+    {
+        if (!CaptureOperationalDto) return input;
+        try {
+            // D7 proves only the speed window association. Other feature availability and
+            // legacy emission remain unknown, so the complete feature cutoff stays null.
+            DateTimeOffset? calculatedAt = physicalOptions.Enabled ? physicalNow : null;
+            var evidence = input.SpeedAverageProvenance?.Assess(input, calculatedAt) ?? "snapshot_missing";
+            return input with { OperationalCalculation = new(input.Posicao,
+                calculatedAt, null,
+                physicalOptions.Enabled ? OperationalReplayPolicy.PhysicalCapturedFrozen : OperationalReplayPolicy.LegacyFrozen,
+                physicalOptions.Enabled ? physicalOptions.MaxAgeSeconds : null) {
+                    SpeedAverage = evidence == "association_mismatch" ? null : input.SpeedAverageProvenance,
+                    SpeedAverageEvidence = evidence } };
+        } catch { Count("operational_dto_prepare_failure"); return input; }
+    }
+    public bool TryCapture(PosicaoVeiculoDto gps,ViagemObservadaResultado? trip) => TryCaptureCore(gps,trip,null,null);
     internal bool TryCapture(ResultadoEnriquecimentoGps input,ViagemObservadaResultado? trip)
-        => TryCaptureCore(input.Posicao,trip,input.PhysicalCalculation);
-    private bool TryCaptureCore(PosicaoVeiculoDto gps,ViagemObservadaResultado? trip,PhysicalEtaCalculation? calculation)
+        => TryCaptureCore(input.Posicao,trip,input.PhysicalCalculation,input.OperationalCalculation);
+    private bool TryCaptureCore(PosicaoVeiculoDto gps,ViagemObservadaResultado? trip,PhysicalEtaCalculation? calculation,
+        OperationalCalculationWitness? operationalCalculation)
     {
         if(!options.Enabled) return false;
         try {
@@ -247,6 +268,11 @@ public sealed class HistoricalEtaShadow : BackgroundService
                 gps.TimestampGps>clock.GetUtcNow()||gps.TimestampGps<=DateTimeOffset.UnixEpoch?"rejected.gps_time":
                 gps.PosicaoNaRota is not { } p||!double.IsFinite(p)||p<0||p>=trip.Value.ProximaOcorrenciaOperacional!.PosicaoLinha?"rejected.position_or_wrap":"rejected.identity");return false;}
             Count("eligible");
+            if (CaptureOperationalDto && operationalCalculation is not null)
+            {
+                try { o=o with { OperationalDto=OperationalEtaCapture.Capture(o,gps,operationalCalculation) }; }
+                catch { Count("operational_dto_capture_failure"); } // Continue the existing Shadow observation.
+            }
             var reason = calculation is not null && ReferenceEquals(calculation.Position,gps) && Enum.IsDefined(calculation.Reason)
                 ? calculation.Reason : PhysicalEtaReason.not_recorded;
             o=o with {PhysicalApplyReason=reason};

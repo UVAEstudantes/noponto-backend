@@ -61,6 +61,14 @@ internal sealed record ResultadoEnriquecimentoGps(
 {
     internal PosicaoVeiculoDto? PredecessorFisico { get; init; }
     internal PhysicalEtaCalculation? PhysicalCalculation { get; init; }
+    internal OperationalCalculationWitness? OperationalCalculation { get; init; }
+    internal GpsSpeedAverageProvenance? SpeedAverageProvenance { get; init; }
+    internal object SpeedAverageExecution { get; } = new();
+
+    internal ResultadoEnriquecimentoGps WithSpeedAverageProvenance(GpsSpeedAverageProvenance snapshot) =>
+        this with { SpeedAverageProvenance = snapshot with {
+            ObservationId = GpsSpeedAverageProvenance.Identity(Posicao),
+            Position = Posicao, Execution = SpeedAverageExecution } };
 }
 
 // Diagnóstico efêmero: não integra API, Redis, viagem, outbox ou SignalR.

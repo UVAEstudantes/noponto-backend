@@ -125,7 +125,156 @@ public sealed class PhysicalEtaMvpTests
         var second = first with { TimestampGps = T, Longitude = -43.1999,
             LongitudeAnterior = first.Longitude, TimestampAnterior = first.TimestampGps };
         var b = await enricher.EnriquecerComContextoAsync(second, null, default, null);
+        Assert.NotNull(b.SpeedAverageProvenance);
+        Assert.Equal(b.Posicao.VelocidadeMedia, b.SpeedAverageProvenance.MeanKmh);
+        Assert.Equal(new[] { 36d, 36d }, b.SpeedAverageProvenance.Samples.Select(s => s.ValueKmh));
         Assert.Equal(100, PhysicalEta.Apply(b, T, On).Posicao.EtaProximaParadaSegundos);
+    }
+
+    [Fact]
+    public void D6_SpeedWindowKeepsLegacyMeanOrderAndIndividualTimes()
+    {
+        var clock = new SpeedClock { Now = T.AddSeconds(10) };
+        var enricher = SpeedEnricher(clock);
+        var position = Fixture().Posicao with
+        {
+            Ordem = "D6-WINDOW", ModalFonte = "ONIBUS", ProvedorFonte = "FIXTURE"
+        };
+        var readings = new (double Speed, DateTimeOffset Gps, DateTimeOffset Received,
+            DateTimeOffset? Sent, DateTimeOffset? Server)[]
+        {
+            (double.NaN, default, default, null, null),
+            (20, T.AddSeconds(-2), T.AddSeconds(1), null, null),
+            (20, T.AddSeconds(-2), T.AddSeconds(2), null, null),
+            (40, T.AddSeconds(-10), T.AddSeconds(3), T.AddSeconds(-9), T.AddSeconds(-8)),
+            (120, T.AddSeconds(-1), T.AddSeconds(4), null, null),
+            (double.PositiveInfinity, T.AddSeconds(-1), T.AddSeconds(4), null, null),
+            (-5, default, default, null, null),
+            (60, T.AddSeconds(-30), T.AddSeconds(5), null, null)
+        };
+        var legacyWindow = new Queue<double>();
+        GpsSpeedAverageProvenance? duplicateSnapshot = null;
+        GpsSpeedAverageProvenance? latest = null;
+
+        foreach (var (speed, gps, received, sent, server) in readings)
+        {
+            if (speed <= 90)
+            {
+                legacyWindow.Enqueue(speed);
+                while (legacyWindow.Count > 3) legacyWindow.Dequeue();
+            }
+            var result = enricher.AtualizarHistoricoVelocidadeComProveniencia(position with
+            {
+                Velocidade = speed, TimestampGps = gps, RecebidoEmUtc = received,
+                TimestampEnvioFonte = sent, TimestampServidorFonte = server
+            });
+            latest = Assert.IsType<GpsSpeedAverageProvenance>(result.SpeedAverageProvenance);
+            var expected = legacyWindow.Count > 0 ? legacyWindow.Average() : (double?)null;
+            if (expected is { } mean)
+            {
+                Assert.Equal(BitConverter.DoubleToInt64Bits(mean),
+                    BitConverter.DoubleToInt64Bits(result.Posicao.VelocidadeMedia!.Value));
+                Assert.Equal(mean, latest.MeanKmh);
+            }
+            else Assert.Null(result.Posicao.VelocidadeMedia);
+            Assert.Equal(legacyWindow.ToArray(), latest.Samples.Select(s => s.ValueKmh));
+            Assert.InRange(latest.Samples.Count, 0, 3);
+            Assert.All(latest.Samples, sample =>
+            {
+                Assert.Equal("D6-WINDOW", sample.Vehicle);
+                Assert.Equal("ONIBUS", sample.ModalSource);
+                Assert.Equal("FIXTURE", sample.ProviderSource);
+                Assert.True(sample.RegisteredAtUtc <= sample.AvailableAtUtc);
+                Assert.True(sample.AvailableAtUtc <= latest.WindowObservedAtUtc);
+            });
+            if (received == T.AddSeconds(2)) duplicateSnapshot = latest;
+        }
+
+        Assert.Equal(new long[] { 1, 2 }, duplicateSnapshot!.Samples.Select(s => s.Sequence));
+        Assert.Equal(new[] { 20d, 20d }, duplicateSnapshot.Samples.Select(s => s.ValueKmh));
+        Assert.Equal(T.AddSeconds(-2), duplicateSnapshot.Samples[0].GpsAtSource);
+        Assert.Equal(T.AddSeconds(-2), duplicateSnapshot.Samples[1].GpsAtSource);
+        Assert.Equal(T.AddSeconds(1), duplicateSnapshot.Samples[0].ReceivedAtUtc);
+        Assert.Equal(T.AddSeconds(2), duplicateSnapshot.Samples[1].ReceivedAtUtc);
+        Assert.Equal(new long[] { 3, 4, 5 }, latest!.Samples.Select(s => s.Sequence));
+        Assert.Equal(T.AddSeconds(-10), latest.Samples[0].GpsAtSource);
+        Assert.Equal(T.AddSeconds(-9), latest.Samples[0].SentAtSource);
+        Assert.Equal(T.AddSeconds(-8), latest.Samples[0].ServerAtSource);
+        Assert.Equal(T.AddSeconds(3), latest.Samples[0].ReceivedAtUtc);
+        Assert.Null(latest.Samples[1].GpsAtSource);
+        Assert.Null(latest.Samples[1].ReceivedAtUtc);
+        Assert.Equal(T.AddSeconds(-30), latest.Samples[2].GpsAtSource);
+
+        // A regra antiga aceita -Infinity porque compara apenas com o limite superior.
+        var legacyAccepted = enricher.AtualizarHistoricoVelocidadeComProveniencia(position with
+        { Velocidade = double.NegativeInfinity });
+        Assert.Equal(BitConverter.DoubleToInt64Bits(double.NegativeInfinity),
+            BitConverter.DoubleToInt64Bits(legacyAccepted.Posicao.VelocidadeMedia!.Value));
+        Assert.Equal(new long[] { 4, 5, 6 }, legacyAccepted.SpeedAverageProvenance!.Samples.Select(s => s.Sequence));
+    }
+
+    [Fact]
+    public void D6_LaterReadingCannotChangeEarlierWindowOrPhysicalEta()
+    {
+        var clock = new SpeedClock { Now = T.AddSeconds(-1) };
+        var enricher = SpeedEnricher(clock);
+        var fixture = Fixture();
+        var first = enricher.AtualizarHistoricoVelocidadeComProveniencia(fixture.Posicao with
+        {
+            Velocidade = 36, TimestampGps = T, RecebidoEmUtc = T.AddSeconds(-2)
+        });
+        var frozen = fixture with { Posicao = first.Posicao,
+            SpeedAverageProvenance = first.SpeedAverageProvenance };
+        var before = PhysicalEta.Apply(frozen, T, On);
+        Assert.Equal(100, before.Posicao.EtaProximaParadaSegundos);
+        Assert.Same(first.SpeedAverageProvenance, before.SpeedAverageProvenance);
+
+        clock.Now = T.AddSeconds(1);
+        var later = enricher.AtualizarHistoricoVelocidadeComProveniencia(fixture.Posicao with
+        {
+            Velocidade = 72, TimestampGps = T.AddSeconds(30), RecebidoEmUtc = T.AddSeconds(1)
+        });
+        Assert.Equal(54, later.Posicao.VelocidadeMedia);
+        Assert.Equal(36, first.Posicao.VelocidadeMedia);
+        Assert.Single(first.SpeedAverageProvenance!.Samples);
+        Assert.Equal(T, first.SpeedAverageProvenance.Samples[0].GpsAtSource);
+        Assert.True(first.SpeedAverageProvenance.WindowObservedAtUtc < later.SpeedAverageProvenance!.Samples[1].AvailableAtUtc);
+        Assert.Equal(before.Posicao.EtaProximaParadaSegundos,
+            PhysicalEta.Apply(frozen, T, On).Posicao.EtaProximaParadaSegundos);
+    }
+
+    [Fact]
+    public void D6_UnknownLocalClockKeepsMeanAndLeavesLocalTimesMissing()
+    {
+        var enricher = SpeedEnricher(new FailingSpeedClock());
+        var result = enricher.AtualizarHistoricoVelocidadeComProveniencia(Fixture().Posicao with
+        {
+            Velocidade = 36, TimestampGps = T, RecebidoEmUtc = T.AddSeconds(1)
+        });
+        var provenance = Assert.IsType<GpsSpeedAverageProvenance>(result.SpeedAverageProvenance);
+        var sample = Assert.Single(provenance.Samples);
+        Assert.Equal(36, result.Posicao.VelocidadeMedia);
+        Assert.Equal(T, sample.GpsAtSource);
+        Assert.Equal(T.AddSeconds(1), sample.ReceivedAtUtc);
+        Assert.Null(sample.RegisteredAtUtc);
+        Assert.Null(sample.AvailableAtUtc);
+        Assert.Null(provenance.WindowObservedAtUtc);
+    }
+
+    private static GpsEnriquecimentoService SpeedEnricher(TimeProvider clock) => new(
+        new FakeGpsPadraoRepository(), Microsoft.Extensions.Options.Options.Create(new GpsPollingOptions
+        { JanelaVelocidadeLeituras = 3, VelocidadeMaximaKmh = 90 }),
+        Microsoft.Extensions.Options.Options.Create(new GpsMatchingBatchOptions()),
+        Microsoft.Extensions.Logging.Abstractions.NullLogger<GpsEnriquecimentoService>.Instance, clock);
+
+    private sealed class SpeedClock : TimeProvider
+    {
+        internal DateTimeOffset Now;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+    private sealed class FailingSpeedClock : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => throw new InvalidOperationException("fixture clock unavailable");
     }
 
     [Fact]

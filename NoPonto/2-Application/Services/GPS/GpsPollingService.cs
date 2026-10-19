@@ -436,7 +436,7 @@ public sealed class GpsPollingService : BackgroundService
 
         // Veículos sem enriquecimento: atualiza só o histórico de velocidade
         var resultadosSemEnriquecimento = semEnriquecimento
-            .Select(x => _enriquecedor.AtualizarHistoricoVelocidade(
+            .Select(x => _enriquecedor.AtualizarHistoricoVelocidadeComProveniencia(
                 MontarComHistorico(x.Nova, x.Anterior)))
             .ToList();
 
@@ -473,17 +473,21 @@ public sealed class GpsPollingService : BackgroundService
         }
 
         // ── Reconstrói todosProcessados com ETA aplicado ──────────────────────
-        var todosProcessados = enriquecimentos
-            .Concat(resultadosSemEnriquecimento.Select(x => new ResultadoEnriquecimentoGps(
-                x, null, ResultadoProjecaoOperacional.NaoSolicitada())))
-            .ToList();
+        var todosProcessados = enriquecimentos.Concat(resultadosSemEnriquecimento).ToList();
 
         var capturePhysicalDiagnostic = _historicalEtaShadow?.CapturePhysicalDiagnostics == true;
         if (_physicalEtaOptions?.Value.Enabled == true || capturePhysicalDiagnostic)
         {
             var physicalNow = DateTimeOffset.UtcNow;
             var physicalOptions = _physicalEtaOptions?.Value ?? new PhysicalEtaOptions();
-            todosProcessados = todosProcessados.Select(x => PhysicalEta.Apply(x, physicalNow, physicalOptions, capturePhysicalDiagnostic)).ToList();
+            var captureOperationalDto = _historicalEtaShadow?.CaptureOperationalDto == true;
+            todosProcessados = todosProcessados.Select(x =>
+            {
+                var final = PhysicalEta.Apply(x, physicalNow, physicalOptions, capturePhysicalDiagnostic);
+                return captureOperationalDto
+                    ? _historicalEtaShadow!.PrepareOperationalCapture(final, physicalNow, physicalOptions)
+                    : final;
+            }).ToList();
         }
 
         // C é estritamente auxiliar: com a flag OFF não há leitura, serialização

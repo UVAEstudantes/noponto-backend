@@ -12,8 +12,8 @@ namespace NoPonto.Application.GPS;
 ///
 /// Thread-safety:
 ///   _padraoAtual usa ConcurrentDictionary para leituras/escritas atomicas por chave.
-///   _historicoVelocidades usa ConcurrentDictionary na chave e lock interno na Queue
-///   porque Queue nao e thread-safe por si so.
+///   _historicoVelocidades usa ConcurrentDictionary na chave e lock no histórico
+///   de cada veículo porque a fila interna não é thread-safe.
 /// </summary>
 public sealed partial class GpsEnriquecimentoService : IEnriquecimentoRetryOperacionalGps
 {
@@ -39,8 +39,20 @@ public sealed partial class GpsEnriquecimentoService : IEnriquecimentoRetryOpera
         new(StringComparer.OrdinalIgnoreCase);
 
     // Historico de velocidades persistido entre ciclos.
-    private readonly ConcurrentDictionary<string, Queue<double>> _historicoVelocidades =
+    private readonly ConcurrentDictionary<string, HistoricoVelocidade> _historicoVelocidades =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly TimeProvider _relogioProveniencia;
+
+    private sealed class HistoricoVelocidade(int capacidade)
+    {
+        internal readonly Queue<EntradaVelocidade> Fila = new(capacidade);
+        internal long UltimaSequencia;
+    }
+
+    private sealed class EntradaVelocidade(GpsSpeedSampleProvenance amostra)
+    {
+        internal GpsSpeedSampleProvenance Amostra = amostra;
+    }
 
     /// <summary>
     /// Fator de tolerância sobre <see cref="GpsPollingOptions.VelocidadeMaximaKmh"/>
@@ -65,11 +77,22 @@ public sealed partial class GpsEnriquecimentoService : IEnriquecimentoRetryOpera
         IOptions<GpsPollingOptions> opcoes,
         IOptions<GpsMatchingBatchOptions> opcoesBatch,
         ILogger<GpsEnriquecimentoService> logger)
+        : this(repositorio, opcoes, opcoesBatch, logger, TimeProvider.System)
+    {
+    }
+
+    internal GpsEnriquecimentoService(
+        IGpsPadraoRepository repositorio,
+        IOptions<GpsPollingOptions> opcoes,
+        IOptions<GpsMatchingBatchOptions> opcoesBatch,
+        ILogger<GpsEnriquecimentoService> logger,
+        TimeProvider relogioProveniencia)
     {
         _repositorio = repositorio;
         _opcoes      = opcoes.Value;
         _opcoesBatch = opcoesBatch.Value;
         _logger      = logger;
+        _relogioProveniencia = relogioProveniencia;
     }
 
     internal bool MatchingBatchHabilitado => _opcoesBatch.Enabled;
@@ -110,7 +133,8 @@ public sealed partial class GpsEnriquecimentoService : IEnriquecimentoRetryOpera
         var caminhoBatch = executorBatch is not null;
         var padraoAnteriorExistente = _padraoAtual.TryGetValue(posicao.Ordem, out var snapshotAnterior)
             && snapshotAnterior.Rota is not null;
-        var velocidadeMedia = AtualizarFilaVelocidade(posicao);
+        var provenienciaVelocidade = AtualizarFilaVelocidade(posicao);
+        var velocidadeMedia = provenienciaVelocidade.MeanKmh;
         var veiculoParado   = (velocidadeMedia ?? posicao.Velocidade) < _opcoes.VelocidadeMinimaBearingKmh;
 
         // ── 1.5. Detecção de salto geográfico implausível ─────────────────────
@@ -497,7 +521,7 @@ public sealed partial class GpsEnriquecimentoService : IEnriquecimentoRetryOpera
             detalheTemporal?.DeltaProgressoMetros, detalheTemporal?.LimiteProgressoMetros,
             detalheTemporal?.VelocidadeImplicitaKmh);
 
-        return new(posicao with
+        return new ResultadoEnriquecimentoGps(posicao with
         {
             Bearing                      = bearing,
             VelocidadeMedia              = velocidadeMedia,
@@ -519,13 +543,19 @@ public sealed partial class GpsEnriquecimentoService : IEnriquecimentoRetryOpera
             ProximaParadaNome            = rota?.ProximaParadaNome,
             DistanciaProximaParadaMetros = rota?.DistanciaProximaParadaMetros,
             DistanciaRestanteRotaMetros  = rota?.DistanciaRestanteRotaMetros,
-        }, contexto, resultadoOperacional, diagnostico);
+        }, contexto, resultadoOperacional, diagnostico)
+            .WithSpeedAverageProvenance(provenienciaVelocidade);
     }
 
     public PosicaoVeiculoDto AtualizarHistoricoVelocidade(PosicaoVeiculoDto posicao)
+        => AtualizarHistoricoVelocidadeComProveniencia(posicao).Posicao;
+
+    internal ResultadoEnriquecimentoGps AtualizarHistoricoVelocidadeComProveniencia(PosicaoVeiculoDto posicao)
     {
-        var velocidadeMedia = AtualizarFilaVelocidade(posicao);
-        return posicao with { VelocidadeMedia = velocidadeMedia };
+        var proveniencia = AtualizarFilaVelocidade(posicao);
+        return new ResultadoEnriquecimentoGps(posicao with { VelocidadeMedia = proveniencia.MeanKmh }, null,
+            ResultadoProjecaoOperacional.NaoSolicitada())
+            .WithSpeedAverageProvenance(proveniencia);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -675,19 +705,36 @@ public sealed partial class GpsEnriquecimentoService : IEnriquecimentoRetryOpera
             : null;
     }
 
-    private double? AtualizarFilaVelocidade(PosicaoVeiculoDto posicao)
+    private DateTimeOffset? InstanteProveniencia()
     {
-        var fila = _historicoVelocidades.GetOrAdd(
-            posicao.Ordem,
-            _ => new Queue<double>(_opcoes.JanelaVelocidadeLeituras));
+        try { return _relogioProveniencia.GetUtcNow(); }
+        catch { return null; } // A instrumentação não pode impedir a média original.
+    }
 
-        lock (fila)
+    private GpsSpeedAverageProvenance AtualizarFilaVelocidade(PosicaoVeiculoDto posicao)
+    {
+        var historico = _historicoVelocidades.GetOrAdd(
+            posicao.Ordem,
+            _ => new HistoricoVelocidade(_opcoes.JanelaVelocidadeLeituras));
+
+        lock (historico)
         {
             if (posicao.Velocidade <= _opcoes.VelocidadeMaximaKmh)
             {
-                fila.Enqueue(posicao.Velocidade);
-                while (fila.Count > _opcoes.JanelaVelocidadeLeituras)
-                    fila.Dequeue();
+                var entrada = new EntradaVelocidade(new(++historico.UltimaSequencia,
+                    posicao.Ordem, posicao.ModalFonte, posicao.ProvedorFonte, posicao.Velocidade,
+                    posicao.TimestampGps == default ? null : posicao.TimestampGps,
+                    posicao.TimestampEnvioFonte, posicao.TimestampServidorFonte,
+                    posicao.RecebidoEmUtc == default ? null : posicao.RecebidoEmUtc,
+                    null, null, GpsSpeedAverageProvenance.Identity(posicao)));
+                historico.Fila.Enqueue(entrada);
+                // Ambos os horários são observados depois da inserção, nunca presumidos antes dela.
+                var registradoEm = InstanteProveniencia();
+                var disponivelEm = InstanteProveniencia();
+                entrada.Amostra = entrada.Amostra with
+                { RegisteredAtUtc = registradoEm, AvailableAtUtc = disponivelEm };
+                while (historico.Fila.Count > _opcoes.JanelaVelocidadeLeituras)
+                    historico.Fila.Dequeue();
             }
             else
             {
@@ -696,7 +743,11 @@ public sealed partial class GpsEnriquecimentoService : IEnriquecimentoRetryOpera
                     posicao.Velocidade, posicao.Ordem);
             }
 
-            return fila.Count > 0 ? fila.Average() : (double?)null;
+            var media = historico.Fila.Count > 0
+                ? historico.Fila.Select(entrada => entrada.Amostra.ValueKmh).Average()
+                : (double?)null;
+            return new(media, InstanteProveniencia(),
+                Array.AsReadOnly(historico.Fila.Select(entrada => entrada.Amostra).ToArray()));
         }
     }
 
