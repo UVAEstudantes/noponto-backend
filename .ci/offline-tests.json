@@ -2,6 +2,7 @@
   "classes": [
     "GpsLeituraValidatorTests",
     "GpsTimestampDeduplicationTests",
+    "NoPonto.Tests.GpsPhysicalPredecessorTests",
     "NoPonto.Tests.GpsEtaClientTests",
     "NoPonto.Tests.GpsBrtTelemetriaTests",
     "NoPonto.Tests.GpsSourceAbstractionTests",

@@ -119,7 +119,13 @@ public sealed class HistoricalEtaGtfsPollingTests
                 for (cycle = 0; cycle < 2; cycle++)
                 {
                     if (cycle == 1 && missingActivePredecessor)
+                    {
                         await cache.RemoveAsync(GpsPollingService.ChaveVeiculoAtivo(cas.Accepted[0].Ordem));
+                        // This fixture asserts absence of physical evidence. Active
+                        // expiry alone no longer implies that absence; retention
+                        // and visual status are covered by GpsPhysicalPredecessorTests.
+                        await cache.RemoveAsync(GpsPollingService.ChaveVeiculoRecente(cas.Accepted[0].Ordem));
+                    }
                     sourceClock.Now = time.AddSeconds(10 + cycle * 31);
                     matching.Respostas.Enqueue(trips.Route(.1 + cycle * .001));
                     await collector.ColetarUmaVezAsync(DateTimeOffset.UtcNow);

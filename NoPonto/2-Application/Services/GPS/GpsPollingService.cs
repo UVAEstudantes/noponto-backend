@@ -299,6 +299,12 @@ public sealed class GpsPollingService : BackgroundService
         var (anteriores, watermarkPorIndice, chavesWatermark) = await GpsTimestampDeduplication.ReadAsync(
             maisRecentesFiltrados, leiturasAnteriores, _posicaoCache, ct);
         performance.RedisLeiturasIniciais += chavesWatermark;
+        var (predecessoresFisicos, leiturasFisicas) = await GpsPhysicalPredecessor.ReadAsync(
+            maisRecentesFiltrados, anteriores, watermarkPorIndice, _cache, ct);
+        performance.RedisLeiturasIniciais += leiturasFisicas;
+        var predecessoresRetidos = predecessoresFisicos
+            .Where((p, i) => p is not null && anteriores[i] is null)
+            .Select(p => p!.Ordem).ToHashSet(StringComparer.OrdinalIgnoreCase);
         performance.RedisLeituraInicialMs = (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
 
@@ -328,7 +334,7 @@ public sealed class GpsPollingService : BackgroundService
             }
             _linhaPorVeiculo[nova.Ordem] = nova.CodigoLinha;
 
-            paraProcessar.Add((nova, anterior));
+            paraProcessar.Add((nova, predecessoresFisicos[i]));
         }
         performance.Novas = paraProcessar.Count;
 
@@ -421,8 +427,17 @@ public sealed class GpsPollingService : BackgroundService
                         finally { semaforo.Release(); }
                     }), performance.MatchingDiagnostics);
             }
-            enriquecimentos = enriquecimentos.Select((x, i) => x with
-                { PredecessorFisico = paraEnriquecer[i].Anterior }).ToArray();
+            enriquecimentos = enriquecimentos.Select((x, i) =>
+            {
+                var anterior = paraEnriquecer[i].Anterior;
+                var retido = predecessoresRetidos.Contains(x.Posicao.Ordem);
+                return x with
+                {
+                    PredecessorFisico = anterior,
+                    Posicao = retido && !GpsPhysicalPredecessor.Continuous(x, anterior!)
+                        ? x.Posicao with { MatchingOperacionalPlausivel = false } : x.Posicao,
+                };
+            }).ToArray();
             resultadosEnriquecidos = enriquecimentos.Select(x => x.Posicao).ToArray();
         }
         performance.MatchingEtapaMs = (long)System.Diagnostics.Stopwatch
