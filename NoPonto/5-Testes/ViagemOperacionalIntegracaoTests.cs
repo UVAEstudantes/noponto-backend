@@ -128,6 +128,82 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CancelamentoAtrasDoCursor_ConcorrenciaOuRollback_PreservaPisoDuravel(bool rollback)
+    {
+        PosicaoVeiculoDto Original(int seconds,double p)=>G(seconds,p) with
+        { LinhaId=db.Linha,SentidoId=db.S1,PadraoOperacionalId=db.P1,
+            TopologiaPadrao="LINEAR",MatchingOperacionalPlausivel=true };
+        var repository=RepositoryMudanca();
+        Assert.Equal(ViagemObservadaStatus.Created,
+            (await repository.TentarAtualizarAsync(Original(0,.1),default)).Status);
+        Assert.Equal(2,(await repository.TentarAtualizarAsync(Original(20,.45),default)).OcorrenciasUltrapassadas.Count);
+        Assert.Equal(ViagemObservadaStatus.Updated,
+            (await repository.TentarAtualizarAsync(GM(30,.1),default)).Status);
+        var pending=await State();
+        Assert.NotNull(pending.Candidato);
+        Assert.Equal(2,pending.Observada.OrdemCursor);
+        var before=await Redis.StreamLengthAsync(_stream);
+        Assert.Equal(3,before);
+        await using var count=db.Source.CreateCommand("SELECT count(*) FROM \"OutboxViagens\" WHERE \"Payload\"->>'ordem_veiculo'=@ordem");
+        count.Parameters.AddWithValue("ordem",_ordem);
+        var outboxBefore=await count.ExecuteScalarAsync();
+        var context=await repository.LerContextoAsync(_ordem,default);
+        var returning=Original(40,.11);
+        if(rollback)
+        {
+            var failing=RepositoryMudanca(()=>throw new InvalidOperationException("Falha de teste apos Outbox"));
+            Assert.Equal(ViagemObservadaStatus.InfrastructureFailure,
+                (await failing.TentarAtualizarAsync(returning,context,ResultadoProjecaoOperacional.NaoSolicitada(),default)).Status);
+            Assert.Equal(ViagemOperacionalCodec.Encode(pending),ViagemOperacionalCodec.Encode(await State()));
+            await Redis.KeyDeleteAsync(Key);
+            context=await RepositoryMudanca().LerContextoAsync(_ordem,default);
+            Assert.Equal(ViagemOperacionalCodec.Encode(pending),ViagemOperacionalCodec.Encode(context!.Estado!));
+            Assert.Equal(before,await Redis.StreamLengthAsync(_stream));
+            Assert.Equal(outboxBefore,await count.ExecuteScalarAsync());
+            Assert.Equal(ViagemObservadaStatus.Updated,
+                (await repository.TentarAtualizarAsync(returning,context,ResultadoProjecaoOperacional.NaoSolicitada(),default)).Status);
+        }
+        else
+        {
+            var results=await Task.WhenAll(
+                RepositoryMudanca().TentarAtualizarAsync(returning,context,ResultadoProjecaoOperacional.NaoSolicitada(),default),
+                RepositoryMudanca().TentarAtualizarAsync(returning,context,ResultadoProjecaoOperacional.NaoSolicitada(),default));
+            Assert.Single(results,r=>r.Status==ViagemObservadaStatus.Updated);
+            Assert.Single(results,r=>r.Status is ViagemObservadaStatus.Conflict or ViagemObservadaStatus.RejectedOlderOrEqual);
+        }
+        var cancelled=await State();
+        Assert.Null(cancelled.Candidato);
+        Assert.Equal(pending.Observada.ViagemId,cancelled.Observada.ViagemId);
+        Assert.Equal(pending.Observada.CursorEstruturalId,cancelled.Observada.CursorEstruturalId);
+        Assert.Equal(2,cancelled.Observada.OrdemCursor);
+        Assert.Equal(.11,cancelled.Observada.PosicaoNaRotaConfirmada);
+        Assert.Equal(before,await Redis.StreamLengthAsync(_stream));
+        Assert.Equal(outboxBefore,await count.ExecuteScalarAsync());
+        await Redis.KeyDeleteAsync(Key);
+        var restarted=RepositoryMudanca();
+        Assert.Equal(ViagemOperacionalCodec.Encode(cancelled),ViagemOperacionalCodec.Encode(
+            (await restarted.LerContextoAsync(_ordem,default))!.Estado!));
+        var future=await restarted.TentarAtualizarAsync(Original(60,.61),default);
+        Assert.Equal(ViagemObservadaStatus.Updated,future.Status);
+        Assert.Equal(db.Occurrences[2],Assert.Single(future.OcorrenciasUltrapassadas).Id);
+        Assert.Equal(3,future.Estado!.OrdemCursor);
+        Assert.Null(future.ProximaOcorrenciaOperacional);
+        Assert.Equal(ViagemObservadaStatus.RejectedOlderOrEqual,
+            (await restarted.TentarAtualizarAsync(Original(60,.61),default)).Status);
+        var events=(await Redis.StreamRangeAsync(_stream)).Select(e=>EventoViagemValidator.Parse(
+            e.Values.ToDictionary(v=>v.Name.ToString(),v=>v.Value.ToString()))).ToArray();
+        Assert.Equal(new int?[]{1,2,3},events.Where(e=>e.Tipo=="PassagemParada").Select(e=>e.Ordem));
+        Assert.All(events,e=>
+        {
+            Assert.Equal(pending.Observada.ViagemId,e.ViagemId);
+            Assert.Equal(db.R1,e.PadraoVersaoId);
+        });
+        Assert.Equal(events.Length,events.Select(e=>e.EventId).Distinct().Count());
+    }
+
+    [Theory]
     [InlineData(.25,1)]
     [InlineData(.39,1)]
     [InlineData(.55,2)]
@@ -180,6 +256,47 @@ public sealed class ViagemOperacionalIntegracaoTests(ViagemOperacionalFixture db
         await using var consulta=db.Source.CreateCommand("SELECT count(*) FROM \"HistoricoPassagens\" WHERE \"ViagemId\"=@viagem");
         consulta.Parameters.AddWithValue("viagem",id);
         Assert.Equal(ordem<3?1L:0L,await consulta.ExecuteScalarAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RetornoAtrasDoTerminalJaIncorporado_ComOuSemCandidata_PreservaRegraExistente(bool candidata)
+    {
+        PosicaoVeiculoDto Original(int seconds,double p)=>G(seconds,p) with
+        { LinhaId=db.Linha,SentidoId=db.S1,PadraoOperacionalId=db.P1,
+            TopologiaPadrao="LINEAR",MatchingOperacionalPlausivel=true };
+        var repository=RepositoryMudanca();
+        await repository.TentarAtualizarAsync(Original(0,.1),default);
+        var terminal=await repository.TentarAtualizarAsync(Original(20,.65),default);
+        Assert.Equal(EstadoViagem.PossivelFim,terminal.EstadoOperacional!.Estado);
+        Assert.Equal(3,terminal.OcorrenciasUltrapassadas.Count);
+        if(candidata)
+        {
+            await repository.TentarAtualizarAsync(GM(30,.1),default);
+            Assert.NotNull((await State()).Candidato);
+        }
+        var returning=await repository.TentarAtualizarAsync(Original(40,.11),default);
+        Assert.Equal(ViagemObservadaStatus.Updated,returning.Status);
+        Assert.Empty(returning.OcorrenciasUltrapassadas);
+        Assert.Null(returning.ProximaOcorrenciaOperacional);
+        Assert.Equal(terminal.Estado!.ViagemId,returning.Estado!.ViagemId);
+        Assert.Equal(terminal.Estado.CursorEstruturalId,returning.Estado.CursorEstruturalId);
+        Assert.Equal(3,returning.Estado.OrdemCursor);
+        Assert.Null(returning.EstadoOperacional!.Candidato);
+        Assert.Equal(.11,returning.Estado.PosicaoNaRotaConfirmada);
+        // Existing terminal rule uses the incorporated terminal/no-next cursor,
+        // including a physical retreat; cancellation must not introduce another rule.
+        Assert.Equal(1,returning.EstadoOperacional.ConfirmacoesPosTerminal);
+        var finished=await repository.TentarAtualizarAsync(Original(50,.12),default);
+        Assert.Equal(EstadoViagem.Finalizada,finished.EstadoOperacional!.Estado);
+        Assert.Empty(finished.OcorrenciasUltrapassadas);
+        var events=(await Redis.StreamRangeAsync(_stream)).Select(e=>EventoViagemValidator.Parse(
+            e.Values.ToDictionary(v=>v.Name.ToString(),v=>v.Value.ToString()))).ToArray();
+        Assert.Equal(new int?[]{1,2,3},events.Where(e=>e.Tipo=="PassagemParada").Select(e=>e.Ordem));
+        Assert.Equal(5,events.Length);
+        Assert.Equal(Original(50,.12).TimestampGps,Assert.Single(events,e=>e.Tipo=="ViagemFinalizada").TimestampEvento);
+        Assert.Equal(events.Length,events.Select(e=>e.EventId).Distinct().Count());
     }
 
     [Fact]

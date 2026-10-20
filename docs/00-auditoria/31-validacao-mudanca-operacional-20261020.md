@@ -121,3 +121,7 @@ Não executados: produção, fonte externa real, frontend/dispositivo, carga da 
 6. Manter **padrão diferente no mesmo sentido** como grupo independente: determinar se os padrões representam serviço alternativo, retorno de execução, geometria equivalente ou identidade estrutural incorreta. A flag existente não resolve isso; não ampliar a política sem essa evidência.
 
 Depois de aprovada e validada a correção restrita de retorno, a recomendação é reutilizar o mecanismo atual para linha/sentido em uma etapa controlada separada. A ativação produtiva continua dependendo de autorização específica e de observação de latência, gravações, rejeições e passagens. Nenhuma ativação ou modificação funcional está incluída nesta entrega.
+
+## Continuidade autorizada — correção isolada
+
+O bloqueio de cancelamento LINEAR descrito acima foi corrigido e validado na etapa seguinte, preservada no [relatório 32](32-correcao-cancelamento-cursor-linear-20261020.md): RED/GREEN, cursor incorporado como piso, 138 testes integrados e 758 offline aprovados. O diagnóstico original permanece como evidência histórica. A flag global segue desligada; os demais limites deste relatório não foram resolvidos por essa correção.

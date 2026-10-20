@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
@@ -409,18 +408,30 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task OperationalRecovery_ReturnBehindCursor_ExposesOutboxConflict(bool batch)
+    [InlineData("BUS", false, .11)]
+    [InlineData("BUS", true, .11)]
+    [InlineData("BRT", false, .11)]
+    [InlineData("BRT", true, .11)]
+    [InlineData("BUS", false, .39)]
+    [InlineData("BUS", true, .39)]
+    [InlineData("BRT", false, .39)]
+    [InlineData("BRT", true, .39)]
+    [InlineData("BUS", false, .55)]
+    [InlineData("BUS", true, .55)]
+    [InlineData("BRT", false, .55)]
+    [InlineData("BRT", true, .55)]
+    public async Task OperationalRecovery_ReturnBehindCursor_PreservesIncorporatedCursor(
+        string modal, bool batch, double returnPosition)
     {
-        var original = await SeedRecoveryRoute("BUS");
-        var alternative = await SeedRecoveryRoute("BUS");
-        var id = Id("BUS", Guid.NewGuid().ToString("N")[..8]);
+        var original = await SeedRecoveryRoute(modal);
+        var alternative = await SeedRecoveryRoute(modal);
+        var id = Id(modal, Guid.NewGuid().ToString("N")[..8]);
         await using var h = await Harness.Create(resources, 235, batch);
         h.Options.MudancaOperacionalHabilitada = true;
         async Task Observe(int seconds, GpsIntegrationResources.Route route, double fraction)
         {
-            h.Bus.Positions = [new(id, route, fraction, h.Origin.AddSeconds(seconds))];
+            var feed = modal == "BUS" ? h.Bus : h.Brt;
+            feed.Positions = [new(id, route, fraction, h.Origin.AddSeconds(seconds))];
             await h.Cycle(seconds);
         }
         await Observe(0, original, .1);
@@ -434,48 +445,81 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         await Observe(60, alternative, .25); // new line requires physical warmup
         await Observe(90, alternative, .26); // first eligible divergent evidence
         Assert.NotNull((await RecoveryRepository().LerContextoAsync(id, default))!.Estado!.Candidato);
-        await Observe(120, original, .1); // insufficient on this line's first return
-        await Observe(150, original, .11); // candidate cancelled; same trip adopts a lower baseline
+        await Observe(120, original, returnPosition - .01); // the distant return may require physical warmup
+        var firstReturn = (await RecoveryRepository().LerContextoAsync(id, default))!.Estado!;
+        await Observe(150, original, returnPosition); // .55 is the forward control; cursor 2 is at .4
         var baseline = (await RecoveryRepository().LerContextoAsync(id, default))!.Estado!;
         Assert.Equal(prior.Observada.ViagemId, baseline.Observada.ViagemId);
         Assert.Null(baseline.Candidato);
-        Assert.Null(baseline.Observada.OrdemCursor);
-        Assert.True(baseline.Observada.PosicaoNaRotaConfirmada < .2);
+        Assert.Equal(prior.Observada.OrdemCursor, baseline.Observada.OrdemCursor);
+        Assert.Equal(prior.Observada.CursorEstruturalId, baseline.Observada.CursorEstruturalId);
+        Assert.Equal(3, h.Trips.Results[^1].ProximaOcorrenciaOperacional!.Ordem);
+        Assert.Equal(original.Versions[0], h.Trips.Results[^1].ProximaOcorrenciaOperacional!.PadraoVersaoId);
+        Assert.InRange(baseline.Observada.PosicaoNaRotaConfirmada, returnPosition - .0001, returnPosition + .0001);
         Assert.Empty(h.Trips.Results[^1].OcorrenciasUltrapassadas);
-        foreach (var (seconds, position) in new[] { (180, .25), (210, .26) })
+        // Reconstruct the repository and rehydrate the durable cancellation after losing Redis.
+        // A plausible first return may already cancel; the next GPS can be a hot update.
+        var durableCancellation = firstReturn.Candidato is null ? firstReturn : baseline;
+        await resources.Db.Redis.GetDatabase().KeyDeleteAsync(ViagemObservadaRepository.ChaveVeiculoViagem(id));
+        Assert.Equal(ViagemOperacionalCodec.Encode(durableCancellation), ViagemOperacionalCodec.Encode(
+            (await RecoveryRepository().LerContextoAsync(id, default))!.Estado!));
+        var positions = returnPosition < .2 ? new[] { .25, .46 }
+            : returnPosition < .4 ? new[] { .41, .46 } : new[] { .56, .57 };
+        foreach (var (seconds, position) in new[] { (180, positions[0]), (210, positions[1]) })
         {
             await Observe(seconds, original, position);
-            Assert.Equal(ViagemObservadaStatus.InvalidState, h.Trips.Results[^1].Status);
+            Assert.Equal(ViagemObservadaStatus.Updated, h.Trips.Results[^1].Status);
             Assert.Equal(h.Origin.AddSeconds(seconds), (await h.Read(id)).TimestampGps);
             Assert.NotNull((await h.Read(id)).EtaProximaParadaSegundos);
-            Assert.Equal(ViagemOperacionalCodec.Encode(baseline), ViagemOperacionalCodec.Encode(
-                (await RecoveryRepository().LerContextoAsync(id, default))!.Estado!));
+            var advanced = (await RecoveryRepository().LerContextoAsync(id, default))!.Estado!;
+            Assert.Equal(prior.Observada.ViagemId, advanced.Observada.ViagemId);
+            Assert.Equal(prior.Observada.CursorEstruturalId, advanced.Observada.CursorEstruturalId);
+            Assert.Equal(2, advanced.Observada.OrdemCursor);
+            Assert.Equal(h.Origin.AddSeconds(seconds), advanced.Observada.TimestampUltimaAtualizacao);
+            Assert.InRange(advanced.Observada.PosicaoNaRotaConfirmada, position - .0001, position + .0001);
+            Assert.Equal(advanced.Observada.PosicaoNaRotaConfirmada * h.Cas.Accepted[^1].ComprimentoRotaMetros!.Value,
+                advanced.Observada.ProgressoAbsolutoMetros, 6);
+            Assert.Empty(h.Trips.Results[^1].OcorrenciasUltrapassadas);
+            Assert.Equal(3, h.Trips.Results[^1].ProximaOcorrenciaOperacional!.Ordem);
         }
-        var log = new RecoveryConflictLog();
-        var probe = new ViagemOperacionalRepository(resources.Db.Redis, resources.Db.Source,
-            Options.Create(new GpsPollingOptions { MudancaOperacionalHabilitada = true }), log);
-        var repeated = await probe.TentarAtualizarAsync(h.Cas.Accepted[^1], default);
-        Assert.Equal(ViagemObservadaStatus.InvalidState, repeated.Status);
-        var conflict = Assert.IsType<EventoViagemPayloadConflictException>(Assert.Single(log.Errors));
-        Assert.Contains(originalEvents, e => e.EventId == conflict.EventId && e.Tipo == "PassagemParada");
-        // Duplicate EventId with a different timestamp is rejected atomically, not silently materialized twice.
+        Assert.DoesNotContain(h.Trips.Results, r => r.Status is ViagemObservadaStatus.InvalidState
+            or ViagemObservadaStatus.InfrastructureFailure);
         var all = await RecoveryEvents(id);
-        Assert.Equal(originalEvents.Select(e => e.EventId), all.Select(e => e.EventId));
+        Assert.Equal(originalEvents, all); // historical payloads, including passage times, stay identical
         await AssertRecoveryPassages(id, 2);
-        GpsIntegrationResources.Record("operational_recovery_return_conflict", new { batch, confirmed_change = false,
-            return_baseline_regressed_cursor = true, repeated_operational_invalid_state = 2,
-            same_passage_event_id_different_payload = true,
+        // Only the unseen occurrence can now produce a passage, in the original execution/version.
+        await Observe(240, original, 1);
+        Assert.Equal(ViagemObservadaStatus.Updated, h.Trips.Results[^1].Status);
+        Assert.Equal(3, Assert.Single(h.Trips.Results[^1].OcorrenciasUltrapassadas).Ordem);
+        Assert.Null(h.Trips.Results[^1].ProximaOcorrenciaOperacional);
+        Assert.Equal(EstadoViagem.PossivelFim, h.Trips.Results[^1].EstadoOperacional!.Estado);
+        await Observe(270, original, 1);
+        Assert.Equal(1, h.Trips.Results[^1].EstadoOperacional!.ConfirmacoesPosTerminal);
+        await Observe(300, original, 1);
+        var final = h.Trips.Results[^1].EstadoOperacional!;
+        Assert.Equal(EstadoViagem.Finalizada, final.Estado);
+        Assert.Equal(prior.Observada.ViagemId, final.Observada.ViagemId);
+        Assert.Equal(3, final.Observada.OrdemCursor);
+        all = await RecoveryEvents(id);
+        Assert.Equal(5, all.Length);
+        Assert.Equal(originalEvents, all.Take(3));
+        Assert.Equal(all.Length, all.Select(e => e.EventId).Distinct().Count());
+        Assert.All(all, e =>
+        {
+            Assert.Equal(prior.Observada.ViagemId, e.ViagemId);
+            Assert.Equal(original.Versions[0], e.PadraoVersaoId);
+            Assert.Equal(original.Directions[0], e.SentidoId);
+            Assert.Equal(original.Code, e.CodigoLinha);
+        });
+        Assert.Equal(new int?[] { 1, 2, 3 }, all.Where(e => e.Tipo == "PassagemParada").Select(e => e.Ordem));
+        Assert.Equal(h.Origin.AddSeconds(300), Assert.Single(all, e => e.Tipo == "ViagemFinalizada").TimestampEvento);
+        await AssertRecoveryPassages(id, 3);
+        Assert.DoesNotContain(h.Trips.Results, r => r.Status is ViagemObservadaStatus.InvalidState
+            or ViagemObservadaStatus.InfrastructureFailure);
+        GpsIntegrationResources.Record("operational_recovery_return_cursor_floor", new { modal, batch, returnPosition,
+            confirmed_change = false, restart_rehydrated_cursor = true, new_passage_and_terminal = true,
+            return_baseline_regressed_cursor = false, repeated_operational_invalid_state = 0,
             duplicate_materialized_passages = 0, realtime_and_eta_continue = true,
-            requirement_satisfied = false });
-    }
-
-    private sealed class RecoveryConflictLog : ILogger<ViagemOperacionalRepository>
-    {
-        public readonly List<Exception> Errors = [];
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel level) => true;
-        public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        { if (exception is not null) Errors.Add(exception); }
+            requirement_satisfied = true });
     }
 }
