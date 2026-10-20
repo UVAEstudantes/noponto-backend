@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,21 +5,15 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NoPonto.API.Hubs;
-using NoPonto.Application.LegacyCompatibility.DTOs;
 using NoPonto.Data.Repositories;
 
 namespace NoPonto.Application.GPS;
 
 public sealed class GpsPollingService : BackgroundService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
     private readonly GpsSppoSnapshotStore _snapshotSppo;
     private readonly IDistributedCache _cache;
-    private readonly IHubContext<GpsHub> _hubContext;
+    private readonly GpsSignalRPublisher _signalR;
     private readonly ILogger<GpsPollingService> _logger;
     private readonly IOptionsMonitor<GpsPollingOptions> _opcoesMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -77,7 +70,7 @@ public sealed class GpsPollingService : BackgroundService
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
-        _hubContext = hubContext;
+        _signalR = new(cache, hubContext);
         _logger = logger;
         _opcoesMonitor = opcoes;
         _scopeFactory = scopeFactory;
@@ -244,6 +237,8 @@ public sealed class GpsPollingService : BackgroundService
             performance.NormalizacaoMs = (long)System.Diagnostics.Stopwatch
                 .GetElapsedTime(inicioEtapa).TotalMilliseconds;
             performance.MatchingDiagnostics.EnrichmentComplete = true;
+            await _signalR.PublicarAsync([], new(StringComparer.OrdinalIgnoreCase),
+                new GpsRecenteCicloCache(_cache, performance), performance, GpsHub.AssinaturasAtivas, ct);
             ConfirmarSnapshotProcessado(loteSppo);
             cicloConcluidoNormalmente = !falhaBrtSemCache;
             return cicloConcluidoNormalmente;
@@ -285,6 +280,8 @@ public sealed class GpsPollingService : BackgroundService
         if (maisRecentesFiltrados.Count == 0)
         {
             performance.MatchingDiagnostics.EnrichmentComplete = true;
+            await _signalR.PublicarAsync([], new(StringComparer.OrdinalIgnoreCase),
+                new GpsRecenteCicloCache(_cache, performance), performance, GpsHub.AssinaturasAtivas, ct);
             ConfirmarSnapshotProcessado(loteSppo);
             cicloConcluidoNormalmente = !falhaBrtSemCache;
             return cicloConcluidoNormalmente;
@@ -616,84 +613,11 @@ public sealed class GpsPollingService : BackgroundService
 
         await Task.WhenAll(tarefasEscrita);
 
-        // ── 7. Linhas assinadas sem veículos novos → carrega do Redis ─────────
-        foreach (var linha in GpsHub.LinhasComAssinantes)
-        {
-            if (ativosPorLinha.ContainsKey(linha)) continue;
-
-            performance.RedisLeiturasIndicesRecente++;
-            var raw = await _cache.GetStringAsync(ChaveLinha(linha), ct);
-            if (string.IsNullOrWhiteSpace(raw)) continue;
-
-            ativosPorLinha[linha] = new HashSet<string>(
-                raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-                StringComparer.OrdinalIgnoreCase);
-        }
-
-        // ── 8. Broadcast SignalR ──────────────────────────────────────────────
         performance.IndicesLinhaMs += (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
-
-        var linhasParaBroadcast = GpsHub.LinhasComAssinantes;
-
-        if (linhasParaBroadcast.Count > 0)
-        {
-            var inicioSignalr = System.Diagnostics.Stopwatch.GetTimestamp();
-            var broadcastTasks = new List<Task>();
-
-            foreach (var linha in linhasParaBroadcast)
-            {
-                if (!ativosPorLinha.TryGetValue(linha, out var todasOrdens)) continue;
-
-                var veiculosDaLinha = new List<PosicaoVeiculoDto>();
-                veiculosDaLinha.AddRange(aceitos.Where(p => p.CodigoLinha == linha));
-
-                var ordensDoCiclo = new HashSet<string>(
-                    veiculosDaLinha.Select(p => p.Ordem),
-                    StringComparer.OrdinalIgnoreCase);
-
-                var ordensSemSinal = todasOrdens.Where(o => !ordensDoCiclo.Contains(o)).ToList();
-
-                if (ordensSemSinal.Count > 0)
-                {
-                    var dadosSemSinal = await Task.WhenAll(
-                        ordensSemSinal.Select(async o =>
-                        {
-                            var json = await recentesDoCiclo.LerAsync(o, ct);
-                            if (json is null) return null;
-                            try
-                            {
-                                var dto = JsonSerializer.Deserialize<PosicaoVeiculoDto>(json, JsonOptions);
-                                return dto is null ? null : dto with { Status = StatusVeiculo.SemSinal };
-                            }
-                            catch { return null; }
-                        }));
-
-                    veiculosDaLinha.AddRange(dadosSemSinal.Where(d => d is not null)!);
-                }
-
-                if (veiculosDaLinha.Count > 0)
-                {
-                    performance.LinhasPublicadas++;
-                    performance.VeiculosEnviados += veiculosDaLinha.Count;
-                    broadcastTasks.Add(
-                        _hubContext.Clients
-                            .Group(GpsHub.GrupoLinha(linha))
-                            // TEMPORARY FRONTEND COMPATIBILITY: output-only alias; no GPS decision changes.
-                            .SendAsync("PosicaoAtualizada",
-                                veiculosDaLinha.Select(FrontendLegacyPosicaoSignalRDto.From).ToArray(), ct));
-                }
-            }
-
-            performance.SignalrPreparacaoMs = (long)System.Diagnostics.Stopwatch
-                .GetElapsedTime(inicioSignalr).TotalMilliseconds;
-            var inicioEsperaBroadcast = System.Diagnostics.Stopwatch.GetTimestamp();
-            await Task.WhenAll(broadcastTasks);
-            performance.SignalrBroadcastMs = (long)System.Diagnostics.Stopwatch
-                .GetElapsedTime(inicioEsperaBroadcast).TotalMilliseconds;
-            performance.SignalrEtapaMs = (long)System.Diagnostics.Stopwatch
-                .GetElapsedTime(inicioSignalr).TotalMilliseconds;
-        }
+        // Same publication path on normal cycles, no GPS and age-filtered input.
+        await _signalR.PublicarAsync(aceitos, ativosPorLinha, recentesDoCiclo,
+            performance, GpsHub.AssinaturasAtivas, ct);
 
         sw.Stop();
         _logger.LogInformation(

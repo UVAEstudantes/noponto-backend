@@ -226,12 +226,12 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
             await app.StartAsync();
             return new(resources, app, Assert.Single(app.Urls), origin, batch, bus, brt);
         }
-        public async Task Cycle(double seconds)
+        public async Task Cycle(double seconds, bool expectedSuccess = true)
         {
             Bus.Clock.Seconds = seconds; Brt.Clock.Seconds = seconds;
             await collector.ColetarUmaVezAsync(DateTimeOffset.UtcNow);
             var method = typeof(GpsPollingService).GetMethod("ProcessarCicloAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            Assert.True(await ((Task<bool>)method.Invoke(polling, [DateTimeOffset.UtcNow, Options, Stopwatch.GetTimestamp(), null, CancellationToken.None])!).WaitAsync(TimeSpan.FromSeconds(20)));
+            Assert.Equal(expectedSuccess, await ((Task<bool>)method.Invoke(polling, [DateTimeOffset.UtcNow, Options, Stopwatch.GetTimestamp(), null, CancellationToken.None])!).WaitAsync(TimeSpan.FromSeconds(20)));
             Assert.Null(Store.Ler());
         }
         public async Task<PosicaoVeiculoDto> Read(string id) => (await Http.GetFromJsonAsync<PosicaoVeiculoDto>("/veiculos/" + id, Json))!;
@@ -292,8 +292,10 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         private readonly ConcurrentDictionary<string, TaskCompletionSource> completions = new();
         private readonly TaskCompletionSource handshake = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Channel<PosicaoVeiculoDto[]> snapshots = Channel.CreateUnbounded<PosicaoVeiculoDto[]>();
+        private readonly Channel<string> emptyLines = Channel.CreateUnbounded<string>();
         private Task reader = Task.CompletedTask;
         public int Messages;
+        public int EmptyMessages;
         public static async Task<WireClient> Connect(string url)
         {
             var c = new WireClient();
@@ -326,6 +328,8 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
                         { if (root.TryGetProperty("error", out _)) completion.TrySetException(new InvalidOperationException("Hub invocation rejected.")); else completion.TrySetResult(); }
                         if (type.GetInt32() == 1 && root.GetProperty("target").GetString() == "PosicaoAtualizada")
                         { Interlocked.Increment(ref Messages); snapshots.Writer.TryWrite(root.GetProperty("arguments")[0].Deserialize<PosicaoVeiculoDto[]>(Json)!); }
+                        if (type.GetInt32() == 1 && root.GetProperty("target").GetString() == "LinhaEsvaziada")
+                        { Interlocked.Increment(ref EmptyMessages); emptyLines.Writer.TryWrite(root.GetProperty("arguments")[0].GetProperty("codigoLinha").GetString()!); }
                     }
                 }
             }
@@ -335,6 +339,11 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         {
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             while (true) { var p = await snapshots.Reader.ReadAsync(budget.Token); if (predicate is null || predicate(p)) return p; }
+        }
+        public async Task<string> NextEmpty()
+        {
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            return await emptyLines.Reader.ReadAsync(budget.Token);
         }
         public async ValueTask DisposeAsync()
         {

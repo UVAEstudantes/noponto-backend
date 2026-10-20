@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.DependencyInjection;
 using NoPonto.API.Hubs;
 using NoPonto.Application.GPS;
 using NoPonto.Data.Interfaces;
@@ -13,8 +15,7 @@ using Xunit.Abstractions;
 
 namespace NoPonto.Tests;
 
-// Explicit opt-in runner only. Passing characterization tests below can record
-// unmet consumer requirements; consult observations.jsonl and the audit report.
+// Explicit opt-in disposable runner only. See observations.jsonl and the audit report.
 public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegrationResources resources, ITestOutputHelper output)
     : IClassFixture<GpsIntegrationResources>
 {
@@ -151,7 +152,7 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
     }
 
     [Fact]
-    public async Task SignalR_TwoConsumersReconnectAndExpiry_RecordMissingRemoval()
+    public async Task SignalR_TwoConsumersReconnectAndExpiry_DeliverIdentifiedRemoval()
     {
         var bus = await resources.Seed("BUS"); var brt = await resources.Seed("BRT");
         await using var h = await Harness.Create(resources, 65);
@@ -177,12 +178,13 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
         var rest = await h.Http.GetFromJsonAsync<JsonElement>("/veiculos/linha/" + bus.Code); Assert.Equal(0, rest.GetProperty("totalVeiculos").GetInt32());
         h.Bus.Positions = []; h.Brt.Positions = [new(brtId, brt, .12, h.Origin.AddSeconds(60))];
         var before = reconnected.Messages; await h.Cycle(60); await reconnected.Invoke("InscreverseLinha", bus.Code); await Task.Delay(100);
-        Assert.Equal(before, reconnected.Messages); // Characterization: unmet removal requirement, NOT success of removal.
+        Assert.Equal(before, reconnected.Messages); // Preserve legacy nonempty array contract.
+        Assert.Equal(bus.Code, await reconnected.NextEmpty());
         Assert.Contains(bus.Code, GpsHub.LinhasComAssinantes);
         GpsIntegrationResources.Record("signalr_consumer_findings", new { two_consumers_received = true, one_cancel_kept_group = true,
             reconnect_resubscribed_and_received = true, zero_counter_without_subscribers = true, positive_counter_with_subscribers = true,
             duplicate_rest_status = "Ativo", duplicate_signalr_status = "SemSinal", expired_rest_vehicles = 0,
-            removal_delivered = false, subscriber_still_present = true, characterizes_unmet_requirement = true });
+            removal_delivered = true, subscriber_still_present = true, characterizes_unmet_requirement = false });
     }
 
     [Theory]
@@ -208,6 +210,10 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
         Assert.Equal(nextLine.Code, newLineGps.CodigoLinha); Assert.Null(newLineGps.TimestampAnterior); Assert.Null(newLineGps.EtaProximaParadaSegundos);
         Assert.Equal(HttpStatusCode.NotFound, (await h.Http.GetAsync("/veiculos/linha/" + route.Code)).StatusCode);
         await oldWire.Invoke("InscreverseLinha", route.Code); await Task.Delay(100); Assert.Equal(oldMessages, oldWire.Messages);
+        Assert.Equal(route.Code, await oldWire.NextEmpty());
+        // Simulate an old process/index still referencing the transferred vehicle.
+        await h.App.Services.GetRequiredService<IDistributedCache>()
+            .SetStringAsync(GpsPollingService.ChaveLinha(route.Code), id);
         // Publish a new immutable version in this disposable schema only.
         state.Positions = [new(id, nextLine, .51, h.Origin.AddSeconds(135))]; await h.Cycle(210); await newWire.Next();
         var published = await resources.PublishNextVersion(nextLine);
@@ -215,8 +221,11 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
         Assert.Equal(published, h.Cas.Accepted.Last().PadraoVersaoId); Assert.Null(h.Cas.Accepted.Last().EtaProximaParadaSegundos);
         Assert.NotNull(h.Cas.Accepted.Last().ProximaOcorrenciaParadaPadraoId);
         Assert.False(h.Cas.Accepted.Last().MatchingOperacionalPlausivel);
+        await oldWire.Invoke("InscreverseLinha", route.Code);
+        Assert.Equal(oldMessages, oldWire.Messages); Assert.Equal(1, oldWire.EmptyMessages);
         GpsIntegrationResources.Record("route_transition", new { modal, direction_changed = true, incompatible_predecessor_eta = false,
-            new_direction_warmup_eta = true, line_change_old_index_removed = true, old_group_received_removal = false,
+            new_direction_warmup_eta = true, line_change_old_index_removed = true, old_group_received_removal = true,
+            stale_index_did_not_leak_transferred_vehicle = true,
             immutable_version_changed = true, version_change_eta = h.Cas.Accepted.Last().EtaProximaParadaSegundos,
             operational_statuses = h.Trips.Results.Select(x => x.Status.ToString()).ToArray() });
     }
@@ -225,9 +234,12 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
     public async Task TerminalOldGpsAndHttpFailure_DoNotInventEta()
     {
         var route = await resources.Seed("BRT"); await using var h = await Harness.Create(resources, 125);
+        await using var wire = await WireClient.Connect(h.Url); await wire.Invoke("InscreverseLinha", route.Code);
         var id = Id("BRT", Guid.NewGuid().ToString("N")[..8]);
         h.Brt.Positions = [new(id, route, .1, h.Origin)]; await h.Cycle(0);
+        await wire.Next();
         h.Brt.HttpStatus = 503; await h.Cycle(30); Assert.Single(h.Cas.Accepted);
+        Assert.Equal(id, Assert.Single(await wire.Next()).Ordem); Assert.Equal(0, wire.EmptyMessages);
         h.Brt.HttpStatus = 200; h.Brt.Positions = [new(id, route, .11, h.Origin.AddSeconds(60))];
         await h.AccelerateExpiry(60); await h.Cycle(60); Assert.NotNull(h.Cas.Accepted.Last().EtaProximaParadaSegundos);
         // Freeze timestamp and return out of order over real HTTP: no writes/renewals.
