@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Distributed;
@@ -10,7 +9,6 @@ namespace NoPonto.Application.GPS;
 // One instance per polling service; invoked serially after commits (or with no GPS).
 internal sealed class GpsSignalRPublisher(IDistributedCache cache, IHubContext<GpsHub> hub)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly ConcurrentDictionary<string, long> _vaziasPublicadas = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task PublicarAsync(
@@ -39,24 +37,31 @@ internal sealed class GpsSignalRPublisher(IDistributedCache cache, IHubContext<G
 
         var inicioSignalr = System.Diagnostics.Stopwatch.GetTimestamp();
         var tarefas = new List<Task>();
+        // A duplicate is absent from aceitos but can still have a valid active payload.
+        // Share reads only within this publication, including stale indices of other lines.
+        var ativos = new Dictionary<string, Task<string?>>(StringComparer.OrdinalIgnoreCase);
+        Task<string?> LerAtivoAsync(string ordem)
+        {
+            if (ativos.TryGetValue(ordem, out var leitura))
+            {
+                performance.RedisIndicesCacheHits++;
+                return leitura;
+            }
+            performance.RedisLeiturasIndicesRecente++;
+            return ativos[ordem] = cache.GetStringAsync(GpsPollingService.ChaveVeiculoAtivo(ordem), ct);
+        }
         foreach (var (linha, geracao) in assinaturas)
         {
-            var veiculos = aceitos.Where(p => string.Equals(p.CodigoLinha, linha, StringComparison.OrdinalIgnoreCase)).ToList();
-            var ordensDoCiclo = veiculos.Select(p => p.Ordem).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var dados = await Task.WhenAll(ordensPorLinha[linha].Where(o => !ordensDoCiclo.Contains(o)).Select(async ordem =>
-            {
-                var json = await recentes.LerAsync(ordem, ct);
-                if (json is null) return null;
-                try
-                {
-                    var p = JsonSerializer.Deserialize<PosicaoVeiculoDto>(json, JsonOptions);
-                    // An index can outlive a payload or reference a vehicle now on another line.
-                    return p is not null && string.Equals(p.CodigoLinha, linha, StringComparison.OrdinalIgnoreCase)
-                        ? p with { Status = StatusVeiculo.SemSinal } : null;
-                }
-                catch (JsonException) { return null; }
-            }));
-            veiculos.AddRange(dados.OfType<PosicaoVeiculoDto>());
+            var ordens = ordensPorLinha[linha].Concat(aceitos
+                    .Where(p => string.Equals(p.CodigoLinha, linha, StringComparison.OrdinalIgnoreCase)).Select(p => p.Ordem))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var valoresAtivos = await Task.WhenAll(ordens.Select(LerAtivoAsync));
+            var ausentes = valoresAtivos.Select((valor, indice) => (valor, indice))
+                .Where(x => string.IsNullOrWhiteSpace(x.valor)).Select(x => x.indice).ToArray();
+            var valoresRecentes = await Task.WhenAll(ausentes.Select(i => recentes.LerAsync(ordens[i], ct)));
+            // Reuse the REST policy; an old line index must not publish a transferred vehicle.
+            var veiculos = VeiculosLinhaRuntimeReader.Decode(ordens, valoresAtivos, ausentes, valoresRecentes)
+                .Where(p => string.Equals(p.CodigoLinha, linha, StringComparison.OrdinalIgnoreCase)).ToList();
 
             if (veiculos.Count > 0)
             {

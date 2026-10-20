@@ -49,8 +49,8 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
             await h.Cycle(15); // HTTP cache hit and duplicate GPS, not a new position.
             Assert.Equal(2, h.Cas.Attempts); Assert.Equal(2, h.Trips.Results.Count);
             Assert.Equal(StatusVeiculo.Ativo, (await h.Read(brtId)).Status);
-            Assert.Equal(StatusVeiculo.SemSinal, Assert.Single(await brtWire.Next()).Status);
-            Assert.Equal(StatusVeiculo.SemSinal, Assert.Single(await busWire.Next()).Status);
+            await AssertRestAndWire(h, brtId, Assert.Single(await brtWire.Next()));
+            await AssertRestAndWire(h, busId, Assert.Single(await busWire.Next()));
             Assert.True(await h.Redis.KeyTimeToLiveAsync(GpsPollingService.ChaveVeiculoAtivo(brtId)) <= ttl);
             await h.AccelerateExpiry(interval - 15);
             foreach (var id in new[] { busId, brtId })
@@ -66,6 +66,7 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
             foreach (var (id, route, wire) in new[] { (busId, bus, busWire), (brtId, brt, brtWire) })
             {
                 var p = await h.Read(id); var pushed = Assert.Single(await wire.Next());
+                await AssertRestAndWire(h, id, pushed);
                 Assert.Equal(h.Origin.AddSeconds(interval), p.TimestampGps); Assert.Equal(p.TimestampGps, pushed.TimestampGps);
                 Assert.Equal(StatusVeiculo.Ativo, p.Status); Assert.Equal(StatusVeiculo.Ativo, pushed.Status);
                 Assert.Equal(route.Versions[0], p.PadraoVersaoId); Assert.Equal(route.Directions[0], p.SentidoId);
@@ -162,7 +163,8 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
         await using var first = await WireClient.Connect(h.Url); await first.Invoke("InscreverseLinha", bus.Code);
         var second = await WireClient.Connect(h.Url); await second.Invoke("InscreverseLinha", bus.Code);
         await h.Cycle(15); var a = Assert.Single(await first.Next()); var b = Assert.Single(await second.Next());
-        Assert.Equal(StatusVeiculo.SemSinal, a.Status); Assert.Equal(a.TimestampGps, b.TimestampGps);
+        Assert.Equal(StatusVeiculo.Ativo, a.Status); Assert.Equal(a.TimestampGps, b.TimestampGps);
+        await AssertRestAndWire(h, busId, a); await AssertRestAndWire(h, busId, b);
         Assert.Equal(StatusVeiculo.Ativo, (await h.Read(busId)).Status);
         Assert.Equal(1, Convert.ToInt32(h.Log.Metrics[^1]["linhas_publicadas"]));
         await first.Invoke("CancelarLinha", bus.Code); Assert.Contains(bus.Code, GpsHub.LinhasComAssinantes);
@@ -183,7 +185,7 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
         Assert.Contains(bus.Code, GpsHub.LinhasComAssinantes);
         GpsIntegrationResources.Record("signalr_consumer_findings", new { two_consumers_received = true, one_cancel_kept_group = true,
             reconnect_resubscribed_and_received = true, zero_counter_without_subscribers = true, positive_counter_with_subscribers = true,
-            duplicate_rest_status = "Ativo", duplicate_signalr_status = "SemSinal", expired_rest_vehicles = 0,
+            duplicate_rest_status = "Ativo", duplicate_signalr_status = "Ativo", expired_rest_vehicles = 0,
             removal_delivered = true, subscriber_still_present = true, characterizes_unmet_requirement = false });
     }
 
@@ -199,14 +201,14 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
         await using var newWire = await WireClient.Connect(h.Url); await newWire.Invoke("InscreverseLinha", nextLine.Code);
         async Task Step(int s, GpsIntegrationResources.Route r, double fraction, uint direction = 0)
         { if (s > 0) await h.AccelerateExpiry(45); state.Positions = [new(id, r, fraction, h.Origin.AddSeconds(65 + s / 3), direction)]; await h.Cycle(s); }
-        await Step(0, route, .50); await oldWire.Next();
-        await Step(45, route, .51); await oldWire.Next();
-        await Step(90, route, .50, 1); var directionChanged = h.Cas.Accepted.Last(); await oldWire.Next();
+        await Step(0, route, .50); await AssertRestAndWire(h, id, Assert.Single(await oldWire.Next()));
+        await Step(45, route, .51); await AssertRestAndWire(h, id, Assert.Single(await oldWire.Next()));
+        await Step(90, route, .50, 1); var directionChanged = h.Cas.Accepted.Last(); await AssertRestAndWire(h, id, Assert.Single(await oldWire.Next()));
         Assert.Equal(route.Directions[1], directionChanged.SentidoId); Assert.Null(directionChanged.EtaProximaParadaSegundos);
         Assert.False(directionChanged.MatchingOperacionalPlausivel);
-        await Step(135, route, .51, 1); await oldWire.Next(); Assert.NotNull(h.Cas.Accepted.Last().EtaProximaParadaSegundos);
+        await Step(135, route, .51, 1); await AssertRestAndWire(h, id, Assert.Single(await oldWire.Next())); Assert.NotNull(h.Cas.Accepted.Last().EtaProximaParadaSegundos);
         var oldMessages = oldWire.Messages;
-        await Step(180, nextLine, .50, 1); var newLineGps = h.Cas.Accepted.Last(); await newWire.Next();
+        await Step(180, nextLine, .50, 1); var newLineGps = h.Cas.Accepted.Last(); await AssertRestAndWire(h, id, Assert.Single(await newWire.Next()));
         Assert.Equal(nextLine.Code, newLineGps.CodigoLinha); Assert.Null(newLineGps.TimestampAnterior); Assert.Null(newLineGps.EtaProximaParadaSegundos);
         Assert.Equal(HttpStatusCode.NotFound, (await h.Http.GetAsync("/veiculos/linha/" + route.Code)).StatusCode);
         await oldWire.Invoke("InscreverseLinha", route.Code); await Task.Delay(100); Assert.Equal(oldMessages, oldWire.Messages);
@@ -215,9 +217,9 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
         await h.App.Services.GetRequiredService<IDistributedCache>()
             .SetStringAsync(GpsPollingService.ChaveLinha(route.Code), id);
         // Publish a new immutable version in this disposable schema only.
-        state.Positions = [new(id, nextLine, .51, h.Origin.AddSeconds(135))]; await h.Cycle(210); await newWire.Next();
+        state.Positions = [new(id, nextLine, .51, h.Origin.AddSeconds(135))]; await h.Cycle(210); await AssertRestAndWire(h, id, Assert.Single(await newWire.Next()));
         var published = await resources.PublishNextVersion(nextLine);
-        await h.AccelerateExpiry(45); state.Positions = [new(id, nextLine, .52, h.Origin.AddSeconds(150))]; await h.Cycle(255); await newWire.Next();
+        await h.AccelerateExpiry(45); state.Positions = [new(id, nextLine, .52, h.Origin.AddSeconds(150))]; await h.Cycle(255); await AssertRestAndWire(h, id, Assert.Single(await newWire.Next()));
         Assert.Equal(published, h.Cas.Accepted.Last().PadraoVersaoId); Assert.Null(h.Cas.Accepted.Last().EtaProximaParadaSegundos);
         Assert.NotNull(h.Cas.Accepted.Last().ProximaOcorrenciaParadaPadraoId);
         Assert.False(h.Cas.Accepted.Last().MatchingOperacionalPlausivel);
@@ -237,9 +239,9 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
         await using var wire = await WireClient.Connect(h.Url); await wire.Invoke("InscreverseLinha", route.Code);
         var id = Id("BRT", Guid.NewGuid().ToString("N")[..8]);
         h.Brt.Positions = [new(id, route, .1, h.Origin)]; await h.Cycle(0);
-        await wire.Next();
+        await AssertRestAndWire(h, id, Assert.Single(await wire.Next()));
         h.Brt.HttpStatus = 503; await h.Cycle(30); Assert.Single(h.Cas.Accepted);
-        Assert.Equal(id, Assert.Single(await wire.Next()).Ordem); Assert.Equal(0, wire.EmptyMessages);
+        await AssertRestAndWire(h, id, Assert.Single(await wire.Next())); Assert.Equal(0, wire.EmptyMessages);
         h.Brt.HttpStatus = 200; h.Brt.Positions = [new(id, route, .11, h.Origin.AddSeconds(60))];
         await h.AccelerateExpiry(60); await h.Cycle(60); Assert.NotNull(h.Cas.Accepted.Last().EtaProximaParadaSegundos);
         // Freeze timestamp and return out of order over real HTTP: no writes/renewals.
@@ -256,6 +258,8 @@ public sealed partial class GpsPipelineDisposableIntegrationTests(GpsIntegration
         for (var i = 0; i < 4; i++)
         { h.Brt.Positions = [new(terminalId, route, .59 + i * .02, now.AddSeconds(i * 10))]; await h.Cycle(180 + i * 30); }
         var terminal = h.Cas.Accepted.Last(); Assert.Null(terminal.ProximaOcorrenciaParadaPadraoId); Assert.Null(terminal.EtaProximaParadaSegundos);
+        var terminalRows = await wire.Next(rows => rows.Any(p => p.Ordem == terminalId && p.TimestampGps == terminal.TimestampGps));
+        await AssertRestAndWire(h, terminalId, Assert.Single(terminalRows, p => p.Ordem == terminalId));
         Assert.Equal(EstadoViagem.Finalizada, h.Trips.Results.Last().EstadoOperacional!.Estado);
         Assert.DoesNotContain(h.Trips.Results, x => x.Status == ViagemObservadaStatus.InfrastructureFailure);
         GpsIntegrationResources.Record("failure_and_eta_gates", new { failed_http_did_not_commit = true, http_recovery_eta = true,

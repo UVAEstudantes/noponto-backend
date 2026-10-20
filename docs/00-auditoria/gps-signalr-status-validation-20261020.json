@@ -1,0 +1,730 @@
+{
+    "date":  "2026-10-20",
+    "base":  "204caef",
+    "branch":  "audit/gps-bus-brt-pipeline",
+    "scope":  "local offline and isolated disposable integration; no deployment",
+    "root_cause":  "Duplicates are correctly absent from accepted GPS, but old publisher read recent unconditionally instead of consulting still-valid active payload",
+    "policy":  "Persisted active payload first, recent only if active absent or whitespace, shared VeiculosLinhaRuntimeReader.Decode, current-line filtering",
+    "contracts_unchanged":  [
+                                "PosicaoAtualizada(posicoes[])",
+                                "LinhaEsvaziada({codigoLinha})"
+                            ],
+    "red_runtime_modified":  false,
+    "runs":  [
+                 {
+                     "directory":  "NoPonto/lab-output/gps-status-20261020-red",
+                     "trx":  "integration.trx",
+                     "sha256":  "45074650f00bb1dfcedf54acee780c6e840145f52c2ee41d32ee27adb5dd7747",
+                     "total":  2,
+                     "passed":  0,
+                     "failed":  2,
+                     "not_executed":  0,
+                     "failures":  [
+                                      {
+                                          "test":  "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_StatusLifecycle_MatchesRestWithoutRenewingDuplicate(modal: \"BRT\")",
+                                          "outcome":  "Failed",
+                                          "message":  "Assert.Equal() Failure: Values differ\r\nExpected: Ativo\r\nActual:   SemSinal"
+                                      },
+                                      {
+                                          "test":  "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_StatusLifecycle_MatchesRestWithoutRenewingDuplicate(modal: \"BUS\")",
+                                          "outcome":  "Failed",
+                                          "message":  "Assert.Equal() Failure: Values differ\r\nExpected: Ativo\r\nActual:   SemSinal"
+                                      }
+                                  ],
+                     "teardown":  {
+                                      "preexisting_unchanged":  true,
+                                      "preexisting_count":  4,
+                                      "owned_containers_remaining":  0,
+                                      "owned_network_removed":  true
+                                  },
+                     "isolation":  {
+                                       "scope":  "disposable",
+                                       "dedicated_network":  true,
+                                       "network_internal":  false,
+                                       "mounts":  "tmpfs only",
+                                       "postgres_image":  "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+                                       "redis_image":  "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+                                       "preexisting_container_count":  4,
+                                       "ports":  "random loopback only"
+                                   }
+                 },
+                 {
+                     "directory":  "NoPonto/lab-output/gps-status-20261020-publisher",
+                     "trx":  "publisher.trx",
+                     "sha256":  "011beed5981c5f1fc105a883e3f7fda7cf39616893062f087ed26b347bcb1ff7",
+                     "total":  20,
+                     "passed":  20,
+                     "failed":  0,
+                     "not_executed":  0
+                 },
+                 {
+                     "directory":  "NoPonto/lab-output/gps-status-20261020-integrated",
+                     "trx":  "integration.trx",
+                     "sha256":  "358ee60887289ef89e46dc47346b4eb9e220470d9a6a0592d098dafe28ccf4d3",
+                     "total":  16,
+                     "passed":  16,
+                     "failed":  0,
+                     "not_executed":  0,
+                     "teardown":  {
+                                      "preexisting_unchanged":  true,
+                                      "preexisting_count":  4,
+                                      "owned_containers_remaining":  0,
+                                      "owned_network_removed":  true
+                                  },
+                     "isolation":  {
+                                       "scope":  "disposable",
+                                       "dedicated_network":  true,
+                                       "network_internal":  false,
+                                       "mounts":  "tmpfs only",
+                                       "postgres_image":  "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+                                       "redis_image":  "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+                                       "preexisting_container_count":  4,
+                                       "ports":  "random loopback only"
+                                   }
+                 },
+                 {
+                     "directory":  "NoPonto/lab-output/gps-status-20261020-offline",
+                     "trx":  "offline.trx",
+                     "sha256":  "967dddb39cb40fae2b39941e27699fb4edc01bb44cd17968433b5da584195df8",
+                     "total":  758,
+                     "passed":  758,
+                     "failed":  0,
+                     "not_executed":  0
+                 }
+             ],
+    "build":  {
+                  "command":  "dotnet build NoPonto.sln -c Release --no-restore --no-incremental --verbosity quiet",
+                  "exit_code":  0,
+                  "errors":  0,
+                  "preexisting_warnings":  5
+              },
+    "offline_verification":  {
+                                 "command":  "py -3.13 -B .ci/offline_tests.py verify NoPonto/lab-output/gps-status-20261020-offline/offline.trx",
+                                 "exit_code":  0,
+                                 "classes":  28,
+                                 "tests":  758
+                             },
+    "protected_sources":  [
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/GpsBrtPollingGate.cs",
+                                  "git_blob":  "4174fb1c05ec595f1a9d47b11d5f15aed4dd90c5",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/GtfsRealtimeGps.cs",
+                                  "git_blob":  "6cf78926475489f1fd1a766be926f42b2118dd48",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/GtfsRealtimeGpsSource.cs",
+                                  "git_blob":  "41cd25cd8dcecd881b37795056b751b41ad6f0b6",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/GpsPhysicalPredecessor.cs",
+                                  "git_blob":  "13fe08d662fcf54692a90150344378d0e8aecc19",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/GpsTimestampDeduplication.cs",
+                                  "git_blob":  "e855791ecc77bac0ff064cc617e79967afe1ccc4",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/PhysicalEta.cs",
+                                  "git_blob":  "e781e76ce8c81b7978fbf276cf85f4636561d082",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/GpsEnriquecimentoService.cs",
+                                  "git_blob":  "9e70d4f80491fdd282b4f5a390f548adaa7f6f0f",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/GpsEnriquecimentoService.Batch.cs",
+                                  "git_blob":  "8857a62342231d86f7d31a70dcffdce2f24be217",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/VeiculosLinhaRuntimeReader.cs",
+                                  "git_blob":  "00237cab54162d7fa47a0d85300561a65658cb07",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/4-Data/Repositories/PosicaoVeiculoCacheRepository.cs",
+                                  "git_blob":  "13c3ab1edffc3bbfae7f6dd02c1add5d5ffaedda",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/4-Data/Repositories/PosicaoVeiculoPayloadWriter.cs",
+                                  "git_blob":  "b71956554a315ba10fa0679b87684e279b93af68",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/Program.cs",
+                                  "git_blob":  "6ed960929a6986ed0dfefcd473dd39d8c1a5c63b",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "tools/gps/test_pipeline_disposable.ps1",
+                                  "git_blob":  "c05a15c916c833b1a753d0896a6f68d587e92b05",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/GpsPollingService.cs",
+                                  "git_blob":  "d6ef6a37a4928478d433687ea4a414242a42fe60",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/1-API/Hubs/GpsHub.cs",
+                                  "git_blob":  "8163d092be40839581ce0fd4821214e216f9be24",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/1-API/Controllers/VeiculosController.cs",
+                                  "git_blob":  "2308652a75aa674183d52e8298e196f25b492538",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/LegacyCompatibility/DTOs/FrontendLegacyDtos.cs",
+                                  "git_blob":  "d73d091f84072f03baee9a47d102f2c5dc77cc49",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/2-Application/Services/GPS/GpsRecenteCicloCache.cs",
+                                  "git_blob":  "75f34292f2288b33ed9d529fbfd60ac6816d89ca",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.Infrastructure.cs",
+                                  "git_blob":  "300b42534771663b829ac274f00c88004a80304d",
+                                  "unchanged_from_base":  true
+                              },
+                              {
+                                  "path":  "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.Removals.cs",
+                                  "git_blob":  "112370589208e8f18ff48c4586d3dbef3ce69ded",
+                                  "unchanged_from_base":  true
+                              }
+                          ],
+    "source_sha256":  [
+                          {
+                              "path":  "NoPonto/2-Application/Services/GPS/GpsSignalRPublisher.cs",
+                              "sha256":  "d956248a823e6a1b5ef99c9c08b45b44ac1f235aea0e4874e9a8016b1781aa24"
+                          },
+                          {
+                              "path":  "NoPonto/5-Testes/GpsSignalRPublisherTests.cs",
+                              "sha256":  "12725f535237941f1ee69a7e00b007dc419bc3289be974bc691537731a5badaf"
+                          },
+                          {
+                              "path":  "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.cs",
+                              "sha256":  "af1ef517488de21a51ee5ad145ba57f7e036f92dc40bcf70c2b7085a1b7e4a6b"
+                          },
+                          {
+                              "path":  "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.Status.cs",
+                              "sha256":  "96d6827ffce597dc7c89426ce7446fedea7483b9530ee3002c102621202dd098"
+                          }
+                      ],
+    "integrated_observations":  [
+                                    {
+                                        "kind":  "guarded_fixture",
+                                        "value":  {
+                                                      "postgres":  "16/PostGIS",
+                                                      "schema":  "exclusive migrated schema",
+                                                      "redis":  "real Redis7",
+                                                      "credentials":  "none"
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "failure_and_eta_gates",
+                                        "value":  {
+                                                      "failed_http_did_not_commit":  true,
+                                                      "http_recovery_eta":  true,
+                                                      "out_of_order_did_not_commit":  true,
+                                                      "old_gps_eta":  false,
+                                                      "terminal_eta":  false,
+                                                      "terminal_state":  "Finalizada",
+                                                      "requests":  [
+                                                                       0,
+                                                                       30,
+                                                                       60,
+                                                                       90,
+                                                                       120,
+                                                                       150,
+                                                                       180,
+                                                                       210,
+                                                                       240,
+                                                                       270
+                                                                   ]
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "joint_cadence",
+                                        "value":  {
+                                                      "bus_get_seconds":  [
+                                                                              0,
+                                                                              30,
+                                                                              60,
+                                                                              90
+                                                                          ],
+                                                      "brt_get_seconds":  [
+                                                                              0,
+                                                                              45,
+                                                                              90
+                                                                          ],
+                                                      "brt_accepted":  3,
+                                                      "brt_eta_after_warmup":  2,
+                                                      "subscribed":  false,
+                                                      "published_counter":  0,
+                                                      "cache_header_latency_clock_seconds":  1,
+                                                      "set_based":  true
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "signalr_removal_lifecycle",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "recent_not_cleared_as_active_expired":  true,
+                                                      "identified_empty_received_by_two_consumers":  true,
+                                                      "other_line_preserved":  true,
+                                                      "cancellation_isolated":  true,
+                                                      "repeated_empty_suppressed":  true,
+                                                      "reconnect_and_resubscribe_resynchronized":  true
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "signalr_removal_lifecycle",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "recent_not_cleared_as_active_expired":  true,
+                                                      "identified_empty_received_by_two_consumers":  true,
+                                                      "other_line_preserved":  true,
+                                                      "cancellation_isolated":  true,
+                                                      "repeated_empty_suppressed":  true,
+                                                      "reconnect_and_resubscribe_resynchronized":  true
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "route_transition",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "direction_changed":  true,
+                                                      "incompatible_predecessor_eta":  false,
+                                                      "new_direction_warmup_eta":  true,
+                                                      "line_change_old_index_removed":  true,
+                                                      "old_group_received_removal":  true,
+                                                      "stale_index_did_not_leak_transferred_vehicle":  true,
+                                                      "immutable_version_changed":  true,
+                                                      "version_change_eta":  null,
+                                                      "operational_statuses":  [
+                                                                                   "Created",
+                                                                                   "Updated",
+                                                                                   "ItineraryChanged",
+                                                                                   "ItineraryChanged",
+                                                                                   "ItineraryChanged",
+                                                                                   "ItineraryChanged",
+                                                                                   "ItineraryChanged"
+                                                                               ]
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "route_transition",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "direction_changed":  true,
+                                                      "incompatible_predecessor_eta":  false,
+                                                      "new_direction_warmup_eta":  true,
+                                                      "line_change_old_index_removed":  true,
+                                                      "old_group_received_removal":  true,
+                                                      "stale_index_did_not_leak_transferred_vehicle":  true,
+                                                      "immutable_version_changed":  true,
+                                                      "version_change_eta":  null,
+                                                      "operational_statuses":  [
+                                                                                   "Created",
+                                                                                   "Updated",
+                                                                                   "ItineraryChanged",
+                                                                                   "ItineraryChanged",
+                                                                                   "ItineraryChanged",
+                                                                                   "ItineraryChanged",
+                                                                                   "ItineraryChanged"
+                                                                               ]
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "signalr_consumer_findings",
+                                        "value":  {
+                                                      "two_consumers_received":  true,
+                                                      "one_cancel_kept_group":  true,
+                                                      "reconnect_resubscribed_and_received":  true,
+                                                      "zero_counter_without_subscribers":  true,
+                                                      "positive_counter_with_subscribers":  true,
+                                                      "duplicate_rest_status":  "Ativo",
+                                                      "duplicate_signalr_status":  "Ativo",
+                                                      "expired_rest_vehicles":  0,
+                                                      "removal_delivered":  true,
+                                                      "subscriber_still_present":  true,
+                                                      "characterizes_unmet_requirement":  false
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "real_redis_expiry",
+                                        "value":  {
+                                                      "elapsed_seconds":  41.0234125,
+                                                      "active_exists":  false,
+                                                      "recent_status":  "SemSinal",
+                                                      "gps_unchanged":  true,
+                                                      "recent_ttl_seconds":  138.955
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "real_redis_joint_witness",
+                                        "value":  {
+                                                      "elapsed_seconds":  60.0674587,
+                                                      "redis_ttl_modified":  false,
+                                                      "brt_gps_delta":  45,
+                                                      "brt_eta":  28.62571651586982,
+                                                      "bus_gets":  [
+                                                                       0,
+                                                                       30,
+                                                                       60
+                                                                   ],
+                                                      "brt_gets":  [
+                                                                       0,
+                                                                       45
+                                                                   ]
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "batch":  false,
+                                                      "set_based":  false,
+                                                      "interval":  30,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "batch":  false,
+                                                      "set_based":  false,
+                                                      "interval":  30,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "batch":  false,
+                                                      "set_based":  false,
+                                                      "interval":  45,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "batch":  false,
+                                                      "set_based":  false,
+                                                      "interval":  45,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "batch":  false,
+                                                      "set_based":  false,
+                                                      "interval":  60,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "batch":  false,
+                                                      "set_based":  false,
+                                                      "interval":  60,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "batch":  false,
+                                                      "set_based":  false,
+                                                      "interval":  240,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  false,
+                                                      "eta":  null,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "batch":  false,
+                                                      "set_based":  false,
+                                                      "interval":  240,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  false,
+                                                      "eta":  null,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "batch":  true,
+                                                      "set_based":  true,
+                                                      "interval":  30,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "batch":  true,
+                                                      "set_based":  true,
+                                                      "interval":  30,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "batch":  true,
+                                                      "set_based":  true,
+                                                      "interval":  45,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "batch":  true,
+                                                      "set_based":  true,
+                                                      "interval":  45,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "batch":  true,
+                                                      "set_based":  true,
+                                                      "interval":  60,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "batch":  true,
+                                                      "set_based":  true,
+                                                      "interval":  60,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  true,
+                                                      "eta":  33.275310177536724,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "batch":  true,
+                                                      "set_based":  true,
+                                                      "interval":  240,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  false,
+                                                      "eta":  null,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "interval_matrix",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "batch":  true,
+                                                      "set_based":  true,
+                                                      "interval":  240,
+                                                      "clock":  "controlled HTTP/GPS clock; accelerated real Redis TTL",
+                                                      "predecessor":  false,
+                                                      "eta":  null,
+                                                      "timestamp_preserved":  true,
+                                                      "rest_active":  true,
+                                                      "signalr_active":  true,
+                                                      "cas_accepted":  4
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "signalr_empty_early_return",
+                                        "value":  {
+                                                      "ageFiltered":  false,
+                                                      "empty_delivered":  true,
+                                                      "empty_without_index_delivered_to_new_subscription":  true,
+                                                      "legacy_empty_arrays":  0,
+                                                      "repeated_empty_suppressed":  true
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "signalr_empty_early_return",
+                                        "value":  {
+                                                      "ageFiltered":  true,
+                                                      "empty_delivered":  true,
+                                                      "empty_without_index_delivered_to_new_subscription":  true,
+                                                      "legacy_empty_arrays":  0,
+                                                      "repeated_empty_suppressed":  true
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "signalr_status_lifecycle",
+                                        "value":  {
+                                                      "modal":  "BUS",
+                                                      "duplicate_rest":  "Ativo",
+                                                      "duplicate_signalr":  "Ativo",
+                                                      "active_expired_rest":  "SemSinal",
+                                                      "active_expired_signalr":  "SemSinal",
+                                                      "reconnect":  "SemSinal",
+                                                      "returned":  "Ativo",
+                                                      "duplicate_payload_watermark_and_ttls_unchanged":  true,
+                                                      "duplicate_did_not_commit":  true,
+                                                      "gps_timestamp_preserved":  true,
+                                                      "predecessor_after_return":  true
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "signalr_status_lifecycle",
+                                        "value":  {
+                                                      "modal":  "BRT",
+                                                      "duplicate_rest":  "Ativo",
+                                                      "duplicate_signalr":  "Ativo",
+                                                      "active_expired_rest":  "SemSinal",
+                                                      "active_expired_signalr":  "SemSinal",
+                                                      "reconnect":  "SemSinal",
+                                                      "returned":  "Ativo",
+                                                      "duplicate_payload_watermark_and_ttls_unchanged":  true,
+                                                      "duplicate_did_not_commit":  true,
+                                                      "gps_timestamp_preserved":  true,
+                                                      "predecessor_after_return":  true
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "real_cas",
+                                        "value":  {
+                                                      "concurrent_accepted":  1,
+                                                      "concurrent_rejected":  1,
+                                                      "duplicate_rejected":  true,
+                                                      "out_of_order_rejected":  true,
+                                                      "lost_fence_rejected":  true,
+                                                      "payload_and_ttl_preserved":  true
+                                                  }
+                                    },
+                                    {
+                                        "kind":  "signalr_cold_empty",
+                                        "value":  {
+                                                      "initial_empty_identified":  true,
+                                                      "empty_http_failure_not_rebroadcast":  true,
+                                                      "new_consumer_refreshed":  true
+                                                  }
+                                    }
+                                ],
+    "limitations":  [
+                        "Independent REST and WebSocket reads are not an atomic snapshot across expiration or concurrent commits",
+                        "Extra active GET for accepted or historical candidates; no peak-load benchmark",
+                        "No real production/provider/proxy/APK/backplane or replicas validation",
+                        "No frontend changes, production operations, deployment, push, merge or ML work"
+                    ]
+}

@@ -53,8 +53,90 @@ public sealed class GpsSignalRPublisherTests
         Assert.Equal(0, f.Last.VeiculosEnviados); Assert.Equal(1, f.Last.LinhasPublicadas);
         await f.Publish(new() { ["42"] = 1 }); Assert.Equal(3, f.Hub.Sent.Count);
         // A new real position permits the next empty transition with the same subscribers.
-        await f.Publish(new() { ["42"] = 1 }, [p with { TimestampGps = p.TimestampGps.AddSeconds(30) }]);
+        var next = p with { TimestampGps = p.TimestampGps.AddSeconds(30) };
+        await f.Seed(next); await f.Publish(new() { ["42"] = 1 }, [next]);
+        await f.Cache.RemoveAsync(GpsPollingService.ChaveVeiculoAtivo(p.Ordem));
+        await f.Cache.RemoveAsync(GpsPollingService.ChaveVeiculoRecente(p.Ordem));
         await f.Publish(new() { ["42"] = 1 }); Assert.Equal(5, f.Hub.Sent.Count);
+    }
+
+    [Theory]
+    [InlineData("BUS", StatusVeiculo.Ativo)]
+    [InlineData("BRT", StatusVeiculo.Ativo)]
+    [InlineData("BUS", StatusVeiculo.SemSinal)]
+    [InlineData("BRT", StatusVeiculo.SemSinal)]
+    public async Task ActivePayloadWinsOverRecentAndCycleCandidate(string modal, StatusVeiculo status)
+    {
+        using var f = new Fixture(); var old = Position(modal, "42");
+        var current = old with { TimestampGps = old.TimestampGps.AddSeconds(30), Latitude = -22.91, Status = status };
+        await f.Seed(current);
+        await f.Cache.SetStringAsync(GpsPollingService.ChaveVeiculoRecente(old.Ordem), JsonSerializer.Serialize(old));
+        var official = Assert.Single((await new VeiculosLinhaRuntimeReader(f.Cache).ListarAsync(["42"])).Posicoes);
+        f.Cache.Reads.Clear(); var writes = f.Cache.Writes;
+        await f.Publish(new() { ["42"] = 1 }, [old]);
+        var row = Assert.Single(Assert.Single(f.Hub.Sent).Payload.EnumerateArray());
+        Assert.Equal(official.Status.ToString(), row.GetProperty("status").GetString());
+        Assert.Equal(official.TimestampGps, row.GetProperty("timestampGps").GetDateTimeOffset());
+        Assert.Equal(official.Latitude, row.GetProperty("latitude").GetDouble());
+        Assert.Equal(writes, f.Cache.Writes);
+        Assert.DoesNotContain(GpsPollingService.ChaveVeiculoRecente(old.Ordem), f.Cache.Reads);
+        Assert.Single(f.Cache.Reads, key => key == GpsPollingService.ChaveVeiculoAtivo(old.Ordem));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task MissingActive_UsesOfficialHistoricalPolicyWithoutWriting(string? active)
+    {
+        using var f = new Fixture(); var p = Position("BRT", "42"); await f.Seed(p);
+        var key = GpsPollingService.ChaveVeiculoAtivo(p.Ordem);
+        if (active is null) await f.Cache.RemoveAsync(key); else await f.Cache.SetStringAsync(key, active);
+        var official = Assert.Single((await new VeiculosLinhaRuntimeReader(f.Cache).ListarAsync(["42"])).Posicoes);
+        var writes = f.Cache.Writes;
+        await f.Publish(new() { ["42"] = 1 }, [p]);
+        var row = Assert.Single(f.Hub.Sent).Payload[0];
+        Assert.Equal(StatusVeiculo.SemSinal, official.Status);
+        Assert.Equal(official.Status.ToString(), row.GetProperty("status").GetString());
+        Assert.Equal(p.TimestampGps, row.GetProperty("timestampGps").GetDateTimeOffset());
+        Assert.Equal(writes, f.Cache.Writes);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("{corrupt")]
+    public async Task InvalidActive_PreservesOfficialSkipPolicy(string active)
+    {
+        using var f = new Fixture(); var p = Position("BUS", "42"); await f.Seed(p);
+        await f.Cache.SetStringAsync(GpsPollingService.ChaveVeiculoAtivo(p.Ordem), active);
+        Assert.Empty((await new VeiculosLinhaRuntimeReader(f.Cache).ListarAsync(["42"])).Posicoes);
+        f.Cache.Reads.Clear(); var writes = f.Cache.Writes;
+        await f.Publish(new() { ["42"] = 1 }, [p]);
+        Assert.Equal("LinhaEsvaziada", Assert.Single(f.Hub.Sent).Event);
+        Assert.DoesNotContain(GpsPollingService.ChaveVeiculoRecente(p.Ordem), f.Cache.Reads);
+        Assert.Equal(writes, f.Cache.Writes);
+    }
+
+    [Fact]
+    public async Task ActiveReadFailure_DoesNotPublishFalseEmptyOrHistoricalAndCanRetry()
+    {
+        using var f = new Fixture(); var p = Position("BRT", "42"); await f.Seed(p);
+        f.Cache.FailKey = GpsPollingService.ChaveVeiculoAtivo(p.Ordem);
+        var writes = f.Cache.Writes; f.Cache.Reads.Clear();
+        await Assert.ThrowsAsync<IOException>(() => f.Publish(new() { ["42"] = 1 }));
+        Assert.Empty(f.Hub.Sent); Assert.DoesNotContain(GpsPollingService.ChaveVeiculoRecente(p.Ordem), f.Cache.Reads);
+        Assert.Equal(writes, f.Cache.Writes);
+        f.Cache.FailKey = null; await f.Publish(new() { ["42"] = 1 });
+        Assert.Equal("Ativo", Assert.Single(f.Hub.Sent).Payload[0].GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task AcceptedCandidateWithoutPersistedPayload_DoesNotBecomeActive()
+    {
+        using var f = new Fixture(); var p = Position("BUS", "42");
+        await f.Publish(new() { ["42"] = 1 }, [p]);
+        Assert.Equal("LinhaEsvaziada", Assert.Single(f.Hub.Sent).Event);
+        Assert.Equal(0, f.Cache.Writes);
     }
 
     [Fact]
@@ -111,11 +193,11 @@ public sealed class GpsSignalRPublisherTests
     private sealed class Fixture : IDisposable
     {
         private readonly ServiceProvider services = new ServiceCollection().AddDistributedMemoryCache().BuildServiceProvider();
-        public IDistributedCache Cache { get; }
+        public RecordingCache Cache { get; }
         public CaptureHub Hub { get; } = new();
         private readonly GpsSignalRPublisher publisher;
         public GpsCicloPerformance Last { get; private set; } = null!;
-        public Fixture() { Cache = services.GetRequiredService<IDistributedCache>(); publisher = new(Cache, Hub); }
+        public Fixture() { Cache = new(services.GetRequiredService<IDistributedCache>()); publisher = new(Cache, Hub); }
         public async Task Seed(PosicaoVeiculoDto p)
         {
             await Cache.SetStringAsync(GpsPollingService.ChaveLinha(p.CodigoLinha), p.Ordem);
@@ -130,6 +212,28 @@ public sealed class GpsSignalRPublisherTests
                 new(Cache, Last), Last, subscriptions, default);
         }
         public void Dispose() => services.Dispose();
+    }
+
+    private sealed class RecordingCache(IDistributedCache inner) : IDistributedCache
+    {
+        public List<string> Reads { get; } = [];
+        public int Writes { get; private set; }
+        public string? FailKey { get; set; }
+        public byte[]? Get(string key) => throw new NotSupportedException();
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default)
+        {
+            Reads.Add(key);
+            return key == FailKey ? Task.FromException<byte[]?>(new IOException("fixture cache read failure")) : inner.GetAsync(key, token);
+        }
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => throw new NotSupportedException();
+        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+        { Writes++; return inner.SetAsync(key, value, options, token); }
+        public void Refresh(string key) => throw new NotSupportedException();
+        public Task RefreshAsync(string key, CancellationToken token = default)
+        { Writes++; return inner.RefreshAsync(key, token); }
+        public void Remove(string key) => throw new NotSupportedException();
+        public Task RemoveAsync(string key, CancellationToken token = default)
+        { Writes++; return inner.RemoveAsync(key, token); }
     }
 
     private sealed class CaptureHub : IHubContext<GpsHub>, IHubClients
