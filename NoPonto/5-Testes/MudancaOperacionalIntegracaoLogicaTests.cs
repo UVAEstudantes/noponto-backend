@@ -64,8 +64,22 @@ public sealed class MudancaOperacionalIntegracaoLogicaTests
         Assert.Null(d.Estado.Candidato);
         Assert.Equal(new[] { "ViagemFinalizada", "ViagemIniciada" }, d.Eventos.Select(x => x.Tipo));
         Assert.Equal(anterior.Observada.ViagemId, d.Eventos[0].ViagemId);
+        Assert.Equal($"fim:{anterior.Observada.ViagemId:D}", d.Eventos[0].EventId);
+        Assert.Equal("MudancaOperacional", d.Eventos[0].MotivoFim);
+        Assert.Equal(Original.LinhaId, d.Eventos[0].LinhaId);
+        Assert.Equal(Original.SentidoId, d.Eventos[0].SentidoId);
+        Assert.Equal(Original.PadraoOperacionalId, d.Eventos[0].PadraoOperacionalId);
+        Assert.Equal(Original.PadraoVersaoId, d.Eventos[0].PadraoVersaoId);
         Assert.Null(d.Eventos[0].OcorrenciaParadaPadraoId);
+        Assert.Null(d.Eventos[0].ParadaId);
+        Assert.Null(d.Eventos[0].TimestampPassagem);
         Assert.Equal(id, d.Eventos[1].ViagemId);
+        Assert.Equal($"inicio:{id:D}", d.Eventos[1].EventId);
+        Assert.Equal(e.LinhaId, d.Eventos[1].LinhaId);
+        Assert.Equal(e.SentidoId, d.Eventos[1].SentidoId);
+        Assert.Equal(e.PadraoOperacionalId, d.Eventos[1].PadraoOperacionalId);
+        Assert.Equal(e.PadraoVersaoId, d.Eventos[1].PadraoVersaoId);
+        Assert.Null(d.Eventos[1].MotivoFim);
         foreach (var evento in d.Eventos) EventoViagemValidator.Validar(evento);
         Assert.Equal(StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente,
             Avaliar(recuperado, e, G(e))!.Status);

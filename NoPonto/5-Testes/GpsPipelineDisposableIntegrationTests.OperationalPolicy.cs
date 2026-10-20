@@ -159,7 +159,7 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
             Assert.Equal(old.Observada.ViagemId, end.ViagemId);
             Assert.Null(end.OcorrenciaParadaPadraoId);
             Assert.Null(end.TimestampPassagem);
-            Assert.Null(end.MotivoFim);
+            Assert.Equal("MudancaOperacional", end.MotivoFim);
             Assert.Equal(third.TimestampGps, end.TimestampEvento);
         }
         GpsIntegrationResources.Record("operational_policy_sequence", new { modal, changeDirection, interruption,
@@ -221,6 +221,8 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
 
     [Theory]
     [InlineData("BUS", false)]
+    [InlineData("BUS", true)]
+    [InlineData("BRT", false)]
     [InlineData("BRT", true)]
     public async Task OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate(string modal, bool batch)
     {
@@ -229,6 +231,8 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         var id = Id(modal, Guid.NewGuid().ToString("N")[..8]);
         await using var h = await Harness.Create(resources, 155, batch);
         h.Options.MudancaOperacionalHabilitada = true;
+        await using var wire = await WireClient.Connect(h.Url);
+        await wire.Invoke("InscreverseLinha", target.Code);
         async Task Observe(int t, GpsIntegrationResources.Route route, double p)
         {
             var feed = modal == "BUS" ? h.Bus : h.Brt;
@@ -241,8 +245,11 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         Assert.Equal(2, old.Observada.OrdemCursor);
         var before = await RecoveryEvents(id);
         await Observe(60, target, .25);
+        await AssertRestAndWire(h, id, Assert.Single(await wire.Next()));
         await Observe(90, target, .26);
+        await AssertRestAndWire(h, id, Assert.Single(await wire.Next()));
         await Observe(120, target, .27);
+        await AssertRestAndWire(h, id, Assert.Single(await wire.Next()));
         var current = h.Trips.Results[^1].EstadoOperacional!;
         Assert.NotEqual(old.Observada.ViagemId, current.Observada.ViagemId);
         var events = await RecoveryEvents(id);
@@ -254,8 +261,18 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         Assert.Null(end.OcorrenciaParadaPadraoId);
         Assert.Null(end.ParadaId);
         Assert.Null(end.TimestampPassagem);
-        Assert.Null(end.MotivoFim);
-        Assert.Throws<FormatException>(() => EventoViagemValidator.Validar(end with { MotivoFim = "MudancaOperacional" }));
+        Assert.Equal("MudancaOperacional", end.MotivoFim);
+        EventoViagemValidator.Validar(end);
+        Assert.Equal(original.Line, end.LinhaId);
+        Assert.Equal(original.Directions[0], end.SentidoId);
+        Assert.Equal(original.Patterns[0], end.PadraoOperacionalId);
+        Assert.Equal(original.Versions[0], end.PadraoVersaoId);
+        var start = Assert.Single(events, e => e.Tipo == "ViagemIniciada" && e.ViagemId == current.Observada.ViagemId);
+        Assert.Equal(target.Line, start.LinhaId);
+        Assert.Equal(target.Directions[0], start.SentidoId);
+        Assert.Equal(target.Patterns[0], start.PadraoOperacionalId);
+        Assert.Equal(target.Versions[0], start.PadraoVersaoId);
+        Assert.Null(start.MotivoFim);
         Assert.Equal(new int?[] { 1, 2 }, events.Where(e => e.Tipo == "PassagemParada").Select(e => e.Ordem));
         await AssertRecoveryPassages(id, 2);
         var stats = await h.Http.GetFromJsonAsync<JsonElement>("/veiculos/historico/stats?ultimasHoras=24");
@@ -287,6 +304,6 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         GpsIntegrationResources.Record("operational_policy_logical_end", new { modal, batch,
             journal_ends = 1, old_trip_cursor = 2, terminal_passages = 0, history_passages = 2,
             public_history_stat = 2, stop_event_is_prediction_on_new_route = true,
-            logical_end_reason = "absent", old_payloads_preserved = true });
+            logical_end_reason = end.MotivoFim, old_payloads_preserved = true });
     }
 }

@@ -229,6 +229,7 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         var end = Assert.Single(transitions, e => e.Tipo == "ViagemFinalizada");
         Assert.Equal(old.Observada.ViagemId, end.ViagemId);
         Assert.Equal(old.Observada.PadraoVersaoId, end.PadraoVersaoId);
+        Assert.Equal("MudancaOperacional", end.MotivoFim);
         Assert.Null(end.OcorrenciaParadaPadraoId);
         Assert.Null(end.ParadaId);
         Assert.Null(end.TimestampPassagem);

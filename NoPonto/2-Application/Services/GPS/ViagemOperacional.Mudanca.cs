@@ -42,7 +42,8 @@ public static partial class ViagemOperacionalRegra
                 throw new InvalidOperationException("Confirmação exige baseline novo válido.");
             var inicio = DecidirInterno(null, avaliacao.EstruturaConfirmada, gps, baseline, novaId);
             // Fim lógico no instante da confirmação; não afirmar passagem/chegada a uma parada.
-            var fim = Evento(anterior, "ViagemFinalizada", gps.TimestampGps) with { OcorrenciaParadaPadraoId = null };
+            var fim = Evento(anterior, "ViagemFinalizada", gps.TimestampGps) with
+                { OcorrenciaParadaPadraoId = null, MotivoFim = "MudancaOperacional" };
             return new(inicio.Estado, new[] { fim }.Concat(inicio.Eventos).ToArray());
         }
         if (avaliacao.Status is StatusMudancaOperacional.PrimeiraEvidencia

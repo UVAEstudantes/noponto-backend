@@ -1,0 +1,1312 @@
+{
+  "base_commit": "a2f0abc29176b1b65525559af5139500e628d0dd",
+  "branch": "audit/gps-bus-brt-pipeline",
+  "sdk": "9.0.306",
+  "platform": "xUnit2/VSTest",
+  "scope": "explicit optional end reason only",
+  "global_flag_default": false,
+  "production_access": false,
+  "runtime_diff": {
+    "files": 2,
+    "added": 4,
+    "removed": 2
+  },
+  "runtime_source_sha256": {
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.Mudanca.cs": "0539f63000ade3623d6ffd8393e951d429551a91f74419ed55458aa02bb86270",
+    "NoPonto/4-Data/Repositories/HistoricoEventoRepository.cs": "ea28fcebd99dad5907fc6627f16fdb16725e5072e1961230d7ce383a6a2e63bf"
+  },
+  "test_source_sha256": {
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalEnd.cs": "6515c42aee61bf06e22cc3e54c62a52b0855f3c8817cebc3698db84aa07fd4a1",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalPolicy.cs": "75044d133d393492f0d3dc776ec545a6c42c47fe40b43bebfa0bf29fcb679998",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalRecovery.cs": "18ba2957b38c8bd7a684ddb05ce3bc6c8fc7a5c38ea0c4fac9b227310e082686",
+    "NoPonto/5-Testes/IntegridadeCircularRegraTests.cs": "0f7faa82652cd74747ab30646a8925b794fb243f4ffe1d32d28b64fb9f755eb6",
+    "NoPonto/5-Testes/MotivoFimEventoTests.cs": "a4d9059d7ee51aaec758c18cce539ec1e776ac67aaa669440328f05042b4b738",
+    "NoPonto/5-Testes/MudancaOperacionalIntegracaoLogicaTests.cs": "5b6aab86896bfff572fd6e4c49a7719bada021d65a7b9034b144d1e67ee2357e"
+  },
+  "normalized_source_sha256": {
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.Mudanca.cs": "9c0013bf07ff9736265bc99db5674c4d5a54332e96a90f8aacf1d5e690f5c586",
+    "NoPonto/4-Data/Repositories/HistoricoEventoRepository.cs": "c0870779f12ffb9d4166516200dafabfbe2d822fbffb209350effe38c408b01b",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalEnd.cs": "6515c42aee61bf06e22cc3e54c62a52b0855f3c8817cebc3698db84aa07fd4a1",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalPolicy.cs": "75044d133d393492f0d3dc776ec545a6c42c47fe40b43bebfa0bf29fcb679998",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalRecovery.cs": "18ba2957b38c8bd7a684ddb05ce3bc6c8fc7a5c38ea0c4fac9b227310e082686",
+    "NoPonto/5-Testes/IntegridadeCircularRegraTests.cs": "b66846e2ca84944f9ec7573ce61c4184b840184788de12b7bb3f55963cd7d7aa",
+    "NoPonto/5-Testes/MotivoFimEventoTests.cs": "a4d9059d7ee51aaec758c18cce539ec1e776ac67aaa669440328f05042b4b738",
+    "NoPonto/5-Testes/MudancaOperacionalIntegracaoLogicaTests.cs": "5b6aab86896bfff572fd6e4c49a7719bada021d65a7b9034b144d1e67ee2357e"
+  },
+  "protected_source_sha256": {
+    "NoPonto/Program.cs": "685beec92a5a9c0afa366be12836a30cf6218c0a62abdc6c1c1341e2e9033b53",
+    "NoPonto/appsettings.json": "a2f96bdf5b8aa777473597c63a6761daf9ba2b5b9ed82269c1eff9ab0f131998",
+    "NoPonto/2-Application/Services/GPS/GpsPoolingOptions.cs": "fd8324b47458250f88ee16eeeeb14b121e0441f0c6ac5b18bf4d3cceee6f135c",
+    "NoPonto/2-Application/Services/GPS/GpsPollingService.cs": "2c47864edbf8057e6b9db117598e886cc5676649e112b561b6b27fa250df2d32",
+    "NoPonto/2-Application/Services/GPS/GpsPhysicalPredecessor.cs": "0bcaf421655ba99689e9ac2202686092f094ae7c347d3f7771b31225e1aa52bd",
+    "NoPonto/2-Application/Services/GPS/GpsSignalRPublisher.cs": "d956248a823e6a1b5ef99c9c08b45b44ac1f235aea0e4874e9a8016b1781aa24",
+    "NoPonto/2-Application/Services/GPS/GpsEnriquecimentoService.cs": "46c38dacf88d68698d08b67bbf88ca77cb81b99f6a63574a996c1b63d08532ee",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.cs": "1d79acde999ff283d34f173afa6b2a8f4ed8b9a9cbdfda03bdb8a12206a87e53",
+    "NoPonto/4-Data/Repositories/ViagemOperacionalCodec.cs": "dc9646e7f138f15ebe6e34b140a1e28fcee7dd35b707727d7a45c8e8ad8cb144",
+    "NoPonto/4-Data/Repositories/ViagemOperacionalRedisScript.cs": "db365a0b39f852a657d17539185b58edc90c246d830c41e196ebd6c85437c80c",
+    "NoPonto/4-Data/Repositories/PosicaoVeiculoCacheRepository.cs": "7d61a1aec5dae23ef53ab8c94371ee59f7098027d1639d52faea7f3de2ca902b",
+    "NoPonto/4-Data/Repositories/PosicaoVeiculoPayloadWriter.cs": "25444811aa5ea3f2cf456b8663aa68455bb6d8c26da87bcad3d852fdf104bb99",
+    "tools/gps/test_pipeline_disposable.ps1": "b0a5155ed7ab21c8cdae1c091c173b8406163f2910e7dbfd0ab3df473c11cc65",
+    "NoPonto/4-Data/Repositories/OcorrenciaParadaRepository.cs": "e3b0a1347411d29e8a549eef84fa3e298c4e4026679b144abccbae2f38eb1c2e",
+    "NoPonto/2-Application/Services/BackgroundServices/ViagemOutboxWorker.cs": "0cadafa7367e2796c7093388b123dc436a50dff259ab0480ddabf2ddc99e380a",
+    "NoPonto/2-Application/Services/GPS/GpsBrtClient.cs": "b23f343ecd63e1cf779adc0c6772b894d1183a210f5f9ae808c1ed6957343cc0",
+    "NoPonto/appsettings.Development.json": "73f95f9e0ceb205fc1c4dc50c07697fcfa29d7087868c2aef1d504cb38c771ec",
+    "NoPonto/NoPonto.csproj": "30ff09497d5d39c6b44eafe0aea8094126da9a871850f1b70fb0252740a4c518",
+    "NoPonto/5-Testes/ViagemOperacionalIntegracaoTests.cs": "c74bd4bfd4b148e9164eeb1de46d189f781c47a81e27b893a5c83cb6eae65590",
+    "NoPonto/4-Data/Repositories/GpsItinerarRepository.cs": "37fc0933e4e330c1cc3d8ba56ccd6fb6ae9d39e64f666fcaeaa9578c311ee83d",
+    "NoPonto/4-Data/Repositories/GpsItinerarioRepository.Batch.cs": "abf4778f16e0ae7047543fcbeefbc4262944d2225319084689fdd592e2ad36a4",
+    "NoPonto/4-Data/Repositories/GpsItinerarioRepository.CombinedSetBased.cs": "32faf431a86203e4a42547f849656058695d434ed00536931c46f7801ce4fe08",
+    "NoPonto/5-Testes/HistoricalEtaGtfsPollingTests.cs": "f3f9b8b1f1c59e4f906abb24fc6a51cae0c975e08158dbd27993f1b3a1f3324b",
+    "NoPonto/2-Application/Services/GPS/RetryOperacionalGps.cs": "8d102effa5bf4af547d3a7eb632ba6e8bc19457bc2196c19af5f4c792443e8f3",
+    "NoPonto/2-Application/Services/GPS/ViagemObservadaService.cs": "a2624f0838ef88325780ea6eb65011d4c5090f47b13c276e8c5842207c4ee07e",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.Integridade.cs": "bdb0d3fc088fd1ef1dfa4ac6caf0489ed7ce9bdf6962f1c61c7c4855d627c798",
+    "NoPonto/4-Data/Repositories/ViagemOperacionalRepository.cs": "f84c7bafb2acfa48890c999859415223fee9cc4b9683849546aca718db3b453c",
+    ".ci/offline_tests.py": "677cb601d02d35fded22a45b13e576b1bc1ea3c4c1832350c35806563d6d0c61",
+    ".ci/offline-tests.json": "8f44dbaed5f1e106bfa23441b3b1ff1f394087b291406ec9bedde3981a7ba3e0"
+  },
+  "unchanged_tracked_sources_verified": 556,
+  "red_green": {
+    "identical_regression_sources": {
+      "NoPonto/5-Testes/MotivoFimEventoTests.cs": "a4d9059d7ee51aaec758c18cce539ec1e776ac67aaa669440328f05042b4b738",
+      "NoPonto/5-Testes/MudancaOperacionalIntegracaoLogicaTests.cs": "5b6aab86896bfff572fd6e4c49a7719bada021d65a7b9034b144d1e67ee2357e",
+      "NoPonto/5-Testes/IntegridadeCircularRegraTests.cs": "0f7faa82652cd74747ab30646a8925b794fb243f4ffe1d32d28b64fb9f755eb6",
+      "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalPolicy.cs": "75044d133d393492f0d3dc776ec545a6c42c47fe40b43bebfa0bf29fcb679998"
+    },
+    "unit_red_passed": 14,
+    "unit_red_failed": 4,
+    "unit_green_passed": 18,
+    "pipeline_red_failed": 4,
+    "pipeline_green_passed": 4
+  },
+  "final_integrated_passed": 293,
+  "final_targeted_unit_passed": 130,
+  "final_offline_repeat_passed": 758,
+  "final_distinct_passed": 1181,
+  "final_failed": 0,
+  "final_skipped": 0,
+  "disposable_runs": 4,
+  "runs": [
+    {
+      "tag": "unit-red",
+      "note": "Initial unit RED; other-event controls later strengthened before repeated RED",
+      "exit_code": 1,
+      "report": "NoPonto/lab-output/operational-end-20261020-unit-red/unit-red.trx",
+      "trx_sha256": "9fec6cc52a996b9abf46100af830a0e81b7380b902e6f0cae217b444d1cf149d",
+      "counters": {
+        "total": 18,
+        "executed": 18,
+        "passed": 14,
+        "failed": 4,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.IntegridadeCircularRegraTests": 1,
+        "NoPonto.Tests.MotivoFimEventoTests": 15,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests": 2
+      },
+      "times": {
+        "creation": "2026-10-20T20:12:10.1717936-03:00",
+        "queuing": "2026-10-20T20:12:10.1717938-03:00",
+        "start": "2026-10-20T20:12:08.0338315-03:00",
+        "finish": "2026-10-20T20:12:10.2608814-03:00"
+      },
+      "command": "dotnet test NoPonto/NoPonto.csproj -c Release --no-restore --filter 'FullyQualifiedName~NoPonto.Tests.MotivoFimEventoTests.|FullyQualifiedName~NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens|FullyQualifiedName~NoPonto.Tests.IntegridadeCircularRegraTests.CandidatoBConfirmado_MantemMudancaOperacionalExistente' --logger 'trx;LogFileName=unit-red.trx' --results-directory NoPonto/lab-output/operational-end-20261020-unit-red --verbosity quiet",
+      "methods": {
+        "NoPonto.Tests.IntegridadeCircularRegraTests.CandidatoBConfirmado_MantemMudancaOperacionalExistente": 1,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_DoesNotRelaxIdentityOrSchemaValidation": 3,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_JsonAndStreamRoundTrip_PreservesIdentityAndOptionalField": 3,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_LegacyJsonWithoutReason_DoesNotInferOrRewriteReason": 1,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_OnOtherEventTypes_RemainsRejected": 4,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_UnknownValues_RemainRejectedByValidatorAndParser": 4,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens": 2
+      },
+      "failures": [
+        {
+          "test_name": "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens(sentido: False)",
+          "message": "Assert.Equal() Failure: Strings differ\r\nExpected: \"MudancaOperacional\"\r\nActual:   null"
+        },
+        {
+          "test_name": "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens(sentido: True)",
+          "message": "Assert.Equal() Failure: Strings differ\r\nExpected: \"MudancaOperacional\"\r\nActual:   null"
+        },
+        {
+          "test_name": "NoPonto.Tests.IntegridadeCircularRegraTests.CandidatoBConfirmado_MantemMudancaOperacionalExistente",
+          "message": "Assert.Equal() Failure: Strings differ\r\nExpected: \"MudancaOperacional\"\r\nActual:   null"
+        },
+        {
+          "test_name": "NoPonto.Tests.MotivoFimEventoTests.EndReason_JsonAndStreamRoundTrip_PreservesIdentityAndOptionalField(reason: \"MudancaOperacional\")",
+          "message": "System.FormatException : Motivo de encerramento inválido."
+        }
+      ]
+    },
+    {
+      "tag": "integration-red",
+      "note": "Fixture queue consumed prior SignalR message; not behavioral RED",
+      "exit_code": 1,
+      "report": "NoPonto/lab-output/operational-end-20261020-integration-red/integration.trx",
+      "trx_sha256": "d102c67b99122832ad54be0cc4b06419d88d794a77298941e0dc623cd5a51baa",
+      "counters": {
+        "total": 4,
+        "executed": 4,
+        "passed": 0,
+        "failed": 4,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 4
+      },
+      "times": {
+        "creation": "2026-10-20T20:12:41.0205540-03:00",
+        "queuing": "2026-10-20T20:12:41.0205543-03:00",
+        "start": "2026-10-20T20:12:33.9087069-03:00",
+        "finish": "2026-10-20T20:12:42.2622455-03:00"
+      },
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/operational-end-20261020-integration-red') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate": 4
+      },
+      "failures": [
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate(modal: \"BUS\", batch: True)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 2026-10-20T23:11:34.0000000+00:00\r\nActual:   2026-10-20T23:11:04.0000000+00:00"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate(modal: \"BRT\", batch: False)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 2026-10-20T23:11:36.0000000+00:00\r\nActual:   2026-10-20T23:11:06.0000000+00:00"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate(modal: \"BRT\", batch: True)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 2026-10-20T23:11:36.0000000+00:00\r\nActual:   2026-10-20T23:11:06.0000000+00:00"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate(modal: \"BUS\", batch: False)",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 2026-10-20T23:11:36.0000000+00:00\r\nActual:   2026-10-20T23:11:06.0000000+00:00"
+        }
+      ]
+    },
+    {
+      "tag": "integration-red-valid",
+      "note": "Actual producer RED: expected reason, found null",
+      "exit_code": 1,
+      "report": "NoPonto/lab-output/operational-end-20261020-integration-red-valid/integration.trx",
+      "trx_sha256": "bbcecf72609fe7d7c53bbdbda8f9913047ef30cefaee18a9abf65354a6a5bd19",
+      "counters": {
+        "total": 4,
+        "executed": 4,
+        "passed": 0,
+        "failed": 4,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 4
+      },
+      "times": {
+        "creation": "2026-10-20T20:13:41.3255701-03:00",
+        "queuing": "2026-10-20T20:13:41.3255707-03:00",
+        "start": "2026-10-20T20:13:33.8671836-03:00",
+        "finish": "2026-10-20T20:13:43.0822591-03:00"
+      },
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/operational-end-20261020-integration-red-valid') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate": 4
+      },
+      "failures": [
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate(modal: \"BRT\", batch: True)",
+          "message": "Assert.Equal() Failure: Strings differ\r\nExpected: \"MudancaOperacional\"\r\nActual:   null"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate(modal: \"BUS\", batch: True)",
+          "message": "Assert.Equal() Failure: Strings differ\r\nExpected: \"MudancaOperacional\"\r\nActual:   null"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate(modal: \"BRT\", batch: False)",
+          "message": "Assert.Equal() Failure: Strings differ\r\nExpected: \"MudancaOperacional\"\r\nActual:   null"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate(modal: \"BUS\", batch: False)",
+          "message": "Assert.Equal() Failure: Strings differ\r\nExpected: \"MudancaOperacional\"\r\nActual:   null"
+        }
+      ]
+    },
+    {
+      "tag": "unit-red-valid",
+      "note": "Repeated unit RED with final regression source",
+      "exit_code": 1,
+      "report": "NoPonto/lab-output/operational-end-20261020-unit-red-valid/unit-red.trx",
+      "trx_sha256": "81b8582ca66657b6b695dccf3033f612a52511f34a90fd1df7f3942bca9ba070",
+      "counters": {
+        "total": 18,
+        "executed": 18,
+        "passed": 14,
+        "failed": 4,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.IntegridadeCircularRegraTests": 1,
+        "NoPonto.Tests.MotivoFimEventoTests": 15,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests": 2
+      },
+      "times": {
+        "creation": "2026-10-20T20:14:02.3551624-03:00",
+        "queuing": "2026-10-20T20:14:02.3551627-03:00",
+        "start": "2026-10-20T20:14:00.5781408-03:00",
+        "finish": "2026-10-20T20:14:02.4243219-03:00"
+      },
+      "command": "dotnet test NoPonto/NoPonto.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~NoPonto.Tests.MotivoFimEventoTests.|FullyQualifiedName~NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens|FullyQualifiedName~NoPonto.Tests.IntegridadeCircularRegraTests.CandidatoBConfirmado_MantemMudancaOperacionalExistente' --logger 'trx;LogFileName=unit-red.trx' --results-directory NoPonto/lab-output/operational-end-20261020-unit-red-valid --verbosity quiet",
+      "methods": {
+        "NoPonto.Tests.IntegridadeCircularRegraTests.CandidatoBConfirmado_MantemMudancaOperacionalExistente": 1,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_DoesNotRelaxIdentityOrSchemaValidation": 3,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_JsonAndStreamRoundTrip_PreservesIdentityAndOptionalField": 3,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_LegacyJsonWithoutReason_DoesNotInferOrRewriteReason": 1,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_OnOtherEventTypes_RemainsRejected": 4,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_UnknownValues_RemainRejectedByValidatorAndParser": 4,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens": 2
+      },
+      "failures": [
+        {
+          "test_name": "NoPonto.Tests.IntegridadeCircularRegraTests.CandidatoBConfirmado_MantemMudancaOperacionalExistente",
+          "message": "Assert.Equal() Failure: Strings differ\r\nExpected: \"MudancaOperacional\"\r\nActual:   null"
+        },
+        {
+          "test_name": "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens(sentido: True)",
+          "message": "Assert.Equal() Failure: Strings differ\r\nExpected: \"MudancaOperacional\"\r\nActual:   null"
+        },
+        {
+          "test_name": "NoPonto.Tests.MotivoFimEventoTests.EndReason_JsonAndStreamRoundTrip_PreservesIdentityAndOptionalField(reason: \"MudancaOperacional\")",
+          "message": "System.FormatException : Motivo de encerramento inválido."
+        },
+        {
+          "test_name": "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens(sentido: False)",
+          "message": "Assert.Equal() Failure: Strings differ\r\nExpected: \"MudancaOperacional\"\r\nActual:   null"
+        }
+      ]
+    },
+    {
+      "tag": "unit-green",
+      "note": "Same regression sources GREEN after two-line logical extension",
+      "exit_code": 0,
+      "report": "NoPonto/lab-output/operational-end-20261020-unit-green/unit-green.trx",
+      "trx_sha256": "07db299d2bbc466fabc390c94fa447d7639bf8f1270cb168a689fa02b5dff97e",
+      "counters": {
+        "total": 18,
+        "executed": 18,
+        "passed": 18,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.IntegridadeCircularRegraTests": 1,
+        "NoPonto.Tests.MotivoFimEventoTests": 15,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests": 2
+      },
+      "times": {
+        "creation": "2026-10-20T20:14:25.6566672-03:00",
+        "queuing": "2026-10-20T20:14:25.6566675-03:00",
+        "start": "2026-10-20T20:14:23.8407400-03:00",
+        "finish": "2026-10-20T20:14:25.6966058-03:00"
+      },
+      "command": "dotnet test NoPonto/NoPonto.csproj -c Release --no-restore --filter 'FullyQualifiedName~NoPonto.Tests.MotivoFimEventoTests.|FullyQualifiedName~NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens|FullyQualifiedName~NoPonto.Tests.IntegridadeCircularRegraTests.CandidatoBConfirmado_MantemMudancaOperacionalExistente' --logger 'trx;LogFileName=unit-green.trx' --results-directory NoPonto/lab-output/operational-end-20261020-unit-green --verbosity quiet",
+      "methods": {
+        "NoPonto.Tests.IntegridadeCircularRegraTests.CandidatoBConfirmado_MantemMudancaOperacionalExistente": 1,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_DoesNotRelaxIdentityOrSchemaValidation": 3,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_JsonAndStreamRoundTrip_PreservesIdentityAndOptionalField": 3,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_LegacyJsonWithoutReason_DoesNotInferOrRewriteReason": 1,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_OnOtherEventTypes_RemainsRejected": 4,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_UnknownValues_RemainRejectedByValidatorAndParser": 4,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens": 2
+      }
+    },
+    {
+      "tag": "integration-green",
+      "note": "Four identical pipeline regressions plus22 persistence/control cases",
+      "exit_code": 0,
+      "report": "NoPonto/lab-output/operational-end-20261020-integration-green/integration.trx",
+      "trx_sha256": "ec624e31596603eac23511546fa0c8f6a45482377680a19e7c2d026a98a8231f",
+      "counters": {
+        "total": 26,
+        "executed": 26,
+        "passed": 26,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 26
+      },
+      "times": {
+        "creation": "2026-10-20T20:16:46.2301115-03:00",
+        "queuing": "2026-10-20T20:16:46.2301118-03:00",
+        "start": "2026-10-20T20:16:39.7324343-03:00",
+        "finish": "2026-10-20T20:16:53.5928176-03:00"
+      },
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/operational-end-20261020-integration-green') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_|FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_CircularLoss_KeepsExistingReason": 4,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_DurableConfirmation_ReplayRollbackAndConcurrency": 6,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_LegacyNull_ConflictingReasonPreservesJournalAndOutbox": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_MaterializerRollback_RestartAndReplayAllReasons": 6,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_NormalTerminal_KeepsNullReasonAndRealPassages": 4,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate": 4
+      }
+    },
+    {
+      "tag": "integration-final",
+      "note": "Final eight-class real integration selection",
+      "exit_code": 0,
+      "report": "NoPonto/lab-output/operational-end-20261020-integration-final/integration.trx",
+      "trx_sha256": "2f3dd8a3145f6b7175bf854cb364e76c9b9b729bde50e12a782c9180ec59e8e0",
+      "counters": {
+        "total": 293,
+        "executed": 293,
+        "passed": 293,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 157,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests": 5,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests": 13,
+        "NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests": 2,
+        "NoPonto.Tests.ViagemDuravelPostgresTests": 32,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests": 62,
+        "NoPonto.Tests.ViagemOutboxBatchTests": 21,
+        "NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests": 1
+      },
+      "times": {
+        "creation": "2026-10-20T20:17:42.0692925-03:00",
+        "queuing": "2026-10-20T20:17:42.0692932-03:00",
+        "start": "2026-10-20T20:17:31.0085621-03:00",
+        "finish": "2026-10-20T20:20:02.3756185-03:00"
+      },
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/operational-end-20261020-integration-final') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.|FullyQualifiedName~NoPonto.Tests.ViagemOperacionalIntegracaoTests.|FullyQualifiedName~NoPonto.Tests.MudancaOperacionalPontaAPontaTests.|FullyQualifiedName~NoPonto.Tests.IntegridadeCircularPostgresTests.|FullyQualifiedName~NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests.|FullyQualifiedName~NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests.|FullyQualifiedName~NoPonto.Tests.ViagemDuravelPostgresTests.|FullyQualifiedName~NoPonto.Tests.ViagemOutboxBatchTests.'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.BusBrtMatrix_RealHttpSqlCasRestAndSignalR": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.CadenceAndPredecessorTogether_RespectHttpCacheWithoutSecondGate": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_ABA_NewExecutionHasOwnCursor": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_CircularAfterInvalidation_RetainsProofRequirement": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_ConcurrentOrRollback_DurableBarrierAndFuturePassage": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_FlagOff_UnmatchedKeepsPersistedCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_IncompatibleMatching_DoesNotAdoptIdentityOrPosition": 7,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_InfrastructureFailure_PreservesEvidence": 6,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_InvalidRawGps_DoesNotEraseCandidate": 3,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_LateProjection_CannotResurrectCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_Terminal_InvalidationDoesNotConfirmArrival": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceIngress_RealMatchingGap_TwoEligiblePositivesAfterBarrier": 4,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceIngress_RetryRealRedis_BarrierCommitsBeforeAcknowledgement": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_CircularLoss_KeepsExistingReason": 4,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_DurableConfirmation_ReplayRollbackAndConcurrency": 6,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_LegacyNull_ConflictingReasonPreservesJournalAndOutbox": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_MaterializerRollback_RestartAndReplayAllReasons": 6,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalEnd_NormalTerminal_KeepsNullReasonAndRealPassages": 4,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives": 19,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate": 4,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_BrtDifferentPatternSameDirection_RemainsSeparate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_InsufficientEvidence_DoesNotConfirm": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_OldDurableTrip_ColdStartAndRestart": 20,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_ReturnBehindCursor_PreservesIncorporatedCursor": 12,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.RealExpiryAndAcquisition_OverSixtySeconds_KeepRecentHistorical": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.RedisCas_ConcurrentDuplicateOutOfOrderAndFencingAreAtomic": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.RouteDirectionVersionAndTerminal_KeepSafetyGates": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_ColdEmptySubscriptionAndHttpFailure_OneRefreshPerSubscription": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_ExpiryWithOtherLiveLine_IsolatedAndResynchronized": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_NoGpsEarlyReturns_ExpireWithoutUnrelatedBeacon": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_StatusLifecycle_MatchesRestWithoutRenewingDuplicate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_TwoConsumersReconnectAndExpiry_DeliverIdentifiedRemoval": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.TerminalOldGpsAndHttpFailure_DoNotInventEta": 1,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.CircularConfiavel_FlagDesligada_PreservaSnapshotsQuentesSemCriarAncora": 1,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.CircularFechada_EnriquecimentoReal_DivergenciaWrapBaselineEPassagem": 2,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.FalhaDepoisEstado_ReverteIntegridadeViagemEOutbox": 1,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.RecuperacaoConcorrente_ComFlagDesligada_ApenasUmaExecucaoNova": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.ABA_BaselineCoerente_SomentePassagemFutura": 2,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.ABB_MatchingReal_ConfirmaEMaterializaSemPassagens": 2,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.CodigosDistintosSobrepostos_ABB_ConfirmaNovaExecucaoSemPassagem": 2,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.CodigosDistintosSobrepostos_ABCBA_NaoAcumulaEvidenciasEntreCandidatos": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.FalhaDuravelDepoisGpsAceito_RepeticaoMesmoTimestampRecuperaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.FlagDesligada_ProvaRealNaoCriaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.RecuperacaoPendente_MesmoGpsDepoisRollback_DeveRecuperarCandidatoEConfirmar": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.Retry_CircularAposRollback_PreservaProtecaoESuprimeIdentidadeMl": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.Retry_NovaInstanciaComRedisPreservado_RecuperaSemReplayDaFonte": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.Retry_RespostaPerdidaDepoisCommit_ReconheceDuravelSemDuplicarEventos": 1,
+        "NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests.Lua_OrdenacaoLimitesLeaseCasEBackoff_PreservamPayload": 1,
+        "NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests.Lua_PendenciaExpirada_EncerraSemChamarOperacao": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CargaEstavel_200Veiculos_AtravessaCheckpointSessentaSegundos": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CargaEstavel_200Veiculos_QuatroPolls_UmWriteDuravelPorVeiculo": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Chaos_RedisPara_ReiniciaVazio_ContinuaMesmaViagem": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CheckpointInvalido_UsaModoConservador": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CheckpointVencido_PersisteUmaVez_EProximaPosicaoNaoPersiste": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Checkpoint_BoundarySessentaSegundos": 3,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.FalhaAntesCommit_RollbackEstadoEOutbox": 2,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Funil_CommitRealSeparaInicioPassagensEFim": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Funil_FalhaAntesCommitNaoConfirmaPassagens": 2,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.HashRedisCorrompido_FazFallbackSeguroParaPostgres": 6,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.PersistenciaSemantica_ReiniciaJanelaCheckpoint": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.PosicoesConcorrentes_UmaViagem_UmEventoInicio": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.PostgreSqlIndisponivel_NaoCriaProjecaoNemEventoRedis": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.ProgressoQuenteAntesDoCheckpoint_NaoAtualizaPostgres": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.ProjecaoDuravel_IntercaladaComHotMaisNovo_MesclaSemRegredir": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisIndisponivel_CommitPostgresContinuaDuravel": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisIndisponivel_ProgressoQuenteDegradaParaCheckpointSemEventoArtificial": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisOnly_Semantica_RedisOnly_UsaNovaVersaoDuravel": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisPerdidoEntreCheckpoints_RecuperaIdentidadeEUltimoSnapshotDuravel": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisVazio_ReidrataMesmaViagem_SemDuplicarInicio": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RelogioRegressivo_ForcaCheckpointConservador": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.SchemaViagem_SemIndiceTemporal_PreservaPkEUpdatesElegiveisAHot": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.WorkerParado_PreservaOutbox_ReinicioDrena_Idempotente": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.AclSemXadd_NaoImpedeCommitPostgres": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.AmbiguidadeEntreSentidos_Reais_PreservaPossivelFimSemCandidato": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Ativa_GlobalB_ProjecaoAAvancaA_EEmiteSomenteParadaA_SemDuplicarNoRetorno": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.BaselineNoTerminal_NaoEmiteRetroativos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Block5000_ConexaoDedicada_CancelamentoNaoBloqueiaConexaoGps": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CancelamentoAtrasDoCursor_ConcorrenciaOuRollback_PreservaPisoDuravel": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CincoFalhasTransitorias_DeadLetterPreservaPayload_AckELimpaContador": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ConflitoRealNoWorker_DlqPrimeiraTentativa_PreservaPrimeiroJournal": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ContinuidadeMesmaObservacao_ReutilizaEstruturaSemAlterarIdentidade": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CorridaMesmoTimestamp_CasOutboxSomenteUmaVez": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.DivergenciaComProjecaoInelegivelOuFalha_CongelaA_SemEvento": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.DuasInstancias_EntregasEPostgresConcorrentes_SemDuplicacao": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ErroPermanente_ComContadorAntigo_VaiParaDlqNaProximaFalha": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ErroPermanente_DlqIndisponivel_PreservaPendingParaRecuperacao": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ErroPermanente_VaiParaDlqNaPrimeiraFalha_AckELimpaContador": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FalhaDeadLetterAposQuinta_ReinicioNaoRepetePostgres_PreservaErro": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FalhaDoAntigoEval_NaoAfetaCommitPostgres_RepeticaoNaoDuplica": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FalhaTransitoria_PrimeiraTentativa_PermanecePendingERecuperaPorXAutoClaim": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FkEUniqueParcial_Reais_JournalNaoPermiteReescreverEvento": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.HashAnterior3_2_ComCursor_AdotaSemPerderCruzamentosNovos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.HashParcial_EReidratadoDoEstadoDuravel": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.HashRedisParcial_NaoApagaCursorDuravel": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.JanelaCandidato_RedisReal": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.LinhaDiferenteEstrutural_PreservaPossivelFimSemCandidato": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.LuaArgumentosInvalidos_ZeroWrites": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Lua_FinalizadaNaoPodeRegredirParaAtiva": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Lua_PossivelFim_NaoPermiteReducaoNemRetornoParaAtiva": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Migration_LegadoNullable_ModeloSemDiferenca": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaDoPointerPublicado_NaoMigraViagemAtiva": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_CancelamentoBaseline_CursorProximaEPassagemFutura": 4,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_CandidatoDuravelPerdaRedis_ConfirmacaoSemPassagens": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_ConfirmacaoConcorrente_ApenasUmCommit": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_FalhaDepoisOutbox_RollbackEstadoEEventos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.PossivelFim_GlobalB_ProjecaoTerminalAContinuaConfirmacoesEFinalizaA": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ProjecaoARegressiva_ERejeitadaSemAlterarCursorOuHash": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ProjecaoRedisCorrompida_EReconstruidaDoPostgres": 7,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.R1Finalizada_NaoReabre_RegistraNovoCandidato": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.R2_NaoFinalizaPrematuramente_PreservaTerminalNoRedis": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.RedisTerminal_ReinicioT0T1_Finalizada_TresPassagensMaisInicioEFim": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ReentregaAposDbAntesAck_Idempotente_XAutoClaim_ReinicioWorker": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.RetornoAtrasDoTerminalJaIncorporado_ComOuSemCandidata_PreservaRegraExistente": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.SnapshotAusente_ETransportadoComoCasVazio": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.SnapshotMudaDepoisDaProjecao_CasRejeitaESemPassagemIncorreta": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.StreamDiagnosticoSaturado_NaoImpedeCommitDuravel": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Trim_PreservaPendingEUnread_ApenasProcessadosAntigosRemovidos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Trim_RemoveDlqAntigaEPreservaDlqRecente": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.WorkerHosted_LoopRealRedis7_PersisteEAck_SemBloquearPolling": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.WrongTypeStream_NaoImpedeEstadoDuravel": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.BatchSizeConfigurado_LimitaDrenagemDoBacklog": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.Carga_MilPassagens_DrenaEmDezBatches": 2,
+        "NoPonto.Tests.ViagemOutboxBatchTests.CentoEUmEventos_SaoDrenadosEmDoisBatches": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.CleanupFalha_ContabilizaENaoImpedeClaimNormal": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.Cleanup_MultiplosBatchesDrenamBacklogSemLoopIlimitado": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.Cleanup_OldestProcessedPreservaInstanteUtcMaterializadoPeloPostgres": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.Cleanup_RemoveSomenteProcessadoExpirado": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.Cleanup_RespeitaLimiteDoBatch": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.Cleanup_SemItensExpirados_EhSeguro": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.DuasInstancias_ReivindicamItensDisjuntos": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.EventoDuplicadoIdentico_EIdempotente": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.EventoDuplicadoPayloadDiferente_DetectaCampos": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.EventoInvalidoNoMeioDoBatch_IsolaFalhaEPreservaValidos": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.LeasePerdidoDepoisDaMaterializacao_FazRollbackCompleto": 2,
+        "NoPonto.Tests.ViagemOutboxBatchTests.MetricasCatchup_AgregamQuantidadeGapEMaximo": 1,
+        "NoPonto.Tests.ViagemOutboxBatchTests.Passagens_SaoMaterializadasEConcluidasEmUmBatch": 4,
+        "NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests.CancelamentoCircular_ProtegeOutboxEHistorico_RecuperaNovaExecucao": 1
+      }
+    },
+    {
+      "tag": "unit-final",
+      "note": "Final targeted unit selection",
+      "exit_code": 0,
+      "report": "NoPonto/lab-output/operational-end-20261020-unit-final/unit.trx",
+      "trx_sha256": "cbba7d644ac82d277b5ec0c3c6b7c1ad001cc44893647b1ccb6c3aa42be2832d",
+      "counters": {
+        "total": 130,
+        "executed": 130,
+        "passed": 130,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.IntegridadeCircularRegraTests": 19,
+        "NoPonto.Tests.MotivoFimEventoTests": 15,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests": 7,
+        "NoPonto.Tests.MudancaOperacionalRegraTests": 30,
+        "NoPonto.Tests.RetryOperacionalGpsTests": 18,
+        "NoPonto.Tests.ViagemObservadaServiceTests": 36,
+        "NoPonto.Tests.WrapDuranteCandidatoTests": 5
+      },
+      "times": {
+        "creation": "2026-10-20T20:17:46.0483202-03:00",
+        "queuing": "2026-10-20T20:17:46.0483206-03:00",
+        "start": "2026-10-20T20:17:44.0049866-03:00",
+        "finish": "2026-10-20T20:17:47.0984663-03:00"
+      },
+      "command": "dotnet test NoPonto/NoPonto.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~NoPonto.Tests.MotivoFimEventoTests.|FullyQualifiedName~NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.|FullyQualifiedName~NoPonto.Tests.MudancaOperacionalRegraTests.|FullyQualifiedName~NoPonto.Tests.ViagemObservadaServiceTests.|FullyQualifiedName~NoPonto.Tests.RetryOperacionalGpsTests.|FullyQualifiedName~NoPonto.Tests.WrapDuranteCandidatoTests.|FullyQualifiedName~NoPonto.Tests.IntegridadeCircularRegraTests.' --logger 'trx;LogFileName=unit.trx' --results-directory NoPonto/lab-output/operational-end-20261020-unit-final --verbosity quiet",
+      "methods": {
+        "NoPonto.Tests.IntegridadeCircularRegraTests.CandidatoBConfirmado_MantemMudancaOperacionalExistente": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.CruzamentoOriginalDuranteProtecao_NaoConstroiEventoConflitante": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.GPSAntigoOuDuplicado_NaoRecuperaEstado": 2,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.GeometriaOuCorredorIncompativeis_NaoProvamWrap": 2,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.IntervaloComMultiplasVoltasPossiveis_NaoRecuperaContagem": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.MatchingInsuficiente_NaoReancoraNemPublicaIdentidadeMl": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.PayloadLegado_SemMotivoFim_PermaneceIdenticoNoRoundTrip": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.ReancoragemSustentada_NovaExecucaoSemPassagens_IndependeDaFlag": 2,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.RecuperacaoOriginal_ComProvaAindaValida_PreservaExecucao": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.RetornoComRuidoSemReabrirCursor_NaoCriaAmbiguidade": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.RoundTripDuravel_PreservaAmbiguidadeEValidaIdentidade": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.SemProva_PreservaVoltaCursorEAncora_BloqueiaPassagens": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.SnapshotAntigoSemAncora_NaoFabricaProva": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.TimeoutOuDuasLeiturasImoveis_NaoIniciamExecucao": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.VersaoGeometricaDiferente_NaoProvaVolta": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.WrapComEvidenciaDirigida_PreservaViagemEBaselineSemPassagens": 1,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_DoesNotRelaxIdentityOrSchemaValidation": 3,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_JsonAndStreamRoundTrip_PreservesIdentityAndOptionalField": 3,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_LegacyJsonWithoutReason_DoesNotInferOrRewriteReason": 1,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_OnOtherEventTypes_RemainsRejected": 4,
+        "NoPonto.Tests.MotivoFimEventoTests.EndReason_UnknownValues_RemainRejectedByValidatorAndParser": 4,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.AusenciaOuFlagDesligada_NaoAvaliaMudanca": 1,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.BRT42Para43_OuSentido_ConfirmaComBaselineSemPassagens": 2,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.CandidatoRecuperado_CancelaOuSubstitui": 1,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.ConfirmaSemBaseline_NaoGeraEventos": 1,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.FoundSemProvaOuSemEstrutura_NaoCriaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests.MesmaOperacaoVersaoNova_NaoIniciaTransicao": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.AlternanciaABA_CancelaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.AlternanciaABC_SubstituiSemAproveitarPrimeiraEvidencia": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.CandidatoRoundTripCodec_PermiteConfirmacaoSemMudarContrato": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.Circular_NovaVoltaMantemContinuidade": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.Circular_RegressaoCandidataNaoConfirmaOutraOperacao": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.Continuidade_NaoDependeApenasDoCodigo": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.DuasEvidencias_ConfirmamLinhaOuSentido": 3,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.GpsDuplicadoOuAntigo_NaoAvanca": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.IdentidadeIncompletaOuDiscordante_NaoCriaEvidencia": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.JanelaEhMaxima_NaoMinima": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.MatchingAusente_NaoCriaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.MatchingSemEvidenciaPositiva_NaoAvanca": 3,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.MovimentoOuProgressoInsuficiente_MantemPrimeiraEvidencia": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.PrimeiraDivergencia_NaoMudaViagemOuProduzTransicao": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.ProgressoRegressivo_InvalidaSemIncorporarPosicao": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.ProjecaoAntigaValida_NaoVetaConfirmacaoObservacional": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.SaltoFisicoOuProjetado_RejeitaEInvalidaCandidato": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.SentidoAmbiguo_NaoConfirma": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.SomentePadraoOuTopologia_FicaInsuficiente": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.SomenteVersaoGeometrica_NaoCriaOutraExecucao": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.CaminhoNormalSemPendencia_NaoGravaFilaNemConsultaViagem": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.Concorrencia_LeasePorVeiculo_NaoExecutaDuasVezes": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.ExpiracaoELimites_NaoViraramSucessoNemFilaIlimitada": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.FalhaTransitoria_RegistroSemProvaSerializada_RecalculaEConfirmaUmaVez": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.FalhasPersistentes_LimiteTentativasELote_NaoReprocessamIndefinidamente": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.FunilRetryDescartadoTemDenominadorSemResultadoDeViagem": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.FunilRetryInicialNaoEntraNaPopulacaoNovaNemNosContadoresLegados": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.MatchingSemProva_NaoAceitaBooleanAntigoNemEmiteOperacao": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.NovoEstadoAntesDoRetry_DescartaAntigoSemRetroceder": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.PendenciasOrdenadas_BackoffDaAntigaImpedeUltrapassagem": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.PredecessorInvalido_NaoReconstruiOperacao": 3,
+        "NoPonto.Tests.RetryOperacionalGpsTests.RedisIndisponivelOuPerdido_NaoPrometeRecuperacao": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.ReenriquecimentoDivergente_NaoProcessaOutroGps": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.RespostaPerdida_CommitDuravelReconhecido_SemRepetirEfeitos": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.TimeoutDeRetry_ReagendaSemBloquearIndefinidamente": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.UpdatedSemCommit_NaoApagaPendencia_BackoffLimitaRepeticao": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.Divergencia_PublicaGpsSemViagemAntigaEPreservaAceite": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.Divergencia_RegistraContadorAgregadoSemAlterarResultado": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.EvidenceBarrier_ServiceRoutesOnlyEnabledNonInfrastructureObservations": 6,
+        "NoPonto.Tests.ViagemObservadaServiceTests.ExcecaoDaViagem_NaoImpedePublicacaoDoGpsAceito": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.FalhaDaTelemetria_NaoAlteraAceiteGpsNemViagem": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.FalhaOuTrocaDaViagem_PreservaAceiteGps": 3,
+        "NoPonto.Tests.ViagemObservadaServiceTests.FunilPredecessorPorModalNoPollingProdutivo": 5,
+        "NoPonto.Tests.ViagemObservadaServiceTests.MatchingAtual_EncaminhaCamposExatosSemRevalidarJitter": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.PendenciaTemCategoriaExclusivaSemChamarServico": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.Polling_ViagemSomenteAposCommitAccepted": 3,
+        "NoPonto.Tests.ViagemObservadaServiceTests.RecuperacaoPendente_GpsRepetidoDepoisFalha_DeveRetentarOperacao": 2,
+        "NoPonto.Tests.ViagemObservadaServiceTests.SamplingComExcecao_FailOpenPreservaGpsViagemETelemetria": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.SamplingNaoSelecionado_PreservaCommitEViagemSemPublicarMl": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.SamplingSelecionado_PublicaEventoSemAlterarIdentidade": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.SemMatching_NaoChamaRepository": 3,
+        "NoPonto.Tests.ViagemObservadaServiceTests.SnapshotGtfsRepetido_NaoDuplicaViagemNemTelemetria": 2,
+        "NoPonto.Tests.ViagemObservadaServiceTests.Telemetria_SomenteDepoisDeCommitAceito": 3,
+        "NoPonto.Tests.WrapDuranteCandidatoTests.Controle_RetornoAntesDaVoltaOuRuido_NaoInventaIncremento": 2,
+        "NoPonto.Tests.WrapDuranteCandidatoTests.Controle_WrapNormalSemCandidato_SeparaIdentidades": 1,
+        "NoPonto.Tests.WrapDuranteCandidatoTests.Regressao_ProtecaoERecuperacao_PreservamIdentidadeETelemetria": 1,
+        "NoPonto.Tests.WrapDuranteCandidatoTests.Regressao_VoltaFisicaSeguinte_NaoPodeReutilizarIdentidadeDaPassagem": 1
+      }
+    },
+    {
+      "tag": "offline",
+      "note": "Known Shadow Until timeout, BUS setbased export_failure; no test edits",
+      "exit_code": 1,
+      "report": "NoPonto/lab-output/operational-end-20261020-offline/offline.trx",
+      "trx_sha256": "381bca1cd1fb0ed8c114c4fdeaae2134e7ce7c2f68cec0b9f8495b321974d95f",
+      "counters": {
+        "total": 758,
+        "executed": 758,
+        "passed": 757,
+        "failed": 1,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "GpsLeituraValidatorTests": 11,
+        "GpsTimestampDeduplicationTests": 12,
+        "NoPonto.Tests.CancelamentoCandidatoCursorTests": 10,
+        "NoPonto.Tests.DatabaseStartupPolicyTests": 21,
+        "NoPonto.Tests.EstadoCausalPosicaoTests": 25,
+        "NoPonto.Tests.GpsBrtTelemetriaTests": 3,
+        "NoPonto.Tests.GpsEtaClientTests": 5,
+        "NoPonto.Tests.GpsMatchingDiagnosticsTests": 29,
+        "NoPonto.Tests.GpsPerformanceMetricsTests": 23,
+        "NoPonto.Tests.GpsPhysicalPredecessorTests": 103,
+        "NoPonto.Tests.GpsPollingCadenciaTests": 40,
+        "NoPonto.Tests.GpsPollingFontesTests": 9,
+        "NoPonto.Tests.GpsSignalRPublisherTests": 20,
+        "NoPonto.Tests.GpsSourceAbstractionTests": 8,
+        "NoPonto.Tests.GtfsRealtimeGpsTests": 65,
+        "NoPonto.Tests.HistoricalEtaGtfsPollingTests": 52,
+        "NoPonto.Tests.HistoricalEtaOfflineExportTests": 12,
+        "NoPonto.Tests.HistoricalEtaRuntimeTests": 22,
+        "NoPonto.Tests.HistoricalEtaShadowTests": 24,
+        "NoPonto.Tests.PhysicalEtaCausalDiagnosticsTests": 36,
+        "NoPonto.Tests.PhysicalEtaIntermittenceTests": 9,
+        "NoPonto.Tests.PhysicalEtaMvpTests": 16,
+        "NoPonto.Tests.PhysicalEtaSelectedStopTests": 15,
+        "NoPonto.Tests.TarifasRegrasTests": 48,
+        "NoPonto.Tests.TelemetriaMlIdentidadeTests": 27,
+        "NoPonto.Tests.TelemetriaMlSamplingTests": 19,
+        "NoPonto.Tests.ViagemOperacionalCodecCompatibilidadeTests": 45,
+        "NoPonto.Tests.ViagemOperacionalRegraTests": 49
+      },
+      "times": {
+        "creation": "2026-10-20T20:17:55.5069573-03:00",
+        "queuing": "2026-10-20T20:17:55.5069574-03:00",
+        "start": "2026-10-20T20:17:53.3885153-03:00",
+        "finish": "2026-10-20T20:18:03.3250632-03:00"
+      },
+      "command": "dotnet test NoPonto/NoPonto.csproj -c Release --no-build --no-restore --filter $operationalEndOfflineFilter --logger 'trx;LogFileName=offline.trx' --results-directory NoPonto/lab-output/operational-end-20261020-offline --verbosity quiet",
+      "filter_command": "python .ci/offline_tests.py filter",
+      "verification_command": "python .ci/offline_tests.py verify NoPonto/lab-output/operational-end-20261020-offline/offline.trx",
+      "verification_executed": false,
+      "failures": [
+        {
+          "test_name": "NoPonto.Tests.HistoricalEtaGtfsPollingTests.PollingContinuesWithIndependentShadow(modal: \"BUS\", batch: True, failure: \"export_failure\")",
+          "message": "System.Threading.Tasks.TaskCanceledException : A task was canceled."
+        }
+      ]
+    },
+    {
+      "tag": "shadow-focused",
+      "note": "All48 cases passed focused after integrated run finished",
+      "exit_code": 0,
+      "report": "NoPonto/lab-output/operational-end-20261020-shadow-focused/shadow.trx",
+      "trx_sha256": "91dc353191ad281477ee46b800454da92ab8f98e2d630d6b9287172b7c4d4944",
+      "counters": {
+        "total": 48,
+        "executed": 48,
+        "passed": 48,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.HistoricalEtaGtfsPollingTests": 48
+      },
+      "times": {
+        "creation": "2026-10-20T20:20:18.3429766-03:00",
+        "queuing": "2026-10-20T20:20:18.3429768-03:00",
+        "start": "2026-10-20T20:20:16.3317646-03:00",
+        "finish": "2026-10-20T20:20:21.4612059-03:00"
+      },
+      "command": "dotnet test NoPonto/NoPonto.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~NoPonto.Tests.HistoricalEtaGtfsPollingTests.PollingContinuesWithIndependentShadow' --logger 'trx;LogFileName=shadow.trx' --results-directory NoPonto/lab-output/operational-end-20261020-shadow-focused --verbosity quiet",
+      "methods": {
+        "NoPonto.Tests.HistoricalEtaGtfsPollingTests.PollingContinuesWithIndependentShadow": 48
+      }
+    },
+    {
+      "tag": "offline-repeat",
+      "note": "Official repeat passed;28 classes verified, does not resolve flake",
+      "exit_code": 0,
+      "report": "NoPonto/lab-output/operational-end-20261020-offline-repeat/offline.trx",
+      "trx_sha256": "dad8126b30d3701dd8414009a2cd4d1fa6ebee35429cc6ed53ea5e3638795fdb",
+      "counters": {
+        "total": 758,
+        "executed": 758,
+        "passed": 758,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "GpsLeituraValidatorTests": 11,
+        "GpsTimestampDeduplicationTests": 12,
+        "NoPonto.Tests.CancelamentoCandidatoCursorTests": 10,
+        "NoPonto.Tests.DatabaseStartupPolicyTests": 21,
+        "NoPonto.Tests.EstadoCausalPosicaoTests": 25,
+        "NoPonto.Tests.GpsBrtTelemetriaTests": 3,
+        "NoPonto.Tests.GpsEtaClientTests": 5,
+        "NoPonto.Tests.GpsMatchingDiagnosticsTests": 29,
+        "NoPonto.Tests.GpsPerformanceMetricsTests": 23,
+        "NoPonto.Tests.GpsPhysicalPredecessorTests": 103,
+        "NoPonto.Tests.GpsPollingCadenciaTests": 40,
+        "NoPonto.Tests.GpsPollingFontesTests": 9,
+        "NoPonto.Tests.GpsSignalRPublisherTests": 20,
+        "NoPonto.Tests.GpsSourceAbstractionTests": 8,
+        "NoPonto.Tests.GtfsRealtimeGpsTests": 65,
+        "NoPonto.Tests.HistoricalEtaGtfsPollingTests": 52,
+        "NoPonto.Tests.HistoricalEtaOfflineExportTests": 12,
+        "NoPonto.Tests.HistoricalEtaRuntimeTests": 22,
+        "NoPonto.Tests.HistoricalEtaShadowTests": 24,
+        "NoPonto.Tests.PhysicalEtaCausalDiagnosticsTests": 36,
+        "NoPonto.Tests.PhysicalEtaIntermittenceTests": 9,
+        "NoPonto.Tests.PhysicalEtaMvpTests": 16,
+        "NoPonto.Tests.PhysicalEtaSelectedStopTests": 15,
+        "NoPonto.Tests.TarifasRegrasTests": 48,
+        "NoPonto.Tests.TelemetriaMlIdentidadeTests": 27,
+        "NoPonto.Tests.TelemetriaMlSamplingTests": 19,
+        "NoPonto.Tests.ViagemOperacionalCodecCompatibilidadeTests": 45,
+        "NoPonto.Tests.ViagemOperacionalRegraTests": 49
+      },
+      "times": {
+        "creation": "2026-10-20T20:20:35.3004163-03:00",
+        "queuing": "2026-10-20T20:20:35.3004166-03:00",
+        "start": "2026-10-20T20:20:33.6069255-03:00",
+        "finish": "2026-10-20T20:20:39.0768188-03:00"
+      },
+      "command": "dotnet test NoPonto/NoPonto.csproj -c Release --no-build --no-restore --filter $operationalEndOfflineFilter --logger 'trx;LogFileName=offline.trx' --results-directory NoPonto/lab-output/operational-end-20261020-offline-repeat --verbosity quiet",
+      "filter_command": "python .ci/offline_tests.py filter",
+      "verification_command": "python .ci/offline_tests.py verify NoPonto/lab-output/operational-end-20261020-offline-repeat/offline.trx",
+      "verification_executed": true
+    }
+  ],
+  "final_observations": [
+    {
+      "kind": "operational_end_circular",
+      "value": {
+        "modal": "BUS",
+        "enabled": false,
+        "reason": "PerdaContinuidadeCircular",
+        "real_circular_recovery": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_end_circular",
+      "value": {
+        "modal": "BRT",
+        "enabled": false,
+        "reason": "PerdaContinuidadeCircular",
+        "real_circular_recovery": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_end_circular",
+      "value": {
+        "modal": "BRT",
+        "enabled": true,
+        "reason": "PerdaContinuidadeCircular",
+        "real_circular_recovery": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_end_circular",
+      "value": {
+        "modal": "BUS",
+        "enabled": true,
+        "reason": "PerdaContinuidadeCircular",
+        "real_circular_recovery": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_end_terminal",
+      "value": {
+        "modal": "BUS",
+        "enabled": false,
+        "reason": null,
+        "real_terminal_passage": true,
+        "passages": 3
+      }
+    },
+    {
+      "kind": "operational_end_terminal",
+      "value": {
+        "modal": "BRT",
+        "enabled": false,
+        "reason": null,
+        "real_terminal_passage": true,
+        "passages": 3
+      }
+    },
+    {
+      "kind": "operational_end_terminal",
+      "value": {
+        "modal": "BRT",
+        "enabled": true,
+        "reason": null,
+        "real_terminal_passage": true,
+        "passages": 3
+      }
+    },
+    {
+      "kind": "operational_end_terminal",
+      "value": {
+        "modal": "BUS",
+        "enabled": true,
+        "reason": null,
+        "real_terminal_passage": true,
+        "passages": 3
+      }
+    },
+    {
+      "kind": "operational_end_durable",
+      "value": {
+        "modal": "BUS",
+        "mode": "concurrent",
+        "reason": "MudancaOperacional",
+        "old_identity_preserved": true,
+        "new_identity_preserved": true,
+        "journal_events": 5,
+        "passages": 2,
+        "replay_idempotent": true,
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_end_durable",
+      "value": {
+        "modal": "BRT",
+        "mode": "restart",
+        "reason": "MudancaOperacional",
+        "old_identity_preserved": true,
+        "new_identity_preserved": true,
+        "journal_events": 5,
+        "passages": 2,
+        "replay_idempotent": true,
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_end_durable",
+      "value": {
+        "modal": "BRT",
+        "mode": "concurrent",
+        "reason": "MudancaOperacional",
+        "old_identity_preserved": true,
+        "new_identity_preserved": true,
+        "journal_events": 5,
+        "passages": 2,
+        "replay_idempotent": true,
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_end_durable",
+      "value": {
+        "modal": "BUS",
+        "mode": "restart",
+        "reason": "MudancaOperacional",
+        "old_identity_preserved": true,
+        "new_identity_preserved": true,
+        "journal_events": 5,
+        "passages": 2,
+        "replay_idempotent": true,
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_end_durable",
+      "value": {
+        "modal": "BUS",
+        "mode": "rollback",
+        "reason": "MudancaOperacional",
+        "old_identity_preserved": true,
+        "new_identity_preserved": true,
+        "journal_events": 5,
+        "passages": 2,
+        "replay_idempotent": true,
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_end_durable",
+      "value": {
+        "modal": "BRT",
+        "mode": "rollback",
+        "reason": "MudancaOperacional",
+        "old_identity_preserved": true,
+        "new_identity_preserved": true,
+        "journal_events": 5,
+        "passages": 2,
+        "replay_idempotent": true,
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_end_materializer",
+      "value": {
+        "modal": "BRT",
+        "reason": "MudancaOperacional",
+        "rollback_verified": true,
+        "restarted_replay_verified": true,
+        "journal_events": 1,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_end_materializer",
+      "value": {
+        "modal": "BUS",
+        "reason": "MudancaOperacional",
+        "rollback_verified": true,
+        "restarted_replay_verified": true,
+        "journal_events": 1,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_end_materializer",
+      "value": {
+        "modal": "BUS",
+        "reason": null,
+        "rollback_verified": true,
+        "restarted_replay_verified": true,
+        "journal_events": 1,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_end_materializer",
+      "value": {
+        "modal": "BRT",
+        "reason": "PerdaContinuidadeCircular",
+        "rollback_verified": true,
+        "restarted_replay_verified": true,
+        "journal_events": 1,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_end_materializer",
+      "value": {
+        "modal": "BUS",
+        "reason": "PerdaContinuidadeCircular",
+        "rollback_verified": true,
+        "restarted_replay_verified": true,
+        "journal_events": 1,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_end_materializer",
+      "value": {
+        "modal": "BRT",
+        "reason": null,
+        "rollback_verified": true,
+        "restarted_replay_verified": true,
+        "journal_events": 1,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_policy_logical_end",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "journal_ends": 1,
+        "old_trip_cursor": 2,
+        "terminal_passages": 0,
+        "history_passages": 2,
+        "public_history_stat": 2,
+        "stop_event_is_prediction_on_new_route": true,
+        "logical_end_reason": "MudancaOperacional",
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_policy_logical_end",
+      "value": {
+        "modal": "BRT",
+        "batch": false,
+        "journal_ends": 1,
+        "old_trip_cursor": 2,
+        "terminal_passages": 0,
+        "history_passages": 2,
+        "public_history_stat": 2,
+        "stop_event_is_prediction_on_new_route": true,
+        "logical_end_reason": "MudancaOperacional",
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_policy_logical_end",
+      "value": {
+        "modal": "BUS",
+        "batch": false,
+        "journal_ends": 1,
+        "old_trip_cursor": 2,
+        "terminal_passages": 0,
+        "history_passages": 2,
+        "public_history_stat": 2,
+        "stop_event_is_prediction_on_new_route": true,
+        "logical_end_reason": "MudancaOperacional",
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_policy_logical_end",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "journal_ends": 1,
+        "old_trip_cursor": 2,
+        "terminal_passages": 0,
+        "history_passages": 2,
+        "public_history_stat": 2,
+        "stop_event_is_prediction_on_new_route": true,
+        "logical_end_reason": "MudancaOperacional",
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_end_legacy",
+      "value": {
+        "modal": "BUS",
+        "null_reason_preserved": true,
+        "journal_conflict": "motivo_fim",
+        "outbox_conflict_rolls_back": true,
+        "passages": 2
+      }
+    },
+    {
+      "kind": "operational_end_legacy",
+      "value": {
+        "modal": "BRT",
+        "null_reason_preserved": true,
+        "journal_conflict": "motivo_fim",
+        "outbox_conflict_rolls_back": true,
+        "passages": 2
+      }
+    }
+  ],
+  "compatibility": {
+    "schema_version": 2,
+    "optional_field": "motivo_fim",
+    "accepted_end_reasons": [
+      null,
+      "PerdaContinuidadeCircular",
+      "MudancaOperacional"
+    ],
+    "unknown_reasons_rejected": true,
+    "reason_on_non_end_rejected": true,
+    "event_ids_unchanged": true,
+    "old_null_not_inferred": true,
+    "null_and_absent_deserialize_as_null": true,
+    "divergent_same_id_payload_conflicts": true,
+    "older_validator_rejects_new_reason": true,
+    "future_enablement_requires_updated_consumers": true,
+    "no_history_rewrite": true
+  },
+  "limitations": [
+    "Flag OFF; no production/deploy/push/merge/PR",
+    "First integrated setup consumed an older SignalR message; fixed queue consumption in tests only before behavioral RED",
+    "First offline757/758: Shadow Until task cancelled while awaiting Results.Count>0 at existing3second limit;48 focused and758 repeat passed, cause not diagnosed",
+    "Integrated293/293 had no concurrency failures; does not resolve historical report35 intermittency",
+    "No fleet load/replica/backplane or arbitrary crash certification; service reconstruction and controlled transaction rollback tested",
+    "Stop events direct projector tested; REST/stats/SignalR use local HTTP/WebSocket harness; no frontend or external consumer certification"
+  ]
+}
