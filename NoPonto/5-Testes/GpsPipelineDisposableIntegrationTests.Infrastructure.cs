@@ -205,7 +205,8 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
                 new GpsEnriquecimentoService(new GpsPadraoRepository(resources.Db.Source, NullLogger<GpsPadraoRepository>.Instance, matchingOptions),
                     Microsoft.Extensions.Options.Options.Create(Options), matchingOptions, NullLogger<GpsEnriquecimentoService>.Instance),
                 new GpsEtaClient(Http, NullLogger<GpsEtaClient>.Instance, Microsoft.Extensions.Options.Options.Create(new GpsEtaOptions { Enabled = false })), resolver, Cas,
-                new ViagemObservadaService(Trips, NullLogger<ViagemObservadaService>.Instance),
+                new ViagemObservadaService(Trips, NullLogger<ViagemObservadaService>.Instance,
+                    Microsoft.Extensions.Options.Options.Create(Options)),
                 physicalEtaOptions: Microsoft.Extensions.Options.Options.Create(new PhysicalEtaOptions { Enabled = true, MaxAgeSeconds = 90 }));
             collector = new(resolver, Store, new Monitor<GpsSppoCollectorOptions>(), NullLogger<GpsSppoCollectorService>.Instance);
         }

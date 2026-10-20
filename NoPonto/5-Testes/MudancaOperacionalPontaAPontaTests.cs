@@ -85,13 +85,13 @@ public sealed class MudancaOperacionalPontaAPontaTests(ViagemOperacionalFixture 
             var enriquecedor=new GpsEnriquecimentoService(new GpsPadraoRepository(db.Source,NullLogger<GpsPadraoRepository>.Instance),Options.Create(_options),Options.Create(matching),NullLogger<GpsEnriquecimentoService>.Instance);
             var retryOptions=Options.Create(new RetryOperacionalGpsOptions());
             _retry=new RetryOperacionalGpsService(new PendenciaOperacionalGpsRepository(db.Redis,retryOptions){Prefixo=_retryPrefix},
-                new ViagemObservadaService(Spy,NullLogger<ViagemObservadaService>.Instance),enriquecedor,
+                new ViagemObservadaService(Spy,NullLogger<ViagemObservadaService>.Instance,Options.Create(_options)),enriquecedor,
                 retryOptions,Options.Create(_options),NullLogger<RetryOperacionalGpsService>.Instance);
             _polling=new(_store,_cache,hub ?? _services.GetRequiredService<IHubContext<GpsHub>>(),pollingLogger ?? NullLogger<GpsPollingService>.Instance,
                 null!,_services.GetRequiredService<IServiceScopeFactory>(),enriquecedor,
                 new GpsEtaClient(_http,NullLogger<GpsEtaClient>.Instance),sources ?? new FonteVazia(),
                 new PosicaoVeiculoCacheRepository(db.Redis,new PosicaoVeiculoPayloadWriter(db.Redis),NullLogger<PosicaoVeiculoCacheRepository>.Instance),
-                new ViagemObservadaService(Spy,NullLogger<ViagemObservadaService>.Instance),telemetriaMl:telemetry,
+                new ViagemObservadaService(Spy,NullLogger<ViagemObservadaService>.Instance,Options.Create(_options)),telemetriaMl:telemetry,
                 structuralHintResolver:sources is null ? null : new GpsStructuralHintResolver(new GpsStructuralHintLookup(db.Source)),
                 retryOperacional:_retry);
         }

@@ -1,0 +1,2621 @@
+{
+  "base_commit": "bcb4ea3",
+  "diagnosis_preservation_commit": "0d93adabc2c7826f38ec396f6a583a2fadc9f45e",
+  "branch": "audit/gps-bus-brt-pipeline",
+  "scope": "existing evidence continuity only; no end-reason change",
+  "sdk": "9.0.306",
+  "platform": "xUnit2/VSTest",
+  "global_flag_default": false,
+  "production_access": false,
+  "runtime_diff": {
+    "files": 5,
+    "added": 70,
+    "removed": 19
+  },
+  "red_green": {
+    "red_passed": 11,
+    "red_failed": 10,
+    "green_passed": 21,
+    "green_failed": 0,
+    "identical_regression_source": true,
+    "source_sha256": "e9e3b8de5ed9c97ca0a4e7a3d5bb86dab3d44b66fec1128658842a9c77512beb"
+  },
+  "circular_legacy_red": {
+    "passed": 4,
+    "failed": 4
+  },
+  "final_integrated_passed": 248,
+  "targeted_unit_passed": 108,
+  "official_offline_passed": 758,
+  "final_distinct_passed": 1114,
+  "final_failed": 0,
+  "final_skipped": 0,
+  "disposable_runs": 10,
+  "all_teardowns_preserved_preexisting": true,
+  "runtime_source_sha256": {
+    "NoPonto/2-Application/Services/GPS/RetryOperacionalGps.cs": "8d102effa5bf4af547d3a7eb632ba6e8bc19457bc2196c19af5f4c792443e8f3",
+    "NoPonto/2-Application/Services/GPS/ViagemObservadaService.cs": "a2624f0838ef88325780ea6eb65011d4c5090f47b13c276e8c5842207c4ee07e",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.Integridade.cs": "bdb0d3fc088fd1ef1dfa4ac6caf0489ed7ce9bdf6962f1c61c7c4855d627c798",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.Mudanca.cs": "df8f5b35de97214f0dc091dbb435d1b062cb251cac370e4c0cc0b127e32724bd",
+    "NoPonto/4-Data/Repositories/ViagemOperacionalRepository.cs": "f84c7bafb2acfa48890c999859415223fee9cc4b9683849546aca718db3b453c"
+  },
+  "test_source_sha256": {
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.EvidenceContinuity.cs": "d2906ff7787b7a0c195747f41d64653182b062d660611fd705300217dda3dece",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.EvidenceIngress.cs": "eb40e7cdb5188767eb533c41983a65cd9fd72c07189d23da48a1699f669237ba",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.Infrastructure.cs": "000ad6ce193a7512ceba6629116cca1a41a306d9a0872ae287c172acc6d69ae0",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalPolicy.cs": "e9e3b8de5ed9c97ca0a4e7a3d5bb86dab3d44b66fec1128658842a9c77512beb",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalRecovery.cs": "c7a146a401064af1d98df5322be690f75fdcdd37cf886e88511c273565c7ae84",
+    "NoPonto/5-Testes/MudancaOperacionalPontaAPontaTests.cs": "dfddf1c7f29e408345ee9d3994c85c3fcfb63c8194bb17ebcff7b9a571af60bb",
+    "NoPonto/5-Testes/MudancaOperacionalRegraTests.cs": "8123a18e505b982192f4745ea28d8f3f8a83e154c783907acaa9b5e6340b1097",
+    "NoPonto/5-Testes/ViagemObservadaServiceTests.cs": "05dacec08d141ee074b0ea0c9269fa91d5705a11dfd371b92403bcf151a2f16f"
+  },
+  "normalized_source_sha256": {
+    "NoPonto/2-Application/Services/GPS/RetryOperacionalGps.cs": "48af30a2a2e699e0a7a008f31af99c526490cf3577e8add3719e33a67ff30fde",
+    "NoPonto/2-Application/Services/GPS/ViagemObservadaService.cs": "fa158e8959e17cac5edf3230f67586885439dc7fc0a94b7c121e8cb6489d5a1d",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.Integridade.cs": "ad5c63ca4f12bae400dc5c5eef718a01ec8bb75822e928f8d54c9935ef1fd6e5",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.Mudanca.cs": "6078b62ee28c7372f425359d3ab7e11e9a24195fde45cd21863f70ec7a4bba33",
+    "NoPonto/4-Data/Repositories/ViagemOperacionalRepository.cs": "331a582d508f2dad43142c98cf42f698673df521c46fde5ecdc04757e296ee69",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.EvidenceContinuity.cs": "d2906ff7787b7a0c195747f41d64653182b062d660611fd705300217dda3dece",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.EvidenceIngress.cs": "eb40e7cdb5188767eb533c41983a65cd9fd72c07189d23da48a1699f669237ba",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.Infrastructure.cs": "000ad6ce193a7512ceba6629116cca1a41a306d9a0872ae287c172acc6d69ae0",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalPolicy.cs": "e9e3b8de5ed9c97ca0a4e7a3d5bb86dab3d44b66fec1128658842a9c77512beb",
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalRecovery.cs": "c7a146a401064af1d98df5322be690f75fdcdd37cf886e88511c273565c7ae84",
+    "NoPonto/5-Testes/MudancaOperacionalPontaAPontaTests.cs": "e774f15ee2facfbfde9ba40867d3576df84bf9e9839edae516b029a5541a6281",
+    "NoPonto/5-Testes/MudancaOperacionalRegraTests.cs": "8123a18e505b982192f4745ea28d8f3f8a83e154c783907acaa9b5e6340b1097",
+    "NoPonto/5-Testes/ViagemObservadaServiceTests.cs": "392bf8f665ca66a9a0623d95bf5433198baa1db131c8a7567de9d18455b69d89"
+  },
+  "protected_working_source_sha256": {
+    "NoPonto/Program.cs": "685beec92a5a9c0afa366be12836a30cf6218c0a62abdc6c1c1341e2e9033b53",
+    "NoPonto/appsettings.json": "a2f96bdf5b8aa777473597c63a6761daf9ba2b5b9ed82269c1eff9ab0f131998",
+    "NoPonto/2-Application/Services/GPS/GpsPoolingOptions.cs": "fd8324b47458250f88ee16eeeeb14b121e0441f0c6ac5b18bf4d3cceee6f135c",
+    "NoPonto/2-Application/Services/GPS/GpsPollingService.cs": "2c47864edbf8057e6b9db117598e886cc5676649e112b561b6b27fa250df2d32",
+    "NoPonto/2-Application/Services/GPS/GpsPhysicalPredecessor.cs": "0bcaf421655ba99689e9ac2202686092f094ae7c347d3f7771b31225e1aa52bd",
+    "NoPonto/2-Application/Services/GPS/GpsSignalRPublisher.cs": "d956248a823e6a1b5ef99c9c08b45b44ac1f235aea0e4874e9a8016b1781aa24",
+    "NoPonto/2-Application/Services/GPS/GpsEnriquecimentoService.cs": "46c38dacf88d68698d08b67bbf88ca77cb81b99f6a63574a996c1b63d08532ee",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.cs": "1d79acde999ff283d34f173afa6b2a8f4ed8b9a9cbdfda03bdb8a12206a87e53",
+    "NoPonto/4-Data/Repositories/ViagemOperacionalCodec.cs": "dc9646e7f138f15ebe6e34b140a1e28fcee7dd35b707727d7a45c8e8ad8cb144",
+    "NoPonto/4-Data/Repositories/ViagemOperacionalRedisScript.cs": "db365a0b39f852a657d17539185b58edc90c246d830c41e196ebd6c85437c80c",
+    "NoPonto/4-Data/Repositories/HistoricoEventoRepository.cs": "986d9a5c72ed96851eeb114b4e11ef83bd66c92ea4e678d9e548d2c78b714a65",
+    "NoPonto/4-Data/Repositories/PosicaoVeiculoCacheRepository.cs": "7d61a1aec5dae23ef53ab8c94371ee59f7098027d1639d52faea7f3de2ca902b",
+    "NoPonto/4-Data/Repositories/PosicaoVeiculoPayloadWriter.cs": "25444811aa5ea3f2cf456b8663aa68455bb6d8c26da87bcad3d852fdf104bb99",
+    "tools/gps/test_pipeline_disposable.ps1": "b0a5155ed7ab21c8cdae1c091c173b8406163f2910e7dbfd0ab3df473c11cc65",
+    "NoPonto/4-Data/Repositories/OcorrenciaParadaRepository.cs": "e3b0a1347411d29e8a549eef84fa3e298c4e4026679b144abccbae2f38eb1c2e",
+    "NoPonto/2-Application/Services/BackgroundServices/ViagemOutboxWorker.cs": "0cadafa7367e2796c7093388b123dc436a50dff259ab0480ddabf2ddc99e380a",
+    "NoPonto/2-Application/Services/GPS/GpsBrtClient.cs": "b23f343ecd63e1cf779adc0c6772b894d1183a210f5f9ae808c1ed6957343cc0",
+    "NoPonto/appsettings.Development.json": "73f95f9e0ceb205fc1c4dc50c07697fcfa29d7087868c2aef1d504cb38c771ec",
+    "NoPonto/NoPonto.csproj": "30ff09497d5d39c6b44eafe0aea8094126da9a871850f1b70fb0252740a4c518",
+    "NoPonto/5-Testes/ViagemOperacionalIntegracaoTests.cs": "c74bd4bfd4b148e9164eeb1de46d189f781c47a81e27b893a5c83cb6eae65590",
+    "NoPonto/4-Data/Repositories/GpsItinerarRepository.cs": "37fc0933e4e330c1cc3d8ba56ccd6fb6ae9d39e64f666fcaeaa9578c311ee83d",
+    "NoPonto/4-Data/Repositories/GpsItinerarioRepository.Batch.cs": "abf4778f16e0ae7047543fcbeefbc4262944d2225319084689fdd592e2ad36a4",
+    "NoPonto/4-Data/Repositories/GpsItinerarioRepository.CombinedSetBased.cs": "32faf431a86203e4a42547f849656058695d434ed00536931c46f7801ce4fe08",
+    "NoPonto/5-Testes/HistoricalEtaGtfsPollingTests.cs": "f3f9b8b1f1c59e4f906abb24fc6a51cae0c975e08158dbd27993f1b3a1f3324b"
+  },
+  "red_source_sha256": {
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalPolicy.cs": "e9e3b8de5ed9c97ca0a4e7a3d5bb86dab3d44b66fec1128658842a9c77512beb",
+    "NoPonto/4-Data/Repositories/ViagemOperacionalRepository.cs": "56a95c9624799c03a355ba60197224eccf53093795399fae4c9bfe7df8fb6135",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.Mudanca.cs": "65056d0ec0b7a5bf26ceea9dbad1eaba6d0868ac65d0e938506cbdfb5b5b3903",
+    "NoPonto/2-Application/Services/GPS/ViagemObservadaService.cs": "96bc3a6c253ff0f8ffd310fd7f2e6148b503cf9f9df7e59aa440f563e5563b4f"
+  },
+  "initial_green_source_sha256": {
+    "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalPolicy.cs": "e9e3b8de5ed9c97ca0a4e7a3d5bb86dab3d44b66fec1128658842a9c77512beb",
+    "NoPonto/4-Data/Repositories/ViagemOperacionalRepository.cs": "ab6e6f961d7b3091af1a18b294e08a78e79639d3dce3e986d15c404b0dedd834",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.Mudanca.cs": "ecd36bbe57a0efeb04c3f4a28a5b6ce030c875d93f7f1b733daaefb8055ef4e4",
+    "NoPonto/2-Application/Services/GPS/ViagemObservadaService.cs": "70885134b2864ecec4316ce4d12f6083798de745d4f1d47775b4744aecb330ea"
+  },
+  "runs": [
+    {
+      "tag": "before",
+      "note": "Original characterizations before runtime edits",
+      "runner_exit_code": 0,
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/evidence-continuity-20261020-before') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-before/integration.trx",
+      "trx_sha256": "d7974160d234ce099f7189b13328e817703b15ed4af45578c81476d1f89a27d2",
+      "counters": {
+        "total": 23,
+        "executed": 23,
+        "passed": 23,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 23
+      },
+      "times": {
+        "creation": "2026-10-20T19:34:08.7543992-03:00",
+        "queuing": "2026-10-20T19:34:08.7544002-03:00",
+        "start": "2026-10-20T19:34:01.1400975-03:00",
+        "finish": "2026-10-20T19:34:14.0604181-03:00"
+      },
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_NonConsecutiveEvidence_CompareCandidateReset": 19,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_ServiceSkipsCandidateInvalidation": 2
+      }
+    },
+    {
+      "tag": "red",
+      "note": "Desired regressions on original runtime",
+      "runner_exit_code": 1,
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/evidence-continuity-20261020-red') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives|FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-red/integration.trx",
+      "trx_sha256": "6362b1a928b2bbad7aad4d65dc287dc546132dc06361318a5783c66aff6a7605",
+      "counters": {
+        "total": 21,
+        "executed": 21,
+        "passed": 11,
+        "failed": 10,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 21
+      },
+      "times": {
+        "creation": "2026-10-20T19:35:22.1467207-03:00",
+        "queuing": "2026-10-20T19:35:22.1467219-03:00",
+        "start": "2026-10-20T19:35:15.3341209-03:00",
+        "finish": "2026-10-20T19:35:25.1852983-03:00"
+      },
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives": 19,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate": 2
+      },
+      "failures": [
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives(modal: \"BRT\", changeDirection: True, interruption: \"invalid_matching\")",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate(modal: \"BRT\")",
+          "message_summary": "Assert.True() Failure",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate(modal: \"BUS\")",
+          "message_summary": "Assert.True() Failure",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives(modal: \"BRT\", changeDirection: True, interruption: \"implausible\")",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives(modal: \"BUS\", changeDirection: False, interruption: \"implausible\")",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives(modal: \"BUS\", changeDirection: False, interruption: \"pattern_conflict\")",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives(modal: \"BRT\", changeDirection: True, interruption: \"ambiguous\")",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives(modal: \"BUS\", changeDirection: False, interruption: \"regressive\")",
+          "message_summary": "Assert.Null() Failure: Value is not null",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives(modal: \"BUS\", changeDirection: False, interruption: \"ambiguous\")",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives(modal: \"BUS\", changeDirection: False, interruption: \"invalid_matching\")",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "expected behavioral RED"
+        }
+      ]
+    },
+    {
+      "tag": "green",
+      "note": "Same regression source after implementation",
+      "runner_exit_code": 0,
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/evidence-continuity-20261020-green') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives|FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-green/integration.trx",
+      "trx_sha256": "014714fef168ec4d0ab23837ca533eff11172d8846f15370ef4662b065ee241b",
+      "counters": {
+        "total": 21,
+        "executed": 21,
+        "passed": 21,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 21
+      },
+      "times": {
+        "creation": "2026-10-20T19:37:12.3921423-03:00",
+        "queuing": "2026-10-20T19:37:12.3921428-03:00",
+        "start": "2026-10-20T19:37:05.7898268-03:00",
+        "finish": "2026-10-20T19:37:15.7359936-03:00"
+      },
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives": 19,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate": 2
+      }
+    },
+    {
+      "tag": "matrix",
+      "note": "Test setup CS0121; fixed explicit constructor types",
+      "runner_exit_code": 1,
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/evidence-continuity-20261020-matrix') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_|FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_|FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_InsufficientEvidence_DoesNotConfirm'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "report": null,
+      "failure": "Three CS0121 test setup errors; no behavioral RED claimed"
+    },
+    {
+      "tag": "circular-red",
+      "note": "Missing-anchor legacy circular guard RED",
+      "runner_exit_code": 1,
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/evidence-continuity-20261020-circular-red') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_CircularAfterInvalidation_RetainsProofRequirement'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-circular-red/integration.trx",
+      "trx_sha256": "04fe45950c8e025fddb94a05617781582a0f2b4c02644466927dd946f003f641",
+      "counters": {
+        "total": 8,
+        "executed": 8,
+        "passed": 4,
+        "failed": 4,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 8
+      },
+      "times": {
+        "creation": "2026-10-20T19:42:09.5080472-03:00",
+        "queuing": "2026-10-20T19:42:09.5080476-03:00",
+        "start": "2026-10-20T19:42:02.8934781-03:00",
+        "finish": "2026-10-20T19:42:10.4004534-03:00"
+      },
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_CircularAfterInvalidation_RetainsProofRequirement": 8
+      },
+      "failures": [
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_CircularAfterInvalidation_RetainsProofRequirement(modal: \"BRT\", reachableWrap: True, hasAnchor: False)",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_CircularAfterInvalidation_RetainsProofRequirement(modal: \"BRT\", reachableWrap: False, hasAnchor: False)",
+          "message_summary": "Assert.Empty() Failure: Collection was not empty",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_CircularAfterInvalidation_RetainsProofRequirement(modal: \"BUS\", reachableWrap: True, hasAnchor: False)",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "expected behavioral RED"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_CircularAfterInvalidation_RetainsProofRequirement(modal: \"BUS\", reachableWrap: False, hasAnchor: False)",
+          "message_summary": "Assert.Empty() Failure: Collection was not empty",
+          "diagnosis": "expected behavioral RED"
+        }
+      ]
+    },
+    {
+      "tag": "matrix-valid",
+      "note": "Durability/terminal/circular matrix GREEN",
+      "runner_exit_code": 0,
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/evidence-continuity-20261020-matrix-valid') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_|FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_|FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_InsufficientEvidence_DoesNotConfirm'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-matrix-valid/integration.trx",
+      "trx_sha256": "44dcefc796f850dc201d226a8f23bae9dba12c4b5d2b5242afb1382fadff0ad6",
+      "counters": {
+        "total": 61,
+        "executed": 61,
+        "passed": 61,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 61
+      },
+      "times": {
+        "creation": "2026-10-20T19:43:04.0784158-03:00",
+        "queuing": "2026-10-20T19:43:04.0784161-03:00",
+        "start": "2026-10-20T19:42:57.7572954-03:00",
+        "finish": "2026-10-20T19:43:17.6070716-03:00"
+      },
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_ABA_NewExecutionHasOwnCursor": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_CircularAfterInvalidation_RetainsProofRequirement": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_ConcurrentOrRollback_DurableBarrierAndFuturePassage": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_FlagOff_UnmatchedKeepsPersistedCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_InfrastructureFailure_PreservesEvidence": 6,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_LateProjection_CannotResurrectCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_Terminal_InvalidationDoesNotConfirmArrival": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives": 19,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_InsufficientEvidence_DoesNotConfirm": 8
+      }
+    },
+    {
+      "tag": "ingress",
+      "note": "Actual local matching and Redis retry",
+      "runner_exit_code": 0,
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/evidence-continuity-20261020-ingress') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceIngress_'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-ingress/integration.trx",
+      "trx_sha256": "caddf1240127223d87a35a790ebc95e21e04718bf38e512f496b47010c3a440e",
+      "counters": {
+        "total": 12,
+        "executed": 12,
+        "passed": 12,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 12
+      },
+      "times": {
+        "creation": "2026-10-20T19:44:27.6593128-03:00",
+        "queuing": "2026-10-20T19:44:27.6593136-03:00",
+        "start": "2026-10-20T19:44:21.1723360-03:00",
+        "finish": "2026-10-20T19:44:31.9874566-03:00"
+      },
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceIngress_RealMatchingGap_TwoEligiblePositivesAfterBarrier": 4,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceIngress_RetryRealRedis_BarrierCommitsBeforeAcknowledgement": 8
+      }
+    },
+    {
+      "tag": "final",
+      "note": "Four old restart expectations and one infrastructure race failure",
+      "runner_exit_code": 1,
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/evidence-continuity-20261020-final') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.|FullyQualifiedName~NoPonto.Tests.ViagemOperacionalIntegracaoTests.|FullyQualifiedName~NoPonto.Tests.MudancaOperacionalPontaAPontaTests.|FullyQualifiedName~NoPonto.Tests.IntegridadeCircularPostgresTests.|FullyQualifiedName~NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests.|FullyQualifiedName~NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests.|FullyQualifiedName~NoPonto.Tests.ViagemDuravelPostgresTests.'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-final/integration.trx",
+      "trx_sha256": "8b04d420a556a182df19af396d42d24d9ee9bc69e9539b62e0727193e38a85bb",
+      "counters": {
+        "total": 248,
+        "executed": 248,
+        "passed": 243,
+        "failed": 5,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 133,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests": 5,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests": 13,
+        "NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests": 2,
+        "NoPonto.Tests.ViagemDuravelPostgresTests": 32,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests": 62,
+        "NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests": 1
+      },
+      "times": {
+        "creation": "2026-10-20T19:47:07.2439161-03:00",
+        "queuing": "2026-10-20T19:47:07.2439165-03:00",
+        "start": "2026-10-20T19:46:57.7242923-03:00",
+        "finish": "2026-10-20T19:49:23.6530704-03:00"
+      },
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.BusBrtMatrix_RealHttpSqlCasRestAndSignalR": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.CadenceAndPredecessorTogether_RespectHttpCacheWithoutSecondGate": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_ABA_NewExecutionHasOwnCursor": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_CircularAfterInvalidation_RetainsProofRequirement": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_ConcurrentOrRollback_DurableBarrierAndFuturePassage": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_FlagOff_UnmatchedKeepsPersistedCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_IncompatibleMatching_DoesNotAdoptIdentityOrPosition": 7,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_InfrastructureFailure_PreservesEvidence": 6,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_InvalidRawGps_DoesNotEraseCandidate": 3,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_LateProjection_CannotResurrectCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_Terminal_InvalidationDoesNotConfirmArrival": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceIngress_RealMatchingGap_TwoEligiblePositivesAfterBarrier": 4,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceIngress_RetryRealRedis_BarrierCommitsBeforeAcknowledgement": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives": 19,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_BrtDifferentPatternSameDirection_RemainsSeparate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_InsufficientEvidence_DoesNotConfirm": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_OldDurableTrip_ColdStartAndRestart": 20,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_ReturnBehindCursor_PreservesIncorporatedCursor": 12,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.RealExpiryAndAcquisition_OverSixtySeconds_KeepRecentHistorical": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.RedisCas_ConcurrentDuplicateOutOfOrderAndFencingAreAtomic": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.RouteDirectionVersionAndTerminal_KeepSafetyGates": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_ColdEmptySubscriptionAndHttpFailure_OneRefreshPerSubscription": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_ExpiryWithOtherLiveLine_IsolatedAndResynchronized": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_NoGpsEarlyReturns_ExpireWithoutUnrelatedBeacon": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_StatusLifecycle_MatchesRestWithoutRenewingDuplicate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_TwoConsumersReconnectAndExpiry_DeliverIdentifiedRemoval": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.TerminalOldGpsAndHttpFailure_DoNotInventEta": 1,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.CircularConfiavel_FlagDesligada_PreservaSnapshotsQuentesSemCriarAncora": 1,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.CircularFechada_EnriquecimentoReal_DivergenciaWrapBaselineEPassagem": 2,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.FalhaDepoisEstado_ReverteIntegridadeViagemEOutbox": 1,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.RecuperacaoConcorrente_ComFlagDesligada_ApenasUmaExecucaoNova": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.ABA_BaselineCoerente_SomentePassagemFutura": 2,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.ABB_MatchingReal_ConfirmaEMaterializaSemPassagens": 2,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.CodigosDistintosSobrepostos_ABB_ConfirmaNovaExecucaoSemPassagem": 2,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.CodigosDistintosSobrepostos_ABCBA_NaoAcumulaEvidenciasEntreCandidatos": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.FalhaDuravelDepoisGpsAceito_RepeticaoMesmoTimestampRecuperaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.FlagDesligada_ProvaRealNaoCriaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.RecuperacaoPendente_MesmoGpsDepoisRollback_DeveRecuperarCandidatoEConfirmar": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.Retry_CircularAposRollback_PreservaProtecaoESuprimeIdentidadeMl": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.Retry_NovaInstanciaComRedisPreservado_RecuperaSemReplayDaFonte": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.Retry_RespostaPerdidaDepoisCommit_ReconheceDuravelSemDuplicarEventos": 1,
+        "NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests.Lua_OrdenacaoLimitesLeaseCasEBackoff_PreservamPayload": 1,
+        "NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests.Lua_PendenciaExpirada_EncerraSemChamarOperacao": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CargaEstavel_200Veiculos_AtravessaCheckpointSessentaSegundos": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CargaEstavel_200Veiculos_QuatroPolls_UmWriteDuravelPorVeiculo": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Chaos_RedisPara_ReiniciaVazio_ContinuaMesmaViagem": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CheckpointInvalido_UsaModoConservador": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CheckpointVencido_PersisteUmaVez_EProximaPosicaoNaoPersiste": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Checkpoint_BoundarySessentaSegundos": 3,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.FalhaAntesCommit_RollbackEstadoEOutbox": 2,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Funil_CommitRealSeparaInicioPassagensEFim": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Funil_FalhaAntesCommitNaoConfirmaPassagens": 2,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.HashRedisCorrompido_FazFallbackSeguroParaPostgres": 6,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.PersistenciaSemantica_ReiniciaJanelaCheckpoint": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.PosicoesConcorrentes_UmaViagem_UmEventoInicio": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.PostgreSqlIndisponivel_NaoCriaProjecaoNemEventoRedis": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.ProgressoQuenteAntesDoCheckpoint_NaoAtualizaPostgres": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.ProjecaoDuravel_IntercaladaComHotMaisNovo_MesclaSemRegredir": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisIndisponivel_CommitPostgresContinuaDuravel": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisIndisponivel_ProgressoQuenteDegradaParaCheckpointSemEventoArtificial": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisOnly_Semantica_RedisOnly_UsaNovaVersaoDuravel": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisPerdidoEntreCheckpoints_RecuperaIdentidadeEUltimoSnapshotDuravel": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisVazio_ReidrataMesmaViagem_SemDuplicarInicio": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RelogioRegressivo_ForcaCheckpointConservador": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.SchemaViagem_SemIndiceTemporal_PreservaPkEUpdatesElegiveisAHot": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.WorkerParado_PreservaOutbox_ReinicioDrena_Idempotente": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.AclSemXadd_NaoImpedeCommitPostgres": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.AmbiguidadeEntreSentidos_Reais_PreservaPossivelFimSemCandidato": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Ativa_GlobalB_ProjecaoAAvancaA_EEmiteSomenteParadaA_SemDuplicarNoRetorno": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.BaselineNoTerminal_NaoEmiteRetroativos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Block5000_ConexaoDedicada_CancelamentoNaoBloqueiaConexaoGps": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CancelamentoAtrasDoCursor_ConcorrenciaOuRollback_PreservaPisoDuravel": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CincoFalhasTransitorias_DeadLetterPreservaPayload_AckELimpaContador": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ConflitoRealNoWorker_DlqPrimeiraTentativa_PreservaPrimeiroJournal": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ContinuidadeMesmaObservacao_ReutilizaEstruturaSemAlterarIdentidade": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CorridaMesmoTimestamp_CasOutboxSomenteUmaVez": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.DivergenciaComProjecaoInelegivelOuFalha_CongelaA_SemEvento": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.DuasInstancias_EntregasEPostgresConcorrentes_SemDuplicacao": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ErroPermanente_ComContadorAntigo_VaiParaDlqNaProximaFalha": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ErroPermanente_DlqIndisponivel_PreservaPendingParaRecuperacao": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ErroPermanente_VaiParaDlqNaPrimeiraFalha_AckELimpaContador": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FalhaDeadLetterAposQuinta_ReinicioNaoRepetePostgres_PreservaErro": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FalhaDoAntigoEval_NaoAfetaCommitPostgres_RepeticaoNaoDuplica": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FalhaTransitoria_PrimeiraTentativa_PermanecePendingERecuperaPorXAutoClaim": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FkEUniqueParcial_Reais_JournalNaoPermiteReescreverEvento": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.HashAnterior3_2_ComCursor_AdotaSemPerderCruzamentosNovos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.HashParcial_EReidratadoDoEstadoDuravel": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.HashRedisParcial_NaoApagaCursorDuravel": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.JanelaCandidato_RedisReal": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.LinhaDiferenteEstrutural_PreservaPossivelFimSemCandidato": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.LuaArgumentosInvalidos_ZeroWrites": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Lua_FinalizadaNaoPodeRegredirParaAtiva": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Lua_PossivelFim_NaoPermiteReducaoNemRetornoParaAtiva": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Migration_LegadoNullable_ModeloSemDiferenca": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaDoPointerPublicado_NaoMigraViagemAtiva": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_CancelamentoBaseline_CursorProximaEPassagemFutura": 4,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_CandidatoDuravelPerdaRedis_ConfirmacaoSemPassagens": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_ConfirmacaoConcorrente_ApenasUmCommit": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_FalhaDepoisOutbox_RollbackEstadoEEventos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.PossivelFim_GlobalB_ProjecaoTerminalAContinuaConfirmacoesEFinalizaA": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ProjecaoARegressiva_ERejeitadaSemAlterarCursorOuHash": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ProjecaoRedisCorrompida_EReconstruidaDoPostgres": 7,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.R1Finalizada_NaoReabre_RegistraNovoCandidato": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.R2_NaoFinalizaPrematuramente_PreservaTerminalNoRedis": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.RedisTerminal_ReinicioT0T1_Finalizada_TresPassagensMaisInicioEFim": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ReentregaAposDbAntesAck_Idempotente_XAutoClaim_ReinicioWorker": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.RetornoAtrasDoTerminalJaIncorporado_ComOuSemCandidata_PreservaRegraExistente": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.SnapshotAusente_ETransportadoComoCasVazio": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.SnapshotMudaDepoisDaProjecao_CasRejeitaESemPassagemIncorreta": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.StreamDiagnosticoSaturado_NaoImpedeCommitDuravel": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Trim_PreservaPendingEUnread_ApenasProcessadosAntigosRemovidos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Trim_RemoveDlqAntigaEPreservaDlqRecente": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.WorkerHosted_LoopRealRedis7_PersisteEAck_SemBloquearPolling": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.WrongTypeStream_NaoImpedeEstadoDuravel": 1,
+        "NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests.CancelamentoCircular_ProtegeOutboxEHistorico_RecuperaNovaExecucao": 1
+      },
+      "failures": [
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_OldDurableTrip_ColdStartAndRestart(modal: \"BUS\", batch: True, changeLine: False, possibleEnd: False, keepPredecessor: False)",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "superseded restart expectation"
+        },
+        {
+          "test_name": "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CorridaMesmoTimestamp_CasOutboxSomenteUmaVez",
+          "message_summary": "Assert.All() Failure: 6 out of 20 items in the collection did not pass.",
+          "diagnosis": "six InfrastructureFailure results; root exception unavailable"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_OldDurableTrip_ColdStartAndRestart(modal: \"BRT\", batch: True, changeLine: False, possibleEnd: False, keepPredecessor: False)",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "superseded restart expectation"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_OldDurableTrip_ColdStartAndRestart(modal: \"BUS\", batch: True, changeLine: True, possibleEnd: False, keepPredecessor: False)",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "superseded restart expectation"
+        },
+        {
+          "test_name": "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_OldDurableTrip_ColdStartAndRestart(modal: \"BRT\", batch: True, changeLine: True, possibleEnd: False, keepPredecessor: False)",
+          "message_summary": "Assert.Equal() Failure: Values differ",
+          "diagnosis": "superseded restart expectation"
+        }
+      ]
+    },
+    {
+      "tag": "restart-race",
+      "note": "Updated restart requirement; unchanged strict race test passed",
+      "runner_exit_code": 0,
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/evidence-continuity-20261020-restart-race') -Filter 'FullyQualifiedName~NoPonto.Tests.ViagemOperacionalIntegracaoTests.CorridaMesmoTimestamp_CasOutboxSomenteUmaVez|FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_OldDurableTrip_ColdStartAndRestart'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-restart-race/integration.trx",
+      "trx_sha256": "cf6062fe25b10402556cf825eda5a5c529524b863b41df8820c4b14e27052924",
+      "counters": {
+        "total": 21,
+        "executed": 21,
+        "passed": 21,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 20,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests": 1
+      },
+      "times": {
+        "creation": "2026-10-20T19:51:06.4639750-03:00",
+        "queuing": "2026-10-20T19:51:06.4639753-03:00",
+        "start": "2026-10-20T19:50:58.2906350-03:00",
+        "finish": "2026-10-20T19:51:15.5996488-03:00"
+      },
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_OldDurableTrip_ColdStartAndRestart": 20,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CorridaMesmoTimestamp_CasOutboxSomenteUmaVez": 1
+      }
+    },
+    {
+      "tag": "final-confirmed",
+      "note": "Final complete integrated selection",
+      "runner_exit_code": 0,
+      "command": "& ./tools/gps/test_pipeline_disposable.ps1 -Run -ResultsDirectory (Join-Path (Get-Location) 'NoPonto/lab-output/evidence-continuity-20261020-final-confirmed') -Filter 'FullyQualifiedName~NoPonto.Tests.GpsPipelineDisposableIntegrationTests.|FullyQualifiedName~NoPonto.Tests.ViagemOperacionalIntegracaoTests.|FullyQualifiedName~NoPonto.Tests.MudancaOperacionalPontaAPontaTests.|FullyQualifiedName~NoPonto.Tests.IntegridadeCircularPostgresTests.|FullyQualifiedName~NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests.|FullyQualifiedName~NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests.|FullyQualifiedName~NoPonto.Tests.ViagemDuravelPostgresTests.'",
+      "isolation": {
+        "scope": "disposable",
+        "dedicated_network": true,
+        "network_internal": false,
+        "mounts": "tmpfs only",
+        "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+        "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+        "preexisting_container_count": 4,
+        "ports": "random loopback only"
+      },
+      "isolation_sha256": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+      "teardown": {
+        "preexisting_unchanged": true,
+        "preexisting_count": 4,
+        "owned_containers_remaining": 0,
+        "owned_network_removed": true
+      },
+      "teardown_sha256": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-final-confirmed/integration.trx",
+      "trx_sha256": "aafc768e67bac86c9e9f171c765f8c2041226748fa0ed6918e7263e57c3b3cb7",
+      "counters": {
+        "total": 248,
+        "executed": 248,
+        "passed": 248,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests": 133,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests": 5,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests": 13,
+        "NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests": 2,
+        "NoPonto.Tests.ViagemDuravelPostgresTests": 32,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests": 62,
+        "NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests": 1
+      },
+      "times": {
+        "creation": "2026-10-20T19:52:00.1569682-03:00",
+        "queuing": "2026-10-20T19:52:00.1569685-03:00",
+        "start": "2026-10-20T19:51:50.9897371-03:00",
+        "finish": "2026-10-20T19:54:06.6708114-03:00"
+      },
+      "methods": {
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.BusBrtMatrix_RealHttpSqlCasRestAndSignalR": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.CadenceAndPredecessorTogether_RespectHttpCacheWithoutSecondGate": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_ABA_NewExecutionHasOwnCursor": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_CircularAfterInvalidation_RetainsProofRequirement": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_ConcurrentOrRollback_DurableBarrierAndFuturePassage": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_FlagOff_UnmatchedKeepsPersistedCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_IncompatibleMatching_DoesNotAdoptIdentityOrPosition": 7,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_InfrastructureFailure_PreservesEvidence": 6,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_InvalidRawGps_DoesNotEraseCandidate": 3,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_LateProjection_CannotResurrectCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceContinuity_Terminal_InvalidationDoesNotConfirmArrival": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceIngress_RealMatchingGap_TwoEligiblePositivesAfterBarrier": 4,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.EvidenceIngress_RetryRealRedis_BarrierCommitsBeforeAcknowledgement": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives": 19,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_LogicalEnd_HistoryStatsAndStopEventsKeepSeparate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_BrtDifferentPatternSameDirection_RemainsSeparate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_InsufficientEvidence_DoesNotConfirm": 8,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_OldDurableTrip_ColdStartAndRestart": 20,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.OperationalRecovery_ReturnBehindCursor_PreservesIncorporatedCursor": 12,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.RealExpiryAndAcquisition_OverSixtySeconds_KeepRecentHistorical": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.RedisCas_ConcurrentDuplicateOutOfOrderAndFencingAreAtomic": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.RouteDirectionVersionAndTerminal_KeepSafetyGates": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_ColdEmptySubscriptionAndHttpFailure_OneRefreshPerSubscription": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_ExpiryWithOtherLiveLine_IsolatedAndResynchronized": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_NoGpsEarlyReturns_ExpireWithoutUnrelatedBeacon": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_StatusLifecycle_MatchesRestWithoutRenewingDuplicate": 2,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.SignalR_TwoConsumersReconnectAndExpiry_DeliverIdentifiedRemoval": 1,
+        "NoPonto.Tests.GpsPipelineDisposableIntegrationTests.TerminalOldGpsAndHttpFailure_DoNotInventEta": 1,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.CircularConfiavel_FlagDesligada_PreservaSnapshotsQuentesSemCriarAncora": 1,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.CircularFechada_EnriquecimentoReal_DivergenciaWrapBaselineEPassagem": 2,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.FalhaDepoisEstado_ReverteIntegridadeViagemEOutbox": 1,
+        "NoPonto.Tests.IntegridadeCircularPostgresTests.RecuperacaoConcorrente_ComFlagDesligada_ApenasUmaExecucaoNova": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.ABA_BaselineCoerente_SomentePassagemFutura": 2,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.ABB_MatchingReal_ConfirmaEMaterializaSemPassagens": 2,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.CodigosDistintosSobrepostos_ABB_ConfirmaNovaExecucaoSemPassagem": 2,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.CodigosDistintosSobrepostos_ABCBA_NaoAcumulaEvidenciasEntreCandidatos": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.FalhaDuravelDepoisGpsAceito_RepeticaoMesmoTimestampRecuperaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.FlagDesligada_ProvaRealNaoCriaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.RecuperacaoPendente_MesmoGpsDepoisRollback_DeveRecuperarCandidatoEConfirmar": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.Retry_CircularAposRollback_PreservaProtecaoESuprimeIdentidadeMl": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.Retry_NovaInstanciaComRedisPreservado_RecuperaSemReplayDaFonte": 1,
+        "NoPonto.Tests.MudancaOperacionalPontaAPontaTests.Retry_RespostaPerdidaDepoisCommit_ReconheceDuravelSemDuplicarEventos": 1,
+        "NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests.Lua_OrdenacaoLimitesLeaseCasEBackoff_PreservamPayload": 1,
+        "NoPonto.Tests.RetryOperacionalGpsRedisIntegracaoTests.Lua_PendenciaExpirada_EncerraSemChamarOperacao": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CargaEstavel_200Veiculos_AtravessaCheckpointSessentaSegundos": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CargaEstavel_200Veiculos_QuatroPolls_UmWriteDuravelPorVeiculo": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Chaos_RedisPara_ReiniciaVazio_ContinuaMesmaViagem": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CheckpointInvalido_UsaModoConservador": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.CheckpointVencido_PersisteUmaVez_EProximaPosicaoNaoPersiste": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Checkpoint_BoundarySessentaSegundos": 3,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.FalhaAntesCommit_RollbackEstadoEOutbox": 2,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Funil_CommitRealSeparaInicioPassagensEFim": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.Funil_FalhaAntesCommitNaoConfirmaPassagens": 2,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.HashRedisCorrompido_FazFallbackSeguroParaPostgres": 6,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.PersistenciaSemantica_ReiniciaJanelaCheckpoint": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.PosicoesConcorrentes_UmaViagem_UmEventoInicio": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.PostgreSqlIndisponivel_NaoCriaProjecaoNemEventoRedis": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.ProgressoQuenteAntesDoCheckpoint_NaoAtualizaPostgres": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.ProjecaoDuravel_IntercaladaComHotMaisNovo_MesclaSemRegredir": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisIndisponivel_CommitPostgresContinuaDuravel": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisIndisponivel_ProgressoQuenteDegradaParaCheckpointSemEventoArtificial": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisOnly_Semantica_RedisOnly_UsaNovaVersaoDuravel": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisPerdidoEntreCheckpoints_RecuperaIdentidadeEUltimoSnapshotDuravel": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RedisVazio_ReidrataMesmaViagem_SemDuplicarInicio": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.RelogioRegressivo_ForcaCheckpointConservador": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.SchemaViagem_SemIndiceTemporal_PreservaPkEUpdatesElegiveisAHot": 1,
+        "NoPonto.Tests.ViagemDuravelPostgresTests.WorkerParado_PreservaOutbox_ReinicioDrena_Idempotente": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.AclSemXadd_NaoImpedeCommitPostgres": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.AmbiguidadeEntreSentidos_Reais_PreservaPossivelFimSemCandidato": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Ativa_GlobalB_ProjecaoAAvancaA_EEmiteSomenteParadaA_SemDuplicarNoRetorno": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.BaselineNoTerminal_NaoEmiteRetroativos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Block5000_ConexaoDedicada_CancelamentoNaoBloqueiaConexaoGps": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CancelamentoAtrasDoCursor_ConcorrenciaOuRollback_PreservaPisoDuravel": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CincoFalhasTransitorias_DeadLetterPreservaPayload_AckELimpaContador": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ConflitoRealNoWorker_DlqPrimeiraTentativa_PreservaPrimeiroJournal": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ContinuidadeMesmaObservacao_ReutilizaEstruturaSemAlterarIdentidade": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.CorridaMesmoTimestamp_CasOutboxSomenteUmaVez": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.DivergenciaComProjecaoInelegivelOuFalha_CongelaA_SemEvento": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.DuasInstancias_EntregasEPostgresConcorrentes_SemDuplicacao": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ErroPermanente_ComContadorAntigo_VaiParaDlqNaProximaFalha": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ErroPermanente_DlqIndisponivel_PreservaPendingParaRecuperacao": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ErroPermanente_VaiParaDlqNaPrimeiraFalha_AckELimpaContador": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FalhaDeadLetterAposQuinta_ReinicioNaoRepetePostgres_PreservaErro": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FalhaDoAntigoEval_NaoAfetaCommitPostgres_RepeticaoNaoDuplica": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FalhaTransitoria_PrimeiraTentativa_PermanecePendingERecuperaPorXAutoClaim": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.FkEUniqueParcial_Reais_JournalNaoPermiteReescreverEvento": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.HashAnterior3_2_ComCursor_AdotaSemPerderCruzamentosNovos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.HashParcial_EReidratadoDoEstadoDuravel": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.HashRedisParcial_NaoApagaCursorDuravel": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.JanelaCandidato_RedisReal": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.LinhaDiferenteEstrutural_PreservaPossivelFimSemCandidato": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.LuaArgumentosInvalidos_ZeroWrites": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Lua_FinalizadaNaoPodeRegredirParaAtiva": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Lua_PossivelFim_NaoPermiteReducaoNemRetornoParaAtiva": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Migration_LegadoNullable_ModeloSemDiferenca": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaDoPointerPublicado_NaoMigraViagemAtiva": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_CancelamentoBaseline_CursorProximaEPassagemFutura": 4,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_CandidatoDuravelPerdaRedis_ConfirmacaoSemPassagens": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_ConfirmacaoConcorrente_ApenasUmCommit": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.MudancaHabilitada_FalhaDepoisOutbox_RollbackEstadoEEventos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.PossivelFim_GlobalB_ProjecaoTerminalAContinuaConfirmacoesEFinalizaA": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ProjecaoARegressiva_ERejeitadaSemAlterarCursorOuHash": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ProjecaoRedisCorrompida_EReconstruidaDoPostgres": 7,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.R1Finalizada_NaoReabre_RegistraNovoCandidato": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.R2_NaoFinalizaPrematuramente_PreservaTerminalNoRedis": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.RedisTerminal_ReinicioT0T1_Finalizada_TresPassagensMaisInicioEFim": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.ReentregaAposDbAntesAck_Idempotente_XAutoClaim_ReinicioWorker": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.RetornoAtrasDoTerminalJaIncorporado_ComOuSemCandidata_PreservaRegraExistente": 2,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.SnapshotAusente_ETransportadoComoCasVazio": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.SnapshotMudaDepoisDaProjecao_CasRejeitaESemPassagemIncorreta": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.StreamDiagnosticoSaturado_NaoImpedeCommitDuravel": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Trim_PreservaPendingEUnread_ApenasProcessadosAntigosRemovidos": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.Trim_RemoveDlqAntigaEPreservaDlqRecente": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.WorkerHosted_LoopRealRedis7_PersisteEAck_SemBloquearPolling": 1,
+        "NoPonto.Tests.ViagemOperacionalIntegracaoTests.WrongTypeStream_NaoImpedeEstadoDuravel": 1,
+        "NoPonto.Tests.WrapDuranteCandidatoIntegracaoTests.CancelamentoCircular_ProtegeOutboxEHistorico_RecuperaNovaExecucao": 1
+      }
+    },
+    {
+      "tag": "unit",
+      "note": "Targeted unit selection",
+      "runner_exit_code": 0,
+      "command": "dotnet test NoPonto/NoPonto.csproj -c Release --no-restore --filter 'FullyQualifiedName~NoPonto.Tests.MudancaOperacionalRegraTests.|FullyQualifiedName~NoPonto.Tests.ViagemObservadaServiceTests.|FullyQualifiedName~NoPonto.Tests.RetryOperacionalGpsTests.|FullyQualifiedName~NoPonto.Tests.WrapDuranteCandidatoTests.|FullyQualifiedName~NoPonto.Tests.IntegridadeCircularRegraTests.' --logger 'trx;LogFileName=unit.trx' --results-directory NoPonto/lab-output/evidence-continuity-20261020-unit --verbosity quiet",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-unit/unit.trx",
+      "trx_sha256": "71b0572d3b94e0324723f5a07ff70f34d3cd1eed179ebfe3e1436a2468eea00c",
+      "counters": {
+        "total": 108,
+        "executed": 108,
+        "passed": 108,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "NoPonto.Tests.IntegridadeCircularRegraTests": 19,
+        "NoPonto.Tests.MudancaOperacionalRegraTests": 30,
+        "NoPonto.Tests.RetryOperacionalGpsTests": 18,
+        "NoPonto.Tests.ViagemObservadaServiceTests": 36,
+        "NoPonto.Tests.WrapDuranteCandidatoTests": 5
+      },
+      "times": {
+        "creation": "2026-10-20T19:45:22.3770982-03:00",
+        "queuing": "2026-10-20T19:45:22.3770983-03:00",
+        "start": "2026-10-20T19:45:20.5822088-03:00",
+        "finish": "2026-10-20T19:45:23.4393803-03:00"
+      },
+      "methods": {
+        "NoPonto.Tests.IntegridadeCircularRegraTests.CandidatoBConfirmado_MantemMudancaOperacionalExistente": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.CruzamentoOriginalDuranteProtecao_NaoConstroiEventoConflitante": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.GPSAntigoOuDuplicado_NaoRecuperaEstado": 2,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.GeometriaOuCorredorIncompativeis_NaoProvamWrap": 2,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.IntervaloComMultiplasVoltasPossiveis_NaoRecuperaContagem": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.MatchingInsuficiente_NaoReancoraNemPublicaIdentidadeMl": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.PayloadLegado_SemMotivoFim_PermaneceIdenticoNoRoundTrip": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.ReancoragemSustentada_NovaExecucaoSemPassagens_IndependeDaFlag": 2,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.RecuperacaoOriginal_ComProvaAindaValida_PreservaExecucao": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.RetornoComRuidoSemReabrirCursor_NaoCriaAmbiguidade": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.RoundTripDuravel_PreservaAmbiguidadeEValidaIdentidade": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.SemProva_PreservaVoltaCursorEAncora_BloqueiaPassagens": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.SnapshotAntigoSemAncora_NaoFabricaProva": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.TimeoutOuDuasLeiturasImoveis_NaoIniciamExecucao": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.VersaoGeometricaDiferente_NaoProvaVolta": 1,
+        "NoPonto.Tests.IntegridadeCircularRegraTests.WrapComEvidenciaDirigida_PreservaViagemEBaselineSemPassagens": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.AlternanciaABA_CancelaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.AlternanciaABC_SubstituiSemAproveitarPrimeiraEvidencia": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.CandidatoRoundTripCodec_PermiteConfirmacaoSemMudarContrato": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.Circular_NovaVoltaMantemContinuidade": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.Circular_RegressaoCandidataNaoConfirmaOutraOperacao": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.Continuidade_NaoDependeApenasDoCodigo": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.DuasEvidencias_ConfirmamLinhaOuSentido": 3,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.GpsDuplicadoOuAntigo_NaoAvanca": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.IdentidadeIncompletaOuDiscordante_NaoCriaEvidencia": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.JanelaEhMaxima_NaoMinima": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.MatchingAusente_NaoCriaCandidato": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.MatchingSemEvidenciaPositiva_NaoAvanca": 3,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.MovimentoOuProgressoInsuficiente_MantemPrimeiraEvidencia": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.PrimeiraDivergencia_NaoMudaViagemOuProduzTransicao": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.ProgressoRegressivo_InvalidaSemIncorporarPosicao": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.ProjecaoAntigaValida_NaoVetaConfirmacaoObservacional": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.SaltoFisicoOuProjetado_RejeitaEInvalidaCandidato": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.SentidoAmbiguo_NaoConfirma": 1,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.SomentePadraoOuTopologia_FicaInsuficiente": 2,
+        "NoPonto.Tests.MudancaOperacionalRegraTests.SomenteVersaoGeometrica_NaoCriaOutraExecucao": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.CaminhoNormalSemPendencia_NaoGravaFilaNemConsultaViagem": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.Concorrencia_LeasePorVeiculo_NaoExecutaDuasVezes": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.ExpiracaoELimites_NaoViraramSucessoNemFilaIlimitada": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.FalhaTransitoria_RegistroSemProvaSerializada_RecalculaEConfirmaUmaVez": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.FalhasPersistentes_LimiteTentativasELote_NaoReprocessamIndefinidamente": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.FunilRetryDescartadoTemDenominadorSemResultadoDeViagem": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.FunilRetryInicialNaoEntraNaPopulacaoNovaNemNosContadoresLegados": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.MatchingSemProva_NaoAceitaBooleanAntigoNemEmiteOperacao": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.NovoEstadoAntesDoRetry_DescartaAntigoSemRetroceder": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.PendenciasOrdenadas_BackoffDaAntigaImpedeUltrapassagem": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.PredecessorInvalido_NaoReconstruiOperacao": 3,
+        "NoPonto.Tests.RetryOperacionalGpsTests.RedisIndisponivelOuPerdido_NaoPrometeRecuperacao": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.ReenriquecimentoDivergente_NaoProcessaOutroGps": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.RespostaPerdida_CommitDuravelReconhecido_SemRepetirEfeitos": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.TimeoutDeRetry_ReagendaSemBloquearIndefinidamente": 1,
+        "NoPonto.Tests.RetryOperacionalGpsTests.UpdatedSemCommit_NaoApagaPendencia_BackoffLimitaRepeticao": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.Divergencia_PublicaGpsSemViagemAntigaEPreservaAceite": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.Divergencia_RegistraContadorAgregadoSemAlterarResultado": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.EvidenceBarrier_ServiceRoutesOnlyEnabledNonInfrastructureObservations": 6,
+        "NoPonto.Tests.ViagemObservadaServiceTests.ExcecaoDaViagem_NaoImpedePublicacaoDoGpsAceito": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.FalhaDaTelemetria_NaoAlteraAceiteGpsNemViagem": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.FalhaOuTrocaDaViagem_PreservaAceiteGps": 3,
+        "NoPonto.Tests.ViagemObservadaServiceTests.FunilPredecessorPorModalNoPollingProdutivo": 5,
+        "NoPonto.Tests.ViagemObservadaServiceTests.MatchingAtual_EncaminhaCamposExatosSemRevalidarJitter": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.PendenciaTemCategoriaExclusivaSemChamarServico": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.Polling_ViagemSomenteAposCommitAccepted": 3,
+        "NoPonto.Tests.ViagemObservadaServiceTests.RecuperacaoPendente_GpsRepetidoDepoisFalha_DeveRetentarOperacao": 2,
+        "NoPonto.Tests.ViagemObservadaServiceTests.SamplingComExcecao_FailOpenPreservaGpsViagemETelemetria": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.SamplingNaoSelecionado_PreservaCommitEViagemSemPublicarMl": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.SamplingSelecionado_PublicaEventoSemAlterarIdentidade": 1,
+        "NoPonto.Tests.ViagemObservadaServiceTests.SemMatching_NaoChamaRepository": 3,
+        "NoPonto.Tests.ViagemObservadaServiceTests.SnapshotGtfsRepetido_NaoDuplicaViagemNemTelemetria": 2,
+        "NoPonto.Tests.ViagemObservadaServiceTests.Telemetria_SomenteDepoisDeCommitAceito": 3,
+        "NoPonto.Tests.WrapDuranteCandidatoTests.Controle_RetornoAntesDaVoltaOuRuido_NaoInventaIncremento": 2,
+        "NoPonto.Tests.WrapDuranteCandidatoTests.Controle_WrapNormalSemCandidato_SeparaIdentidades": 1,
+        "NoPonto.Tests.WrapDuranteCandidatoTests.Regressao_ProtecaoERecuperacao_PreservamIdentidadeETelemetria": 1,
+        "NoPonto.Tests.WrapDuranteCandidatoTests.Regressao_VoltaFisicaSeguinte_NaoPodeReutilizarIdentidadeDaPassagem": 1
+      }
+    },
+    {
+      "tag": "offline",
+      "note": "Official allowlist; all 28 classes verified",
+      "runner_exit_code": 0,
+      "command": "dotnet test NoPonto/NoPonto.csproj -c Release --no-build --no-restore --filter $evidenceContinuityOfflineFilter --logger 'trx;LogFileName=offline.trx' --results-directory NoPonto/lab-output/evidence-continuity-20261020-offline --verbosity quiet",
+      "filter_command": "python .ci/offline_tests.py filter",
+      "verification_command": "python .ci/offline_tests.py verify NoPonto/lab-output/evidence-continuity-20261020-offline/offline.trx",
+      "report": "NoPonto/lab-output/evidence-continuity-20261020-offline/offline.trx",
+      "trx_sha256": "c9976fcfa8ef2a55cde2c655e5ab2bf4899ebf453c74690dbf282ae688107f19",
+      "counters": {
+        "total": 758,
+        "executed": 758,
+        "passed": 758,
+        "failed": 0,
+        "error": 0,
+        "timeout": 0,
+        "aborted": 0,
+        "inconclusive": 0,
+        "passedButRunAborted": 0,
+        "notRunnable": 0,
+        "notExecuted": 0,
+        "disconnected": 0,
+        "warning": 0,
+        "completed": 0,
+        "inProgress": 0,
+        "pending": 0
+      },
+      "classes": {
+        "GpsLeituraValidatorTests": 11,
+        "GpsTimestampDeduplicationTests": 12,
+        "NoPonto.Tests.CancelamentoCandidatoCursorTests": 10,
+        "NoPonto.Tests.DatabaseStartupPolicyTests": 21,
+        "NoPonto.Tests.EstadoCausalPosicaoTests": 25,
+        "NoPonto.Tests.GpsBrtTelemetriaTests": 3,
+        "NoPonto.Tests.GpsEtaClientTests": 5,
+        "NoPonto.Tests.GpsMatchingDiagnosticsTests": 29,
+        "NoPonto.Tests.GpsPerformanceMetricsTests": 23,
+        "NoPonto.Tests.GpsPhysicalPredecessorTests": 103,
+        "NoPonto.Tests.GpsPollingCadenciaTests": 40,
+        "NoPonto.Tests.GpsPollingFontesTests": 9,
+        "NoPonto.Tests.GpsSignalRPublisherTests": 20,
+        "NoPonto.Tests.GpsSourceAbstractionTests": 8,
+        "NoPonto.Tests.GtfsRealtimeGpsTests": 65,
+        "NoPonto.Tests.HistoricalEtaGtfsPollingTests": 52,
+        "NoPonto.Tests.HistoricalEtaOfflineExportTests": 12,
+        "NoPonto.Tests.HistoricalEtaRuntimeTests": 22,
+        "NoPonto.Tests.HistoricalEtaShadowTests": 24,
+        "NoPonto.Tests.PhysicalEtaCausalDiagnosticsTests": 36,
+        "NoPonto.Tests.PhysicalEtaIntermittenceTests": 9,
+        "NoPonto.Tests.PhysicalEtaMvpTests": 16,
+        "NoPonto.Tests.PhysicalEtaSelectedStopTests": 15,
+        "NoPonto.Tests.TarifasRegrasTests": 48,
+        "NoPonto.Tests.TelemetriaMlIdentidadeTests": 27,
+        "NoPonto.Tests.TelemetriaMlSamplingTests": 19,
+        "NoPonto.Tests.ViagemOperacionalCodecCompatibilidadeTests": 45,
+        "NoPonto.Tests.ViagemOperacionalRegraTests": 49
+      },
+      "times": {
+        "creation": "2026-10-20T19:47:33.0717113-03:00",
+        "queuing": "2026-10-20T19:47:33.0717113-03:00",
+        "start": "2026-10-20T19:47:30.3031830-03:00",
+        "finish": "2026-10-20T19:47:37.6918353-03:00"
+      }
+    }
+  ],
+  "final_observations": [
+    {
+      "kind": "evidence_continuity_circular",
+      "value": {
+        "modal": "BUS",
+        "reachableWrap": false,
+        "hasAnchor": true,
+        "anchor_not_fabricated": true,
+        "existing_proof_required": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_circular",
+      "value": {
+        "modal": "BRT",
+        "reachableWrap": false,
+        "hasAnchor": true,
+        "anchor_not_fabricated": true,
+        "existing_proof_required": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_circular",
+      "value": {
+        "modal": "BRT",
+        "reachableWrap": false,
+        "hasAnchor": false,
+        "anchor_not_fabricated": true,
+        "existing_proof_required": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_circular",
+      "value": {
+        "modal": "BRT",
+        "reachableWrap": true,
+        "hasAnchor": true,
+        "anchor_not_fabricated": true,
+        "existing_proof_required": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_circular",
+      "value": {
+        "modal": "BRT",
+        "reachableWrap": true,
+        "hasAnchor": false,
+        "anchor_not_fabricated": true,
+        "existing_proof_required": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_circular",
+      "value": {
+        "modal": "BUS",
+        "reachableWrap": true,
+        "hasAnchor": false,
+        "anchor_not_fabricated": true,
+        "existing_proof_required": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_circular",
+      "value": {
+        "modal": "BUS",
+        "reachableWrap": true,
+        "hasAnchor": true,
+        "anchor_not_fabricated": true,
+        "existing_proof_required": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_circular",
+      "value": {
+        "modal": "BUS",
+        "reachableWrap": false,
+        "hasAnchor": false,
+        "anchor_not_fabricated": true,
+        "existing_proof_required": true,
+        "passages": 0
+      }
+    },
+    {
+      "kind": "operational_recovery_insufficient",
+      "value": {
+        "reason": "implausible",
+        "no_premature_transition": true,
+        "later_positive_confirmed": true,
+        "candidate_preserved_after_rejection": false,
+        "two_new_positives_after_invalidation": true,
+        "retrospective_passages": 0
+      }
+    },
+    {
+      "kind": "operational_recovery_insufficient",
+      "value": {
+        "reason": "invalid_matching",
+        "no_premature_transition": true,
+        "later_positive_confirmed": true,
+        "candidate_preserved_after_rejection": false,
+        "two_new_positives_after_invalidation": true,
+        "retrospective_passages": 0
+      }
+    },
+    {
+      "kind": "operational_recovery_insufficient",
+      "value": {
+        "reason": "same_timestamp",
+        "no_premature_transition": true,
+        "later_positive_confirmed": true,
+        "candidate_preserved_after_rejection": false,
+        "two_new_positives_after_invalidation": false,
+        "retrospective_passages": 0
+      }
+    },
+    {
+      "kind": "operational_recovery_insufficient",
+      "value": {
+        "reason": "ambiguous",
+        "no_premature_transition": true,
+        "later_positive_confirmed": true,
+        "candidate_preserved_after_rejection": false,
+        "two_new_positives_after_invalidation": true,
+        "retrospective_passages": 0
+      }
+    },
+    {
+      "kind": "operational_recovery_insufficient",
+      "value": {
+        "reason": "regressive",
+        "no_premature_transition": true,
+        "later_positive_confirmed": true,
+        "candidate_preserved_after_rejection": false,
+        "two_new_positives_after_invalidation": true,
+        "retrospective_passages": 0
+      }
+    },
+    {
+      "kind": "operational_recovery_insufficient",
+      "value": {
+        "reason": "out_of_order",
+        "no_premature_transition": true,
+        "later_positive_confirmed": true,
+        "candidate_preserved_after_rejection": false,
+        "two_new_positives_after_invalidation": false,
+        "retrospective_passages": 0
+      }
+    },
+    {
+      "kind": "operational_recovery_insufficient",
+      "value": {
+        "reason": "expired",
+        "no_premature_transition": true,
+        "later_positive_confirmed": true,
+        "candidate_preserved_after_rejection": false,
+        "two_new_positives_after_invalidation": false,
+        "retrospective_passages": 0
+      }
+    },
+    {
+      "kind": "operational_recovery_insufficient",
+      "value": {
+        "reason": "stationary",
+        "no_premature_transition": true,
+        "later_positive_confirmed": true,
+        "candidate_preserved_after_rejection": false,
+        "two_new_positives_after_invalidation": false,
+        "retrospective_passages": 0
+      }
+    },
+    {
+      "kind": "operational_policy_unmatched",
+      "value": {
+        "modal": "BUS",
+        "durable_invalidation": true,
+        "position_and_cursor_preserved": true,
+        "candidate_retained": false,
+        "two_new_positives_required": true
+      }
+    },
+    {
+      "kind": "operational_policy_unmatched",
+      "value": {
+        "modal": "BRT",
+        "durable_invalidation": true,
+        "position_and_cursor_preserved": true,
+        "candidate_retained": false,
+        "two_new_positives_required": true
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BRT",
+        "changeDirection": true,
+        "interruption": "invalid_matching",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": true,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BRT",
+        "changeDirection": true,
+        "interruption": "implausible",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": true,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "gap_181",
+        "intermediate_status": null,
+        "candidate_retained": true,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "implausible",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": true,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "return_A",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BRT",
+        "changeDirection": true,
+        "interruption": "return_A",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BRT",
+        "changeDirection": true,
+        "interruption": "gap_120",
+        "intermediate_status": null,
+        "candidate_retained": true,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "ambiguous",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": true,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "gap_120",
+        "intermediate_status": null,
+        "candidate_retained": true,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "pattern_conflict",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": true,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "gap_180",
+        "intermediate_status": null,
+        "candidate_retained": true,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "late",
+        "intermediate_status": "RejectedOlderOrEqual",
+        "candidate_retained": true,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "invalid_matching",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": true,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "regressive",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": true,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "third_identity",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BRT",
+        "changeDirection": true,
+        "interruption": "ambiguous",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": true,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "stationary",
+        "intermediate_status": "Updated",
+        "candidate_retained": true,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BRT",
+        "changeDirection": true,
+        "interruption": "third_identity",
+        "intermediate_status": "Updated",
+        "candidate_retained": false,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_third": false,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "operational_policy_sequence",
+      "value": {
+        "modal": "BUS",
+        "changeDirection": false,
+        "interruption": "duplicate",
+        "intermediate_status": "RejectedOlderOrEqual",
+        "candidate_retained": true,
+        "restored_candidate_equal": true,
+        "actual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_third": true,
+        "reset_counterfactual_confirms_at_fourth": false,
+        "historical_passages": 0,
+        "operational_truth_available": false
+      }
+    },
+    {
+      "kind": "evidence_continuity_durability",
+      "value": {
+        "modal": "BRT",
+        "unmatched": false,
+        "rollback": true,
+        "durable_barrier": true,
+        "stale_snapshot_rejected": true,
+        "two_new_positives": true,
+        "new_passages": 1,
+        "duplicate_passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_durability",
+      "value": {
+        "modal": "BUS",
+        "unmatched": true,
+        "rollback": true,
+        "durable_barrier": true,
+        "stale_snapshot_rejected": true,
+        "two_new_positives": true,
+        "new_passages": 1,
+        "duplicate_passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_durability",
+      "value": {
+        "modal": "BUS",
+        "unmatched": false,
+        "rollback": false,
+        "durable_barrier": true,
+        "stale_snapshot_rejected": true,
+        "two_new_positives": true,
+        "new_passages": 1,
+        "duplicate_passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_durability",
+      "value": {
+        "modal": "BRT",
+        "unmatched": true,
+        "rollback": false,
+        "durable_barrier": true,
+        "stale_snapshot_rejected": true,
+        "two_new_positives": true,
+        "new_passages": 1,
+        "duplicate_passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_durability",
+      "value": {
+        "modal": "BRT",
+        "unmatched": true,
+        "rollback": true,
+        "durable_barrier": true,
+        "stale_snapshot_rejected": true,
+        "two_new_positives": true,
+        "new_passages": 1,
+        "duplicate_passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_durability",
+      "value": {
+        "modal": "BUS",
+        "unmatched": false,
+        "rollback": true,
+        "durable_barrier": true,
+        "stale_snapshot_rejected": true,
+        "two_new_positives": true,
+        "new_passages": 1,
+        "duplicate_passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_durability",
+      "value": {
+        "modal": "BRT",
+        "unmatched": false,
+        "rollback": false,
+        "durable_barrier": true,
+        "stale_snapshot_rejected": true,
+        "two_new_positives": true,
+        "new_passages": 1,
+        "duplicate_passages": 0
+      }
+    },
+    {
+      "kind": "evidence_continuity_durability",
+      "value": {
+        "modal": "BUS",
+        "unmatched": true,
+        "rollback": false,
+        "durable_barrier": true,
+        "stale_snapshot_rejected": true,
+        "two_new_positives": true,
+        "new_passages": 1,
+        "duplicate_passages": 0
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BRT",
+        "batch": false,
+        "returnPosition": 0.55,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BUS",
+        "batch": false,
+        "returnPosition": 0.39,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "returnPosition": 0.39,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BUS",
+        "batch": false,
+        "returnPosition": 0.55,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BRT",
+        "batch": false,
+        "returnPosition": 0.39,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "returnPosition": 0.55,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BRT",
+        "batch": false,
+        "returnPosition": 0.11,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "returnPosition": 0.11,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "returnPosition": 0.55,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "returnPosition": 0.11,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BUS",
+        "batch": false,
+        "returnPosition": 0.11,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "operational_recovery_return_cursor_floor",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "returnPosition": 0.39,
+        "confirmed_change": false,
+        "restart_rehydrated_cursor": true,
+        "new_passage_and_terminal": true,
+        "return_baseline_regressed_cursor": false,
+        "repeated_operational_invalid_state": 0,
+        "duplicate_materialized_passages": 0,
+        "realtime_and_eta_continue": true,
+        "requirement_satisfied": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_retry",
+      "value": {
+        "modal": "BRT",
+        "failure": "rejected",
+        "durable_before_ack": true,
+        "candidate_cleared": true,
+        "old_events_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_retry",
+      "value": {
+        "modal": "BUS",
+        "failure": "rejected",
+        "durable_before_ack": true,
+        "candidate_cleared": true,
+        "old_events_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_retry",
+      "value": {
+        "modal": "BRT",
+        "failure": "unmatched",
+        "durable_before_ack": true,
+        "candidate_cleared": true,
+        "old_events_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_retry",
+      "value": {
+        "modal": "BUS",
+        "failure": "unmatched",
+        "durable_before_ack": true,
+        "candidate_cleared": true,
+        "old_events_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_retry",
+      "value": {
+        "modal": "BRT",
+        "failure": "infrastructure",
+        "durable_before_ack": true,
+        "candidate_cleared": true,
+        "old_events_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_retry",
+      "value": {
+        "modal": "BUS",
+        "failure": "rollback",
+        "durable_before_ack": true,
+        "candidate_cleared": true,
+        "old_events_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_retry",
+      "value": {
+        "modal": "BUS",
+        "failure": "infrastructure",
+        "durable_before_ack": true,
+        "candidate_cleared": true,
+        "old_events_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_retry",
+      "value": {
+        "modal": "BRT",
+        "failure": "rollback",
+        "durable_before_ack": true,
+        "candidate_cleared": true,
+        "old_events_preserved": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BUS",
+        "batch": false,
+        "changeLine": true,
+        "possibleEnd": true,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BUS",
+        "batch": false,
+        "changeLine": false,
+        "possibleEnd": true,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "changeLine": false,
+        "possibleEnd": false,
+        "keepPredecessor": false,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 3,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "changeLine": true,
+        "possibleEnd": true,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "changeLine": true,
+        "possibleEnd": false,
+        "keepPredecessor": false,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 3,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "changeLine": true,
+        "possibleEnd": false,
+        "keepPredecessor": false,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 3,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BRT",
+        "batch": false,
+        "changeLine": false,
+        "possibleEnd": true,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "changeLine": false,
+        "possibleEnd": true,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BUS",
+        "batch": false,
+        "changeLine": false,
+        "possibleEnd": false,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BRT",
+        "batch": false,
+        "changeLine": false,
+        "possibleEnd": false,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "changeLine": true,
+        "possibleEnd": false,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BRT",
+        "batch": false,
+        "changeLine": true,
+        "possibleEnd": false,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "changeLine": true,
+        "possibleEnd": false,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "changeLine": false,
+        "possibleEnd": false,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BUS",
+        "batch": false,
+        "changeLine": true,
+        "possibleEnd": false,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "changeLine": false,
+        "possibleEnd": true,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BRT",
+        "batch": false,
+        "changeLine": true,
+        "possibleEnd": true,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "changeLine": false,
+        "possibleEnd": false,
+        "keepPredecessor": false,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 3,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "changeLine": false,
+        "possibleEnd": false,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "operational_recovery_old_state",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "changeLine": true,
+        "possibleEnd": true,
+        "keepPredecessor": true,
+        "old_age_days": 11,
+        "cold_start_warmed": true,
+        "durable_candidate_restored": true,
+        "restart_readings_to_confirmation": 1,
+        "logical_end_without_stop": true,
+        "baseline_retroactive_passages": 0,
+        "future_passages": 1,
+        "duplicate_delivery_extra_events": 0,
+        "realtime_and_physical_eta": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_infrastructure",
+      "value": {
+        "modal": "BUS",
+        "unmatched": false,
+        "failure": "projection",
+        "candidate_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_infrastructure",
+      "value": {
+        "modal": "BRT",
+        "unmatched": true,
+        "failure": "projection",
+        "candidate_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_infrastructure",
+      "value": {
+        "modal": "BRT",
+        "unmatched": false,
+        "failure": "directed",
+        "candidate_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_infrastructure",
+      "value": {
+        "modal": "BRT",
+        "unmatched": true,
+        "failure": "directed",
+        "candidate_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_infrastructure",
+      "value": {
+        "modal": "BUS",
+        "unmatched": true,
+        "failure": "global",
+        "candidate_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_infrastructure",
+      "value": {
+        "modal": "BUS",
+        "unmatched": false,
+        "failure": "global",
+        "candidate_preserved": true
+      }
+    },
+    {
+      "kind": "operational_recovery_same_direction_pattern",
+      "value": {
+        "batch": false,
+        "matching_valid": true,
+        "line_and_direction_equal": true,
+        "patterns_distinct": true,
+        "new_execution": false,
+        "policy_defined": false
+      }
+    },
+    {
+      "kind": "operational_recovery_same_direction_pattern",
+      "value": {
+        "batch": true,
+        "matching_valid": true,
+        "line_and_direction_equal": true,
+        "patterns_distinct": true,
+        "new_execution": false,
+        "policy_defined": false
+      }
+    },
+    {
+      "kind": "evidence_continuity_fencing",
+      "value": {
+        "modal": "BUS",
+        "unmatched": false,
+        "newer_projection_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_fencing",
+      "value": {
+        "modal": "BRT",
+        "unmatched": true,
+        "newer_projection_preserved": true
+      }
+    },
+    {
+      "kind": "operational_policy_logical_end",
+      "value": {
+        "modal": "BUS",
+        "batch": false,
+        "journal_ends": 1,
+        "old_trip_cursor": 2,
+        "terminal_passages": 0,
+        "history_passages": 2,
+        "public_history_stat": 2,
+        "stop_event_is_prediction_on_new_route": true,
+        "logical_end_reason": "absent",
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "operational_policy_logical_end",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "journal_ends": 1,
+        "old_trip_cursor": 2,
+        "terminal_passages": 0,
+        "history_passages": 2,
+        "public_history_stat": 2,
+        "stop_event_is_prediction_on_new_route": true,
+        "logical_end_reason": "absent",
+        "old_payloads_preserved": true
+      }
+    },
+    {
+      "kind": "evidence_continuity_ingress",
+      "value": {
+        "modal": "BUS",
+        "batch": true,
+        "actual_http_and_matching": true,
+        "raw_gps_accepted": true,
+        "barrier_preserves_cursor": true,
+        "eligible_positives_after_barrier": 2,
+        "new_passages": 1
+      }
+    },
+    {
+      "kind": "evidence_continuity_ingress",
+      "value": {
+        "modal": "BRT",
+        "batch": true,
+        "actual_http_and_matching": true,
+        "raw_gps_accepted": true,
+        "barrier_preserves_cursor": true,
+        "eligible_positives_after_barrier": 2,
+        "new_passages": 1
+      }
+    },
+    {
+      "kind": "evidence_continuity_ingress",
+      "value": {
+        "modal": "BUS",
+        "batch": false,
+        "actual_http_and_matching": true,
+        "raw_gps_accepted": true,
+        "barrier_preserves_cursor": true,
+        "eligible_positives_after_barrier": 2,
+        "new_passages": 1
+      }
+    },
+    {
+      "kind": "evidence_continuity_ingress",
+      "value": {
+        "modal": "BRT",
+        "batch": false,
+        "actual_http_and_matching": true,
+        "raw_gps_accepted": true,
+        "barrier_preserves_cursor": true,
+        "eligible_positives_after_barrier": 2,
+        "new_passages": 1
+      }
+    }
+  ],
+  "review_invariants": {
+    "cursor_floor_block_unchanged": true,
+    "shared_transaction_unchanged": true,
+    "logical_end_branch_unchanged": true,
+    "event_id_payload_validation_idempotency_unchanged": true,
+    "matching_eta_ml_signalr_frontend_configuration_unchanged": true
+  },
+  "remaining_limits": [
+    "Flag OFF; logical end reason unchanged and pending separate task",
+    "Extra semantic writes and longer recovery after missing predecessor; no fleet-load certification",
+    "No durable ledger of all GPS; existing best-effort retry guarantees",
+    "BRT same-direction different patterns still require policy",
+    "Historical Shadow timeouts preserved; current 758 offline passed without ETA/ML changes",
+    "One initial broad race returned infrastructure failures; exception unavailable; unchanged test passed focused and final full selections; no root-cause claim",
+    "No production, external providers, replica/backplane, frontend/ML execution or arbitrary crashes"
+  ]
+}

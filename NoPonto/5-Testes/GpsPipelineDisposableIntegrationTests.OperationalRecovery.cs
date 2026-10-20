@@ -188,7 +188,9 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         else
         {
             Assert.Equal(old.Observada.ViagemId, warmup.Observada.ViagemId);
-            Assert.Equal(candidate, warmup.Candidato);
+            Assert.Null(warmup.Candidato);
+            Assert.Equal(old.Observada.CursorEstruturalId, warmup.Observada.CursorEstruturalId);
+            Assert.Equal(origin.AddSeconds(60), warmup.Observada.TimestampUltimaAtualizacao);
         }
         var firstRestartResult = restarted.Trips.Results[^1];
         source.Positions = [new(id, target, .28, origin.AddSeconds(90), direction)];
@@ -196,6 +198,16 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         var pushed = Assert.Single(await wire.Next());
         await AssertRestAndWire(restarted, id, pushed);
         Assert.NotNull(pushed.EtaProximaParadaSegundos);
+        if (!keepPredecessor)
+        {
+            var firstPositive = (await RecoveryRepository().LerContextoAsync(id, default))!.Estado!;
+            Assert.Equal(old.Observada.ViagemId, firstPositive.Observada.ViagemId);
+            Assert.Equal(origin.AddSeconds(90), firstPositive.Candidato!.Timestamp);
+            Assert.Empty(await RecoveryEvents(id));
+            source.Positions = [new(id, target, .29, origin.AddSeconds(120), direction)];
+            await restarted.Cycle(120);
+            await AssertRestAndWire(restarted, id, Assert.Single(await wire.Next()));
+        }
         var result = keepPredecessor ? firstRestartResult : restarted.Trips.Results[^1];
         var current = Assert.IsType<ViagemOperacionalState>(result.EstadoOperacional);
         Assert.NotEqual(old.Observada.ViagemId, current.Observada.ViagemId);
@@ -220,11 +232,12 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         Assert.Null(end.OcorrenciaParadaPadraoId);
         Assert.Null(end.ParadaId);
         Assert.Null(end.TimestampPassagem);
-        Assert.Equal(origin.AddSeconds(keepPredecessor ? 60 : 90), end.TimestampEvento);
+        Assert.Equal(origin.AddSeconds(keepPredecessor ? 60 : 120), end.TimestampEvento);
         Assert.Equal(current.Observada.ViagemId, Assert.Single(transitions, e => e.Tipo == "ViagemIniciada").ViagemId);
         // Only a future crossing may create a passage, attributed exclusively to the new execution.
-        source.Positions = [new(id, target, .41, origin.AddSeconds(120), direction)];
-        await restarted.Cycle(120);
+        var futureSeconds = keepPredecessor ? 120 : 150;
+        source.Positions = [new(id, target, .41, origin.AddSeconds(futureSeconds), direction)];
+        await restarted.Cycle(futureSeconds);
         await AssertRestAndWire(restarted, id, Assert.Single(await wire.Next()));
         var all = await RecoveryEvents(id);
         Assert.Equal(3, all.Length);
@@ -239,7 +252,7 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         await AssertRecoveryPassages(id, 1, passage);
         GpsIntegrationResources.Record("operational_recovery_old_state", new { modal, batch, changeLine, possibleEnd, keepPredecessor,
             old_age_days = 11, cold_start_warmed = true, durable_candidate_restored = true,
-            restart_readings_to_confirmation = keepPredecessor ? 1 : 2,
+            restart_readings_to_confirmation = keepPredecessor ? 1 : 3,
             logical_end_without_stop = true, baseline_retroactive_passages = 0, future_passages = 1,
             duplicate_delivery_extra_events = 0, realtime_and_physical_eta = true });
     }
@@ -373,10 +386,12 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
             Assert.Equal(ViagemObservadaStatus.RejectedOlderOrEqual, result.Status);
             Assert.Equal(ViagemOperacionalCodec.Encode(pending), ViagemOperacionalCodec.Encode(state));
         }
-        else if (reason is "invalid_matching" or "ambiguous" or "implausible")
+        else if (reason is "invalid_matching" or "ambiguous" or "implausible" or "regressive")
         {
-            Assert.Equal(ViagemObservadaStatus.ItineraryChanged, result.Status);
-            Assert.Equal(ViagemOperacionalCodec.Encode(pending), ViagemOperacionalCodec.Encode(state));
+            Assert.Equal(ViagemObservadaStatus.Updated, result.Status);
+            Assert.True(result.PersistidoDuravelmente);
+            Assert.Null(state.Candidato);
+            Assert.Equal(pending.Observada with { TimestampUltimaAtualizacao = second.TimestampGps }, state.Observada);
         }
         else
         {
@@ -392,18 +407,26 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
             pattern.VersaoAtualId = null;
             await context.SaveChangesAsync();
         }
-        // Existing policy retains the first candidate across rejected/insufficient readings.
-        // A later positive reading within its window can confirm; evidence need not be consecutive.
+        // A fresh contradiction invalidates the sequence; silence/old packets do not.
         var third = await RecoveryEvidence(id, target, .27, origin.AddSeconds(reason == "expired" ? 196 : 30));
         var confirmed = await repository.TentarAtualizarAsync(third, default);
         Assert.Equal(ViagemObservadaStatus.Updated, confirmed.Status);
+        var invalidated = reason is "invalid_matching" or "ambiguous" or "implausible" or "regressive";
+        if (invalidated)
+        {
+            Assert.Equal(old.Observada.ViagemId, confirmed.Estado!.ViagemId);
+            Assert.Empty(await RecoveryEvents(id));
+            confirmed = await repository.TentarAtualizarAsync(
+                await RecoveryEvidence(id, target, .29, origin.AddSeconds(60)), default);
+        }
         Assert.NotEqual(old.Observada.ViagemId, confirmed.Estado!.ViagemId);
         var events = await RecoveryEvents(id);
         Assert.Equal(2, events.Length);
         Assert.DoesNotContain(events, e => e.Tipo == "PassagemParada");
         Assert.Null(Assert.Single(events, e => e.Tipo == "ViagemFinalizada").OcorrenciaParadaPadraoId);
         GpsIntegrationResources.Record("operational_recovery_insufficient", new { reason, no_premature_transition = true,
-            later_positive_confirmed = true, candidate_preserved_after_rejection = reason is "invalid_matching" or "ambiguous" or "implausible",
+            later_positive_confirmed = true, candidate_preserved_after_rejection = false,
+            two_new_positives_after_invalidation = invalidated,
             retrospective_passages = 0 });
     }
 

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NoPonto.Application.EventosParada;
 using NoPonto.Application.GPS;
 using NoPonto.Application.Services.EventosParada;
@@ -11,8 +12,7 @@ using Xunit;
 
 namespace NoPonto.Tests;
 
-// Characterization only: production policy is unchanged. The counterfactual below
-// reuses the existing evaluator with a cleared candidate, without persisting it.
+// Regression at the existing durable transition and observed-service boundaries.
 public sealed partial class GpsPipelineDisposableIntegrationTests
 {
     [Theory]
@@ -35,7 +35,7 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
     [InlineData("BRT", true, "gap_120")]
     [InlineData("BRT", true, "return_A")]
     [InlineData("BRT", true, "third_identity")]
-    public async Task OperationalPolicy_NonConsecutiveEvidence_CompareCandidateReset(
+    public async Task OperationalPolicy_Contradiction_DurablyRequiresTwoNewPositives(
         string modal, bool changeDirection, string interruption)
     {
         var original = await SeedRecoveryRoute(modal);
@@ -56,6 +56,8 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         Assert.Equal(ViagemObservadaStatus.Updated, (await repository.TentarAtualizarAsync(first, default)).Status);
         var pending = (await repository.LerContextoAsync(id, default))!.Estado!;
         Assert.NotNull(pending.Candidato);
+        var resetRequired = interruption is "ambiguous" or "invalid_matching" or "implausible"
+            or "pattern_conflict" or "regressive";
         GpsIntegrationResources.Route? ambiguous = null;
         ViagemObservadaStatus? intermediateStatus = null;
         if (!interruption.StartsWith("gap_"))
@@ -85,16 +87,21 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
             Assert.Equal(interruption switch
             {
                 "duplicate" or "late" => ViagemObservadaStatus.RejectedOlderOrEqual,
-                "ambiguous" or "invalid_matching" or "implausible" or "pattern_conflict" => ViagemObservadaStatus.ItineraryChanged,
                 _ => ViagemObservadaStatus.Updated
             }, result.Status);
             Assert.Empty(result.OcorrenciasUltrapassadas);
         }
         var middle = (await repository.LerContextoAsync(id, default))!.Estado!;
         Assert.Equal(old.Observada.ViagemId, middle.Observada.ViagemId);
-        if (interruption == "return_A") Assert.Null(middle.Candidato);
+        if (interruption == "return_A" || resetRequired) Assert.Null(middle.Candidato);
         else if (interruption != "third_identity") Assert.Equal(pending.Candidato, middle.Candidato);
         else Assert.NotEqual(pending.Candidato!.PadraoVersaoId, middle.Candidato!.PadraoVersaoId);
+        if (resetRequired)
+        {
+            Assert.Equal(pending.Observada with { TimestampUltimaAtualizacao = origin.AddSeconds(15) }, middle.Observada);
+            Assert.Equal(pending.Integridade, middle.Integridade);
+            Assert.Equal(pending.Estado, middle.Estado);
+        }
         Assert.Empty(await RecoveryEvents(id));
         if (ambiguous is not null)
         {
@@ -112,12 +119,10 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         var third = await Evidence(target, .27, thirdSeconds);
         var structure = new EstruturaViagem(target.Versions[0], target.Line, target.Directions[0], target.Code,
             true, target.Patterns[0], "LINEAR");
-        var resetRequired = interruption is "ambiguous" or "invalid_matching" or "implausible"
-            or "pattern_conflict" or "regressive";
         var proposedInput = resetRequired ? restored with { Candidato = null } : restored;
         var counterfactual = ViagemOperacionalRegra.AvaliarMudancaSeHabilitada(
             new() { MudancaOperacionalHabilitada = true }, proposedInput, structure, third)!;
-        var shouldConfirm = interruption is not ("return_A" or "third_identity" or "gap_181");
+        var shouldConfirm = !resetRequired && interruption is not ("return_A" or "third_identity" or "gap_181");
         Assert.Equal(resetRequired || interruption == "return_A" ? StatusMudancaOperacional.PrimeiraEvidencia
             : shouldConfirm ? StatusMudancaOperacional.MudancaConfirmada : StatusMudancaOperacional.CandidatoSubstituido,
             counterfactual.Status);
@@ -137,6 +142,17 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         Assert.Equal(shouldConfirm ? 2 : 0, events.Length);
         Assert.DoesNotContain(events, e => e.Tipo == "PassagemParada");
         await AssertRecoveryPassages(id, 0);
+        if (resetRequired)
+        {
+            var restarted = (await repository.LerContextoAsync(id, default))!.Estado!;
+            Assert.Equal(old.Observada.ViagemId, restarted.Observada.ViagemId);
+            Assert.Equal(third.TimestampGps, restarted.Candidato!.Timestamp);
+            var fourth = await repository.TentarAtualizarAsync(await Evidence(target, .29, thirdSeconds + 30), default);
+            Assert.Equal(ViagemObservadaStatus.Updated, fourth.Status);
+            Assert.NotEqual(old.Observada.ViagemId, fourth.Estado!.ViagemId);
+            Assert.Equal(2, (await RecoveryEvents(id)).Length);
+            await AssertRecoveryPassages(id, 0);
+        }
         if (shouldConfirm)
         {
             var end = Assert.Single(events, e => e.Tipo == "ViagemFinalizada");
@@ -157,14 +173,18 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
     [Theory]
     [InlineData("BUS")]
     [InlineData("BRT")]
-    public async Task OperationalPolicy_UnmatchedGps_ServiceSkipsCandidateInvalidation(string modal)
+    public async Task OperationalPolicy_UnmatchedGps_DurablyInvalidatesCandidate(string modal)
     {
         var original = await SeedRecoveryRoute(modal);
         var target = await SeedRecoveryRoute(modal);
         var id = Id(modal, Guid.NewGuid().ToString("N")[..8]);
         var old = await SeedOldOperation(id, original, false);
         var repository = RecoveryRepository();
-        var service = new ViagemObservadaService(repository, NullLogger<ViagemObservadaService>.Instance);
+        using var services = new ServiceCollection().AddLogging()
+            .AddSingleton<IViagemObservadaRepository>(repository)
+            .AddSingleton<IOptions<GpsPollingOptions>>(Options.Create(new GpsPollingOptions { MudancaOperacionalHabilitada = true }))
+            .AddSingleton<ViagemObservadaService>().BuildServiceProvider();
+        var service = services.GetRequiredService<ViagemObservadaService>();
         var origin = DateTimeOffset.UtcNow.AddSeconds(-90);
         var first = (await RecoveryEvidence(id, target, .25, origin)) with { ModalFonte = modal };
         Assert.Equal(ViagemObservadaStatus.Updated, (await service.AtualizarAsync(first, default))!.Value.Status);
@@ -172,20 +192,31 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         Assert.NotNull(pending.Candidato);
         var unmatched = first with { TimestampGps = origin.AddSeconds(15),
             PadraoVersaoId = null, PosicaoNaRota = null, MatchingOperacionalPlausivel = false };
-        Assert.Null(await service.AtualizarAsync(unmatched, default));
-        Assert.Equal(ViagemOperacionalCodec.Encode(pending), ViagemOperacionalCodec.Encode(
-            (await repository.LerContextoAsync(id, default))!.Estado!));
+        var invalidated = await service.AtualizarAsync(unmatched, default);
+        Assert.True(invalidated?.PersistidoDuravelmente);
+        var cleared = (await repository.LerContextoAsync(id, default))!.Estado!;
+        Assert.Null(cleared.Candidato);
+        Assert.Equal(pending.Observada with { TimestampUltimaAtualizacao = unmatched.TimestampGps }, cleared.Observada);
+        await resources.Db.Redis.GetDatabase().KeyDeleteAsync(ViagemObservadaRepository.ChaveVeiculoViagem(id));
+        Assert.Null((await RecoveryRepository().LerContextoAsync(id, default))!.Estado!.Candidato);
+        Assert.Equal(ViagemObservadaStatus.RejectedOlderOrEqual,
+            (await service.AtualizarAsync(unmatched, default))!.Value.Status);
         var last = (await RecoveryEvidence(id, target, .27, origin.AddSeconds(30))) with { ModalFonte = modal };
         var confirmed = await service.AtualizarAsync(last, default);
         Assert.Equal(ViagemObservadaStatus.Updated, confirmed!.Value.Status);
-        Assert.NotEqual(old.Observada.ViagemId, confirmed.Value.Estado!.ViagemId);
+        Assert.Equal(old.Observada.ViagemId, confirmed.Value.Estado!.ViagemId);
+        Assert.Empty(await RecoveryEvents(id));
+        var fourth = last with { TimestampGps = origin.AddSeconds(60), PosicaoNaRota = .29 };
+        var point = await resources.Db.PontoCircularAsync(target.Versions[0], .29);
+        fourth = fourth with { Latitude = point.Latitude, Longitude = point.Longitude };
+        Assert.NotEqual(old.Observada.ViagemId, (await service.AtualizarAsync(fourth, default))!.Value.Estado!.ViagemId);
         var events = await RecoveryEvents(id);
         Assert.Equal(2, events.Length);
         Assert.DoesNotContain(events, e => e.Tipo == "PassagemParada");
         await AssertRecoveryPassages(id, 0);
         GpsIntegrationResources.Record("operational_policy_unmatched", new { modal,
-            service_result_for_unmatched = "null", state_unchanged = true, candidate_retained = true,
-            later_positive_confirms = true, repository_only_fix_would_miss_service_guard = true });
+            durable_invalidation = true, position_and_cursor_preserved = true, candidate_retained = false,
+            two_new_positives_required = true });
     }
 
     [Theory]

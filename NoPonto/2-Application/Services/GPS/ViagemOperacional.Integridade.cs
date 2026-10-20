@@ -47,6 +47,13 @@ public static partial class ViagemOperacionalRegra
     internal static bool IdentidadeConfiavel(ViagemOperacionalState estado) =>
         estado.Integridade?.Continuidade != ContinuidadeCircular.Ambigua;
 
+    // Limpar a candidata não prova o trecho circular não observado. A âncora
+    // retida continua exigindo a mesma prova/limites usados durante a candidatura.
+    internal static bool ExigeRevalidacaoCircular(ViagemOperacionalState s, GpsPollingOptions opcoes) =>
+        s.Observada.Topologia == "CIRCULAR" && (s.Candidato is not null
+            || (opcoes.MudancaOperacionalHabilitada && s.Integridade is { } i
+                && (i.Ancora is null || i.Ancora.Timestamp < s.Observada.TimestampUltimaAtualizacao)));
+
     private static bool MatchingConfiavel(EstruturaViagem e, PosicaoVeiculoDto gps, GpsPollingOptions opcoes) =>
         gps.MatchingOperacionalPlausivel && e.SentidoInequivoco
         && GpsLeituraValidator.CoordenadaValida(gps.Latitude, gps.Longitude)
@@ -103,7 +110,7 @@ public static partial class ViagemOperacionalRegra
     {
         if (s.Observada.Topologia != "CIRCULAR" || s.Estado == EstadoViagem.Finalizada) return null;
         var ambigua = !IdentidadeConfiavel(s);
-        var cancelando = s.Candidato is not null && e.PadraoOperacionalId == s.Observada.PadraoOperacionalId
+        var cancelando = ExigeRevalidacaoCircular(s, opcoes) && e.PadraoOperacionalId == s.Observada.PadraoOperacionalId
             && e.SentidoId == s.SentidoId && e.LinhaId == s.LinhaId;
         if (!ambigua && !cancelando) return null;
         if (baseline.Ultrapassadas.Count != 0 && ambigua)

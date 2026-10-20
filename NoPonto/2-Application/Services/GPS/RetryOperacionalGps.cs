@@ -183,7 +183,10 @@ internal sealed class RetryOperacionalGpsService(IPendenciaOperacionalGpsStore s
                     || refeito.Posicao.CodigoLinha != gps.CodigoLinha || refeito.Posicao.Latitude != gps.Latitude
                     || refeito.Posicao.Longitude != gps.Longitude)
                 { await EncerrarAsync(lease, "ReenriquecimentoAlterouObservacao", ct); return; }
-                if (!refeito.Posicao.MatchingOperacionalPlausivel)
+                if (!refeito.Posicao.MatchingOperacionalPlausivel && (!gpsOptions.Value.MudancaOperacionalHabilitada
+                    || refeito.Diagnostico?.StatusGlobal == StatusBuscaPadrao.InfrastructureFailure
+                    || refeito.Diagnostico?.StatusDirecionado == StatusBuscaPadrao.InfrastructureFailure
+                    || refeito.ProjecaoOperacional.Status == StatusProjecaoOperacional.FalhaInfraestrutura))
                 { await ReagendarAsync(lease, ct); return; } // Ausência de matching também pode ser infraestrutura.
                 chamouViagem = true;
                 var resultado = await viagens.AtualizarAsync(refeito with
