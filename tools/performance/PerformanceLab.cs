@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NoPonto.Application.GPS;
 using NoPonto.Application.Services.BackgroundServices;
 using NoPonto.Data.Repositories;
+using StackExchange.Redis;
 using Xunit;
 
 namespace NoPonto.Tests;
@@ -323,8 +324,79 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
             { Sample("unavailable", new { component, phase, reason = ex.SqlState }); }
         }
         var endpoint = resources.Db.Redis.GetEndPoints().Single();
-        var info = await resources.Db.Redis.GetServer(endpoint).InfoAsync();
+        var info = await PerformanceLabRedisInfo.ReadAsync(
+            () => resources.Db.Redis.GetServer(endpoint).InfoAsync(),
+            reason => Sample("unavailable", new { component = "redis", phase, reason }));
+        if (info is null) return;
         var wanted = new[] { "used_memory", "used_memory_peak", "connected_clients", "total_commands_processed", "instantaneous_ops_per_sec", "evicted_keys", "keyspace_hits", "keyspace_misses" };
         Sample("redis", new { phase, measured = info.SelectMany(x => x).Where(x => wanted.Contains(x.Key)).ToDictionary(x => x.Key, x => x.Value) });
+    }
+}
+
+// Only the optional INFO read can degrade. Connection, timeout, authentication,
+// persistence and other command failures remain fatal to the caller.
+internal static class PerformanceLabRedisInfo
+{
+    internal static async Task<T?> ReadAsync<T>(Func<Task<T>> read, Action<string> unavailable) where T : class
+    {
+        try { return await read(); }
+        catch (RedisCommandException ex) when (ex.Message ==
+            "This operation is not available unless admin mode is enabled: INFO")
+        { unavailable("info_admin_disabled"); return null; }
+        catch (RedisServerException ex) when (ex.Message.StartsWith("NOPERM ", StringComparison.Ordinal)
+            && ex.Message.EndsWith("to run the 'info' command", StringComparison.OrdinalIgnoreCase))
+        { unavailable("info_permission_denied"); return null; }
+    }
+}
+
+// No fixture: these regressions never initialize a Redis/PostGIS connection.
+public sealed class PerformanceLabRedisInfoTests
+{
+    [Fact]
+    public async Task Success_PreservesMeasuredValues()
+    {
+        var measured = new Dictionary<string, string> { ["used_memory"] = "123456" };
+        var reasons = new List<string>();
+        Assert.Same(measured, await PerformanceLabRedisInfo.ReadAsync(() => Task.FromResult(measured), reasons.Add));
+        Assert.Empty(reasons);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InfoDisabled_ReturnsNoValuesAndSpecificReason(bool serverDenied)
+    {
+        Exception failure = serverDenied
+            ? new RedisServerException("NOPERM this user has no permissions to run the 'info' command")
+            : new RedisCommandException("This operation is not available unless admin mode is enabled: INFO");
+        var reasons = new List<string>();
+        Assert.Null(await PerformanceLabRedisInfo.ReadAsync(() => Task.FromException<object>(failure), reasons.Add));
+        Assert.Equal(serverDenied ? "info_permission_denied" : "info_admin_disabled", Assert.Single(reasons));
+    }
+
+    [Theory]
+    [InlineData("connection")]
+    [InlineData("timeout")]
+    [InlineData("auth")]
+    [InlineData("persistence")]
+    [InlineData("other_admin_command")]
+    [InlineData("other_permission")]
+    [InlineData("unexpected_command_error")]
+    public async Task OtherFailures_PropagateOriginalExceptionWithoutUnavailableMetric(string kind)
+    {
+        Exception failure = kind switch
+        {
+            "connection" => new RedisConnectionException(ConnectionFailureType.UnableToConnect, "offline test"),
+            "timeout" => new RedisTimeoutException("offline test", CommandStatus.Unknown),
+            "auth" => new RedisServerException("NOAUTH Authentication required."),
+            "persistence" => new RedisServerException("MISCONF Redis is configured to save RDB snapshots"),
+            "other_admin_command" => new RedisCommandException("This operation is not available unless admin mode is enabled: FLUSHDB"),
+            "other_permission" => new RedisServerException("NOPERM this user has no permissions to run the 'get' command"),
+            _ => new RedisCommandException("Unexpected INFO command failure")
+        };
+        var reasons = new List<string>();
+        var actual = await Record.ExceptionAsync(() => PerformanceLabRedisInfo.ReadAsync(() => Task.FromException<object>(failure), reasons.Add));
+        Assert.Same(failure, actual);
+        Assert.Empty(reasons);
     }
 }

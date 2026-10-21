@@ -121,11 +121,16 @@ foreach ($dir in (Get-ChildItem -LiteralPath $LabDirectory -Directory -Filter 'r
         else { $md.Add("| $key | indisponível neste cenário |") }
     }
     $md.Add("| Divergências REST/SignalR | $($summary.measured.rest_signalr_divergences) (vazio = indisponível) |")
+    if ($summary.availability.redis) { $md.Add("| Redis INFO | $($summary.measured.redis.Count) amostra(s) medida(s); consultar indisponibilidades por fase |") }
+    else { $md.Add('| Redis INFO | indisponível; nenhuma amostra medida |') }
     $md.Add(''); $md.Add('Operação por flag/etapa, backlog, PostgreSQL, Redis, CPU/RAM e tempos internos: consultar summary.json e observations.jsonl. Dados brutos de containers: resources.jsonl. Logs separados: stdout.log/stderr.log; resultado de asserções: scenario.trx.')
     $md.Add(''); $md.Add('## Validação')
     foreach ($errorText in $errors) { $md.Add("- $errorText") }
     $md.Add(''); $md.Add('## Métricas indisponíveis')
     foreach ($entry in $summary.unavailable) { $md.Add("- $entry") }
+    foreach ($entry in $summary.availability.runtime_unavailable) {
+        $md.Add("- $($entry.component) (fase: $($entry.phase)): $($entry.reason)")
+    }
     $md.Add(''); $md.Add('## Limitações')
     foreach ($entry in $summary.limitations) { $md.Add("- $entry") }
     [IO.File]::WriteAllLines((Join-Path $dir.FullName 'summary.md'), $md)

@@ -260,7 +260,7 @@ try {
             status = 'running'; exit_code = $null; interruption = $null }
         $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $run 'run.json') -Encoding utf8
         $pg = "Host=127.0.0.1;Port=$($ports.PgPort);Database=noponto_gps_fixture;Username=postgres;Timeout=5;Command Timeout=5"
-        $redis = "127.0.0.1:$($ports.RedisPort),connectTimeout=5000,syncTimeout=5000"
+        $redis = "127.0.0.1:$($ports.RedisPort),connectTimeout=5000,syncTimeout=5000,allowAdmin=true"
         $envs = @{ NOPONTO_GPS_FIXTURE_POSTGRES = $pg; NOPONTO_GPS_FIXTURE_REDIS = $redis; NOPONTO_GPS_FIXTURE_GUARD = $state.guard;
             NOPONTO_GPS_FIXTURE_RESULTS = $run; POSTGIS_TEST_CONNECTION = $pg; REDIS_TEST_CONNECTION = $redis;
             NOPONTO_PERF_RUN = '1'; NOPONTO_PERF_SCENARIO = $Scenario; NOPONTO_PERF_VEHICLES = $Vehicles; NOPONTO_PERF_LINES = $LinesPerModal;

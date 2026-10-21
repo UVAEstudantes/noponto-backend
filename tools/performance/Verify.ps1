@@ -20,6 +20,13 @@ New-Item -ItemType Directory -Path $scratch | Out-Null
 $lab = $scratch
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'Lab.ps1'),[ref]$tokens,[ref]$errors)
+$connectionAssignment = $ast.Find({ param($node)
+    $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+    $node.Left.Extent.Text -eq '$redis' -and $node.Right.Extent.Text -like '*connectTimeout=*'
+}, $true)
+$ports = @{ RedisPort = 54321 }
+. ([scriptblock]::Create($connectionAssignment.Extent.Text))
+Check (($redis -split ',')[0] -ceq '127.0.0.1:54321' -and ($redis -split ',') -contains 'allowAdmin=true') 'isolated Redis connection enables INFO admin mode and retains guarded loopback port'
 foreach ($name in @('Native','Run-Process')) {
     $node = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
     # Load only these local helper definitions, never the lab entry point.
@@ -67,6 +74,14 @@ $wrong = Make-Run 'wrong-definition' 'finished' 1 8
 $wrongConfig = Get-Content -LiteralPath (Join-Path $wrong 'run.json') -Raw | ConvertFrom-Json -AsHashtable
 $wrongConfig.scenario = 'B'
 $wrongConfig | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $wrong 'run.json') -Encoding utf8
+$redisUnavailable = Make-Run 'redis-info-unavailable' 'finished' 1 8
+@{ kind = 'perf_unavailable'; value = @{ component = 'redis'; phase = 'before'; reason = 'info_admin_disabled' } } |
+    ConvertTo-Json -Compress | Add-Content -LiteralPath (Join-Path $redisUnavailable 'observations.jsonl') -Encoding utf8
+$redisPartial = Make-Run 'redis-info-partial' 'finished' 1 8
+@{ kind = 'perf_redis'; value = @{ phase = 'before'; measured = @{ used_memory = '123456' } } } |
+    ConvertTo-Json -Depth 5 -Compress | Add-Content -LiteralPath (Join-Path $redisPartial 'observations.jsonl') -Encoding utf8
+@{ kind = 'perf_unavailable'; value = @{ component = 'redis'; phase = 'after'; reason = 'info_permission_denied' } } |
+    ConvertTo-Json -Compress | Add-Content -LiteralPath (Join-Path $redisPartial 'observations.jsonl') -Encoding utf8
 & (Join-Path $PSScriptRoot 'Report.ps1') -LabDirectory $scratch | Out-Null
 $a = Get-Content -LiteralPath (Join-Path $good 'summary.json') -Raw | ConvertFrom-Json
 Check $a.complete 'complete evidence accepted'
@@ -79,6 +94,15 @@ Check $op.complete 'operational-only report accepts the expected sample count'
 Check ($null -eq $op.measured.supplied_positions -and $null -eq $op.measured.trip_infrastructure_failures) 'operational-only report does not invent GPS counters'
 $mismatch = Get-Content -LiteralPath (Join-Path $wrong 'summary.json') -Raw | ConvertFrom-Json
 Check (-not $mismatch.complete) 'mismatched scenario definition rejected'
+$unavailable = Get-Content -LiteralPath (Join-Path $redisUnavailable 'summary.json') -Raw | ConvertFrom-Json
+Check ($unavailable.complete -and -not $unavailable.availability.redis -and $unavailable.measured.redis.Count -eq 0 -and
+    $unavailable.availability.runtime_unavailable[0].reason -eq 'info_admin_disabled') 'INFO unavailable keeps valid run complete without inventing Redis values'
+$markdown = Get-Content -LiteralPath (Join-Path $redisUnavailable 'summary.md') -Raw
+Check ($markdown -match 'Redis INFO.*indisponível' -and $markdown -match 'redis.*before.*info_admin_disabled') 'Markdown explicitly identifies unavailable Redis INFO and phase/reason'
+$partialInfo = Get-Content -LiteralPath (Join-Path $redisPartial 'summary.json') -Raw | ConvertFrom-Json
+Check ($partialInfo.complete -and $partialInfo.availability.redis -and $partialInfo.measured.redis.Count -eq 1 -and
+    $partialInfo.measured.redis[0].measured.used_memory -ceq '123456' -and
+    $partialInfo.availability.runtime_unavailable[0].reason -eq 'info_permission_denied') 'partial INFO availability retains only measured values and denial reason'
 foreach ($path in @($zero,$partial,$interrupted,$missing)) {
     $s = Get-Content -LiteralPath (Join-Path $path 'summary.json') -Raw | ConvertFrom-Json
     Check (-not $s.complete) "incomplete evidence rejected: $([IO.Path]::GetFileName($path))"

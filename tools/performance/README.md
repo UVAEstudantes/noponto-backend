@@ -21,6 +21,8 @@ $lab = Join-Path (Get-Location) ('NoPonto/lab-output/perf-' + [guid]::NewGuid().
 
 `Prepare` apenas compila (limite 180 s), em `build/` e `obj/` exclusivos. Não inicia API, Docker nem testes. `Start` cria dois containers e uma rede com UUID e label `noponto.performance.lab`. Portas aleatórias são vinculadas exclusivamente a `127.0.0.1`. Nenhum endpoint ou connection string externo pode ser informado. Guards idênticos no PostgreSQL e Redis são validados antes de migrations/seed em schema exclusivo. A API usada pelos cenários é Kestrel temporário em loopback, iniciado pelo teste; não é a API de desenvolvimento/produção e sua URL não precisa ser informada.
 
+A conexão Redis construída por este launcher usa `allowAdmin=true` para coletar `INFO`, exclusivamente no endpoint descartável validado. Isso habilita a permissão do cliente StackExchange.Redis, sem alterar servidor, ACL, credenciais ou configuração global. Se `INFO` for bloqueado pelo modo admin do cliente ou explicitamente negado por ACL, apenas essa métrica fica indisponível (`info_admin_disabled`/`info_permission_denied`, com fase no JSON/Markdown). Erros de conexão, timeout, autenticação, persistência ou outros comandos continuam sendo falhas. Após atualizar o kit, criar outro UUID e executar `Prepare` novamente; não reutilizar o build/fingerprint anterior nem regenerar os relatórios da execução falha para substituir a evidência original.
+
 ## Executar os cenários
 
 Começar um por vez, com os defaults. O processo do VSTest é iniciado **somente** em `Run`. Cada execução tem diretório `run-<cenário>-<UUID>` novo. Nenhum teste fora de `PerformanceLab_Manual` é descoberto pelo filtro de execução; ele chama explicitamente os pequenos controles de correção descritos abaixo.

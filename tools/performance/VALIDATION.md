@@ -61,3 +61,29 @@ dotnet test NoPonto/NoPonto.csproj -c Release --no-build --no-restore -p:OutputP
 - Deploy, CI/CD, push, merge ou PR. O único registro Git autorizado é o commit local específico do kit.
 
 Os critérios no README são propostas para os relatórios futuros. Não há medições reais de p50/p95/p99, throughput, CPU/RAM, backlog ou recuperação disponíveis nesta entrega.
+
+## Correção pontual Redis INFO — 21/10/2026
+
+Base `e8ca589`, branch inalterada e árvore inicial limpa. Rastreio: `Lab.ps1` valida ownership/porta loopback/guards, constrói uma única string Redis e fornece-a ao processo por `NOPONTO_GPS_FIXTURE_REDIS` e `REDIS_TEST_CONNECTION`. `GpsIntegrationResources` exige igualdade, valida endpoint/guard antes de inicializar `ViagemOperacionalFixture`, que cria `Db.Redis` usando `REDIS_TEST_CONNECTION`. A string não incluía `allowAdmin`, cujo default bloqueava `IServer.InfoAsync()` no cliente. Nenhuma configuração de produção participa desse caminho.
+
+Correção: `allowAdmin=true` somente na string local do launcher. O wrapper de INFO em `PerformanceLab.cs` converte apenas a mensagem exata de admin desabilitado para INFO e NOPERM especificamente para o comando INFO em `perf_unavailable`, sem valores presumidos ou texto bruto da exceção. Outras exceções se propagam intactas; o wrapper não envolve persistência/GPS. `Report.ps1` conserva os campos JSON existentes (availability/lista de motivos/amostras medidas) e acrescenta indicação explícita no Markdown, inclusive em disponibilidade parcial.
+
+Verificações executadas nesta correção:
+
+- `pwsh -NoProfile -File tools/performance/Verify.ps1`: RED antes da correção, exit 1 em `isolated Redis connection enables INFO admin mode and retains guarded loopback port`; GREEN final **26/26**, exit 0. Os novos checks executam a atribuição de conexão extraída do AST do launcher com porta controlada, validam ausência de valores fabricados, motivo/fase no Markdown e preservação das amostras parcialmente disponíveis. Só diretórios sintéticos novos foram passados ao gerador de relatórios.
+- Testes C# abaixo: **10 aprovados, zero falhas/ignorados, 58 ms** de execução, exit 0. Build sem erros, com os cinco avisos preexistentes e o aviso Grpc.Tools de primeiro build em diretório separado. Filtro exclusivo da classe sem fixture; não executa `PerformanceLab_Manual`, inicialização de Redis/PostGIS ou migrations.
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj -c Release --no-restore -p:CustomAfterMicrosoftCommonTargets=D:/repositorio_github/NoPonto/noponto-backend/tools/performance/PerformanceLab.targets -p:OutputPath=D:/repositorio_github/NoPonto/noponto-backend/NoPonto/lab-output/perf-info-fix-20261021/build/ -p:IntermediateOutputPath=D:/repositorio_github/NoPonto/noponto-backend/NoPonto/lab-output/perf-info-fix-20261021/obj/ --filter FullyQualifiedName~NoPonto.Tests.PerformanceLabRedisInfoTests --logger 'trx;LogFileName=redis-info-offline.trx' --results-directory D:/repositorio_github/NoPonto/noponto-backend/NoPonto/lab-output/perf-info-fix-20261021 --verbosity quiet
+```
+
+| Requisito | Evidência offline |
+|---|---|
+| INFO bem-sucedido preserva medidas | `PerformanceLabRedisInfoTests.Success_PreservesMeasuredValues` |
+| Admin local/ACL INFO negados não interrompem por métrica opcional | `PerformanceLabRedisInfoTests.InfoDisabled_ReturnsNoValuesAndSpecificReason` (2 casos) |
+| Falhas reais não são ocultadas | `PerformanceLabRedisInfoTests.OtherFailures_PropagateOriginalExceptionWithoutUnavailableMetric` (7 casos: conexão, timeout, autenticação, persistência, admin de outro comando, ACL de outro comando e erro inesperado) |
+| JSON/Markdown sem métricas inventadas | Os três checks INFO de `Verify.ps1`, incluindo indisponibilidade total e parcial |
+
+TRX e hashes de preservação ficam em `NoPonto/lab-output/perf-info-fix-20261021/`; dados sintéticos PowerShell em `NoPonto/lab-output/perf-kit-verification-0bbe6ae9999448af8f250b4b2e7689d2/`. A execução falha original em `perf-a72141cb89974cc496e8554859c9a242/run-A-06eed6e1f21e4a68839ec53a59a69e0d/` não foi regenerada nem alterada; seu laboratório foi inventariado por SHA-256 antes/depois da correção. `git diff --check` e o escopo do commit foram conferidos.
+
+Não executados nesta correção: qualquer comando Docker, Start/Run/Stop, cenários A/B/C/D, integração com serviços reais, carga ou matrizes. Sem alteração de pipeline GPS/matching/SignalR/operação/ETA, configuração global/credenciais, push, merge, deploy ou PR. A primeira confirmação contra Redis real será feita pelo usuário em novo laboratório com novo build/fingerprint.
