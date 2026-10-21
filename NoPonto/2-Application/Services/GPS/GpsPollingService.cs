@@ -23,6 +23,7 @@ public sealed class GpsPollingService : BackgroundService
     private readonly GpsEtaClient _etaClient;
     private readonly IStatusGpsSource _brtSource;
     private readonly bool _gtfsRealtimeSelected;
+    private readonly bool _gtfsBusSelected;
     private readonly GpsBrtPollingGate _brtGate = new();
 
     private readonly IPosicaoVeiculoCacheRepository _posicaoCache;
@@ -79,8 +80,8 @@ public sealed class GpsPollingService : BackgroundService
         _brtSource = sourceResolver.GetPrimary(GpsModalNames.Brt) as IStatusGpsSource
             ?? throw new InvalidOperationException(
                 "A fonte GPS primária BRT precisa expor status para preservar o cache/fail-open operacional.");
-        _gtfsRealtimeSelected = _brtSource is GtfsRealtimeGpsSource
-            || sourceResolver.GetPrimary(GpsModalNames.Bus) is GtfsRealtimeGpsSource;
+        _gtfsBusSelected = sourceResolver.GetPrimary(GpsModalNames.Bus) is GtfsRealtimeGpsSource;
+        _gtfsRealtimeSelected = _brtSource is GtfsRealtimeGpsSource || _gtfsBusSelected;
         _posicaoCache = posicaoCache;
         _viagemObservada = viagemObservada;
         _telemetriaMl = telemetriaMl;
@@ -153,7 +154,8 @@ public sealed class GpsPollingService : BackgroundService
 
             try
             {
-                await Task.Delay(delay, stoppingToken);
+                await AguardarProximoCicloAsync(delay, cicloConcluidoNormalmente
+                    && duracao < TimeSpan.FromSeconds(opcoes.IntervaloSegundos), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -162,6 +164,22 @@ public sealed class GpsPollingService : BackgroundService
         }
 
         _logger.LogInformation("GpsPollingService encerrado.");
+    }
+
+    internal async Task AguardarProximoCicloAsync(TimeSpan delay, bool repousoNormal,
+        CancellationToken ct, TimeProvider? relogio = null)
+    {
+        var clock = relogio ?? TimeProvider.System;
+        if (!_gtfsBusSelected || !repousoNormal)
+        {
+            await Task.Delay(delay, clock, ct);
+            return;
+        }
+        try
+        {
+            await _snapshotSppo.AguardarPublicacaoAsync().WaitAsync(delay, clock, ct);
+        }
+        catch (TimeoutException) { } // Normal periodic wakeup; cancellation still propagates.
     }
 
     internal static TimeSpan CalcularDelayProximoCiclo(
@@ -200,6 +218,7 @@ public sealed class GpsPollingService : BackgroundService
         {
         var inicioEtapa = System.Diagnostics.Stopwatch.GetTimestamp();
         loteSppo = LerSnapshotPendente(_snapshotSppo);
+        var snapshotLidoEm = DateTimeOffset.UtcNow;
         performance.SnapshotSppoConsumido = loteSppo is not null;
         performance.SnapshotSppoMs = (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
@@ -216,6 +235,17 @@ public sealed class GpsPollingService : BackgroundService
             && !brtPolling.CacheReutilizado;
         performance.FontesBrtMs = (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
+        // A BUS snapshot can arrive while BRT is awaited. Keep an already selected
+        // generation, otherwise include the pending batch before freezing this cycle's input.
+        if (loteSppo is null)
+        {
+            loteSppo = LerSnapshotPendente(_snapshotSppo);
+            snapshotLidoEm = DateTimeOffset.UtcNow;
+        }
+        performance.SnapshotSppoConsumido = loteSppo is not null;
+        if (loteSppo is not null)
+            _logger.LogInformation("BUS handoff consumed: generation={generation}, handoff_wait_ms={wait:F0}; acquisition and processing are separate stages.",
+                loteSppo.Geracao, Math.Max(0, (snapshotLidoEm - loteSppo.ColetaConcluidaEmUtc).TotalMilliseconds));
         _logger.LogInformation(
             "Coleta GPS: SPPO snapshot={statusSppo} (geracao={geracaoSppo}, posicoes={posicoesSppo}); " +
             "BRT efetivo={statusBrt} ({duracaoBrt:F0}ms), consulta={consultaBrt}, " +

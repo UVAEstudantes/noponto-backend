@@ -18,8 +18,18 @@ public sealed class GpsSppoSnapshotStore
     private readonly SemaphoreSlim _vaga = new(1, 1);
     private LoteSppoSnapshot? _atual;
     private long _geracao;
+    private TaskCompletionSource _disponivel = NovaNotificacao();
 
     public LoteSppoSnapshot? Ler() => Volatile.Read(ref _atual);
+
+    // Observe availability without removing the batch, freeing its slot or issuing ACK.
+    internal Task AguardarPublicacaoAsync()
+    {
+        lock (_publicacao) return _disponivel.Task;
+    }
+
+    private static TaskCompletionSource NovaNotificacao()
+        => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public async Task<LoteSppoSnapshot> PublicarAsync(
         DateTimeOffset? janelaInicio,
@@ -52,6 +62,7 @@ public sealed class GpsSppoSnapshotStore
                     Array.AsReadOnly(posicoes.ToArray()));
 
                 Volatile.Write(ref _atual, lote);
+                _disponivel.TrySetResult();
                 return lote;
             }
         }
@@ -71,6 +82,7 @@ public sealed class GpsSppoSnapshotStore
                 return false;
 
             Volatile.Write(ref _atual, null);
+            _disponivel = NovaNotificacao();
             _vaga.Release();
             return true;
         }

@@ -39,10 +39,16 @@ public sealed partial class GpsPollingCadenciaTests
             fixture.Clock.Set(seconds);
             var read = await collector.ColetarUmaVezAsync(fixture.Clock.GetUtcNow());
             Assert.Equal(StatusFonteGps.Sucesso, read.Status);
+            timestamps.Add(Assert.Single(read.Posicoes).TimestampGps);
+            if (seconds % 30 != 0)
+            {
+                Assert.Null(store.Ler());
+                continue;
+            }
             var batch = Assert.IsType<LoteSppoSnapshot>(store.Ler());
             var position = Assert.Single(batch.Posicoes);
             Assert.Equal("00123", position.Ordem);
-            timestamps.Add(position.TimestampGps);
+            Assert.Equal(timestamps[^1], position.TimestampGps);
             Assert.Null(batch.WatermarkConfirmado);
             Assert.True(store.Confirmar(batch.Geracao));
         }
@@ -282,16 +288,22 @@ public sealed partial class GpsPollingCadenciaTests
         using var collector = new GpsSppoCollectorService(resolver, store, options,
             NullLogger<GpsSppoCollectorService>.Instance);
         var successfulReads = 0;
+        var publications = 0;
         while (fixture.Clock.Seconds <= 110)
         {
             Assert.Equal(StatusFonteGps.Sucesso, (await collector.ColetarUmaVezAsync(fixture.Clock.GetUtcNow())).Status);
             successfulReads++;
-            Assert.True(store.Confirmar(store.Ler()!.Geracao));
+            if (store.Ler() is { } batch)
+            {
+                Assert.True(store.Confirmar(batch.Geracao));
+                publications++;
+            }
             // ExecuteAsync waits this interval after completion, not after the start.
             fixture.Clock.Advance(options.CurrentValue.IntervaloEntreColetasSegundos);
         }
         Assert.Equal(new double[] { 0, 31, 70, 103 }, fixture.RequestStarts);
         Assert.True(successfulReads > fixture.RequestStarts.Count);
+        Assert.Equal(fixture.RequestStarts.Count, publications);
     }
 
     private sealed class DelayedCadenceContent(byte[] body, Action onRead) : HttpContent
