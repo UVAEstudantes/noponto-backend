@@ -24,8 +24,7 @@ public sealed partial class GpsPadraoRepository
         contexto_global AS MATERIALIZED (
           SELECT l."Codigo" codigo,pv."Id",po."Id" padrao_operacional_id,
             po."SentidoId" sentido_id,s."LinhaId" linha_id,pv."Topologia" topologia,
-            pv."Geometria",pv."Geometria"::geography geometria_geography,
-            ST_Length(pv."Geometria"::geography) comprimento_metros
+            pv."Geometria",pv."Geometria"::geography geometria_geography
           FROM codigos c JOIN "Linhas" l ON l."Codigo"=c.codigo
           JOIN "Sentidos" s ON s."LinhaId"=l."Id"
           JOIN "PadroesOperacionais" po ON po."SentidoId"=s."Id"
@@ -72,6 +71,11 @@ public sealed partial class GpsPadraoRepository
         global_vencedor AS MATERIALIZED (
           SELECT c.*,ST_LineInterpolatePoint(c."Geometria",GREATEST(0.0,LEAST(1.0,c.posicao_na_rota))) ponto_rota
           FROM global_rank c WHERE ranking=1
+        ),
+        global_comprimentos AS MATERIALIZED (
+          SELECT c."Id",ST_Length(c.geometria_geography) comprimento_metros
+          FROM contexto_global c
+          WHERE EXISTS (SELECT 1 FROM global_vencedor g WHERE g."Id"=c."Id")
         ),
         anterior_geometria AS (
           SELECT e.input_id,e.bearing,e.dist_max,e.ponto_geom,e.ponto_geography,c.*,
@@ -126,7 +130,9 @@ public sealed partial class GpsPadraoRepository
             o.ponto_geography,o.dist_max)
         ),
         global_resultado AS (
-          SELECT g.*,pp.* FROM global_vencedor g LEFT JOIN LATERAL (
+          SELECT g.*,gc.comprimento_metros,pp.* FROM global_vencedor g
+          JOIN global_comprimentos gc ON gc."Id"=g."Id"
+          LEFT JOIN LATERAL (
             SELECT p."Nome" parada_nome,op."Id" ocorrencia_id,op."ParadaId" parada_id,
               op."Ordem" parada_ordem,op."DistanciaAcumuladaMetros" parada_distancia_acumulada,
               op."DistanciaDaLinhaMetros" parada_distancia_linha,
@@ -134,7 +140,7 @@ public sealed partial class GpsPadraoRepository
               GREATEST(0.0,CASE WHEN op."PosicaoTracado">g.posicao_na_rota THEN
                 ST_Length(ST_LineSubstring(g."Geometria",0,op."PosicaoTracado")::geography)
                 -ST_Length(ST_LineSubstring(g."Geometria",0,g.posicao_na_rota)::geography)
-              ELSE g.comprimento_metros-ST_Length(ST_LineSubstring(g."Geometria",0,g.posicao_na_rota)::geography)
+              ELSE gc.comprimento_metros-ST_Length(ST_LineSubstring(g."Geometria",0,g.posicao_na_rota)::geography)
                 +ST_Length(ST_LineSubstring(g."Geometria",0,op."PosicaoTracado")::geography) END)
                 distancia_restante_rota_metros
             FROM "OcorrenciasParadasPadroes" op JOIN "Paradas" p ON p."Id"=op."ParadaId"
