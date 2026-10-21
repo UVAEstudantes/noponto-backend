@@ -8,7 +8,7 @@ using Xunit;
 
 namespace NoPonto.Tests;
 
-public sealed class GpsPerformanceMetricsTests
+public sealed partial class GpsPerformanceMetricsTests
 {
     [Fact]
     public void MatchingCombinado_SeparaComandosLegacyESetBased()

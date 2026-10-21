@@ -9,6 +9,7 @@ namespace NoPonto.Data.Repositories;
 public sealed partial class GpsPadraoRepository
 {
     public const int TamanhoChunkMatchingPadrao = 100;
+    internal TimeProvider MatchingDiagnosticsClock { get; init; } = TimeProvider.System;
 
     // Divergencia intencional em relacao ao global individual: cancelamento do
     // batch sempre interrompe a operacao e nunca e convertido em inelegibilidade
@@ -68,6 +69,8 @@ public sealed partial class GpsPadraoRepository
         cancellationToken.ThrowIfCancellationRequested();
         var resultados = new Dictionary<string, ResultadoMatchingCombinado>(StringComparer.Ordinal);
         var comandos = new List<MetricaComandoMatchingLote>();
+        using var phases = new MatchingBatchPhaseDiagnostics(_logger, MatchingBatchOperation.Combined,
+            entradas.Count, cancellationToken, comandos, motor, MatchingDiagnosticsClock);
 
         foreach (var entrada in entradas)
         {
@@ -107,6 +110,7 @@ public sealed partial class GpsPadraoRepository
                     resultados[entrada.InputId] = FalhaCombinada(entrada.ProjecaoOperacional.HasValue);
                 continue;
             }
+            phases.Move(MatchingBatchPhase.Prepare);
             var inicio = Stopwatch.GetTimestamp();
             var comandoBatchRegistrado = false;
             var tentativaPostgres = false;
@@ -115,11 +119,13 @@ public sealed partial class GpsPadraoRepository
                 AntesDoComandoBatchParaTeste?.Invoke(TipoBatchMatching.Combinado, numeroChunk);
                 cancellationToken.ThrowIfCancellationRequested();
                 await ExecutarCombinadoChunkAsync(chunk, resultados,
-                    () => tentativaPostgres = true, motor, cancellationToken);
+                    () => tentativaPostgres = true, motor, cancellationToken, phases);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
+                phases.Move(MatchingBatchPhase.Fallback);
+                phases.ChunkFailures++;
                 if (tentativaPostgres)
                 {
                     comandos.Add(new(TipoBatchMatching.Combinado,
@@ -192,6 +198,7 @@ public sealed partial class GpsPadraoRepository
             }
             finally
             {
+                phases.Move(MatchingBatchPhase.Other);
                 if (tentativaPostgres && !comandoBatchRegistrado)
                     comandos.Add(new(TipoBatchMatching.Combinado,
                         OrigemComandoMatchingLote.Batch, chunk.Length,
@@ -200,8 +207,10 @@ public sealed partial class GpsPadraoRepository
             AposChunkParaTeste?.Invoke(TipoBatchMatching.Combinado, numeroChunk);
         }
 
-        return new(entradas.Select(x => new ResultadoMatchingCombinadoLote(
+        var result = new ResultadoMatchingLote<ResultadoMatchingCombinadoLote>(entradas.Select(x => new ResultadoMatchingCombinadoLote(
             x.InputId, resultados[x.InputId])).ToArray(), new(entradas.Count, comandos));
+        phases.Complete();
+        return result;
     }
 
     private async Task<ResultadoMatchingLote<ResultadoMatchingGlobalLote>> ExecutarGlobaisEmLoteAsync(
@@ -214,6 +223,8 @@ public sealed partial class GpsPadraoRepository
         var resultados = entradas.ToDictionary(x => x.InputId,
             _ => ResultadoBuscaPadrao.NotEligible(), StringComparer.Ordinal);
         var comandos = new List<MetricaComandoMatchingLote>();
+        using var phases = new MatchingBatchPhaseDiagnostics(_logger, MatchingBatchOperation.Global,
+            entradas.Count, cancellationToken, comandos, MotorCombinadoMatchingLote.NaoAplicavel, MatchingDiagnosticsClock);
         var validas = entradas.Where(x => x.Bearing.HasValue
             && DadosBasicosValidos(x.Latitude, x.Longitude, x.Bearing.Value,
                 x.DistanciaMaximaMetros)).ToArray();
@@ -230,6 +241,7 @@ public sealed partial class GpsPadraoRepository
                     resultados[entrada.InputId] = ResultadoBuscaPadrao.InfrastructureFailure();
                 continue;
             }
+            phases.Move(MatchingBatchPhase.Prepare);
             var inicio = Stopwatch.GetTimestamp();
             var comandoBatchRegistrado = false;
             var tentativaPostgres = false;
@@ -245,11 +257,13 @@ public sealed partial class GpsPadraoRepository
                     usar_faixa = false, fracao_min = 0d, fracao_max = 1d
                 }));
                 await ExecutarRotaChunkAsync(json, direcionado: false, resultados,
-                    () => tentativaPostgres = true, cancellationToken);
+                    () => tentativaPostgres = true, cancellationToken, phases);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
+                phases.Move(MatchingBatchPhase.Fallback);
+                phases.ChunkFailures++;
                 if (tentativaPostgres)
                 {
                     comandos.Add(new(TipoBatchMatching.GlobalSimples,
@@ -337,6 +351,7 @@ public sealed partial class GpsPadraoRepository
             }
             finally
             {
+                phases.Move(MatchingBatchPhase.Other);
                 if (tentativaPostgres && !comandoBatchRegistrado)
                     comandos.Add(new(TipoBatchMatching.GlobalSimples,
                         OrigemComandoMatchingLote.Batch, chunk.Length,
@@ -345,8 +360,10 @@ public sealed partial class GpsPadraoRepository
             AposChunkParaTeste?.Invoke(TipoBatchMatching.GlobalSimples, numeroChunk);
         }
 
-        return new(entradas.Select(x => new ResultadoMatchingGlobalLote(
+        var result = new ResultadoMatchingLote<ResultadoMatchingGlobalLote>(entradas.Select(x => new ResultadoMatchingGlobalLote(
             x.InputId, resultados[x.InputId])).ToArray(), new(entradas.Count, comandos));
+        phases.Complete();
+        return result;
     }
 
     private async Task<ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>> ExecutarDirecionadosEmLoteAsync(
@@ -358,6 +375,8 @@ public sealed partial class GpsPadraoRepository
         cancellationToken.ThrowIfCancellationRequested();
         var resultados = new Dictionary<string, ResultadoBuscaPadrao>(StringComparer.Ordinal);
         var comandos = new List<MetricaComandoMatchingLote>();
+        using var phases = new MatchingBatchPhaseDiagnostics(_logger, MatchingBatchOperation.Directed,
+            entradas.Count, cancellationToken, comandos, MotorCombinadoMatchingLote.NaoAplicavel, MatchingDiagnosticsClock);
         foreach (var entrada in entradas)
             resultados[entrada.InputId] = !entrada.Bearing.HasValue
                 ? ResultadoBuscaPadrao.NotEligible()
@@ -383,6 +402,7 @@ public sealed partial class GpsPadraoRepository
                     resultados[entrada.InputId] = ResultadoBuscaPadrao.InfrastructureFailure();
                 continue;
             }
+            phases.Move(MatchingBatchPhase.Prepare);
             var inicio = Stopwatch.GetTimestamp();
             var comandoBatchRegistrado = false;
             var tentativaPostgres = false;
@@ -399,11 +419,13 @@ public sealed partial class GpsPadraoRepository
                     fracao_max = x.Faixa?.Max ?? 1d
                 }));
                 await ExecutarRotaChunkAsync(json, direcionado: true, resultados,
-                    () => tentativaPostgres = true, cancellationToken);
+                    () => tentativaPostgres = true, cancellationToken, phases);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
+                phases.Move(MatchingBatchPhase.Fallback);
+                phases.ChunkFailures++;
                 if (tentativaPostgres)
                 {
                     comandos.Add(new(TipoBatchMatching.Direcionado,
@@ -473,6 +495,7 @@ public sealed partial class GpsPadraoRepository
             }
             finally
             {
+                phases.Move(MatchingBatchPhase.Other);
                 if (tentativaPostgres && !comandoBatchRegistrado)
                     comandos.Add(new(TipoBatchMatching.Direcionado,
                         OrigemComandoMatchingLote.Batch, chunk.Length,
@@ -481,8 +504,10 @@ public sealed partial class GpsPadraoRepository
             AposChunkParaTeste?.Invoke(TipoBatchMatching.Direcionado, numeroChunk);
         }
 
-        return new(entradas.Select(x => new ResultadoMatchingDirecionadoLote(
+        var result = new ResultadoMatchingLote<ResultadoMatchingDirecionadoLote>(entradas.Select(x => new ResultadoMatchingDirecionadoLote(
             x.InputId, resultados[x.InputId])).ToArray(), new(entradas.Count, comandos));
+        phases.Complete();
+        return result;
     }
 
     private async Task ExecutarRotaChunkAsync(
@@ -490,7 +515,7 @@ public sealed partial class GpsPadraoRepository
         bool direcionado,
         Dictionary<string, ResultadoBuscaPadrao> resultados,
         Action registrarTentativaPostgres,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, MatchingBatchPhaseDiagnostics phases)
     {
         const string sql = """
             WITH inputs AS (
@@ -592,21 +617,29 @@ public sealed partial class GpsPadraoRepository
             """;
 
         registrarTentativaPostgres();
+        phases.Move(MatchingBatchPhase.Connection);
         await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
+        phases.Move(MatchingBatchPhase.Prepare);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql.Replace("/*FILTRO_PADRAO*/",
             direcionado ? "AND i.\"Id\" = entrada.padrao_versao_id" : "")
             .Replace("/*DESEMPATE_GLOBAL*/",
                 direcionado ? "" : ", cs.\"Id\" ASC");
         cmd.Parameters.AddWithValue("inputs", NpgsqlDbType.Jsonb, json);
+        phases.Move(MatchingBatchPhase.ExecuteReader);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        phases.Move(MatchingBatchPhase.Read);
         while (await reader.ReadAsync(cancellationToken))
         {
+            phases.Move(MatchingBatchPhase.Materialize);
+            phases.Rows++;
             var inputId = reader.GetString(reader.GetOrdinal("input_id"));
             resultados[inputId] = reader.IsDBNull(reader.GetOrdinal("padrao_versao_id"))
                 ? ResultadoBuscaPadrao.NotEligible()
                 : ResultadoBuscaPadrao.Found(LerRota(reader));
+            phases.Move(MatchingBatchPhase.Read);
         }
+        phases.Move(MatchingBatchPhase.Other);
     }
 
     private async Task ExecutarCombinadoChunkAsync(
@@ -614,7 +647,7 @@ public sealed partial class GpsPadraoRepository
         Dictionary<string, ResultadoMatchingCombinado> resultados,
         Action registrarTentativaPostgres,
         MotorCombinadoMatchingLote motor,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, MatchingBatchPhaseDiagnostics phases)
     {
         var json = JsonSerializer.Serialize(chunk.Select(x => new
         {
@@ -642,15 +675,21 @@ public sealed partial class GpsPadraoRepository
                     : ResultadoProjecaoOperacional.NaoSolicitada());
 
         registrarTentativaPostgres();
+        phases.Move(MatchingBatchPhase.Connection);
         await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
+        phases.Move(MatchingBatchPhase.Prepare);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = motor == MotorCombinadoMatchingLote.SetBased
             ? SqlMatchingCombinadoLoteSetBased
             : SqlMatchingCombinadoLoteLegacy;
         cmd.Parameters.AddWithValue("inputs", NpgsqlDbType.Jsonb, json);
+        phases.Move(MatchingBatchPhase.ExecuteReader);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        phases.Move(MatchingBatchPhase.Read);
         while (await reader.ReadAsync(cancellationToken))
         {
+            phases.Move(MatchingBatchPhase.Materialize);
+            phases.Rows++;
             var inputId = reader.GetString(reader.GetOrdinal("input_id"));
             var atual = resultados[inputId];
             switch (reader.GetString(reader.GetOrdinal("ramo")))
@@ -667,7 +706,9 @@ public sealed partial class GpsPadraoRepository
                 default: throw new InvalidOperationException("Ramo inesperado no matching combinado em lote.");
             }
             resultados[inputId] = atual;
+            phases.Move(MatchingBatchPhase.Read);
         }
+        phases.Move(MatchingBatchPhase.Other);
     }
 
     internal static CategoriaFalhaMatchingBatch ClassificarFalhaBatch(Exception ex)

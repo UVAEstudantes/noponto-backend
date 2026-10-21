@@ -33,6 +33,7 @@ internal interface IExecutorMatchingGps
 
 public sealed partial class GpsEnriquecimentoService
 {
+    internal TimeProvider MatchingDiagnosticsClock { get; init; } = TimeProvider.System;
     internal async Task<ResultadoEnriquecimentoGps[]> EnriquecerLoteComContextoAsync(
         IReadOnlyList<EntradaEnriquecimentoGps> entradas,
         CancellationToken ct,
@@ -45,6 +46,8 @@ public sealed partial class GpsEnriquecimentoService
         if (entradas.Count == 0) return [];
 
         performance?.RegistrarMatchingBatchInputs(entradas.Count);
+        using var phases = new MatchingBatchPhaseDiagnostics(_logger, MatchingBatchOperation.Stage,
+            entradas.Count, ct, clock: MatchingDiagnosticsClock);
 
         var stageId = Guid.NewGuid().ToString("N");
         var ids = Enumerable.Range(0, entradas.Count)
@@ -52,6 +55,7 @@ public sealed partial class GpsEnriquecimentoService
             .ToArray();
         var executor = new ExecutorMatchingGpsLote(
             _repositorio, ids, performance, _opcoesBatch.TamanhoChunk, ct);
+        phases.Move(MatchingBatchPhase.Other); // Decisions/barriers/awaits, not CPU-only time.
 
         // A concorrência aqui é apenas da decisão C# por posição. O executor
         // emite no máximo um grupo simple, um combined e um directed, nessa ordem;
@@ -70,6 +74,7 @@ public sealed partial class GpsEnriquecimentoService
             }
         }), performance?.MatchingDiagnostics);
         performance?.RegistrarProtecaoBatch(executor.Protecao);
+        phases.Complete();
         return resultados;
     }
 
