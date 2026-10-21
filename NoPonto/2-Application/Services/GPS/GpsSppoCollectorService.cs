@@ -14,6 +14,8 @@ public sealed class GpsSppoCollectorService : BackgroundService
     private readonly GpsSppoCollectorMetrics _metrics;
     private readonly SemaphoreSlim _coletaEmAndamento = new(1, 1);
     private DateTimeOffset? _watermarkConfirmado;
+    // Only the immediately preceding published snapshot, never a historical watermark.
+    private Dictionary<string, DateTimeOffset>? _timestampsSnapshotPublicado;
 
     public GpsSppoCollectorService(
         IGpsSourceResolver sourceResolver,
@@ -93,8 +95,22 @@ public sealed class GpsSppoCollectorService : BackgroundService
                 _logger.LogInformation("BUS current snapshot: status={status}, count={count}; historical coverage unknown, intermediate positions not recoverable.",
                     result.Status, result.Posicoes.Count);
                 if (result.Status == StatusFonteGps.Sucesso && result.Posicoes.Count > 0)
+                {
+                    var timestamps = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var position in result.Posicoes)
+                        if (!timestamps.TryGetValue(position.Ordem, out var previous) || position.TimestampGps > previous)
+                            timestamps[position.Ordem] = position.TimestampGps;
+                    if (_timestampsSnapshotPublicado is { } published && published.Count == timestamps.Count
+                        && timestamps.All(x => published.TryGetValue(x.Key, out var previous) && previous == x.Value))
+                    {
+                        _logger.LogInformation("BUS current snapshot unchanged: count={count}; no new handoff generation.",
+                            result.Posicoes.Count);
+                        return result;
+                    }
                     await _snapshot.PublicarAsync(null, null, started, DateTimeOffset.UtcNow, null,
                         result.Posicoes, stoppingToken);
+                    _timestampsSnapshotPublicado = timestamps;
+                }
                 return result;
             }
             var opcoes = _opcoesMonitor.CurrentValue;

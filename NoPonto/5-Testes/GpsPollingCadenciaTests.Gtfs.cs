@@ -252,6 +252,11 @@ public sealed partial class GpsPollingCadenciaTests
         {
             fixture.Clock.Set(seconds);
             await collector.ColetarUmaVezAsync(fixture.Clock.GetUtcNow());
+            if (seconds % 33 != 0)
+            {
+                Assert.Null(store.Ler());
+                continue;
+            }
             var batch = Assert.IsType<LoteSppoSnapshot>(store.Ler());
             Assert.Equal("00123", Assert.Single(batch.Posicoes).Ordem);
             var callsBeforePendingRead = fixture.RequestStarts.Count;
