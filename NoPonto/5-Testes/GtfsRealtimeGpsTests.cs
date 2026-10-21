@@ -54,7 +54,10 @@ public sealed class GtfsRealtimeGpsTests(ITestOutputHelper output)
         var handler = new Handler((request, _) =>
         {
             if (request.Headers.IfNoneMatch.Any())
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotModified));
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotModified)
+                {
+                    Headers = { ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"fixture\"") },
+                });
             var response = Response(Feed());
             response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"fixture\"");
             response.Headers.CacheControl = new() { MaxAge = TimeSpan.FromSeconds(60) };

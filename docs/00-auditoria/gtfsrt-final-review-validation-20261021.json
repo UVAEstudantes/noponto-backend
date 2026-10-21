@@ -1,0 +1,255 @@
+{
+  "base_head": "43b6a72776b0e9c1105bf33b5fe73d2e33d3012b",
+  "initial_state_sha256": {
+    "NoPonto/2-Application/Services/GPS/GtfsRealtimeGps.cs": "7dcabab945fdd9033411753dbba6b04c61ebfbda76e61fc549eca1f7e32fa299",
+    "NoPonto/2-Application/Services/GPS/GtfsRealtimeGpsSource.cs": "4bef39689a2c45e43c41390d431c1aae613a70eecb6077c0614ff56339331a5b",
+    "NoPonto/5-Testes/GpsPollingCadenciaTests.Gtfs.cs": "d9c43c1e169f9a52e1987599820df4abd3ce189b5d4b19eb81dfb48559693650",
+    "NoPonto/HISTORICO.md": "3b014f80d283f57fd6644f34595a60da634c226b94144af6e913cef9e30b1f2e",
+    "NoPonto/5-Testes/GpsPollingCadenciaTests.BusAcquisition.cs": "15f20508675991eb7ef3661ee835678ce83041a68290139b3c2119c704d7d716",
+    "NoPonto/5-Testes/GpsPollingCadenciaTests.Outages.cs": "cc47cbb4a579b677467f26ce6a91e983cbf0500e561006619c8fe2071d199001",
+    "docs/00-auditoria/38-correcao-aquisicao-gps-bus-20261021.md": "0629445553d56b4617fcab2d02e11b0af5018a49bde3d844e02857242f0fed2a",
+    "docs/00-auditoria/39-auditoria-falhas-aquisicao-gtfsrt-20261021.md": "558ba02f57774142e8699609e95f9bfb8d0b019f028d37531b5d1c40fe9dd03b",
+    "docs/00-auditoria/bus-acquisition-validation-20261021.json": "6f047494c36d147dc09cbb31e77c1ee364e68917a7ba81772e46ba39899444b4",
+    "docs/00-auditoria/gtfsrt-outage-validation-20261021.json": "2771bd5a68e5481f06b8ea1ea4747094768e1bcb6d8b7fae201087954e821ae9"
+  },
+  "report_38_39_integration_hashes_match": true,
+  "protected_files": [
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsSppoCollectorService.cs",
+      "sha256": "b80b39eb1e15dd0f792fd405bf378319c027ed54259fa0c6c6c3774da16cf78f",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsSppoSnapshotStore.cs",
+      "sha256": "797ad9e8a0e6b5e3e39bc8f34b58137f0c9eded2c1eddae2b9824e15c3f71a79",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsPollingService.cs",
+      "sha256": "2c47864edbf8057e6b9db117598e886cc5676649e112b561b6b27fa250df2d32",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsSppoCollectorOptions.cs",
+      "sha256": "c168ae063d5deeb65bfb3cbb2bea8eb56758563aa6fbd8ce790896b235fa405f",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsTimestampDeduplication.cs",
+      "sha256": "696e97f421742784d3d543ce803fc7e788327ebead34ac08124f84bceaf4887f",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsSignalRPublisher.cs",
+      "sha256": "d956248a823e6a1b5ef99c9c08b45b44ac1f235aea0e4874e9a8016b1781aa24",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsBrtPollingGate.cs",
+      "sha256": "125488113a36befea714561b733ec9f81143e5613246dc6e11bf6537b60d481e",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/Program.cs",
+      "sha256": "685beec92a5a9c0afa366be12836a30cf6218c0a62abdc6c1c1341e2e9033b53",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/1-API/Configuration/DatabaseStartupPolicy.cs",
+      "sha256": "3b423eb04a36341e00f244af109baff5f7adfd6402ba868afb64d89d9b685de9",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/NoPonto.csproj",
+      "sha256": "30ff09497d5d39c6b44eafe0aea8094126da9a871850f1b70fb0252740a4c518",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/Dockerfile",
+      "sha256": "34ed2dc53aceeab7a3a9fcf3fc6b7bd11afb96af5a5ce6f8e31e8a9b34ad15dd",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/.dockerignore",
+      "sha256": "0a8df2cc0165605d67bfd509802c3a2fc5f2f3055cd8dafb3bb01267ea3f02d7",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": "NoPonto/docker-compose.yml",
+      "sha256": "af8b361c58a94d3c4b00f96798b8b5461353ad1dd210c13e5d6a3387f3667fd5",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": ".deploy/deploy-api.sh",
+      "sha256": "c459b91ff264580465e68b3ce494ef1778e8a06aef61cafaa7c2b9cf7089838d",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": ".deploy/ssh-deploy.sh",
+      "sha256": "aba8188aede3734ca1d6438adffb6fa5a6536afb249bc6a71f98d786c50fa2c3",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "path": ".github/workflows/deploy.yml",
+      "sha256": "b5a84f243a2cd180c82d424dd0871e2aad335d249a544e0ca4c73a927f4191ac",
+      "unchanged_from_HEAD": true
+    }
+  ],
+  "gtfs_options_and_parser_unchanged": true,
+  "functional_source_changes_during_review": false,
+  "solution_build": {
+    "command": "dotnet build NoPonto.sln --no-restore --no-incremental -c Release",
+    "executed": false,
+    "reason": "Automatic approval review rejected CreateProcess: approval required by policy, AskForApproval Never."
+  },
+  "runs": [
+    {
+      "file": "NoPonto/lab-output/gtfs-final-review-20261021/review-304-red.trx",
+      "sha256": "72b2772b05213a79e7e79610d9f44d34c4e3e1163f96449d507c7adff086abc9",
+      "total": 2,
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "review_failures": [
+        {
+          "name": "NoPonto.Tests.GtfsFinalReview304Tests.ReplacingCacheControlOn304MustNotRetainRemovedMaxAge",
+          "message": "Assert.Equal() Failure: Values differ\r\nExpected: 3\r\nActual:   2"
+        },
+        {
+          "name": "NoPonto.Tests.GtfsFinalReview304Tests.DifferentStrongEtagOn304MustNotRelabelOldBody",
+          "message": "Assert.False() Failure\r\nExpected: False\r\nActual:   True"
+        }
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/gtfs-final-review-20261021/review-directed.trx",
+      "sha256": "3e9b117a8a0ee726be0fe7f43708760f3cfdf38c1b667c9bb4b4dcd69f204f0a",
+      "total": 201,
+      "passed": 201,
+      "failed": 0,
+      "skipped": 0,
+      "review_failures": []
+    },
+    {
+      "file": "NoPonto/lab-output/gtfs-final-review-20261021/review-offline.trx",
+      "sha256": "9286433011cb0d05b6dfb628a07e681cabf101f9ef2bc7c20f047abd2d9cda2f",
+      "total": 810,
+      "passed": 810,
+      "failed": 0,
+      "skipped": 0,
+      "review_failures": []
+    }
+  ],
+  "standard_assembly_excludes_review_tests": true,
+  "review_cases_sha256": "b064cba1dc9e1f58e19cbf0cdc3fa22a363b8c956c63db56493237164a21e4a2",
+  "syntax_checks": [
+    {
+      "document": "41-plano-manual-aquisicao-gtfsrt-20261021.md",
+      "block": 0,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 0,
+      "commands_executed": false
+    },
+    {
+      "document": "41-plano-manual-aquisicao-gtfsrt-20261021.md",
+      "block": 1,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 0,
+      "commands_executed": false
+    },
+    {
+      "document": "41-plano-manual-aquisicao-gtfsrt-20261021.md",
+      "block": 2,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 0,
+      "commands_executed": false
+    },
+    {
+      "document": "41-plano-manual-aquisicao-gtfsrt-20261021.md",
+      "block": 3,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 0,
+      "commands_executed": false
+    },
+    {
+      "document": "41-plano-manual-aquisicao-gtfsrt-20261021.md",
+      "block": 4,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 0,
+      "commands_executed": false
+    },
+    {
+      "document": "41-plano-manual-aquisicao-gtfsrt-20261021.md",
+      "block": 5,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 0,
+      "commands_executed": false
+    },
+    {
+      "document": "41-plano-manual-aquisicao-gtfsrt-20261021.md",
+      "block": 6,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 2,
+      "commands_executed": false
+    },
+    {
+      "document": "41-plano-manual-aquisicao-gtfsrt-20261021.md",
+      "block": 7,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 0,
+      "commands_executed": false
+    },
+    {
+      "document": "41-plano-manual-aquisicao-gtfsrt-20261021.md",
+      "block": 8,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 0,
+      "commands_executed": false
+    },
+    {
+      "document": "42-diagnostico-readonly-homeserver-20261021.md",
+      "block": 0,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 1,
+      "commands_executed": false
+    },
+    {
+      "document": "42-diagnostico-readonly-homeserver-20261021.md",
+      "block": 1,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 1,
+      "commands_executed": false
+    },
+    {
+      "document": "42-diagnostico-readonly-homeserver-20261021.md",
+      "block": 2,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 0,
+      "commands_executed": false
+    },
+    {
+      "document": "42-diagnostico-readonly-homeserver-20261021.md",
+      "block": 3,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 1,
+      "commands_executed": false
+    },
+    {
+      "document": "42-diagnostico-readonly-homeserver-20261021.md",
+      "block": 4,
+      "bash_syntax_exit": 0,
+      "embedded_python_parsed": 0,
+      "commands_executed": false
+    }
+  ],
+  "production_or_diagnostic_commands_executed": false,
+  "deployment_verdict": "blocked_on_304_findings_build_and_provenance",
+  "historico_previous_prefix_preserved": true,
+  "historico_previous_sha256": "3b014f80d283f57fd6644f34595a60da634c226b94144af6e913cef9e30b1f2e",
+  "deliverables_sha256": {
+    "docs/00-auditoria/40-revisao-final-aquisicao-gtfsrt-20261021.md": "2960f0385b108f1166ac9268aa8d70e516842526aba053b9afa859aeb17d9a55",
+    "docs/00-auditoria/41-plano-manual-aquisicao-gtfsrt-20261021.md": "dc6775a9a41e5546861ea76af2cb245f65747f7c63fec55b72a8ae75394c398d",
+    "docs/00-auditoria/42-diagnostico-readonly-homeserver-20261021.md": "7d0277e0cdb5b147db5d94e722730102c8c9e28993bd1350ec127e8f5afc744f",
+    "docs/00-auditoria/40-review-304-cases.cs.txt": "b064cba1dc9e1f58e19cbf0cdc3fa22a363b8c956c63db56493237164a21e4a2"
+  }
+}

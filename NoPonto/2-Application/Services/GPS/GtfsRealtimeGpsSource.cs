@@ -56,7 +56,12 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
             finally { _readGate.Release(); }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-        catch (OperationCanceledException) { return new(StatusFonteGps.Falha, [], watch.Elapsed, "acquisition_timeout"); }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("GTFSRT source={source} failure={reason} last_http_snapshot={last}; source acquisition budget expired, no new operational snapshot.",
+                Name, "acquisition_timeout", _lastHttpSnapshot);
+            return new(StatusFonteGps.Falha, [], watch.Elapsed, "acquisition_timeout");
+        }
         catch (Exception ex) when (ex is Npgsql.NpgsqlException or TimeoutException or IOException)
         {
             _logger.LogWarning("GTFSRT source={source} crosswalk unavailable; historical coverage unknown; no operational fallback.", Name);
@@ -67,6 +72,8 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
     private async Task<GpsSourceReadResult> ReadCoreAsync(CancellationToken ct)
     {
         var result = await _client.ReadAsync(ct);
+        _logger.LogInformation("GTFSRT source={source} acquisition={acquisition} success={success} failure={failure} acquisition_duration_ms={duration:F0} reused={reused}; acquisition is distinct from accepted GPS and SignalR publication.",
+            Name, result.Acquisition, result.Success, result.Failure, result.Duration.TotalMilliseconds, result.Reused);
         var now = DateTimeOffset.UtcNow;
         if (!result.Success)
         {

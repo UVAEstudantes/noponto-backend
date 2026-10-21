@@ -1,0 +1,199 @@
+{
+  "base_head": "43b6a72776b0e9c1105bf33b5fe73d2e33d3012b",
+  "runs": [
+    {
+      "file": "NoPonto/lab-output/bus-acquisition-20261021/bus-acquisition-red.trx",
+      "sha256": "be4c92806774a70f71e486bef7c5d59d8c790485be46fed58359f0acefe95d94",
+      "total": 7,
+      "passed": 1,
+      "failed": 6,
+      "skipped": 0,
+      "acquisition_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 0)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 0)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 0, cacheControl: True)"
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/bus-acquisition-20261021/bus-acquisition-red-sequence.trx",
+      "sha256": "be65b89f00430ae83c098208a9bb18f80e3ae35c71a48cf37d3049a24995d4ce",
+      "total": 7,
+      "passed": 1,
+      "failed": 6,
+      "skipped": 0,
+      "acquisition_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 0)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 0, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 0)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 10)"
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/bus-acquisition-20261021/bus-acquisition-green.trx",
+      "sha256": "374db91e5fe98997241de631de85bc7ff8b78016d1404603b801243a6d96df2c",
+      "total": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "acquisition_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 0, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 0)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 0)"
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/bus-acquisition-20261021/bus-acquisition-directed.trx",
+      "sha256": "759e6573e1e9ea089d2c4894c68acb22d1d8114c09c1ef3f6e845634524749a4",
+      "total": 170,
+      "passed": 170,
+      "failed": 0,
+      "skipped": 0,
+      "acquisition_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 429, absolute: True, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_304RetainsOrUpdatesCachePolicyWithoutRenewingGps(updatePolicy: False, nextRequest: 120)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 0, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_BodyLatencyDoesNotRestartFreshnessOrChangeGpsTime",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 0, dateOffset: -20, nextRequest: 40)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 0, dateOffset: 0, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 0, dateOffset: 100, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 0)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 30, age: 30, dateOffset: 0, nextRequest: 30)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 10, dateOffset: 0, nextRequest: 50)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 0)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_304RetainsOrUpdatesCachePolicyWithoutRenewingGps(updatePolicy: True, nextRequest: 150)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 30, age: 60, dateOffset: 0, nextRequest: 30)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 429, absolute: False, nextRequest: 69)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 503, absolute: False, nextRequest: 69)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_304NoStoreEvictsBodyAndValidatorsWithoutBypassingInterval",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 503, absolute: True, nextRequest: 60)"
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/bus-acquisition-20261021/bus-acquisition-directed-final.trx",
+      "sha256": "2d65eee5d831dbac1f8642ad279bf020bd8a702cc8f980398a78a56968addaf9",
+      "total": 172,
+      "passed": 172,
+      "failed": 0,
+      "skipped": 0,
+      "acquisition_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 0, dateOffset: 100, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_NoCache304KeepsValidationRequirementAndMinimumInterval",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 503, absolute: False, nextRequest: 69)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 0)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 0)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 503, absolute: True, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_304RetainsOrUpdatesCachePolicyWithoutRenewingGps(updatePolicy: True, nextRequest: 150)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 0, dateOffset: 0, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 0, dateOffset: -20, nextRequest: 40)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 30, age: 30, dateOffset: 0, nextRequest: 30)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 0, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorCompletionDelayStillQuantizesAcquisition",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_304NoStoreEvictsBodyAndValidatorsWithoutBypassingInterval",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 429, absolute: False, nextRequest: 69)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 10, dateOffset: 0, nextRequest: 50)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_BodyLatencyDoesNotRestartFreshnessOrChangeGpsTime",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 30, age: 60, dateOffset: 0, nextRequest: 30)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 429, absolute: True, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_304RetainsOrUpdatesCachePolicyWithoutRenewingGps(updatePolicy: False, nextRequest: 120)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: False)"
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/bus-acquisition-20261021/bus-acquisition-offline.trx",
+      "sha256": "ee638d0bdc554280ce592276cae2e38ad8b11d320bcfae49f237ee39f0345ca4",
+      "total": 781,
+      "passed": 781,
+      "failed": 0,
+      "skipped": 0,
+      "acquisition_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 0, dateOffset: -20, nextRequest: 40)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 503, absolute: True, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 0)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 0, dateOffset: 100, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 10, dateOffset: 0, nextRequest: 50)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 429, absolute: True, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 30, age: 60, dateOffset: 0, nextRequest: 30)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 15, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 0, cacheControl: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 10)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_304NoStoreEvictsBodyAndValidatorsWithoutBypassingInterval",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorCompletionDelayStillQuantizesAcquisition",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_304RetainsOrUpdatesCachePolicyWithoutRenewingGps(updatePolicy: False, nextRequest: 120)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_304RetainsOrUpdatesCachePolicyWithoutRenewingGps(updatePolicy: True, nextRequest: 150)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 429, absolute: False, nextRequest: 69)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_RetryAfterIsNeverShortenedByAgeCorrection(status: 503, absolute: False, nextRequest: 69)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 30, age: 30, dateOffset: 0, nextRequest: 30)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_DateAgeAndTransitRespectFreshnessAndMinimumInterval(maxAge: 60, age: 0, dateOffset: 0, nextRequest: 60)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_BodyLatencyDoesNotRestartFreshnessOrChangeGpsTime",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_HttpRateLimitStaysAnchoredToRequestStart(age: 10, cacheControl: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_NoCache304KeepsValidationRequirementAndMinimumInterval",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_CollectorDoesNotMissExpiredHttpSnapshotWithVariableLatency(collectorStep: 30, age: 0)"
+      ]
+    }
+  ],
+  "protected_files": [
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsSppoCollectorService.cs",
+      "working_sha256": "b80b39eb1e15dd0f792fd405bf378319c027ed54259fa0c6c6c3774da16cf78f",
+      "unchanged": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsSppoSnapshotStore.cs",
+      "working_sha256": "797ad9e8a0e6b5e3e39bc8f34b58137f0c9eded2c1eddae2b9824e15c3f71a79",
+      "unchanged": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsPollingService.cs",
+      "working_sha256": "2c47864edbf8057e6b9db117598e886cc5676649e112b561b6b27fa250df2d32",
+      "unchanged": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsSppoCollectorOptions.cs",
+      "working_sha256": "c168ae063d5deeb65bfb3cbb2bea8eb56758563aa6fbd8ce790896b235fa405f",
+      "unchanged": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsTimestampDeduplication.cs",
+      "working_sha256": "696e97f421742784d3d543ce803fc7e788327ebead34ac08124f84bceaf4887f",
+      "unchanged": true
+    },
+    {
+      "path": "NoPonto/2-Application/Services/GPS/GpsSignalRPublisher.cs",
+      "working_sha256": "d956248a823e6a1b5ef99c9c08b45b44ac1f235aea0e4874e9a8016b1781aa24",
+      "unchanged": true
+    }
+  ],
+  "parser_unchanged": true,
+  "external_services_used": false,
+  "solution_build": {
+    "executed": false,
+    "reason": "Automatic approval review rejected the command because approval was required and unavailable; project compiled by the authorized directed test command."
+  },
+  "final_sources_sha256": {
+    "NoPonto/2-Application/Services/GPS/GtfsRealtimeGps.cs": "fa8eb498ec360598e4835c3d71406ac5b4c14868f30a47d63839aeadd0e145b5",
+    "NoPonto/2-Application/Services/GPS/GtfsRealtimeGpsSource.cs": "72fc7dad93fd86cbc29ca4e370f9dc32b571e2af448281260f853bec08d17b1a",
+    "NoPonto/5-Testes/GpsPollingCadenciaTests.BusAcquisition.cs": "15f20508675991eb7ef3661ee835678ce83041a68290139b3c2119c704d7d716",
+    "NoPonto/5-Testes/GpsPollingCadenciaTests.Gtfs.cs": "d9c43c1e169f9a52e1987599820df4abd3ce189b5d4b19eb81dfb48559693650"
+  },
+  "historico_previous_prefix_preserved": true,
+  "historico_previous_sha256": "267ebc0717c56f3195598e9c65abdccbecb0626583696cbf54af002a01bc1ad4"
+}

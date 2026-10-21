@@ -1,0 +1,264 @@
+{
+  "base_head": "43b6a72776b0e9c1105bf33b5fe73d2e33d3012b",
+  "continuation": true,
+  "previous_state_sha256": {
+    "NoPonto/2-Application/Services/GPS/GtfsRealtimeGps.cs": "fa8eb498ec360598e4835c3d71406ac5b4c14868f30a47d63839aeadd0e145b5",
+    "NoPonto/2-Application/Services/GPS/GtfsRealtimeGpsSource.cs": "72fc7dad93fd86cbc29ca4e370f9dc32b571e2af448281260f853bec08d17b1a",
+    "NoPonto/5-Testes/GpsPollingCadenciaTests.Gtfs.cs": "d9c43c1e169f9a52e1987599820df4abd3ce189b5d4b19eb81dfb48559693650",
+    "NoPonto/HISTORICO.md": "2f46ddc3075bee775ad0c687e0a22656b8727814da0fddb1d527d5ed14bbac59",
+    "NoPonto/5-Testes/GpsPollingCadenciaTests.BusAcquisition.cs": "15f20508675991eb7ef3661ee835678ce83041a68290139b3c2119c704d7d716",
+    "docs/00-auditoria/38-correcao-aquisicao-gps-bus-20261021.md": "0629445553d56b4617fcab2d02e11b0af5018a49bde3d844e02857242f0fed2a",
+    "docs/00-auditoria/bus-acquisition-validation-20261021.json": "6f047494c36d147dc09cbb31e77c1ee364e68917a7ba81772e46ba39899444b4"
+  },
+  "previous_artifacts_preserved": [
+    {
+      "file": "NoPonto/5-Testes/GpsPollingCadenciaTests.Gtfs.cs",
+      "sha256": "d9c43c1e169f9a52e1987599820df4abd3ce189b5d4b19eb81dfb48559693650"
+    },
+    {
+      "file": "NoPonto/5-Testes/GpsPollingCadenciaTests.BusAcquisition.cs",
+      "sha256": "15f20508675991eb7ef3661ee835678ce83041a68290139b3c2119c704d7d716"
+    },
+    {
+      "file": "docs/00-auditoria/38-correcao-aquisicao-gps-bus-20261021.md",
+      "sha256": "0629445553d56b4617fcab2d02e11b0af5018a49bde3d844e02857242f0fed2a"
+    },
+    {
+      "file": "docs/00-auditoria/bus-acquisition-validation-20261021.json",
+      "sha256": "6f047494c36d147dc09cbb31e77c1ee364e68917a7ba81772e46ba39899444b4"
+    }
+  ],
+  "protected_files": [
+    {
+      "file": "NoPonto/2-Application/Services/GPS/GpsSppoCollectorService.cs",
+      "sha256": "b80b39eb1e15dd0f792fd405bf378319c027ed54259fa0c6c6c3774da16cf78f",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "file": "NoPonto/2-Application/Services/GPS/GpsSppoSnapshotStore.cs",
+      "sha256": "797ad9e8a0e6b5e3e39bc8f34b58137f0c9eded2c1eddae2b9824e15c3f71a79",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "file": "NoPonto/2-Application/Services/GPS/GpsPollingService.cs",
+      "sha256": "2c47864edbf8057e6b9db117598e886cc5676649e112b561b6b27fa250df2d32",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "file": "NoPonto/2-Application/Services/GPS/GpsSppoCollectorOptions.cs",
+      "sha256": "c168ae063d5deeb65bfb3cbb2bea8eb56758563aa6fbd8ce790896b235fa405f",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "file": "NoPonto/2-Application/Services/GPS/GpsTimestampDeduplication.cs",
+      "sha256": "696e97f421742784d3d543ce803fc7e788327ebead34ac08124f84bceaf4887f",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "file": "NoPonto/2-Application/Services/GPS/GpsSignalRPublisher.cs",
+      "sha256": "d956248a823e6a1b5ef99c9c08b45b44ac1f235aea0e4874e9a8016b1781aa24",
+      "unchanged_from_HEAD": true
+    },
+    {
+      "file": "NoPonto/2-Application/Services/GPS/GpsBrtPollingGate.cs",
+      "sha256": "125488113a36befea714561b733ec9f81143e5613246dc6e11bf6537b60d481e",
+      "unchanged_from_HEAD": true
+    }
+  ],
+  "parser_unchanged": true,
+  "previous_http_deadline_algorithm_unchanged": true,
+  "runs": [
+    {
+      "file": "NoPonto/lab-output/gps-outage-20261021/outage-red.trx",
+      "sha256": "2ddd1fcdad518ae5aeb24b6d22e663d98126e17436235265c3f62ac7b88cb201",
+      "total": 6,
+      "passed": 0,
+      "failed": 6,
+      "skipped": 0,
+      "outage_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"http503\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_io\")"
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/gps-outage-20261021/outage-red-full.trx",
+      "sha256": "9b631d560fa4c6e5795d1a3170eb2be086bde9057457ae17d6f978f60dbbb33a",
+      "total": 8,
+      "passed": 0,
+      "failed": 8,
+      "skipped": 0,
+      "outage_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_OuterTimeoutIsLoggedWithoutNewSnapshot",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"http503\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_StartupSourceTimeoutDoesNotBypassHttpInterval",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"tls\")"
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/gps-outage-20261021/outage-green.trx",
+      "sha256": "de3e281f9f0167dbc07fb2bb230dd667cbc817eb4d3823a8128902ac9d1cf164",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "outage_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_OuterTimeoutIsLoggedWithoutNewSnapshot",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_StartupSourceTimeoutDoesNotBypassHttpInterval",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"http503\")"
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/gps-outage-20261021/outage-expanded.trx",
+      "sha256": "2d7121d90d1521b5a394d841b880822ab69441288130606e8e4dec4f633873b8",
+      "total": 27,
+      "passed": 26,
+      "failed": 1,
+      "skipped": 0,
+      "outage_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BRT\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_CallerCancellationPropagatesAndReleasesGate",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_StartupSourceTimeoutDoesNotBypassHttpInterval",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_Recovered200WithSameGpsRemainsDuplicate",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BUS\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_OuterTimeoutIsLoggedWithoutNewSnapshot",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"connect_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"connect_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"connect_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BRT\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BRT\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_AcquisitionLogsSeparateCachedFailureAndCachedSuccess",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BUS\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_CrosswalkTimeoutPreservesCompletedHttpSnapshot",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BUS\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"http503\")"
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/gps-outage-20261021/outage-directed-final.trx",
+      "sha256": "b42e3a5f62cfa779adf637f68f68964608c3ddbca3c34d7b61a3c5800e5f0111",
+      "total": 201,
+      "passed": 201,
+      "failed": 0,
+      "skipped": 0,
+      "outage_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BUS\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_CrosswalkTimeoutPreservesCompletedHttpSnapshot",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BUS\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"http503\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BRT\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"connect_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_CallerCancellationPropagatesAndReleasesGate",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"connect_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Brt_OuterTimeoutKeepsFallbackAgeIncreasingOnFollowingRead",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BRT\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_StartupSourceTimeoutDoesNotBypassHttpInterval",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_OuterTimeoutIsLoggedWithoutNewSnapshot",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_OuterTimeoutDoesNotRepublishPreviousGeneration",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BUS\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BRT\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_Recovered200WithSameGpsRemainsDuplicate",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"connect_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_AcquisitionLogsSeparateCachedFailureAndCachedSuccess",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: True)"
+      ]
+    },
+    {
+      "file": "NoPonto/lab-output/gps-outage-20261021/outage-offline-final.trx",
+      "sha256": "6742463430ffd31d38b21f2016b2412960d1084aa444f82cd4c77a303c4c857c",
+      "total": 810,
+      "passed": 810,
+      "failed": 0,
+      "skipped": 0,
+      "outage_cases": [
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BUS\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: False)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"connect_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_SourceTimeoutCannotBecomeCachedSuccess(partialBody: True)",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"connect_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_CallerCancellationPropagatesAndReleasesGate",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_Recovered200WithSameGpsRemainsDuplicate",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_OuterTimeoutIsLoggedWithoutNewSnapshot",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_FailureClearsValidatorsBeforeRecovery(fault: \"http503\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_AcquisitionLogsSeparateCachedFailureAndCachedSuccess",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_StartupSourceTimeoutDoesNotBypassHttpInterval",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BRT\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Bus_OuterTimeoutDoesNotRepublishPreviousGeneration",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BUS\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BUS\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Gtfs_CrosswalkTimeoutPreservesCompletedHttpSnapshot",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BRT\", fault: \"tls\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BRT\", fault: \"body_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime(modal: \"BRT\", fault: \"body_io\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.BusBrt_StartupOutageHasNoInventedFallbackAndRecovers(modal: \"BUS\", fault: \"connect_timeout\")",
+        "NoPonto.Tests.GpsPollingCadenciaTests.Brt_OuterTimeoutKeepsFallbackAgeIncreasingOnFollowingRead"
+      ]
+    }
+  ],
+  "new_test_methods": [
+    "Gtfs_SourceTimeoutCannotBecomeCachedSuccess",
+    "Gtfs_FailureClearsValidatorsBeforeRecovery",
+    "Gtfs_StartupSourceTimeoutDoesNotBypassHttpInterval",
+    "Gtfs_OuterTimeoutIsLoggedWithoutNewSnapshot",
+    "BusBrt_ConsecutiveTransportFailuresKeepStatusAndPhysicalTime",
+    "BusBrt_StartupOutageHasNoInventedFallbackAndRecovers",
+    "Gtfs_CallerCancellationPropagatesAndReleasesGate",
+    "Gtfs_AcquisitionLogsSeparateCachedFailureAndCachedSuccess",
+    "Gtfs_Recovered200WithSameGpsRemainsDuplicate",
+    "Gtfs_CrosswalkTimeoutPreservesCompletedHttpSnapshot",
+    "Brt_OuterTimeoutKeepsFallbackAgeIncreasingOnFollowingRead",
+    "Bus_OuterTimeoutDoesNotRepublishPreviousGeneration"
+  ],
+  "new_test_cases_final": 29,
+  "external_services_used": false,
+  "operational_timeout_or_cache_policy_changes": false,
+  "independent_solution_build_repeated": false,
+  "historico_previous_prefix_preserved": true,
+  "historico_previous_sha256": "2f46ddc3075bee775ad0c687e0a22656b8727814da0fddb1d527d5ed14bbac59",
+  "final_source_sha256": {
+    "NoPonto/2-Application/Services/GPS/GtfsRealtimeGps.cs": "7dcabab945fdd9033411753dbba6b04c61ebfbda76e61fc549eca1f7e32fa299",
+    "NoPonto/2-Application/Services/GPS/GtfsRealtimeGpsSource.cs": "4bef39689a2c45e43c41390d431c1aae613a70eecb6077c0614ff56339331a5b",
+    "NoPonto/5-Testes/GpsPollingCadenciaTests.Outages.cs": "cc47cbb4a579b677467f26ce6a91e983cbf0500e561006619c8fe2071d199001"
+  }
+}
