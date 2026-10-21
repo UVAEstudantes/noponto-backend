@@ -179,7 +179,7 @@ public sealed class IntegridadeCircularRegraTests
         var d=ViagemOperacionalRegra.AplicarAvaliacaoMudanca(s,avaliacao,gps,Baseline(),Guid.NewGuid())!;
         Assert.NotEqual(s.Observada.ViagemId,d.Estado.Observada.ViagemId);
         Assert.Null(d.Estado.Integridade); Assert.Equal(0,d.Estado.Observada.Volta);
-        Assert.Null(Assert.Single(d.Eventos,e=>e.Tipo=="ViagemFinalizada").MotivoFim);
+        Assert.Equal("MudancaOperacional",Assert.Single(d.Eventos,e=>e.Tipo=="ViagemFinalizada").MotivoFim);
         Assert.DoesNotContain(d.Eventos,e=>e.Tipo=="PassagemParada");
     }
 

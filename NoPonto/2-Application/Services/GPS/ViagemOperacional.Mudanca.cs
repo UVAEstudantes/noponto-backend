@@ -42,12 +42,19 @@ public static partial class ViagemOperacionalRegra
                 throw new InvalidOperationException("Confirmação exige baseline novo válido.");
             var inicio = DecidirInterno(null, avaliacao.EstruturaConfirmada, gps, baseline, novaId);
             // Fim lógico no instante da confirmação; não afirmar passagem/chegada a uma parada.
-            var fim = Evento(anterior, "ViagemFinalizada", gps.TimestampGps) with { OcorrenciaParadaPadraoId = null };
+            var fim = Evento(anterior, "ViagemFinalizada", gps.TimestampGps) with
+                { OcorrenciaParadaPadraoId = null, MotivoFim = "MudancaOperacional" };
             return new(inicio.Estado, new[] { fim }.Concat(inicio.Eventos).ToArray());
         }
         if (avaliacao.Status is StatusMudancaOperacional.PrimeiraEvidencia
             or StatusMudancaOperacional.CandidatoMantido or StatusMudancaOperacional.CandidatoSubstituido)
             return new(anterior with { Candidato = avaliacao.Candidato,
+                Observada = anterior.Observada with { TimestampUltimaAtualizacao = gps.TimestampGps } }, []);
+        if (avaliacao.Status == StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente
+            && anterior.Candidato is not null && avaliacao.Candidato is null)
+            return new(anterior with { Candidato = null,
+                Integridade = anterior.Observada.Topologia == "CIRCULAR"
+                    ? anterior.Integridade ?? NovoRegistro(anterior, null) : anterior.Integridade,
                 Observada = anterior.Observada with { TimestampUltimaAtualizacao = gps.TimestampGps } }, []);
         return null; // Continuidade normal ou rejeição sem mudança: fluxo anterior.
     }
@@ -71,8 +78,11 @@ public static partial class ViagemOperacionalRegra
         if (gps.TimestampGps <= obs.TimestampUltimaAtualizacao
             || (candidato is not null && gps.TimestampGps <= candidato.Timestamp))
             return Rejeitar("Observação duplicada ou antiga.");
+        if (statusMatching == StatusBuscaPadrao.InfrastructureFailure)
+            return Rejeitar("Matching indisponível por infraestrutura.");
         if (statusMatching != StatusBuscaPadrao.Found || !matchingPlausivel || estrutura is null)
-            return Rejeitar("Matching ausente, indisponível ou implausível.");
+            return new(StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente, null,
+                "Matching novo ausente ou implausível; sequência invalidada.");
         if (gps.Ordem != obs.OrdemVeiculo || obs.ViagemId == Guid.Empty
             || anterior.LinhaId == Guid.Empty || anterior.SentidoId == Guid.Empty
             || obs.PadraoOperacionalId == Guid.Empty || obs.PadraoVersaoId == Guid.Empty
@@ -88,11 +98,12 @@ public static partial class ViagemOperacionalRegra
             || gps.ComprimentoRotaMetros is not { } comprimento || !double.IsFinite(comprimento) || comprimento <= 0
             || !double.IsFinite(opcoes.VelocidadeMaximaKmh) || opcoes.VelocidadeMaximaKmh <= 0
             || !double.IsFinite(opcoes.ToleranciaProjecaoMetros) || opcoes.ToleranciaProjecaoMetros < 0)
-            return Rejeitar("Identidade, posição ou parâmetros inválidos.");
+            return new(StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente, null,
+                "Identidade, posição ou parâmetros inválidos.");
 
         var mesmaOperacao = estrutura.LinhaId == anterior.LinhaId && estrutura.SentidoId == anterior.SentidoId
             && estrutura.PadraoOperacionalId == obs.PadraoOperacionalId && estrutura.Topologia == obs.Topologia;
-        if (mesmaOperacao)
+        if (mesmaOperacao && (candidato is null || estrutura.SentidoInequivoco))
             return new(candidato is null ? StatusMudancaOperacional.Continuidade : StatusMudancaOperacional.CandidatoCancelado,
                 null, "Operação original; versão geométrica não define outra execução.");
         if (!estrutura.SentidoInequivoco)
@@ -123,6 +134,9 @@ public static partial class ViagemOperacionalRegra
                 segundos, opcoes.VelocidadeMaximaKmh)
             || Math.Abs(progresso) > GpsEnriquecimentoService.OrcamentoProjecaoMetros(segundos, opcoes))
             return new(StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente, null, "Salto entre evidências implausível.");
+        if (progresso < 0)
+            return new(StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente, null,
+                "Progresso regressivo entre evidências; sequência invalidada.");
         if (!EvidenciaInicioSuficiente(candidato, gps))
             return new(StatusMudancaOperacional.CandidatoMantido, candidato, "Movimento/progresso ainda insuficiente.");
         return new(StatusMudancaOperacional.MudancaConfirmada, candidato,

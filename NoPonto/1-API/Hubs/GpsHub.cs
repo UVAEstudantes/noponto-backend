@@ -12,6 +12,7 @@ namespace NoPonto.API.Hubs;
 ///
 /// Protocolo servidor → cliente:
 ///   PosicaoAtualizada(posicoes[])  — lista de PosicaoVeiculoDto da linha
+///   LinhaEsvaziada({ codigoLinha }) — snapshot vazio da linha identificada
 /// </summary>
 public sealed class GpsHub : Hub
 {
@@ -23,8 +24,9 @@ public sealed class GpsHub : Hub
     // Conjunto de linhas que têm pelo menos 1 conexão ativa.
     // Recalculado a partir de _linhasPorConexao para evitar race conditions
     // de contadores que ficam negativos ou pulam para zero erroneamente.
-    private static readonly ConcurrentDictionary<string, byte> _linhasAtivas =
+    private static readonly ConcurrentDictionary<string, long> _linhasAtivas =
         new(StringComparer.OrdinalIgnoreCase);
+    private static long _geracaoInscricao;
 
     /// <summary>
     /// Linhas com pelo menos 1 cliente conectado agora.
@@ -32,6 +34,10 @@ public sealed class GpsHub : Hub
     /// </summary>
     public static IReadOnlyCollection<string> LinhasComAssinantes =>
         (IReadOnlyCollection<string>)_linhasAtivas.Keys;
+
+    // A nova inscrição precisa de um estado vazio mesmo se a linha já estava vazia.
+    internal static IReadOnlyDictionary<string, long> AssinaturasAtivas =>
+        _linhasAtivas.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
 
     // ── Chamadas do cliente ───────────────────────────────────────────────────
 
@@ -44,12 +50,13 @@ public sealed class GpsHub : Hub
 
         await Groups.AddToGroupAsync(Context.ConnectionId, GrupoLinha(linha));
 
-        _linhasPorConexao.AddOrUpdate(
-            Context.ConnectionId,
-            _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase) { linha },
-            (_, set) => { lock (set) { set.Add(linha); } return set; });
-
-        _linhasAtivas[linha] = 1;
+        var set = _linhasPorConexao.GetOrAdd(Context.ConnectionId,
+            _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        lock (set)
+        {
+            if (set.Add(linha))
+                _linhasAtivas[linha] = Interlocked.Increment(ref _geracaoInscricao);
+        }
     }
 
     public async Task CancelarLinha(string codigoLinha)
@@ -105,6 +112,7 @@ public sealed class GpsHub : Hub
 
         // Garante que linhas com conexão estão no dicionário
         foreach (var linha in linhasComConexao)
-            _linhasAtivas[linha] = 1;
+            if (!_linhasAtivas.ContainsKey(linha))
+                _linhasAtivas.TryAdd(linha, Interlocked.Increment(ref _geracaoInscricao));
     }
 }

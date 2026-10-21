@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace NoPonto.Application.GPS;
 
@@ -10,14 +11,17 @@ public sealed class ViagemObservadaService
         _repository.LerContextoAsync(ordem, ct);
     private readonly IViagemObservadaRepository _repository;
     private readonly ILogger<ViagemObservadaService> _logger;
+    private readonly IOptions<GpsPollingOptions>? _options;
 
-    public ViagemObservadaService(IViagemObservadaRepository repository, ILogger<ViagemObservadaService> logger)
+    public ViagemObservadaService(IViagemObservadaRepository repository, ILogger<ViagemObservadaService> logger,
+        IOptions<GpsPollingOptions>? options = null)
     {
         _repository = repository;
         _logger = logger;
+        _options = options;
     }
 
-    /// <summary>Sem matching atual, a viagem permanece intacta, inclusive seu timestamp.</summary>
+    /// <summary>A leitura de contexto não altera a viagem ou seu timestamp.</summary>
     public async Task<ContextoOperacional?> LerContextoAsync(string ordem, CancellationToken ct)
     {
         try
@@ -47,7 +51,8 @@ public sealed class ViagemObservadaService
         ResultadoEnriquecimentoGps enriquecimento, CancellationToken ct)
     {
         var posicao = enriquecimento.Posicao;
-        if (posicao.PadraoVersaoId is null || posicao.PosicaoNaRota is null)
+        var recuperacao = _options?.Value.MudancaOperacionalHabilitada == true;
+        if ((posicao.PadraoVersaoId is null || posicao.PosicaoNaRota is null) && !recuperacao)
         {
             GpsCommitPerformanceContext.DiagnosticCurrent?.RegistrarResultadoOperacional(null);
             return null;
@@ -55,7 +60,11 @@ public sealed class ViagemObservadaService
         ViagemObservadaResultado result;
         try
         {
-            result = enriquecimento.ContextoOperacional is null
+            result = recuperacao && (enriquecimento.Diagnostico?.StatusGlobal == StatusBuscaPadrao.InfrastructureFailure
+                || enriquecimento.Diagnostico?.StatusDirecionado == StatusBuscaPadrao.InfrastructureFailure
+                || enriquecimento.ProjecaoOperacional.Status == StatusProjecaoOperacional.FalhaInfraestrutura)
+                ? new(ViagemObservadaStatus.InfrastructureFailure, enriquecimento.ContextoOperacional?.Observada)
+                : enriquecimento.ContextoOperacional is null
                 ? await _repository.TentarAtualizarAsync(posicao, ct).ConfigureAwait(false)
                 : await _repository.TentarAtualizarAsync(posicao,
                     enriquecimento.ContextoOperacional,

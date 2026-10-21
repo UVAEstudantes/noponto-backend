@@ -188,7 +188,8 @@ public static class EventoViagemValidator
 {
     public static void Validar(EventoViagem e)
     {
-        if (e.MotivoFim is not null && (e.Tipo != "ViagemFinalizada" || e.MotivoFim != "PerdaContinuidadeCircular"))
+        if (e.MotivoFim is not null && (e.Tipo != "ViagemFinalizada"
+            || e.MotivoFim is not ("PerdaContinuidadeCircular" or "MudancaOperacional")))
             throw new FormatException("Motivo de encerramento inválido.");
         if (e.ViagemId == Guid.Empty || e.SentidoId == Guid.Empty || e.PadraoVersaoId == Guid.Empty
             || string.IsNullOrWhiteSpace(e.OrdemVeiculo) || string.IsNullOrWhiteSpace(e.CodigoLinha)

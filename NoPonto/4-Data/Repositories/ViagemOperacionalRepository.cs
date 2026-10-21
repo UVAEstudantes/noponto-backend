@@ -105,11 +105,15 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
         PosicaoVeiculoDto gps, ContextoOperacional? contexto,
         ResultadoProjecaoOperacional projecao, bool snapshotFornecido, CancellationToken ct)
     {
-        if (gps.PadraoVersaoId is not { } itinerary || itinerary == Guid.Empty || gps.PosicaoNaRota is not { } p
-            || !double.IsFinite(p) || p is < 0 or > 1 || string.IsNullOrWhiteSpace(gps.Ordem)
-            || string.IsNullOrWhiteSpace(gps.CodigoLinha)
+        var semMatching = gps.PadraoVersaoId is null || gps.PosicaoNaRota is null;
+        var itinerary = gps.PadraoVersaoId.GetValueOrDefault();
+        var p = gps.PosicaoNaRota.GetValueOrDefault();
+        if (string.IsNullOrWhiteSpace(gps.Ordem)
             || !GpsLeituraValidator.CoordenadaValida(gps.Latitude, gps.Longitude)
-            || !GpsLeituraValidator.TimestampValido(gps.TimestampGps, DateTimeOffset.UtcNow, out _))
+            || !GpsLeituraValidator.TimestampValido(gps.TimestampGps, DateTimeOffset.UtcNow, out _)
+            || (semMatching ? !options.Value.MudancaOperacionalHabilitada
+                : itinerary == Guid.Empty || !double.IsFinite(p) || p is < 0 or > 1
+                    || string.IsNullOrWhiteSpace(gps.CodigoLinha)))
             return new(ViagemObservadaStatus.InvalidState);
 
         try
@@ -128,10 +132,23 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
 
             EstruturaViagem? estruturaObservacional = null;
             var estruturaObservacionalConsultada = false;
+            var cancelandoCandidata = false;
             DecisaoViagem? decisionMudanca = null;
             TransicaoParadas? baselineMudanca = null;
             var protegida = previous is not null && !ViagemOperacionalRegra.IdentidadeConfiavel(previous);
-            if (!protegida && options.Value.MudancaOperacionalHabilitada
+            if (options.Value.MudancaOperacionalHabilitada && previous?.Candidato is not null
+                && projecao.Status == StatusProjecaoOperacional.FalhaInfraestrutura)
+                return new(ViagemObservadaStatus.InfrastructureFailure, observed);
+            if (semMatching)
+            {
+                if (protegida || previous?.Candidato is null
+                    || previous.Estado is not (EstadoViagem.Ativa or EstadoViagem.PossivelFim))
+                    return new(ViagemObservadaStatus.ItineraryChanged, observed);
+                // GPS válido sem matching é uma barreira de evidência, não um baseline.
+                var avaliacao = ViagemOperacionalRegra.AvaliarMudancaSeHabilitada(options.Value, previous, null, gps)!;
+                decisionMudanca = ViagemOperacionalRegra.AplicarAvaliacaoMudanca(previous, avaliacao, gps);
+            }
+            else if (!protegida && options.Value.MudancaOperacionalHabilitada
                 && previous?.Estado is EstadoViagem.Ativa or EstadoViagem.PossivelFim)
             {
                 await using var leituraMudanca = await source.OpenConnectionAsync(ct);
@@ -140,6 +157,7 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                 estruturaObservacionalConsultada = true;
                 var avaliacao = ViagemOperacionalRegra.AvaliarMudancaSeHabilitada(
                     options.Value, previous, estruturaObservacional, gps)!;
+                cancelandoCandidata = avaliacao.Status == StatusMudancaOperacional.CandidatoCancelado;
                 if (avaliacao.Status == StatusMudancaOperacional.MudancaConfirmada)
                 {
                     baselineMudanca = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(
@@ -150,7 +168,7 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                 }
                 decisionMudanca = ViagemOperacionalRegra.AplicarAvaliacaoMudanca(previous, avaliacao,
                     gps, baselineMudanca, baselineMudanca is null ? Guid.Empty : Guid.NewGuid());
-                // Não deixar Decidir limpar candidatos em observações sem prova positiva.
+                // Rejeições que preservam evidência (ex.: infraestrutura) não viram baseline.
                 if (decisionMudanca is null && previous.Candidato is not null
                     && avaliacao.Status == StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente)
                 {
@@ -208,6 +226,8 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
             }
             else
             {
+                var continuidadeCircularPendente = previous is not null
+                    && ViagemOperacionalRegra.ExigeRevalidacaoCircular(previous, options.Value);
                 EstruturaViagem? structure;
                 if (usandoProjecao && previous is not null)
                     structure = new(previous.Observada.PadraoVersaoId, previous.LinhaId,
@@ -228,11 +248,12 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                 baseline = previous is null || previous.Estado == EstadoViagem.Finalizada
                     || previous.Observada.PadraoVersaoId != itinerary
                     || protegida
+                    || continuidadeCircularPendente
                     || (previous.Candidato is not null && (options.Value.MudancaOperacionalHabilitada
                         || previous.Observada.Topologia == "CIRCULAR"));
                 GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
-                var posicaoInicialTransicao = protegida || (baseline && previous?.Candidato is not null
-                        && previous.Observada.Topologia == "CIRCULAR") ? p
+                var posicaoInicialTransicao = protegida || (baseline && continuidadeCircularPendente
+                        && previous!.Observada.Topologia == "CIRCULAR") ? p
                         : PosicaoInicialTransicao(previous, itinerary, p, baseline,
                             options.Value.MudancaOperacionalHabilitada);
                 transition = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(connection, null,
@@ -242,12 +263,27 @@ public sealed partial class ViagemOperacionalRepository(IConnectionMultiplexer r
                     structure.Topologia, previous is null || previous.Estado == EstadoViagem.Finalizada
                         || previous.Observada.PadraoVersaoId != itinerary ? 0 : previous.Observada.Volta);
                 if (transition.Status != ViagemObservadaStatus.Updated) return new(transition.Status);
+                if (cancelandoCandidata && baseline
+                    && previous!.Observada.Topologia == "LINEAR" && structure.Topologia == "LINEAR"
+                    && previous.Observada.PadraoVersaoId == itinerary
+                    && transition.UltimaOrdem < previous.Observada.UltimaParadaOrdem)
+                {
+                    // Mesma execução: adotar o GPS atual não reabre ocorrências incorporadas.
+                    // A consulta normal com p == p valida o cursor antigo e resolve o próximo
+                    // alvo sem cruzamentos; baselines de uma nova execução não passam aqui.
+                    GpsCommitPerformanceContext.Current?.RegistrarViagemPgRead();
+                    transition = await OcorrenciaParadaRepository.BuscarTransicaoNaConexaoAsync(connection, null,
+                        itinerary, p, p, previous.Observada.UltimaOcorrenciaParadaPadraoId,
+                        previous.Observada.UltimaParadaOrdem, false, ct, structure.Topologia,
+                        previous.Observada.Volta);
+                    if (transition.Status != ViagemObservadaStatus.Updated) return new(transition.Status);
+                }
                 var provaCircular = previous?.Observada.Topologia == "CIRCULAR"
-                    && (protegida || previous.Candidato is not null)
+                    && (protegida || continuidadeCircularPendente)
                     ? await BuscarProvaCircularAsync(connection, previous, structure, gpsOperacional, ct) : null;
                 decision = ViagemOperacionalRegra.Decidir(previous, structure, gpsOperacional,
                     transition, Guid.NewGuid(), adocaoLegado: options.Value.MudancaOperacionalHabilitada
-                        && previous?.Candidato is not null, provaCircular: provaCircular, opcoes: options.Value);
+                        && (previous?.Candidato is not null || continuidadeCircularPendente), provaCircular: provaCircular, opcoes: options.Value);
                 correlatedDiagnostics?.Transition(gps, previous, structure, transition, posicaoInicialTransicao, p, baseline, decision);
                 if (previous is not null && transition.Ultrapassadas.Count > 0)
                     GpsCommitPerformanceContext.Current?.RegistrarCatchupPassagens(

@@ -1,0 +1,6 @@
+<Project>
+  <!-- Opt-in only: no production project/configuration changes. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'NoPonto'">
+    <Compile Include="$(MSBuildThisFileDirectory)PerformanceLab.cs" />
+  </ItemGroup>
+</Project>

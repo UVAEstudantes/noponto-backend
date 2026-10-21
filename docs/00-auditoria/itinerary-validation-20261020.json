@@ -1,0 +1,119 @@
+{
+  "base_commit": "b816690484f514a7ce8bf55d7f7adb804f499dfb",
+  "branch": "audit/gps-bus-brt-pipeline",
+  "scope": "diagnosis only; no production behavior changes",
+  "sdk": "9.0.306",
+  "test_platform": "xUnit 2 / VSTest",
+  "unique_passed_final_selections": 345,
+  "test_runs": [
+    {
+      "report": "NoPonto/lab-output/itinerary-audit-20261020/itinerary-repro.trx",
+      "sha256": "a14755c26dd2737a0b7a06766b4c219bc3836756c12bbd1034ac8b1b1f827793",
+      "command": "dotnet test NoPonto/NoPonto.csproj --no-restore --filter \"FullyQualifiedName~GpsPassagens4C6Tests|FullyQualifiedName~GpsCorrelatedDiagnosticsTests\" --logger \"trx;LogFileName=itinerary-repro.trx\" --results-directory NoPonto/lab-output/itinerary-audit-20261020",
+      "exit_code": 0,
+      "passed": 38,
+      "failed": 0,
+      "skipped": 0,
+      "classes": {
+        "NoPonto.Tests.GpsPassagens4C6Tests": 14,
+        "NoPonto.Tests.GpsCorrelatedDiagnosticsTests": 24
+      }
+    },
+    {
+      "report": "NoPonto/lab-output/itinerary-audit-20261020/itinerary-continuity.trx",
+      "sha256": "9c1e69985a1a19b8f28a679471d5e31362f2ca09a36940e10c8891bfd325bb6a",
+      "command": "dotnet test NoPonto/NoPonto.csproj --no-build --no-restore --filter \"FullyQualifiedName~ViagemOperacionalRegraTests|FullyQualifiedName~MudancaOperacionalRegraTests|FullyQualifiedName~MudancaOperacionalIntegracaoLogicaTests|FullyQualifiedName~IntegridadeCircularRegraTests|FullyQualifiedName~GpsCursor4C8Tests|FullyQualifiedName~GpsCursor4C9Tests|FullyQualifiedName~ViagemObservadaServiceTests|FullyQualifiedName~PhysicalEtaMvpTests|FullyQualifiedName~PhysicalEtaSelectedStopTests|FullyQualifiedName~TelemetriaMlIdentidadeTests|FullyQualifiedName~GpsEnriquecimentoServiceTests\" --logger \"trx;LogFileName=itinerary-continuity.trx\" --results-directory NoPonto/lab-output/itinerary-audit-20261020",
+      "exit_code": 0,
+      "passed": 295,
+      "failed": 0,
+      "skipped": 0,
+      "classes": {
+        "NoPonto.Tests.PhysicalEtaMvpTests": 16,
+        "NoPonto.Tests.PhysicalEtaSelectedStopTests": 15,
+        "NoPonto.Tests.GpsEnriquecimentoServiceTests": 91,
+        "NoPonto.Tests.MudancaOperacionalRegraTests": 30,
+        "NoPonto.Tests.ViagemOperacionalRegraTests": 49,
+        "NoPonto.Tests.GpsCursor4C8Tests": 5,
+        "NoPonto.Tests.TelemetriaMlIdentidadeTests": 27,
+        "NoPonto.Tests.GpsCursor4C9Tests": 6,
+        "NoPonto.Tests.ViagemObservadaServiceTests": 30,
+        "NoPonto.Tests.IntegridadeCircularRegraTests": 19,
+        "NoPonto.Tests.MudancaOperacionalIntegracaoLogicaTests": 7
+      }
+    },
+    {
+      "report": "NoPonto/lab-output/itinerary-audit-20261020/itinerary-impact-final.trx",
+      "sha256": "0fa26da1ac7e75214608568ec14eb6d94b19d34acfef7e65d9c78bed6d3b1631",
+      "command": "dotnet test NoPonto/NoPonto.csproj --no-restore --filter \"FullyQualifiedName~GpsItineraryContinuityDiagnosisTests\" --logger \"trx;LogFileName=itinerary-impact-final.trx\" --results-directory NoPonto/lab-output/itinerary-audit-20261020",
+      "exit_code": 0,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "classes": {
+        "NoPonto.Tests.GpsItineraryContinuityDiagnosisTests": 12
+      }
+    }
+  ],
+  "initial_fixture_error": "8 failures: coordinates (0,0) caused InvalidState; corrected only synthetic fixture; subsequent 8 then final 12 passed. No production fix or functional red-green claimed.",
+  "full_solution_build": "Not executed: automatic approval review required approval, policy Never; no technical reason supplied. Project compiled by dotnet test.",
+  "production": {
+    "read_only": true,
+    "modals": {
+      "BUS": {
+        "sampled": 8,
+        "gps_increased_last_interval": 8,
+        "operational_frozen_with_new_gps": 7,
+        "durable_version_unchanged": 7,
+        "first_divergent_version": 7,
+        "last_max_operational_lag_hours": 128.655
+      },
+      "BRT": {
+        "sampled": 8,
+        "gps_increased_last_interval": 8,
+        "operational_frozen_with_new_gps": 5,
+        "durable_version_unchanged": 5,
+        "first_divergent_version": 6,
+        "last_max_operational_lag_hours": 275.19388888888886
+      }
+    },
+    "rest_gets": 6,
+    "redis_eval_ro_calls": 5,
+    "max_named_keys_per_eval": 51,
+    "sql_readonly_transactions": 79,
+    "sql_breakdown": {
+      "index_metadata": 3,
+      "durable_state_primary_key": 48,
+      "geometry_two_version_replay": 11,
+      "indexed_occurrence_seeks": 17
+    },
+    "statement_timeout_ms": 3000,
+    "lock_timeout_ms": 500,
+    "artifact_hashes": {
+      "itinerary-production-evidence-20261020.jsonl": {
+        "sha256": "27d3aa662e7f5bdda2b327bc18edad24a3575ba98a46ef164c62647c3788e8c0",
+        "jsonl_records": 7
+      },
+      "itinerary-geometry-evidence-20261020.jsonl": {
+        "sha256": "e7ee3813bf699799bc265af58f0c33b0172ad92c8fd0fd8492bade316da3ec54",
+        "jsonl_records": 5
+      },
+      "itinerary-structure-evidence-20261020.jsonl": {
+        "sha256": "39a767b382b7875b7d0770f15f5ff5d28e087ddab406d19a917dd69bcc35cc94",
+        "jsonl_records": 5
+      }
+    }
+  },
+  "protected_working_file_sha256": {
+    "NoPonto/Program.cs": "685beec92a5a9c0afa366be12836a30cf6218c0a62abdc6c1c1341e2e9033b53",
+    "NoPonto/2-Application/Services/GPS/GpsPollingService.cs": "2c47864edbf8057e6b9db117598e886cc5676649e112b561b6b27fa250df2d32",
+    "NoPonto/2-Application/Services/GPS/GpsPhysicalPredecessor.cs": "0bcaf421655ba99689e9ac2202686092f094ae7c347d3f7771b31225e1aa52bd",
+    "NoPonto/2-Application/Services/GPS/GpsSignalRPublisher.cs": "d956248a823e6a1b5ef99c9c08b45b44ac1f235aea0e4874e9a8016b1781aa24",
+    "NoPonto/2-Application/Services/GPS/PhysicalEta.cs": "f6f5afc28c2f435b7edc2e64fbb9548d91c09d3f458e1d68636c089201e7501b",
+    "NoPonto/2-Application/Services/GPS/GpsEnriquecimentoService.cs": "46c38dacf88d68698d08b67bbf88ca77cb81b99f6a63574a996c1b63d08532ee",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.cs": "1d79acde999ff283d34f173afa6b2a8f4ed8b9a9cbdfda03bdb8a12206a87e53",
+    "NoPonto/2-Application/Services/GPS/ViagemOperacional.Mudanca.cs": "65056d0ec0b7a5bf26ceea9dbad1eaba6d0868ac65d0e938506cbdfb5b5b3903",
+    "NoPonto/4-Data/Repositories/ViagemOperacionalRepository.cs": "5de4bc4fd9ff2ab3d16c5f185c0514f93a49f98e135f262b9d95b8c6340a16fc",
+    "NoPonto/4-Data/Repositories/GpsItinerarioRepository.CombinedSetBased.cs": "32faf431a86203e4a42547f849656058695d434ed00536931c46f7801ce4fe08",
+    "NoPonto/4-Data/Repositories/PosicaoVeiculoCacheRepository.cs": "7d61a1aec5dae23ef53ab8c94371ee59f7098027d1639d52faea7f3de2ca902b"
+  }
+}

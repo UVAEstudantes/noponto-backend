@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
 using Xunit;
 
@@ -6,6 +7,55 @@ namespace NoPonto.Tests;
 
 public sealed class ViagemObservadaServiceTests
 {
+    private sealed class EvidenceRepository : IViagemObservadaRepository
+    {
+        public readonly List<PosicaoVeiculoDto> Calls = [];
+        public ContextoOperacional? Context;
+        public Task<ViagemObservadaResultado> TentarAtualizarAsync(string ordem, Guid id, DateTimeOffset t,
+            double p, CancellationToken ct) => throw new InvalidOperationException("DTO must remain intact");
+        public Task<ViagemObservadaResultado> TentarAtualizarAsync(PosicaoVeiculoDto p, CancellationToken ct)
+        { Calls.Add(p); return Task.FromResult(new ViagemObservadaResultado(ViagemObservadaStatus.Updated)); }
+        public Task<ViagemObservadaResultado> TentarAtualizarAsync(PosicaoVeiculoDto p,
+            ContextoOperacional? context, ResultadoProjecaoOperacional projection, CancellationToken ct)
+        { Context = context; return TentarAtualizarAsync(p, ct); }
+    }
+
+    [Theory]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, true)]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, false)]
+    public async Task EvidenceBarrier_ServiceRoutesOnlyEnabledNonInfrastructureObservations(
+        bool enabled, bool unmatched, bool infrastructure)
+    {
+        var repo = new EvidenceRepository();
+        var service = new ViagemObservadaService(repo, NullLogger<ViagemObservadaService>.Instance,
+            Options.Create(new GpsPollingOptions { MudancaOperacionalHabilitada = enabled }));
+        var gps = unmatched ? Position() with { PadraoVersaoId = null, PosicaoNaRota = null } : Position();
+        var context = new ContextoOperacional([], null, null);
+        var input = new ResultadoEnriquecimentoGps(gps, context,
+            infrastructure ? ResultadoProjecaoOperacional.Falha() : ResultadoProjecaoOperacional.NaoSolicitada());
+        var result = await service.AtualizarAsync(input, default);
+        if (!enabled && unmatched)
+        {
+            Assert.Null(result);
+            Assert.Empty(repo.Calls);
+        }
+        else if (enabled && infrastructure)
+        {
+            Assert.Equal(ViagemObservadaStatus.InfrastructureFailure, result!.Value.Status);
+            Assert.Empty(repo.Calls);
+        }
+        else
+        {
+            Assert.Equal(ViagemObservadaStatus.Updated, result!.Value.Status);
+            Assert.Equal(gps, Assert.Single(repo.Calls));
+            Assert.Same(context, repo.Context);
+        }
+    }
+
     [Theory]
     [InlineData("ONIBUS", "GTFSRT_BUS", "00123")]
     [InlineData("BRT", "GTFSRT_BRT", "BRT-00123")]

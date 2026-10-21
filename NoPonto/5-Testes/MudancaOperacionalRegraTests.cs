@@ -137,13 +137,26 @@ public sealed class MudancaOperacionalRegraTests
     [Theory]
     [InlineData(.2005, -43.1998)]
     [InlineData(.202, -43.2)]
-    [InlineData(.199, -43.1998)]
     public void MovimentoOuProgressoInsuficiente_MantemPrimeiraEvidencia(double p, double lon)
     {
         var (s, e) = Candidatar();
         var a = Avaliar(s, e, G(e, 20, p, lon));
         Assert.Equal(StatusMudancaOperacional.CandidatoMantido, a.Status);
         Assert.Same(s.Candidato, a.Candidato);
+    }
+
+    [Fact]
+    public void ProgressoRegressivo_InvalidaSemIncorporarPosicao()
+    {
+        var (s, e) = Candidatar();
+        var gps = G(e, 20, .199, -43.1998);
+        var a = Avaliar(s, e, gps);
+        Assert.Equal(StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente, a.Status);
+        Assert.Null(a.Candidato);
+        var d = ViagemOperacionalRegra.AplicarAvaliacaoMudanca(s, a, gps)!;
+        Assert.Null(d.Estado.Candidato);
+        Assert.Equal(s.Observada with { TimestampUltimaAtualizacao = gps.TimestampGps }, d.Estado.Observada);
+        Assert.Empty(d.Eventos);
     }
 
     [Theory]
@@ -175,7 +188,8 @@ public sealed class MudancaOperacionalRegraTests
         var (s, e) = Candidatar();
         var a = Avaliar(s, e, G(e, 20, .202, -43.1998), status, plausivel);
         Assert.Equal(StatusMudancaOperacional.EvidenciaRejeitadaOuInsuficiente, a.Status);
-        Assert.Same(s.Candidato, a.Candidato);
+        if (status == StatusBuscaPadrao.InfrastructureFailure) Assert.Same(s.Candidato, a.Candidato);
+        else Assert.Null(a.Candidato);
     }
 
     [Fact]

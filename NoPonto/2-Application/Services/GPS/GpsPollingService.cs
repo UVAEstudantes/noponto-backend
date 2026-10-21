@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,21 +5,15 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NoPonto.API.Hubs;
-using NoPonto.Application.LegacyCompatibility.DTOs;
 using NoPonto.Data.Repositories;
 
 namespace NoPonto.Application.GPS;
 
 public sealed class GpsPollingService : BackgroundService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
     private readonly GpsSppoSnapshotStore _snapshotSppo;
     private readonly IDistributedCache _cache;
-    private readonly IHubContext<GpsHub> _hubContext;
+    private readonly GpsSignalRPublisher _signalR;
     private readonly ILogger<GpsPollingService> _logger;
     private readonly IOptionsMonitor<GpsPollingOptions> _opcoesMonitor;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -77,7 +70,7 @@ public sealed class GpsPollingService : BackgroundService
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
-        _hubContext = hubContext;
+        _signalR = new(cache, hubContext);
         _logger = logger;
         _opcoesMonitor = opcoes;
         _scopeFactory = scopeFactory;
@@ -212,9 +205,7 @@ public sealed class GpsPollingService : BackgroundService
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
 
         inicioEtapa = System.Diagnostics.Stopwatch.GetTimestamp();
-        var brtPolling = await _brtGate.ObterAsync(
-            TimeSpan.FromSeconds(opcoes.IntervaloBrtSegundos),
-            BuscarResultadoBrtAsync, ct);
+        var brtPolling = await ObterBrtAsync(opcoes, ct);
         var resultadoBrt = brtPolling.ResultadoEfetivo;
         performance.BrtConsultasHttp = brtPolling.ConsultaHttpReal ? 1 : 0;
         performance.BrtCacheReutilizacoes = brtPolling.CacheReutilizado ? 1 : 0;
@@ -246,6 +237,8 @@ public sealed class GpsPollingService : BackgroundService
             performance.NormalizacaoMs = (long)System.Diagnostics.Stopwatch
                 .GetElapsedTime(inicioEtapa).TotalMilliseconds;
             performance.MatchingDiagnostics.EnrichmentComplete = true;
+            await _signalR.PublicarAsync([], new(StringComparer.OrdinalIgnoreCase),
+                new GpsRecenteCicloCache(_cache, performance), performance, GpsHub.AssinaturasAtivas, ct);
             ConfirmarSnapshotProcessado(loteSppo);
             cicloConcluidoNormalmente = !falhaBrtSemCache;
             return cicloConcluidoNormalmente;
@@ -287,6 +280,8 @@ public sealed class GpsPollingService : BackgroundService
         if (maisRecentesFiltrados.Count == 0)
         {
             performance.MatchingDiagnostics.EnrichmentComplete = true;
+            await _signalR.PublicarAsync([], new(StringComparer.OrdinalIgnoreCase),
+                new GpsRecenteCicloCache(_cache, performance), performance, GpsHub.AssinaturasAtivas, ct);
             ConfirmarSnapshotProcessado(loteSppo);
             cicloConcluidoNormalmente = !falhaBrtSemCache;
             return cicloConcluidoNormalmente;
@@ -301,6 +296,12 @@ public sealed class GpsPollingService : BackgroundService
         var (anteriores, watermarkPorIndice, chavesWatermark) = await GpsTimestampDeduplication.ReadAsync(
             maisRecentesFiltrados, leiturasAnteriores, _posicaoCache, ct);
         performance.RedisLeiturasIniciais += chavesWatermark;
+        var (predecessoresFisicos, leiturasFisicas) = await GpsPhysicalPredecessor.ReadAsync(
+            maisRecentesFiltrados, anteriores, watermarkPorIndice, _cache, ct);
+        performance.RedisLeiturasIniciais += leiturasFisicas;
+        var predecessoresRetidos = predecessoresFisicos
+            .Where((p, i) => p is not null && anteriores[i] is null)
+            .Select(p => p!.Ordem).ToHashSet(StringComparer.OrdinalIgnoreCase);
         performance.RedisLeituraInicialMs = (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
 
@@ -330,7 +331,7 @@ public sealed class GpsPollingService : BackgroundService
             }
             _linhaPorVeiculo[nova.Ordem] = nova.CodigoLinha;
 
-            paraProcessar.Add((nova, anterior));
+            paraProcessar.Add((nova, predecessoresFisicos[i]));
         }
         performance.Novas = paraProcessar.Count;
 
@@ -423,8 +424,17 @@ public sealed class GpsPollingService : BackgroundService
                         finally { semaforo.Release(); }
                     }), performance.MatchingDiagnostics);
             }
-            enriquecimentos = enriquecimentos.Select((x, i) => x with
-                { PredecessorFisico = paraEnriquecer[i].Anterior }).ToArray();
+            enriquecimentos = enriquecimentos.Select((x, i) =>
+            {
+                var anterior = paraEnriquecer[i].Anterior;
+                var retido = predecessoresRetidos.Contains(x.Posicao.Ordem);
+                return x with
+                {
+                    PredecessorFisico = anterior,
+                    Posicao = retido && !GpsPhysicalPredecessor.Continuous(x, anterior!)
+                        ? x.Posicao with { MatchingOperacionalPlausivel = false } : x.Posicao,
+                };
+            }).ToArray();
             resultadosEnriquecidos = enriquecimentos.Select(x => x.Posicao).ToArray();
         }
         performance.MatchingEtapaMs = (long)System.Diagnostics.Stopwatch
@@ -603,84 +613,11 @@ public sealed class GpsPollingService : BackgroundService
 
         await Task.WhenAll(tarefasEscrita);
 
-        // ── 7. Linhas assinadas sem veículos novos → carrega do Redis ─────────
-        foreach (var linha in GpsHub.LinhasComAssinantes)
-        {
-            if (ativosPorLinha.ContainsKey(linha)) continue;
-
-            performance.RedisLeiturasIndicesRecente++;
-            var raw = await _cache.GetStringAsync(ChaveLinha(linha), ct);
-            if (string.IsNullOrWhiteSpace(raw)) continue;
-
-            ativosPorLinha[linha] = new HashSet<string>(
-                raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-                StringComparer.OrdinalIgnoreCase);
-        }
-
-        // ── 8. Broadcast SignalR ──────────────────────────────────────────────
         performance.IndicesLinhaMs += (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
-
-        var linhasParaBroadcast = GpsHub.LinhasComAssinantes;
-
-        if (linhasParaBroadcast.Count > 0)
-        {
-            var inicioSignalr = System.Diagnostics.Stopwatch.GetTimestamp();
-            var broadcastTasks = new List<Task>();
-
-            foreach (var linha in linhasParaBroadcast)
-            {
-                if (!ativosPorLinha.TryGetValue(linha, out var todasOrdens)) continue;
-
-                var veiculosDaLinha = new List<PosicaoVeiculoDto>();
-                veiculosDaLinha.AddRange(aceitos.Where(p => p.CodigoLinha == linha));
-
-                var ordensDoCiclo = new HashSet<string>(
-                    veiculosDaLinha.Select(p => p.Ordem),
-                    StringComparer.OrdinalIgnoreCase);
-
-                var ordensSemSinal = todasOrdens.Where(o => !ordensDoCiclo.Contains(o)).ToList();
-
-                if (ordensSemSinal.Count > 0)
-                {
-                    var dadosSemSinal = await Task.WhenAll(
-                        ordensSemSinal.Select(async o =>
-                        {
-                            var json = await recentesDoCiclo.LerAsync(o, ct);
-                            if (json is null) return null;
-                            try
-                            {
-                                var dto = JsonSerializer.Deserialize<PosicaoVeiculoDto>(json, JsonOptions);
-                                return dto is null ? null : dto with { Status = StatusVeiculo.SemSinal };
-                            }
-                            catch { return null; }
-                        }));
-
-                    veiculosDaLinha.AddRange(dadosSemSinal.Where(d => d is not null)!);
-                }
-
-                if (veiculosDaLinha.Count > 0)
-                {
-                    performance.LinhasPublicadas++;
-                    performance.VeiculosEnviados += veiculosDaLinha.Count;
-                    broadcastTasks.Add(
-                        _hubContext.Clients
-                            .Group(GpsHub.GrupoLinha(linha))
-                            // TEMPORARY FRONTEND COMPATIBILITY: output-only alias; no GPS decision changes.
-                            .SendAsync("PosicaoAtualizada",
-                                veiculosDaLinha.Select(FrontendLegacyPosicaoSignalRDto.From).ToArray(), ct));
-                }
-            }
-
-            performance.SignalrPreparacaoMs = (long)System.Diagnostics.Stopwatch
-                .GetElapsedTime(inicioSignalr).TotalMilliseconds;
-            var inicioEsperaBroadcast = System.Diagnostics.Stopwatch.GetTimestamp();
-            await Task.WhenAll(broadcastTasks);
-            performance.SignalrBroadcastMs = (long)System.Diagnostics.Stopwatch
-                .GetElapsedTime(inicioEsperaBroadcast).TotalMilliseconds;
-            performance.SignalrEtapaMs = (long)System.Diagnostics.Stopwatch
-                .GetElapsedTime(inicioSignalr).TotalMilliseconds;
-        }
+        // Same publication path on normal cycles, no GPS and age-filtered input.
+        await _signalR.PublicarAsync(aceitos, ativosPorLinha, recentesDoCiclo,
+            performance, GpsHub.AssinaturasAtivas, ct);
 
         sw.Stop();
         _logger.LogInformation(
@@ -1015,6 +952,15 @@ public sealed class GpsPollingService : BackgroundService
         return await ConfirmarLoteDetalhadoAsync(detalhadas, ttlAtivo, ttlRecente,
             grauParalelismo, ct, performance);
     }
+
+    internal Task<ResultadoBrtPolling> ObterBrtAsync(
+        GpsPollingOptions opcoes, CancellationToken ct, long? timestampAtual = null)
+        // GTFS-RT already owns acquisition cadence (HTTP freshness/rate limit).
+        // A second interval restarts on client cache hits and can skip the next
+        // eligible poll. Keep gate serialization/fail-open and the legacy interval.
+        => _brtGate.ObterAsync(_brtSource is GtfsRealtimeGpsSource
+                ? TimeSpan.Zero : TimeSpan.FromSeconds(opcoes.IntervaloBrtSegundos),
+            BuscarResultadoBrtAsync, ct, timestampAtual);
 
     private async Task<ResultadoFonteGps> BuscarResultadoBrtAsync(CancellationToken ct)
     {

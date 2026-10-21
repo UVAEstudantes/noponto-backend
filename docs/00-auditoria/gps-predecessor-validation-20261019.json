@@ -1,0 +1,144 @@
+{
+    "schema":  "gps-predecessor-validation-v1",
+    "date":  "2026-10-19",
+    "branch":  "audit/gps-bus-brt-pipeline",
+    "base_commit":  "869cf60b1327b4daedf081197727ab4d3528762a",
+    "production_access":  false,
+    "deploy":  false,
+    "frontend_modified":  false,
+    "ml_runtime_modified":  false,
+    "cache_ttl_seconds":  {
+                              "active":  40,
+                              "recent":  180
+                          },
+    "physical_interval_seconds":  {
+                                      "inclusive_max":  180,
+                                      "exclusive_min":  0
+                                  },
+    "build":  {
+                  "exit_code":  0,
+                  "configuration":  "Release",
+                  "existing_warnings":  5,
+                  "solution":  "NoPonto.sln",
+                  "no_restore":  true,
+                  "no_incremental":  true
+              },
+    "official_offline":  {
+                             "failed":  0,
+                             "manifest":  ".ci/offline-tests.json",
+                             "configuration":  "Release",
+                             "passed":  738,
+                             "classes":  27,
+                             "skipped":  0,
+                             "ci_verifier_passed":  true,
+                             "total":  738
+                         },
+    "regression_cases":  [
+                             {
+                                 "test":  "NoPonto.Tests.GpsPhysicalPredecessorTests.CasRace_DoesNotAdvanceOperationalStateOrRenewVisualCache",
+                                 "cases":  2,
+                                 "passed":  2
+                             },
+                             {
+                                 "test":  "NoPonto.Tests.GpsPhysicalPredecessorTests.DuplicateAndOutOfOrder_DoNotReadEvidenceRenewLivenessOrCommit",
+                                 "cases":  4,
+                                 "passed":  4
+                             },
+                             {
+                                 "test":  "NoPonto.Tests.GpsPhysicalPredecessorTests.FreshGps_AfterActiveExpiry_UsesBoundedPhysicalEvidence",
+                                 "cases":  32,
+                                 "passed":  32
+                             },
+                             {
+                                 "test":  "NoPonto.Tests.GpsPhysicalPredecessorTests.NewLineOrItinerary_RequiresNewContinuityBeforeEta",
+                                 "cases":  12,
+                                 "passed":  12
+                             },
+                             {
+                                 "test":  "NoPonto.Tests.GpsPhysicalPredecessorTests.OldIncomingGps_RemainsIneligibleForEta_EvenWithPhysicalHistory",
+                                 "cases":  2,
+                                 "passed":  2
+                             },
+                             {
+                                 "test":  "NoPonto.Tests.GpsPhysicalPredecessorTests.PhysicalSafetyGates_RemainRequired",
+                                 "cases":  10,
+                                 "passed":  10
+                             },
+                             {
+                                 "test":  "NoPonto.Tests.GpsPhysicalPredecessorTests.PhysicalWindow_UsesGpsInterval_IndependentlyOfCacheLifetime",
+                                 "cases":  5,
+                                 "passed":  5
+                             },
+                             {
+                                 "test":  "NoPonto.Tests.GpsPhysicalPredecessorTests.Restart_RequiresLiveProjectionWarmup_WithoutCopyingCachedMatching",
+                                 "cases":  2,
+                                 "passed":  2
+                             },
+                             {
+                                 "test":  "NoPonto.Tests.GpsPhysicalPredecessorTests.RetainedEvidence_MustMatchWatermarkIdentityAndLiveProjection",
+                                 "cases":  34,
+                                 "passed":  34
+                             }
+                         ],
+    "runs":  [
+
+             ],
+    "protected_sources":  [
+
+                          ],
+    "before_after":  {
+                         "red_trx":  "predecessor-red.trx",
+                         "rows":  [
+                                      {
+                                          "cases":  4,
+                                          "before_predecessor":  4,
+                                          "before_eta_eligible":  4,
+                                          "interval_seconds":  30,
+                                          "after_predecessor":  4,
+                                          "after_eta_eligible":  4
+                                      },
+                                      {
+                                          "cases":  4,
+                                          "before_predecessor":  0,
+                                          "before_eta_eligible":  0,
+                                          "interval_seconds":  45,
+                                          "after_predecessor":  4,
+                                          "after_eta_eligible":  4
+                                      },
+                                      {
+                                          "cases":  4,
+                                          "before_predecessor":  0,
+                                          "before_eta_eligible":  0,
+                                          "interval_seconds":  60,
+                                          "after_predecessor":  4,
+                                          "after_eta_eligible":  4
+                                      },
+                                      {
+                                          "cases":  4,
+                                          "before_predecessor":  0,
+                                          "before_eta_eligible":  0,
+                                          "interval_seconds":  181,
+                                          "after_predecessor":  0,
+                                          "after_eta_eligible":  0
+                                      },
+                                      {
+                                          "cases":  4,
+                                          "before_predecessor":  0,
+                                          "before_eta_eligible":  0,
+                                          "interval_seconds":  240,
+                                          "after_predecessor":  0,
+                                          "after_eta_eligible":  0
+                                      }
+                                  ],
+                         "combinations":  "BUS/BRT x individual/batch, fresh GPS and continuous valid matching",
+                         "before_eta_basis":  "predecessor_absent gate in unchanged PhysicalEta; red cases stop on missing-history assertion",
+                         "green_trx":  "predecessor-offline-final.trx"
+                     },
+    "limits":  [
+                   "No connected Redis/PostGIS tests",
+                   "No production availability or accuracy measurement",
+                   "Existing current-GPS age and physical safety gates preserved",
+                   "Restart or incompatible matching requires warmup",
+                   "Recent reads do not renew visual TTLs"
+               ]
+}

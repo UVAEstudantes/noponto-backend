@@ -1,0 +1,41 @@
+{
+  "provenance": "Resumo transcrito da saida agregada da primeira execucao SSH de gps-source-observation.py; nenhum payload bruto foi retido.",
+  "window_utc": ["2026-10-19T22:10:44.131379+00:00", "2026-10-19T22:14:46.442876+00:00"],
+  "rounds": 9,
+  "nominal_seconds_between_rounds": 30,
+  "duration_seconds": 244.638,
+  "sources": {
+    "GTFSRT_BUS": {
+      "successful_rounds": 9,
+      "vehicles_per_snapshot": {"min": 1841, "p50": 1865, "max": 1868},
+      "positive_gps_delta_seconds": {"n": 10946, "p50": 30, "p95": 62, "min": 1, "max": 211},
+      "gps_age_seconds": {"n": 16728, "p50": 43.14, "p95": 64.077},
+      "same_timestamp_pairs": 3780,
+      "seen_pairs": 14726,
+      "http_seconds_p50": 1.262
+    },
+    "ZIRIX": {
+      "successful_rounds": 9,
+      "vehicles_per_snapshot": {"min": 2539, "p50": 2562, "max": 2593},
+      "positive_gps_delta_seconds": {"n": 20108, "p50": 30, "p95": 52, "min": 1, "max": 1361},
+      "gps_age_seconds": {"n": 23048, "p50": 19.121, "p95": 35.429},
+      "same_timestamp_pairs": 58,
+      "seen_pairs": 20166,
+      "http_seconds_p50": 2.394
+    }
+  },
+  "paired_BUS": {
+    "vehicle_round_pairs": 15353,
+    "current_minus_legacy_gps_seconds": {"p50": -30, "p95": 0, "min": -176, "max": 71},
+    "equal_timestamp_pairs": 3813,
+    "speed_difference_equal_timestamp": {"p50": 0, "p95": 0, "max": 0},
+    "position_distance_metres_equal_timestamp": {"p50": 0.116, "p95": 0.196, "max": 0.22}
+  },
+  "limitations": [
+    "Leituras diretas, sem sampling historico e sem crosswalk operacional.",
+    "Ultima posicao por veiculo/rodada; nao mede todos os eventos internos do provedor.",
+    "ZIRIX consultado por janela de 30s de datetime_servidor; conjuntos e filtros nao equivalentes.",
+    "A primeira execucao BRT_RIO falhou em 5/9 rodadas por gzip nao decodificado; usar a captura BRT complementar completa.",
+    "Pares sao observacoes repetidas de veiculos, nao veiculos distintos nem viagens."
+  ]
+}
