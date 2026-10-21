@@ -1,0 +1,6292 @@
+{
+  "base_commit": "b4ff287daad464c65bed1ce351b7bd3009408119",
+  "branch": "perf/combined-setbased-directed",
+  "initial_worktree_clean": true,
+  "source_sha256": {
+    "baseline": "32faf431a86203e4a42547f849656058695d434ed00536931c46f7801ce4fe08",
+    "candidate": "26ad75ccdf3ec8d33ed519b50cf82c9cb77520b8a8979a20578a29fe3d08d906",
+    "application_candidate_bytes": "26ad75ccdf3ec8d33ed519b50cf82c9cb77520b8a8979a20578a29fe3d08d906",
+    "original_tracked_bytes": "32faf431a86203e4a42547f849656058695d434ed00536931c46f7801ce4fe08",
+    "baseline_sql_canonical": "8a8f92be62d2782224723f88bfb8c12f8be26e713f2d806819ef6f2afc4462ad",
+    "candidate_sql_canonical": "888d59bb1bb9dc756731b336cc8106c9295d2df8189d1dde2e17ce543cfc9cd4"
+  },
+  "environment": {
+    "postgres": "PostgreSQL 16.4 (Debian 16.4-1.pgdg110+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 10.2.1-6) 10.2.1 20210110, 64-bit",
+    "postgis": "POSTGIS=\"3.4.3 e365945\" [EXTENSION] PGSQL=\"160\" GEOS=\"3.9.0-CAPI-1.16.2\" PROJ=\"7.2.1 NETWORK_ENABLED=OFF URL_ENDPOINT=https://cdn.proj.org USER_WRITABLE_DIRECTORY=/var/lib/postgresql/.local/share/proj DATABASE_PATH=/usr/share/proj/proj.db\" LIBXML=\"2.9.10\" LIBJSON=\"0.15\" LIBPROTOBUF=\"1.3.3\" WAGYU=\"0.5.0 (Internal)\" TOPOLOGY",
+    "work_mem": "4MB",
+    "jit": "on",
+    "cpu_limit": 2,
+    "memory_limit_bytes": 2147483648,
+    "storage": "tmpfs 2g",
+    "catalog": {
+      "lines": 465,
+      "patterns": 885,
+      "versions": 1770,
+      "points": 667662,
+      "median_vertices": 364.0,
+      "max_vertices": 1046,
+      "circular_versions": 74,
+      "occurrences": 106988
+    },
+    "gtfs_sha256": "a99f925460e7628b6eeecb9952430542c06b3e2800afa8ba7f9765fd2e6f26f1",
+    "catalog_limitations": "BUS 700/200 catalog reconstructed from local GTFS, representative trip per route/direction/shape, stop fractions rebuilt with LineLocatePoint, previous versions cloned; synthetic midpoint/wrap positions, not operational replay; local partial dump not imported",
+    "image_id": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5"
+  },
+  "benchmarks": {
+    "pairs": 7,
+    "chunk_size": 100,
+    "percentile": "nearest rank",
+    "scenarios": {
+      "low": {
+        "inputs": 2800,
+        "commands": 28,
+        "rows": {
+          "GLOBAL": 2660,
+          "OPERACIONAL": 40,
+          "ANTERIOR": 40
+        },
+        "runs": [
+          {
+            "pair": 1,
+            "variant": "baseline",
+            "wall_ms": 6023.020599997835
+          },
+          {
+            "pair": 1,
+            "variant": "candidate",
+            "wall_ms": 5202.757499999279
+          },
+          {
+            "pair": 2,
+            "variant": "candidate",
+            "wall_ms": 4818.605599997682
+          },
+          {
+            "pair": 2,
+            "variant": "baseline",
+            "wall_ms": 5537.625199998729
+          },
+          {
+            "pair": 3,
+            "variant": "baseline",
+            "wall_ms": 6311.689199999819
+          },
+          {
+            "pair": 3,
+            "variant": "candidate",
+            "wall_ms": 5125.866700000188
+          },
+          {
+            "pair": 4,
+            "variant": "candidate",
+            "wall_ms": 4948.743000000832
+          },
+          {
+            "pair": 4,
+            "variant": "baseline",
+            "wall_ms": 6767.660299999989
+          },
+          {
+            "pair": 5,
+            "variant": "baseline",
+            "wall_ms": 6199.39069999964
+          },
+          {
+            "pair": 5,
+            "variant": "candidate",
+            "wall_ms": 4605.809699998645
+          },
+          {
+            "pair": 6,
+            "variant": "candidate",
+            "wall_ms": 5046.245099998487
+          },
+          {
+            "pair": 6,
+            "variant": "baseline",
+            "wall_ms": 6396.720799999457
+          },
+          {
+            "pair": 7,
+            "variant": "baseline",
+            "wall_ms": 6136.496200000693
+          },
+          {
+            "pair": 7,
+            "variant": "candidate",
+            "wall_ms": 5277.078999999503
+          }
+        ],
+        "summary": {
+          "baseline": {
+            "p50_ms": 6199.39069999964,
+            "p95_ms": 6767.660299999989
+          },
+          "candidate": {
+            "p50_ms": 5046.245099998487,
+            "p95_ms": 5277.078999999503
+          }
+        },
+        "input_sha256": "053265a4d9914715baeeda598f38525b69d1a1776f83f292fce2d16488cbec33",
+        "exact_ordered_equivalence": true,
+        "p50_reduction_percent": 18.600950574081743,
+        "p95_reduction_percent": 22.025060861882917
+      },
+      "high": {
+        "inputs": 3000,
+        "commands": 30,
+        "rows": {
+          "OPERACIONAL": 500,
+          "GLOBAL": 3000,
+          "ANTERIOR": 2400
+        },
+        "runs": [
+          {
+            "pair": 1,
+            "variant": "baseline",
+            "wall_ms": 9831.754200000432
+          },
+          {
+            "pair": 1,
+            "variant": "candidate",
+            "wall_ms": 8999.30200000017
+          },
+          {
+            "pair": 2,
+            "variant": "candidate",
+            "wall_ms": 8559.364900000219
+          },
+          {
+            "pair": 2,
+            "variant": "baseline",
+            "wall_ms": 9907.150899998669
+          },
+          {
+            "pair": 3,
+            "variant": "baseline",
+            "wall_ms": 9439.309099998354
+          },
+          {
+            "pair": 3,
+            "variant": "candidate",
+            "wall_ms": 9115.279099998588
+          },
+          {
+            "pair": 4,
+            "variant": "candidate",
+            "wall_ms": 8490.864799998235
+          },
+          {
+            "pair": 4,
+            "variant": "baseline",
+            "wall_ms": 9850.676799997018
+          },
+          {
+            "pair": 5,
+            "variant": "baseline",
+            "wall_ms": 9803.795700001501
+          },
+          {
+            "pair": 5,
+            "variant": "candidate",
+            "wall_ms": 8941.929699998582
+          },
+          {
+            "pair": 6,
+            "variant": "candidate",
+            "wall_ms": 9015.034100000776
+          },
+          {
+            "pair": 6,
+            "variant": "baseline",
+            "wall_ms": 9683.26370000068
+          },
+          {
+            "pair": 7,
+            "variant": "baseline",
+            "wall_ms": 10261.042999998608
+          },
+          {
+            "pair": 7,
+            "variant": "candidate",
+            "wall_ms": 7894.987699997728
+          }
+        ],
+        "summary": {
+          "baseline": {
+            "p50_ms": 9831.754200000432,
+            "p95_ms": 10261.042999998608
+          },
+          "candidate": {
+            "p50_ms": 8941.929699998582,
+            "p95_ms": 9115.279099998588
+          }
+        },
+        "input_sha256": "e87d96197504f6b77fac0fd87e06832813d81d8896e6344a2aa1fa19d2e1a7e1",
+        "exact_ordered_equivalence": true,
+        "p50_reduction_percent": 9.050516132734598,
+        "p95_reduction_percent": 11.166154356824887
+      },
+      "concentrated": {
+        "inputs": 3000,
+        "commands": 30,
+        "rows": {
+          "OPERACIONAL": 500,
+          "GLOBAL": 3000,
+          "ANTERIOR": 2400
+        },
+        "runs": [
+          {
+            "pair": 1,
+            "variant": "baseline",
+            "wall_ms": 3076.9402000005357
+          },
+          {
+            "pair": 1,
+            "variant": "candidate",
+            "wall_ms": 3436.9838000020536
+          },
+          {
+            "pair": 2,
+            "variant": "candidate",
+            "wall_ms": 3570.920999998634
+          },
+          {
+            "pair": 2,
+            "variant": "baseline",
+            "wall_ms": 4012.780400000338
+          },
+          {
+            "pair": 3,
+            "variant": "baseline",
+            "wall_ms": 3911.264200000005
+          },
+          {
+            "pair": 3,
+            "variant": "candidate",
+            "wall_ms": 3582.224199999473
+          },
+          {
+            "pair": 4,
+            "variant": "candidate",
+            "wall_ms": 3713.1848000026366
+          },
+          {
+            "pair": 4,
+            "variant": "baseline",
+            "wall_ms": 3784.546099999716
+          },
+          {
+            "pair": 5,
+            "variant": "baseline",
+            "wall_ms": 4328.829300000507
+          },
+          {
+            "pair": 5,
+            "variant": "candidate",
+            "wall_ms": 3633.3126000026823
+          },
+          {
+            "pair": 6,
+            "variant": "candidate",
+            "wall_ms": 3877.4475999998685
+          },
+          {
+            "pair": 6,
+            "variant": "baseline",
+            "wall_ms": 4041.233399999328
+          },
+          {
+            "pair": 7,
+            "variant": "baseline",
+            "wall_ms": 3929.0207999983977
+          },
+          {
+            "pair": 7,
+            "variant": "candidate",
+            "wall_ms": 3400.9022999998706
+          }
+        ],
+        "summary": {
+          "baseline": {
+            "p50_ms": 3929.0207999983977,
+            "p95_ms": 4328.829300000507
+          },
+          "candidate": {
+            "p50_ms": 3582.224199999473,
+            "p95_ms": 3877.4475999998685
+          }
+        },
+        "input_sha256": "434f28158ec3dcf607c531a0db33bd1f9d25b5463cba848d2b93d9b38401eb82",
+        "exact_ordered_equivalence": true,
+        "p50_reduction_percent": 8.82654019034631,
+        "p95_reduction_percent": 10.427338865050316
+      }
+    }
+  },
+  "plan_metrics": {
+    "low": {
+      "baseline": {
+        "scenario": "low",
+        "inputs": 2800,
+        "commands": 28,
+        "rows": {
+          "GLOBAL": 2660,
+          "OPERACIONAL": 40,
+          "ANTERIOR": 40
+        },
+        "wall_ms": 6235.888600003818,
+        "planning_ms": 107.46,
+        "execution_ms": 5533.384,
+        "aggregate": {
+          "planning_ms": 107.46,
+          "execution_ms": 5533.384,
+          "buffers": {
+            "Shared Hit Blocks": 327488,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "ctes_inclusive": {
+            "CTE entradas": {
+              "inclusive_ms": 22.006999999999998,
+              "rows": 2800,
+              "loops": 28
+            },
+            "CTE pontos": {
+              "inclusive_ms": 2.2070000000000003,
+              "rows": 2800,
+              "loops": 28
+            },
+            "CTE codigos": {
+              "inclusive_ms": 24.145,
+              "rows": 2635,
+              "loops": 28
+            },
+            "CTE contexto_global": {
+              "inclusive_ms": 2410.629,
+              "rows": 5188,
+              "loops": 28
+            },
+            "CTE versoes_requeridas": {
+              "inclusive_ms": 0.9340000000000005,
+              "rows": 80,
+              "loops": 28
+            },
+            "CTE contexto_versoes": {
+              "inclusive_ms": 41.01000000000001,
+              "rows": 80,
+              "loops": 28
+            },
+            "CTE global_vencedor": {
+              "inclusive_ms": 3968.1040000000003,
+              "rows": 2660,
+              "loops": 28
+            },
+            "CTE anterior_vencedor": {
+              "inclusive_ms": 52.298,
+              "rows": 40,
+              "loops": 28
+            },
+            "CTE operacional_vencedor": {
+              "inclusive_ms": 3.4009999999999962,
+              "rows": 40,
+              "loops": 28
+            }
+          },
+          "branches_inclusive": {
+            "GLOBAL": {
+              "inclusive_ms": 5425.938999999999,
+              "rows": 2660,
+              "next_stop_ms": 1431.6799999999998,
+              "next_stop_loops": 2660
+            },
+            "ANTERIOR": {
+              "inclusive_ms": 73.72599999999996,
+              "rows": 40,
+              "next_stop_ms": 20.84,
+              "next_stop_loops": 40
+            },
+            "OPERACIONAL": {
+              "inclusive_ms": 3.7379999999999973,
+              "rows": 40
+            }
+          },
+          "scans": {
+            "Seq Scan:PadroesOperacionais": {
+              "loops": 56,
+              "rows_approx": 25692,
+              "removed_approx": 0
+            },
+            "Seq Scan:Sentidos": {
+              "loops": 56,
+              "rows_approx": 25431,
+              "removed_approx": 0
+            },
+            "Seq Scan:Linhas": {
+              "loops": 56,
+              "rows_approx": 26040,
+              "removed_approx": 0
+            },
+            "Index Scan:PadroesVersoes": {
+              "loops": 5268,
+              "rows_approx": 5268,
+              "removed_approx": 0
+            },
+            "Bitmap Heap Scan:OcorrenciasParadasPadroes": {
+              "loops": 2700,
+              "rows_approx": 85200,
+              "removed_approx": 78860
+            },
+            "Index Scan:Paradas": {
+              "loops": 85097,
+              "rows_approx": 85097,
+              "removed_approx": 0
+            }
+          },
+          "joins": {
+            "Nested Loop": {
+              "loops": 2896,
+              "rows_approx": 106124,
+              "removed_approx": 0
+            },
+            "Hash Join": {
+              "loops": 253,
+              "rows_approx": 18822,
+              "removed_approx": 0
+            }
+          },
+          "node_counts": {
+            "Sort": 112,
+            "Function Scan": 28,
+            "CTE Scan": 448,
+            "Aggregate": 56,
+            "Nested Loop": 252,
+            "Hash Join": 280,
+            "Seq Scan": 168,
+            "Hash": 280,
+            "Index Scan": 112,
+            "Append": 56,
+            "Subquery Scan": 84,
+            "WindowAgg": 28,
+            "Result": 140,
+            "Limit": 56,
+            "Bitmap Heap Scan": 56,
+            "Bitmap Index Scan": 56
+          },
+          "spatial_filter_nodes": [
+            {
+              "chunk": 0,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 40,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 40,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 193,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 204,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 199,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 192,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 197,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 197,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 207,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 207,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 192,
+              "rows": 0,
+              "removed": 1,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            }
+          ],
+          "jit_chunks": 0
+        },
+        "root_startup_ms": 5517.082,
+        "isolated_first_chunk": {
+          "GLOBAL": {
+            "planning_ms": 3.369,
+            "execution_ms": 220.735,
+            "rows": 100,
+            "hits": 12287,
+            "reads": 0
+          },
+          "ANTERIOR": {
+            "planning_ms": 6.781,
+            "execution_ms": 93.636,
+            "rows": 40,
+            "hits": 5988,
+            "reads": 0
+          },
+          "OPERACIONAL": {
+            "planning_ms": 3.676,
+            "execution_ms": 223.514,
+            "rows": 40,
+            "hits": 1909,
+            "reads": 0
+          }
+        }
+      },
+      "candidate": {
+        "scenario": "low",
+        "inputs": 2800,
+        "commands": 28,
+        "rows": {
+          "GLOBAL": 2660,
+          "OPERACIONAL": 40,
+          "ANTERIOR": 40
+        },
+        "wall_ms": 5042.382600011479,
+        "planning_ms": 106.81099999999999,
+        "execution_ms": 4474.425,
+        "aggregate": {
+          "planning_ms": 106.81099999999999,
+          "execution_ms": 4474.425,
+          "buffers": {
+            "Shared Hit Blocks": 323357,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "ctes_inclusive": {
+            "CTE entradas": {
+              "inclusive_ms": 21.333000000000002,
+              "rows": 2800,
+              "loops": 28
+            },
+            "CTE pontos": {
+              "inclusive_ms": 2.425,
+              "rows": 2800,
+              "loops": 28
+            },
+            "CTE codigos": {
+              "inclusive_ms": 23.681,
+              "rows": 2635,
+              "loops": 28
+            },
+            "CTE contexto_global": {
+              "inclusive_ms": 474.5609999999999,
+              "rows": 5188,
+              "loops": 28
+            },
+            "CTE versoes_requeridas": {
+              "inclusive_ms": 0.9500000000000004,
+              "rows": 80,
+              "loops": 28
+            },
+            "CTE contexto_versoes": {
+              "inclusive_ms": 40.59700000000001,
+              "rows": 80,
+              "loops": 28
+            },
+            "CTE global_vencedor": {
+              "inclusive_ms": 2033.5510000000006,
+              "rows": 2660,
+              "loops": 28
+            },
+            "CTE global_comprimentos": {
+              "inclusive_ms": 891.6260000000004,
+              "rows": 2660,
+              "loops": 27
+            },
+            "CTE anterior_vencedor": {
+              "inclusive_ms": 54.319999999999986,
+              "rows": 40,
+              "loops": 28
+            },
+            "CTE operacional_vencedor": {
+              "inclusive_ms": 3.6959999999999957,
+              "rows": 40,
+              "loops": 28
+            }
+          },
+          "branches_inclusive": {
+            "GLOBAL": {
+              "inclusive_ms": 4360.135000000001,
+              "rows": 2660,
+              "next_stop_ms": 1417.52,
+              "next_stop_loops": 2660
+            },
+            "ANTERIOR": {
+              "inclusive_ms": 79.96399999999998,
+              "rows": 40,
+              "next_stop_ms": 24.759999999999998,
+              "next_stop_loops": 40
+            },
+            "OPERACIONAL": {
+              "inclusive_ms": 4.117999999999996,
+              "rows": 40
+            }
+          },
+          "scans": {
+            "Seq Scan:PadroesOperacionais": {
+              "loops": 56,
+              "rows_approx": 25692,
+              "removed_approx": 0
+            },
+            "Seq Scan:Sentidos": {
+              "loops": 56,
+              "rows_approx": 25431,
+              "removed_approx": 0
+            },
+            "Seq Scan:Linhas": {
+              "loops": 56,
+              "rows_approx": 26040,
+              "removed_approx": 0
+            },
+            "Index Scan:PadroesVersoes": {
+              "loops": 5268,
+              "rows_approx": 5268,
+              "removed_approx": 0
+            },
+            "Bitmap Heap Scan:OcorrenciasParadasPadroes": {
+              "loops": 2700,
+              "rows_approx": 85200,
+              "removed_approx": 78860
+            },
+            "Index Scan:Paradas": {
+              "loops": 85097,
+              "rows_approx": 85097,
+              "removed_approx": 0
+            }
+          },
+          "joins": {
+            "Nested Loop": {
+              "loops": 2924,
+              "rows_approx": 108784,
+              "removed_approx": 260940
+            },
+            "Hash Join": {
+              "loops": 280,
+              "rows_approx": 21482,
+              "removed_approx": 0
+            }
+          },
+          "node_counts": {
+            "Sort": 112,
+            "Function Scan": 28,
+            "CTE Scan": 532,
+            "Aggregate": 56,
+            "Nested Loop": 280,
+            "Hash Join": 308,
+            "Seq Scan": 168,
+            "Hash": 308,
+            "Index Scan": 112,
+            "Append": 56,
+            "Subquery Scan": 84,
+            "WindowAgg": 28,
+            "Result": 140,
+            "Limit": 56,
+            "Bitmap Heap Scan": 56,
+            "Bitmap Index Scan": 56
+          },
+          "spatial_filter_nodes": [
+            {
+              "chunk": 0,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 40,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 40,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 193,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 204,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 199,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 192,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 197,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 197,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 207,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 207,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 192,
+              "rows": 0,
+              "removed": 1,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            }
+          ],
+          "jit_chunks": 0
+        },
+        "root_startup_ms": 4457.792,
+        "isolated_first_chunk": {
+          "GLOBAL": {
+            "planning_ms": 2.108,
+            "execution_ms": 138.582,
+            "rows": 100,
+            "hits": 12123,
+            "reads": 0
+          },
+          "ANTERIOR": {
+            "planning_ms": 3.175,
+            "execution_ms": 65.803,
+            "rows": 40,
+            "hits": 5988,
+            "reads": 0
+          },
+          "OPERACIONAL": {
+            "planning_ms": 3.398,
+            "execution_ms": 97.684,
+            "rows": 40,
+            "hits": 1745,
+            "reads": 0
+          }
+        }
+      }
+    },
+    "high": {
+      "baseline": {
+        "scenario": "high",
+        "inputs": 3000,
+        "commands": 30,
+        "rows": {
+          "OPERACIONAL": 500,
+          "GLOBAL": 3000,
+          "ANTERIOR": 2400
+        },
+        "wall_ms": 9797.712500010675,
+        "planning_ms": 105.877,
+        "execution_ms": 9142.536,
+        "aggregate": {
+          "planning_ms": 105.877,
+          "execution_ms": 9142.536,
+          "buffers": {
+            "Shared Hit Blocks": 653601,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "ctes_inclusive": {
+            "CTE entradas": {
+              "inclusive_ms": 22.283000000000005,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE pontos": {
+              "inclusive_ms": 2.6829999999999994,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE codigos": {
+              "inclusive_ms": 24.785999999999998,
+              "rows": 2826,
+              "loops": 30
+            },
+            "CTE contexto_global": {
+              "inclusive_ms": 2603.413000000001,
+              "rows": 5560,
+              "loops": 30
+            },
+            "CTE versoes_requeridas": {
+              "inclusive_ms": 2.623,
+              "rows": 2400,
+              "loops": 30
+            },
+            "CTE contexto_versoes": {
+              "inclusive_ms": 1072.212,
+              "rows": 2400,
+              "loops": 30
+            },
+            "CTE global_vencedor": {
+              "inclusive_ms": 4308.432000000001,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE anterior_vencedor": {
+              "inclusive_ms": 1753.151,
+              "rows": 2400,
+              "loops": 30
+            },
+            "CTE operacional_vencedor": {
+              "inclusive_ms": 50.238000000000014,
+              "rows": 500,
+              "loops": 30
+            }
+          },
+          "branches_inclusive": {
+            "GLOBAL": {
+              "inclusive_ms": 5974.669999999999,
+              "rows": 3000,
+              "next_stop_ms": 1633.3999999999999,
+              "next_stop_loops": 3000
+            },
+            "ANTERIOR": {
+              "inclusive_ms": 3070.0090000000005,
+              "rows": 2400,
+              "next_stop_ms": 1279.9999999999998,
+              "next_stop_loops": 2400
+            },
+            "OPERACIONAL": {
+              "inclusive_ms": 54.97600000000002,
+              "rows": 500
+            }
+          },
+          "scans": {
+            "Seq Scan:PadroesOperacionais": {
+              "loops": 60,
+              "rows_approx": 47796,
+              "removed_approx": 0
+            },
+            "Seq Scan:Sentidos": {
+              "loops": 60,
+              "rows_approx": 47310,
+              "removed_approx": 0
+            },
+            "Seq Scan:Linhas": {
+              "loops": 60,
+              "rows_approx": 27900,
+              "removed_approx": 0
+            },
+            "Index Scan:PadroesVersoes": {
+              "loops": 7960,
+              "rows_approx": 7960,
+              "removed_approx": 0
+            },
+            "Bitmap Heap Scan:OcorrenciasParadasPadroes": {
+              "loops": 5400,
+              "rows_approx": 170100,
+              "removed_approx": 156800
+            },
+            "Index Scan:Paradas": {
+              "loops": 170029,
+              "rows_approx": 170029,
+              "removed_approx": 0
+            }
+          },
+          "joins": {
+            "Nested Loop": {
+              "loops": 5610,
+              "rows_approx": 198050,
+              "removed_approx": 0
+            },
+            "Hash Join": {
+              "loops": 294,
+              "rows_approx": 30382,
+              "removed_approx": 0
+            }
+          },
+          "node_counts": {
+            "Sort": 120,
+            "Function Scan": 30,
+            "CTE Scan": 480,
+            "Aggregate": 60,
+            "Nested Loop": 270,
+            "Hash Join": 300,
+            "Seq Scan": 180,
+            "Hash": 300,
+            "Index Scan": 120,
+            "Append": 60,
+            "Subquery Scan": 90,
+            "WindowAgg": 30,
+            "Result": 150,
+            "Limit": 60,
+            "Bitmap Heap Scan": 60,
+            "Bitmap Index Scan": 60
+          },
+          "spatial_filter_nodes": [
+            {
+              "chunk": 0,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 193,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 204,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 199,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 192,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 197,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 197,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 207,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 207,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 192,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 193,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 197,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            }
+          ],
+          "jit_chunks": 0
+        },
+        "root_startup_ms": 9125.194,
+        "isolated_first_chunk": {
+          "GLOBAL": {
+            "planning_ms": 2.673,
+            "execution_ms": 218.772,
+            "rows": 100,
+            "hits": 12287,
+            "reads": 0
+          },
+          "ANTERIOR": {
+            "planning_ms": 3.32,
+            "execution_ms": 143.29,
+            "rows": 100,
+            "hits": 12302,
+            "reads": 0
+          },
+          "OPERACIONAL": {
+            "planning_ms": 2.519,
+            "execution_ms": 215.133,
+            "rows": 100,
+            "hits": 2139,
+            "reads": 0
+          }
+        }
+      },
+      "candidate": {
+        "scenario": "high",
+        "inputs": 3000,
+        "commands": 30,
+        "rows": {
+          "OPERACIONAL": 500,
+          "GLOBAL": 3000,
+          "ANTERIOR": 2400
+        },
+        "wall_ms": 8245.962299988605,
+        "planning_ms": 104.156,
+        "execution_ms": 7879.06,
+        "aggregate": {
+          "planning_ms": 104.156,
+          "execution_ms": 7879.06,
+          "buffers": {
+            "Shared Hit Blocks": 649166,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "ctes_inclusive": {
+            "CTE entradas": {
+              "inclusive_ms": 21.915,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE pontos": {
+              "inclusive_ms": 2.3589999999999995,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE codigos": {
+              "inclusive_ms": 24.13,
+              "rows": 2826,
+              "loops": 30
+            },
+            "CTE contexto_global": {
+              "inclusive_ms": 466.13900000000007,
+              "rows": 5560,
+              "loops": 30
+            },
+            "CTE versoes_requeridas": {
+              "inclusive_ms": 2.364,
+              "rows": 2400,
+              "loops": 30
+            },
+            "CTE contexto_versoes": {
+              "inclusive_ms": 1110.682,
+              "rows": 2400,
+              "loops": 30
+            },
+            "CTE global_vencedor": {
+              "inclusive_ms": 1998.816,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE global_comprimentos": {
+              "inclusive_ms": 931.5599999999998,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE anterior_vencedor": {
+              "inclusive_ms": 1840.8729999999998,
+              "rows": 2400,
+              "loops": 30
+            },
+            "CTE operacional_vencedor": {
+              "inclusive_ms": 55.05100000000002,
+              "rows": 500,
+              "loops": 30
+            }
+          },
+          "branches_inclusive": {
+            "GLOBAL": {
+              "inclusive_ms": 4530.393000000001,
+              "rows": 3000,
+              "next_stop_ms": 1575.4999999999998,
+              "next_stop_loops": 3000
+            },
+            "ANTERIOR": {
+              "inclusive_ms": 3244.6079999999997,
+              "rows": 2400,
+              "next_stop_ms": 1360.6000000000001,
+              "next_stop_loops": 2400
+            },
+            "OPERACIONAL": {
+              "inclusive_ms": 61.24300000000001,
+              "rows": 500
+            }
+          },
+          "scans": {
+            "Seq Scan:PadroesOperacionais": {
+              "loops": 60,
+              "rows_approx": 47796,
+              "removed_approx": 0
+            },
+            "Seq Scan:Sentidos": {
+              "loops": 60,
+              "rows_approx": 47310,
+              "removed_approx": 0
+            },
+            "Seq Scan:Linhas": {
+              "loops": 60,
+              "rows_approx": 27900,
+              "removed_approx": 0
+            },
+            "Index Scan:PadroesVersoes": {
+              "loops": 7960,
+              "rows_approx": 7960,
+              "removed_approx": 0
+            },
+            "Bitmap Heap Scan:OcorrenciasParadasPadroes": {
+              "loops": 5400,
+              "rows_approx": 170100,
+              "removed_approx": 156800
+            },
+            "Index Scan:Paradas": {
+              "loops": 170029,
+              "rows_approx": 170029,
+              "removed_approx": 0
+            }
+          },
+          "joins": {
+            "Nested Loop": {
+              "loops": 5640,
+              "rows_approx": 201050,
+              "removed_approx": 297000
+            },
+            "Hash Join": {
+              "loops": 324,
+              "rows_approx": 33382,
+              "removed_approx": 0
+            }
+          },
+          "node_counts": {
+            "Sort": 120,
+            "Function Scan": 30,
+            "CTE Scan": 570,
+            "Aggregate": 60,
+            "Nested Loop": 300,
+            "Hash Join": 330,
+            "Seq Scan": 180,
+            "Hash": 330,
+            "Index Scan": 120,
+            "Append": 60,
+            "Subquery Scan": 90,
+            "WindowAgg": 30,
+            "Result": 150,
+            "Limit": 60,
+            "Bitmap Heap Scan": 60,
+            "Bitmap Index Scan": 60
+          },
+          "spatial_filter_nodes": [
+            {
+              "chunk": 0,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 193,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 204,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 199,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 206,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 192,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 194,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 197,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 198,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 196,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 195,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 197,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 207,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 207,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 192,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 193,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 197,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            }
+          ],
+          "jit_chunks": 0
+        },
+        "root_startup_ms": 7862.346,
+        "isolated_first_chunk": {
+          "GLOBAL": {
+            "planning_ms": 2.847,
+            "execution_ms": 176.825,
+            "rows": 100,
+            "hits": 12123,
+            "reads": 0
+          },
+          "ANTERIOR": {
+            "planning_ms": 4.205,
+            "execution_ms": 155.842,
+            "rows": 100,
+            "hits": 12302,
+            "reads": 0
+          },
+          "OPERACIONAL": {
+            "planning_ms": 2.887,
+            "execution_ms": 146.86,
+            "rows": 100,
+            "hits": 1975,
+            "reads": 0
+          }
+        }
+      }
+    },
+    "concentrated": {
+      "baseline": {
+        "scenario": "concentrated",
+        "inputs": 3000,
+        "commands": 30,
+        "rows": {
+          "OPERACIONAL": 500,
+          "GLOBAL": 3000,
+          "ANTERIOR": 2400
+        },
+        "wall_ms": 3634.5440999903076,
+        "planning_ms": 131.957,
+        "execution_ms": 3336.71,
+        "aggregate": {
+          "planning_ms": 131.957,
+          "execution_ms": 3336.71,
+          "buffers": {
+            "Shared Hit Blocks": 392508,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "ctes_inclusive": {
+            "CTE entradas": {
+              "inclusive_ms": 24.460000000000004,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE pontos": {
+              "inclusive_ms": 2.7120000000000006,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE codigos": {
+              "inclusive_ms": 26.135,
+              "rows": 30,
+              "loops": 30
+            },
+            "CTE contexto_global": {
+              "inclusive_ms": 62.303999999999995,
+              "rows": 60,
+              "loops": 30
+            },
+            "CTE versoes_requeridas": {
+              "inclusive_ms": 2.101,
+              "rows": 24,
+              "loops": 30
+            },
+            "CTE contexto_versoes": {
+              "inclusive_ms": 22.772,
+              "rows": 24,
+              "loops": 30
+            },
+            "CTE global_vencedor": {
+              "inclusive_ms": 1069.772,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE anterior_vencedor": {
+              "inclusive_ms": 467.4499999999999,
+              "rows": 2400,
+              "loops": 30
+            },
+            "CTE operacional_vencedor": {
+              "inclusive_ms": 37.67600000000004,
+              "rows": 500,
+              "loops": 30
+            }
+          },
+          "branches_inclusive": {
+            "GLOBAL": {
+              "inclusive_ms": 2000.261,
+              "rows": 3000,
+              "next_stop_ms": 913.9999999999999,
+              "next_stop_loops": 3000
+            },
+            "ANTERIOR": {
+              "inclusive_ms": 1254.935,
+              "rows": 2400,
+              "next_stop_ms": 771.3000000000001,
+              "next_stop_loops": 2400
+            },
+            "OPERACIONAL": {
+              "inclusive_ms": 39.36400000000002,
+              "rows": 500
+            }
+          },
+          "scans": {
+            "Seq Scan:PadroesOperacionais": {
+              "loops": 60,
+              "rows_approx": 47796,
+              "removed_approx": 0
+            },
+            "Seq Scan:Sentidos": {
+              "loops": 60,
+              "rows_approx": 47310,
+              "removed_approx": 0
+            },
+            "Seq Scan:Linhas": {
+              "loops": 60,
+              "rows_approx": 27900,
+              "removed_approx": 0
+            },
+            "Index Scan:PadroesVersoes": {
+              "loops": 84,
+              "rows_approx": 84,
+              "removed_approx": 0
+            },
+            "Bitmap Heap Scan:OcorrenciasParadasPadroes": {
+              "loops": 5400,
+              "rows_approx": 113400,
+              "removed_approx": 118800
+            },
+            "Index Scan:Paradas": {
+              "loops": 113400,
+              "rows_approx": 113400,
+              "removed_approx": 0
+            }
+          },
+          "joins": {
+            "Nested Loop": {
+              "loops": 5610,
+              "rows_approx": 133884,
+              "removed_approx": 0
+            },
+            "Hash Join": {
+              "loops": 294,
+              "rows_approx": 9622,
+              "removed_approx": 0
+            }
+          },
+          "node_counts": {
+            "Sort": 120,
+            "Function Scan": 30,
+            "CTE Scan": 480,
+            "Aggregate": 60,
+            "Nested Loop": 270,
+            "Hash Join": 300,
+            "Seq Scan": 180,
+            "Hash": 300,
+            "Index Scan": 120,
+            "Append": 60,
+            "Subquery Scan": 90,
+            "WindowAgg": 30,
+            "Result": 150,
+            "Limit": 60,
+            "Bitmap Heap Scan": 60,
+            "Bitmap Index Scan": 60
+          },
+          "spatial_filter_nodes": [
+            {
+              "chunk": 0,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/7",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            }
+          ],
+          "jit_chunks": 0
+        },
+        "root_startup_ms": 3321.023,
+        "isolated_first_chunk": {
+          "GLOBAL": {
+            "planning_ms": 2.958,
+            "execution_ms": 62.414,
+            "rows": 100,
+            "hits": 7225,
+            "reads": 0
+          },
+          "ANTERIOR": {
+            "planning_ms": 2.791,
+            "execution_ms": 47.681,
+            "rows": 100,
+            "hits": 7322,
+            "reads": 0
+          },
+          "OPERACIONAL": {
+            "planning_ms": 2.771,
+            "execution_ms": 42.874,
+            "rows": 100,
+            "hits": 47,
+            "reads": 0
+          }
+        }
+      },
+      "candidate": {
+        "scenario": "concentrated",
+        "inputs": 3000,
+        "commands": 30,
+        "rows": {
+          "OPERACIONAL": 500,
+          "GLOBAL": 3000,
+          "ANTERIOR": 2400
+        },
+        "wall_ms": 3727.1359999976994,
+        "planning_ms": 121.266,
+        "execution_ms": 3072.221,
+        "aggregate": {
+          "planning_ms": 121.266,
+          "execution_ms": 3072.221,
+          "buffers": {
+            "Shared Hit Blocks": 392508,
+            "Shared Read Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "ctes_inclusive": {
+            "CTE entradas": {
+              "inclusive_ms": 24.071,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE pontos": {
+              "inclusive_ms": 2.4050000000000002,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE codigos": {
+              "inclusive_ms": 25.509,
+              "rows": 30,
+              "loops": 30
+            },
+            "CTE contexto_global": {
+              "inclusive_ms": 45.608000000000004,
+              "rows": 60,
+              "loops": 30
+            },
+            "CTE versoes_requeridas": {
+              "inclusive_ms": 1.7550000000000001,
+              "rows": 24,
+              "loops": 30
+            },
+            "CTE contexto_versoes": {
+              "inclusive_ms": 20.427999999999997,
+              "rows": 24,
+              "loops": 30
+            },
+            "CTE global_vencedor": {
+              "inclusive_ms": 1044.6080000000002,
+              "rows": 3000,
+              "loops": 30
+            },
+            "CTE global_comprimentos": {
+              "inclusive_ms": 26.655000000000005,
+              "rows": 30,
+              "loops": 30
+            },
+            "CTE anterior_vencedor": {
+              "inclusive_ms": 410.87499999999994,
+              "rows": 2400,
+              "loops": 30
+            },
+            "CTE operacional_vencedor": {
+              "inclusive_ms": 37.89100000000002,
+              "rows": 500,
+              "loops": 30
+            }
+          },
+          "branches_inclusive": {
+            "GLOBAL": {
+              "inclusive_ms": 1881.7670000000003,
+              "rows": 3000,
+              "next_stop_ms": 811.9,
+              "next_stop_loops": 3000
+            },
+            "ANTERIOR": {
+              "inclusive_ms": 1112.562,
+              "rows": 2400,
+              "next_stop_ms": 686.4000000000001,
+              "next_stop_loops": 2400
+            },
+            "OPERACIONAL": {
+              "inclusive_ms": 39.444000000000024,
+              "rows": 500
+            }
+          },
+          "scans": {
+            "Seq Scan:PadroesOperacionais": {
+              "loops": 60,
+              "rows_approx": 47796,
+              "removed_approx": 0
+            },
+            "Seq Scan:Sentidos": {
+              "loops": 60,
+              "rows_approx": 47310,
+              "removed_approx": 0
+            },
+            "Seq Scan:Linhas": {
+              "loops": 60,
+              "rows_approx": 27900,
+              "removed_approx": 0
+            },
+            "Index Scan:PadroesVersoes": {
+              "loops": 84,
+              "rows_approx": 84,
+              "removed_approx": 0
+            },
+            "Bitmap Heap Scan:OcorrenciasParadasPadroes": {
+              "loops": 5400,
+              "rows_approx": 113400,
+              "removed_approx": 118800
+            },
+            "Index Scan:Paradas": {
+              "loops": 113400,
+              "rows_approx": 113400,
+              "removed_approx": 0
+            }
+          },
+          "joins": {
+            "Nested Loop": {
+              "loops": 5640,
+              "rows_approx": 136884,
+              "removed_approx": 0
+            },
+            "Hash Join": {
+              "loops": 324,
+              "rows_approx": 9652,
+              "removed_approx": 0
+            }
+          },
+          "node_counts": {
+            "Sort": 120,
+            "Function Scan": 30,
+            "CTE Scan": 570,
+            "Aggregate": 60,
+            "Nested Loop": 300,
+            "Hash Join": 330,
+            "Seq Scan": 180,
+            "Hash": 330,
+            "Index Scan": 120,
+            "Append": 60,
+            "Subquery Scan": 90,
+            "WindowAgg": 30,
+            "Result": 150,
+            "Limit": 60,
+            "Bitmap Heap Scan": 60,
+            "Bitmap Index Scan": 60
+          },
+          "spatial_filter_nodes": [
+            {
+              "chunk": 0,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 0,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 1,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 2,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 3,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 4,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 5,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 6,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 7,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 8,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 9,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 10,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 11,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 12,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 13,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 14,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 15,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 16,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 17,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 18,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 19,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 20,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 21,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 22,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 100,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 23,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 24,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 25,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 26,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 27,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 28,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/6/0/0/0/0/0/1",
+              "type": "Subquery Scan",
+              "loops": 200,
+              "rows": 1,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/8",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            },
+            {
+              "chunk": 29,
+              "path": "root/9",
+              "type": "Hash Join",
+              "loops": 1,
+              "rows": 0,
+              "removed": 0,
+              "removed_join": 0
+            }
+          ],
+          "jit_chunks": 0
+        },
+        "root_startup_ms": 3057.608,
+        "isolated_first_chunk": {
+          "GLOBAL": {
+            "planning_ms": 2.654,
+            "execution_ms": 81.453,
+            "rows": 100,
+            "hits": 7225,
+            "reads": 0
+          },
+          "ANTERIOR": {
+            "planning_ms": 3.457,
+            "execution_ms": 47.856,
+            "rows": 100,
+            "hits": 7322,
+            "reads": 0
+          },
+          "OPERACIONAL": {
+            "planning_ms": 2.61,
+            "execution_ms": 43.637,
+            "rows": 100,
+            "hits": 47,
+            "reads": 0
+          }
+        }
+      }
+    }
+  },
+  "tests": {
+    "red": {
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "0",
+        "failed": "2",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx_sha256": "861fdd437a97503d355a4a0c6ae5c194b7bc27e9c203d12bcaa0f3c4ff5415aa",
+      "assertion": "Expected rejected full-length calls 0; actual 2, in both theory cases"
+    },
+    "postgis": {
+      "counters": {
+        "total": "123",
+        "executed": "123",
+        "passed": "123",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx_sha256": "b8e9fb4c68930bae4a2a3b9f40fe5a8d81ad0dfba71172ce0b219b4310074e80"
+    },
+    "directed": {
+      "counters": {
+        "total": "411",
+        "executed": "411",
+        "passed": "411",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx_sha256": "6765ea31f28e94ac90154849de2331329f1ae270da00ee1761c56597adb45e69"
+    },
+    "offline": {
+      "counters": {
+        "total": "883",
+        "executed": "883",
+        "passed": "883",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx_sha256": "44096ced7cdb24c384c2d0dfb87636b3b6cf44a00dadd2241f584360cd8f9b60"
+    }
+  },
+  "harness_checks": {
+    "invalid_ownership": "rejected before database connection",
+    "existing_tables": "seed rejected before DDL",
+    "order_mutation": "RED: changed SQL ordering rejected at first chunk; no sorting/tolerance"
+  },
+  "plan_archive": {
+    "file": "46-combined-postgis-plans-20261021.json.gz",
+    "sha256": "e41f4342b36c4d8687833667db7f44797a01afb4680de97cfff84dfb84bd1285",
+    "compressed_bytes": 651533,
+    "json_bytes": 9548474
+  },
+  "build": {
+    "command": "dotnet build NoPonto.sln --no-restore --no-incremental -c Release",
+    "status": "rejected_before_start",
+    "reason": "approval required by policy, but AskForApproval is set to Never",
+    "project_release_compilation": "passed through dotnet test"
+  },
+  "protected_files_check": {
+    "initial_tracked_files": 829,
+    "unchanged": 827,
+    "changed": [
+      "NoPonto/4-Data/Repositories/GpsItinerarioRepository.CombinedSetBased.cs",
+      "NoPonto/HISTORICO.md"
+    ],
+    "history_previous_bytes_preserved": true,
+    "reports_38_45_preserved": true,
+    "unchanged_sql_blocks": {
+      "version_context": true,
+      "global_score_and_winner": true,
+      "previous_and_operational": true,
+      "previous_next_stop_and_union_order": true
+    }
+  },
+  "disposable_cleanup": {
+    "before_count": 19,
+    "owned_removed": true,
+    "note": "Initial inventory used short IDs; final inventory normalized before comparison",
+    "preexisting_present": 19,
+    "additional_created_remaining": 0
+  },
+  "production": "not accessed; no measured production improvement; no commit/push/PR/merge/deploy"
+}
