@@ -87,3 +87,28 @@ dotnet test NoPonto/NoPonto.csproj -c Release --no-restore -p:CustomAfterMicroso
 TRX e hashes de preservação ficam em `NoPonto/lab-output/perf-info-fix-20261021/`; dados sintéticos PowerShell em `NoPonto/lab-output/perf-kit-verification-0bbe6ae9999448af8f250b4b2e7689d2/`. A execução falha original em `perf-a72141cb89974cc496e8554859c9a242/run-A-06eed6e1f21e4a68839ec53a59a69e0d/` não foi regenerada nem alterada; seu laboratório foi inventariado por SHA-256 antes/depois da correção. `git diff --check` e o escopo do commit foram conferidos.
 
 Não executados nesta correção: qualquer comando Docker, Start/Run/Stop, cenários A/B/C/D, integração com serviços reais, carga ou matrizes. Sem alteração de pipeline GPS/matching/SignalR/operação/ETA, configuração global/credenciais, push, merge, deploy ou PR. A primeira confirmação contra Redis real será feita pelo usuário em novo laboratório com novo build/fingerprint.
+
+## Correção de concorrência no registro de evidências — 21/10/2026
+
+Base `d2bae8b`, mesma branch e árvore inicialmente limpa. A tentativa manual A com quatro veículos/dois clientes alcançou o primeiro ciclo e depois encontrou `IOException` no append concorrente. O rastreio confirmou `LabFleet → Task.WhenAll(clientes) → Sample → GpsIntegrationResources.Record → File.AppendAllText`: as mensagens de entrega e as verificações REST dos clientes abrem o mesmo arquivo. As demais evidências da fixture usam o mesmo helper; a busca não encontrou outro escritor C# direto desse arquivo. A mensagem Windows "used by another process" também ocorre entre handles concorrentes no próprio processo, como demonstrado pelo teste offline sem serviços.
+
+Correção restrita ao helper de testes: objeto de lock estático compartilhado protege cada chamada de `AppendAllText` do início ao fechamento. O JSON completo é serializado antes do lock, com o mesmo envelope e terminador `\n`; os chamadores e `Task.WhenAll` não foram alterados. Sem catch, supressão ou retry. A garantia cobre a indivisibilidade entre escritores desse helper no mesmo processo; bloqueio externo, falha de disco/crash e múltiplos processos externos não recebem garantia nova. O lock do launcher continua impedindo execuções simultâneas no mesmo laboratório.
+
+Testes da classe nova `GpsIntegrationEvidenceRecordTests`, sem fixture Redis/PostGIS:
+
+- `ConcurrentRecord_CompleteJsonLinesPreserveEveryWriterAndPayload`: oito escritores dedicados, largada por barreira e 16 registros por escritor (128 mais dois marcadores). Valida 130 linhas, UTF-8/JSON estritos, envelope, identidades/índices completos e únicos, ordem dentro de cada escritor, payload Unicode com aspas/barra/newline e preservação de append anterior/posterior. RED original: `IOException` exata reportada, **1 aprovado/1 falho**, 104 ms; GREEN após lock: **2/2 aprovados, zero falhas/ignorados**, 179 ms no conjunto.
+- `ExclusiveExternalHandle_IOExceptionPropagatesWithoutChangingEvidence`: arquivo mantido por handle exclusivo recusa gravação, preserva bytes anteriores e aceita append após liberação. Demonstra que I/O real não é mascarado e que o lock não fica retido após exceção.
+
+Os testes substituem temporariamente apenas `NOPONTO_GPS_FIXTURE_RESULTS`, restaurando-o em finally. A coleção não paraleliza com outras coleções para proteger essa variável de processo. Os diretórios de evidência são novos, em `%TEMP%/noponto-evidence-<GUID>`, e seus caminhos ficam no TRX; os dois laboratórios anteriores nunca são usados pelos testes.
+
+Comando RED e GREEN (troca apenas `LogFileName=record-red.trx` por `LogFileName=record-green.trx`):
+
+```powershell
+dotnet test NoPonto/NoPonto.csproj -c Release --no-restore -p:OutputPath=D:/repositorio_github/NoPonto/noponto-backend/NoPonto/lab-output/perf-record-fix-20261021/build/ -p:IntermediateOutputPath=D:/repositorio_github/NoPonto/noponto-backend/NoPonto/lab-output/perf-record-fix-20261021/obj/ --filter FullyQualifiedName~NoPonto.Tests.GpsIntegrationEvidenceRecordTests --logger 'trx;LogFileName=record-green.trx' --results-directory D:/repositorio_github/NoPonto/noponto-backend/NoPonto/lab-output/perf-record-fix-20261021 --verbosity quiet
+```
+
+Builds sem erros; cinco avisos preexistentes, mais aviso Grpc.Tools de primeiro build no diretório separado na montagem RED. O build GREEN não teve novos avisos. `pwsh -NoProfile -File tools/performance/Verify.ps1` também passou **26/26**, exit 0, com relatórios sintéticos novos em `NoPonto/lab-output/perf-kit-verification-566ddeec40f44d7490b64d55d0fddfa8/`. Nenhum script de relatório foi modificado; o leitor existente continua consumindo o mesmo formato.
+
+Os 494 arquivos dos laboratórios `perf-a72141cb89974cc496e8554859c9a242` (falha INFO) e `perf-dcd60f6e0a1044cc88df50fc481d45ed` (falha de escrita concorrente) foram inventariados por SHA-256 antes/depois. Evidências e TRXs desta correção ficam em `NoPonto/lab-output/perf-record-fix-20261021/`. Nenhum relatório anterior foi regenerado. `git diff --check` e o escopo do commit foram conferidos.
+
+Não executados: Docker, Prepare/Start/Run/Stop do launcher, cenários A/B/C/D, integrações Redis/PostGIS, carga, benchmarks ou matrizes extensas. Sem alteração de pipeline produtivo, SignalR, matching, regras GPS, ETA, Redis ou PostGIS; sem push, merge, deploy ou PR. O novo teste é apenas de concorrência/contrato de arquivos locais, não resultado de desempenho do backend. Nova tentativa manual exige novo UUID e Prepare/build/fingerprint.

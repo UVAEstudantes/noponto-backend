@@ -1,6 +1,6 @@
 # Homologação manual de desempenho — NoPonto
 
-Kit preparado sobre `audit/gps-bus-brt-pipeline`, base `63da9a9d3cc6fa48e476c0e2eddb13784d75bf40`, em 21/10/2026. **Os cenários de desempenho ainda não foram executados.** Nenhum resultado de capacidade ou aprovação produtiva é alegado. Não executar o Compose normal da aplicação para este laboratório.
+Kit preparado sobre `audit/gps-bus-brt-pipeline`, base `63da9a9d3cc6fa48e476c0e2eddb13784d75bf40`, em 21/10/2026. **A preparação original não executou cenários; as tentativas manuais posteriores e correções estão registradas em VALIDATION.md.** Nenhum resultado de capacidade ou aprovação produtiva é alegado. Não executar o Compose normal da aplicação para este laboratório.
 
 ## Preparação no Windows
 
@@ -22,6 +22,8 @@ $lab = Join-Path (Get-Location) ('NoPonto/lab-output/perf-' + [guid]::NewGuid().
 `Prepare` apenas compila (limite 180 s), em `build/` e `obj/` exclusivos. Não inicia API, Docker nem testes. `Start` cria dois containers e uma rede com UUID e label `noponto.performance.lab`. Portas aleatórias são vinculadas exclusivamente a `127.0.0.1`. Nenhum endpoint ou connection string externo pode ser informado. Guards idênticos no PostgreSQL e Redis são validados antes de migrations/seed em schema exclusivo. A API usada pelos cenários é Kestrel temporário em loopback, iniciado pelo teste; não é a API de desenvolvimento/produção e sua URL não precisa ser informada.
 
 A conexão Redis construída por este launcher usa `allowAdmin=true` para coletar `INFO`, exclusivamente no endpoint descartável validado. Isso habilita a permissão do cliente StackExchange.Redis, sem alterar servidor, ACL, credenciais ou configuração global. Se `INFO` for bloqueado pelo modo admin do cliente ou explicitamente negado por ACL, apenas essa métrica fica indisponível (`info_admin_disabled`/`info_permission_denied`, com fase no JSON/Markdown). Erros de conexão, timeout, autenticação, persistência ou outros comandos continuam sendo falhas. Após atualizar o kit, criar outro UUID e executar `Prepare` novamente; não reutilizar o build/fingerprint anterior nem regenerar os relatórios da execução falha para substituir a evidência original.
+
+`GpsIntegrationResources.Record` centraliza a escrita de evidências: um lock estático protege somente a abertura/append/fechamento de cada linha completa, entre escritores do mesmo testhost. A serialização JSON e o processamento GPS/SignalR permanecem fora desse lock. O formato `{kind,value}` com uma linha por registro permanece igual. Erros reais de disco ou bloqueio por escritor externo continuam propagando; não há retry silencioso ou descarte de registros. O kit mantém um processo de execução por laboratório com `operation.lock` e diretórios exclusivos; não se promete coordenação com processos externos nem atomicidade diante de crash/disco cheio.
 
 ## Executar os cenários
 

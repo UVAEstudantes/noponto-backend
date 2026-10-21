@@ -37,6 +37,7 @@ namespace NoPonto.Tests;
 // fixture's schema/migration/seed/teardown code. Never part of offline allowlist.
 public sealed class GpsIntegrationResources : IAsyncLifetime
 {
+    private static readonly object EvidenceWriteLock = new();
     public ViagemOperacionalFixture Db { get; } = new();
     public string Pg { get; private set; } = "";
     public string RedisEndpoint { get; private set; } = "";
@@ -78,7 +79,11 @@ public sealed class GpsIntegrationResources : IAsyncLifetime
     public static void Record(string kind, object value)
     {
         var directory = Environment.GetEnvironmentVariable("NOPONTO_GPS_FIXTURE_RESULTS") ?? throw new InvalidOperationException("Results directory required.");
-        File.AppendAllText(Path.Combine(directory, "observations.jsonl"), JsonSerializer.Serialize(new { kind, value }) + "\n");
+        var line = JsonSerializer.Serialize(new { kind, value }) + "\n";
+        // All fixture/lab writers share this gate. Only the complete file append
+        // is serialized; caller processing and JSON serialization stay concurrent.
+        lock (EvidenceWriteLock)
+            File.AppendAllText(Path.Combine(directory, "observations.jsonl"), line);
     }
 
     public async Task<Route> Seed(string modal)
