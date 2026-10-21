@@ -122,7 +122,10 @@ public sealed record GtfsHttpSnapshot(bool Success, GtfsParsedSnapshot? Snapshot
     string? Failure, TimeSpan Duration, bool Reused)
 {
     public DateTimeOffset? ReceivedAtUtc { get; init; }
+    internal GtfsHttpAcquisition Acquisition { get; init; }
 }
+
+internal enum GtfsHttpAcquisition { Failed, LocalCache, Downloaded, NotModified }
 
 // One client instance per modal. Bounded body, serialized acquisition, HTTP cache and no retries.
 public sealed class GtfsRealtimeGpsClient(HttpClient http, Uri endpoint,
@@ -135,6 +138,7 @@ public sealed class GtfsRealtimeGpsClient(HttpClient http, Uri endpoint,
     private string? _etag;
     private DateTimeOffset? _lastModified;
     private bool _mustRevalidate;
+    private TimeSpan? _cacheMaxAge;
 
     public async Task<GtfsHttpSnapshot> ReadAsync(CancellationToken cancellationToken)
     {
@@ -145,30 +149,57 @@ public sealed class GtfsRealtimeGpsClient(HttpClient http, Uri endpoint,
             if (!options.LimitsValid()) throw new InvalidOperationException("Invalid GTFS-RT limits.");
             if (_clock.GetUtcNow() < _nextRequest && _last is not null)
                 return _mustRevalidate
-                    ? new(false, null, "cache_requires_validation", timer.Elapsed, true)
-                    : _last with { Reused = true, Duration = timer.Elapsed };
-            _nextRequest = _clock.GetUtcNow().AddSeconds(options.IntervalSeconds);
+                    ? new(false, null, "cache_requires_validation", timer.Elapsed, true) { Acquisition = GtfsHttpAcquisition.LocalCache }
+                    : _last with { Reused = true, Duration = timer.Elapsed, Acquisition = GtfsHttpAcquisition.LocalCache };
+            var requestStarted = _clock.GetUtcNow();
+            _nextRequest = requestStarted.AddSeconds(options.IntervalSeconds);
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             budget.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
             using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
             if (_etag is not null) request.Headers.TryAddWithoutValidation("If-None-Match", _etag);
             if (_lastModified.HasValue) request.Headers.IfModifiedSince = _lastModified;
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, budget.Token);
-            if (response.Headers.CacheControl is { } cachePolicy) _mustRevalidate = cachePolicy.NoCache;
-            var freshness = response.Headers.CacheControl?.MaxAge ?? TimeSpan.Zero;
-            var remaining = freshness - (response.Headers.Age ?? TimeSpan.Zero);
-            if (remaining > TimeSpan.Zero && response.Headers.CacheControl?.NoCache != true)
-                _nextRequest = _clock.GetUtcNow().Add(remaining > TimeSpan.FromSeconds(options.IntervalSeconds)
-                    ? remaining : TimeSpan.FromSeconds(options.IntervalSeconds));
+            var responseReceived = _clock.GetUtcNow();
             if (response.Headers.RetryAfter is { } retry)
             {
                 var until = retry.Date ?? _clock.GetUtcNow().Add(retry.Delta ?? TimeSpan.Zero);
                 if (until > _nextRequest) _nextRequest = until;
             }
-            if (response.StatusCode == HttpStatusCode.NotModified && _last?.Success == true)
-                return _last = _last with { Reused = true, Duration = timer.Elapsed };
+            var notModified = response.StatusCode == HttpStatusCode.NotModified;
+            if (notModified && !IdentifiesStoredResponse(response))
+                return RecordFailure("http_304_validator_mismatch", timer.Elapsed);
+            var cachePolicy = response.Headers.CacheControl;
+            // RFC 9111 section 3.2: a supplied field replaces the entire stored field.
+            // Only omission of Cache-Control in a valid 304 retains the previous policy.
+            _mustRevalidate = cachePolicy?.NoCache ?? (notModified && _mustRevalidate);
+            _cacheMaxAge = cachePolicy is not null ? cachePolicy.MaxAge : notModified ? _cacheMaxAge : null;
+            // RFC 9111 section 4.2.3: transit time is already part of the response age.
+            // Keep the provider interval anchored to the GET start, independently of freshness.
+            var responseDelay = responseReceived > requestStarted ? responseReceived - requestStarted : TimeSpan.Zero;
+            var apparentAge = response.Headers.Date is { } date && responseReceived > date
+                ? responseReceived - date : TimeSpan.Zero;
+            var correctedAge = (response.Headers.Age ?? TimeSpan.Zero) + responseDelay;
+            var remaining = (_cacheMaxAge ?? TimeSpan.Zero) - (apparentAge > correctedAge ? apparentAge : correctedAge);
+            if (remaining > TimeSpan.Zero && !_mustRevalidate && cachePolicy?.NoStore != true)
+            {
+                var freshUntil = responseReceived.Add(remaining);
+                if (freshUntil > _nextRequest) _nextRequest = freshUntil;
+            }
+            if (notModified)
+            {
+                _etag = response.Headers.ETag?.ToString() ?? _etag;
+                _lastModified = response.Content.Headers.LastModified ?? _lastModified;
+                var validated = _last! with { Reused = true, Duration = timer.Elapsed, Acquisition = GtfsHttpAcquisition.NotModified };
+                if (cachePolicy?.NoStore == true)
+                {
+                    _etag = null; _lastModified = null; _cacheMaxAge = null;
+                    _last = new(false, null, "cache_not_reusable", timer.Elapsed, false);
+                    return validated;
+                }
+                return _last = validated;
+            }
             if (!response.IsSuccessStatusCode)
-                return _last = new(false, null, $"http_{(int)response.StatusCode}", timer.Elapsed, false);
+                return RecordFailure($"http_{(int)response.StatusCode}", timer.Elapsed);
             if (response.Content.Headers.ContentLength > options.MaxResponseBytes)
                 throw new InvalidDataException("GTFS-RT response limit.");
             await using var stream = await response.Content.ReadAsStreamAsync(budget.Token);
@@ -186,16 +217,45 @@ public sealed class GtfsRealtimeGpsClient(HttpClient http, Uri endpoint,
             _lastModified = response.Content.Headers.LastModified;
             if (response.Headers.CacheControl?.NoStore == true)
             {
-                _etag = null; _lastModified = null;
+                _etag = null; _lastModified = null; _cacheMaxAge = null;
                 _last = new(false, null, "cache_not_reusable", timer.Elapsed, false);
-                return new(true, parsed, null, timer.Elapsed, false) { ReceivedAtUtc = _clock.GetUtcNow() };
+                return new(true, parsed, null, timer.Elapsed, false) { ReceivedAtUtc = _clock.GetUtcNow(), Acquisition = GtfsHttpAcquisition.Downloaded };
             }
-            return _last = new(true, parsed, null, timer.Elapsed, false) { ReceivedAtUtc = _clock.GetUtcNow() };
+            return _last = new(true, parsed, null, timer.Elapsed, false) { ReceivedAtUtc = _clock.GetUtcNow(), Acquisition = GtfsHttpAcquisition.Downloaded };
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-        catch (OperationCanceledException) { return _last = new(false, null, "timeout", timer.Elapsed, false); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The source's acquisition budget is also a caller cancellation here.
+            // Do not let the previous successful body masquerade as this failed attempt.
+            RecordFailure("acquisition_cancelled", timer.Elapsed);
+            throw;
+        }
+        catch (OperationCanceledException) { return RecordFailure("timeout", timer.Elapsed); }
         catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or InvalidProtocolBufferException)
-        { return _last = new(false, null, "invalid_or_unavailable_feed", timer.Elapsed, false); }
+        { return RecordFailure("invalid_or_unavailable_feed", timer.Elapsed); }
         finally { _gate.Release(); }
+    }
+
+    private bool IdentifiesStoredResponse(HttpResponseMessage response)
+    {
+        if (_last?.Success != true || _last.Snapshot is null) return false;
+        // RFC 9111 section 4.3.4: prefer the received ETag; a different strong
+        // validator must never fall back to a matching Last-Modified value.
+        if (response.Headers.ETag is { } received)
+            return System.Net.Http.Headers.EntityTagHeaderValue.TryParse(_etag, out var stored)
+                && (received.IsWeak || !stored.IsWeak)
+                && string.Equals(received.Tag, stored.Tag, StringComparison.Ordinal);
+        if (response.Content.Headers.LastModified is { } modified)
+            return _lastModified == modified;
+        return _etag is null && _lastModified is null;
+    }
+
+    private GtfsHttpSnapshot RecordFailure(string reason, TimeSpan duration)
+    {
+        // A validator is only useful while its complete representation is retained.
+        // Keep the already planned HTTP/cache/Retry-After deadline on failure.
+        _etag = null;
+        _lastModified = null;
+        return _last = new(false, null, reason, duration, false);
     }
 }

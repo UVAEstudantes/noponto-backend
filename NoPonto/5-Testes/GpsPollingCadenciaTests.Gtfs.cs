@@ -23,10 +23,10 @@ public sealed partial class GpsPollingCadenciaTests
     public GpsPollingCadenciaTests(ITestOutputHelper output) => _cadenceOutput = output;
 
     [Theory]
-    [InlineData(1, true, 60)]
+    [InlineData(1, true, 30)]
     [InlineData(0, true, 30)]
     [InlineData(1, false, 30)]
-    public async Task Brt_GateAndHttpCache_ReproduceAndIsolateAcquisitionAmplification(
+    public async Task Brt_GateAndHttpCache_DoNotAmplifyCorrectedFreshness(
         int headerLatencySeconds, bool cacheControl, int expectedInterval)
     {
         using var fixture = new GtfsCadenceFixture(GpsModalNames.Brt, headerLatencySeconds, cacheControl);
@@ -42,14 +42,14 @@ public sealed partial class GpsPollingCadenciaTests
         var expected = Enumerable.Range(0, 120 / expectedInterval + 1)
             .Select(i => (double)(i * expectedInterval)).ToArray();
         Assert.Equal(expected, fixture.RequestStarts);
-        _cadenceOutput.WriteLine($"legacy_gate_http_starts_seconds={string.Join(',', fixture.RequestStarts)}");
+        _cadenceOutput.WriteLine($"gate_http_starts_seconds={string.Join(',', fixture.RequestStarts)}");
     }
 
     [Theory]
-    [InlineData(30, 0, 1, 45)]
-    [InlineData(30, 10, 1, 45)]
-    [InlineData(60, 0, 1, 75)]
-    [InlineData(60, 30, 1, 45)]
+    [InlineData(30, 0, 1, 30)]
+    [InlineData(30, 10, 1, 30)]
+    [InlineData(60, 0, 1, 60)]
+    [InlineData(60, 30, 1, 30)]
     [InlineData(30, 0, 0, 30)]
     public async Task Brt_PollingDoesNotAddGateDelayAfterHttpCacheExpires(
         int maxAge, int age, int latency, int expectedInterval)
@@ -88,12 +88,12 @@ public sealed partial class GpsPollingCadenciaTests
         using var fixture = new GtfsCadenceFixture(modal);
         using var polling = fixture.CreatePolling();
         var first = Assert.Single((await fixture.ReadAsync(polling, 0)).Posicoes);
-        var before = Assert.Single((await fixture.ReadAsync(polling, 30.999)).Posicoes);
+        var before = Assert.Single((await fixture.ReadAsync(polling, 29.999)).Posicoes);
         Assert.Single(fixture.RequestStarts);
         Assert.Equal(first.TimestampGps, before.TimestampGps);
         Assert.Equal(first.RecebidoEmUtc, before.RecebidoEmUtc);
-        var at = Assert.Single((await fixture.ReadAsync(polling, 31)).Posicoes);
-        Assert.Equal(new double[] { 0, 31 }, fixture.RequestStarts);
+        var at = Assert.Single((await fixture.ReadAsync(polling, 30)).Posicoes);
+        Assert.Equal(new double[] { 0, 30 }, fixture.RequestStarts);
         Assert.Equal(modal == GpsModalNames.Brt ? "BRT-00123" : "00123", at.Ordem);
         Assert.Equal(first.Ordem, at.Ordem);
         Assert.Equal("GTFSRT_" + modal, at.ProvedorFonte);
@@ -124,7 +124,7 @@ public sealed partial class GpsPollingCadenciaTests
         {
             var position = Assert.Single((await fixture.ReadAsync(polling, seconds)).Posicoes);
             first ??= position;
-            if (seconds < 90)
+            if (seconds < 60)
             {
                 Assert.Equal(first.TimestampGps, position.TimestampGps);
                 Assert.Equal(first.RecebidoEmUtc, position.RecebidoEmUtc);
@@ -138,14 +138,14 @@ public sealed partial class GpsPollingCadenciaTests
                     first.TimestampGps.ToUnixTimeMilliseconds()));
             }
         }
-        Assert.Equal(new double[] { 0, 45, 90 }, fixture.RequestStarts);
+        Assert.Equal(new double[] { 0, 30, 60, 90 }, fixture.RequestStarts);
         Assert.Equal(new[] { "\"snapshot-1\"" }, fixture.ConditionalEtags[1]);
         Assert.Equal(new[] { "\"snapshot-1\"" }, fixture.ConditionalEtags[2]);
     }
 
     [Theory]
-    [InlineData(0, 75)]
-    [InlineData(60, 120)]
+    [InlineData(0, 60)]
+    [InlineData(60, 105)]
     public async Task Brt_HttpFailurePreservesLastGpsAndHonorsRetryAfter(int retryAfter, int recovery)
     {
         using var fixture = new GtfsCadenceFixture(GpsModalNames.Brt);
@@ -168,7 +168,7 @@ public sealed partial class GpsPollingCadenciaTests
             var read = await polling.ObterBrtAsync(new GpsPollingOptions(), default, Ts(seconds));
             var position = Assert.Single(read.ResultadoEfetivo.Posicoes);
             first ??= position;
-            if (seconds >= 45 && seconds < recovery)
+            if (seconds >= 30 && seconds < recovery)
             {
                 Assert.Equal(StatusFonteGps.Falha, read.ResultadoConsulta);
                 Assert.True(read.CacheReutilizado);
@@ -181,7 +181,7 @@ public sealed partial class GpsPollingCadenciaTests
                 Assert.True(position.TimestampGps > first.TimestampGps);
             }
         }
-        Assert.Equal(new double[] { 0, 45, recovery }, fixture.RequestStarts);
+        Assert.Equal(new double[] { 0, 30, recovery }, fixture.RequestStarts);
     }
 
     [Fact]
@@ -280,14 +280,14 @@ public sealed partial class GpsPollingCadenciaTests
         for (var seconds = 0; seconds <= 75; seconds += 15)
         {
             var result = await fixture.ReadAsync(polling, seconds);
-            if (seconds is 45 or 60)
+            if (seconds is 30 or 45)
             {
                 Assert.Equal(StatusFonteGps.Falha, result.Status);
                 Assert.Empty(result.Posicoes);
             }
             else Assert.Equal("00123", Assert.Single(result.Posicoes).Ordem);
         }
-        Assert.Equal(new double[] { 0, 45, 75 }, fixture.RequestStarts);
+        Assert.Equal(new double[] { 0, 30, 60 }, fixture.RequestStarts);
     }
 
     [Theory]
@@ -331,7 +331,7 @@ public sealed partial class GpsPollingCadenciaTests
             Assert.True(await (Task<bool>)process.Invoke(polling,
                 [fixture.Clock.GetUtcNow(), options, Stopwatch.GetTimestamp(), null, CancellationToken.None])!);
         }
-        Assert.Equal(new double[] { 0, 45, 90 }, fixture.RequestStarts);
+        Assert.Equal(new double[] { 0, 30, 60, 90 }, fixture.RequestStarts);
         Assert.Equal(0, matching.ChamadasBuscarEnriquecimento);
         Assert.Equal(0, matching.ChamadasBatchGlobal);
         Assert.Equal(0, matching.ChamadasBatchCombinado);

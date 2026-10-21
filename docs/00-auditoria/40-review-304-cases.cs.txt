@@ -1,0 +1,79 @@
+using System.Net;
+using System.Net.Http.Headers;
+using Google.Protobuf;
+using NoPonto.Application.GPS;
+using TransitRealtime;
+using Xunit;
+namespace NoPonto.Tests;
+public sealed class GtfsFinalReview304Tests
+{
+    [Fact]
+    public async Task DifferentStrongEtagOn304MustNotRelabelOldBody()
+    {
+        var clock = new Clock();
+        var starts = new List<double>();
+        using var http = new HttpClient(new Handler(request =>
+        {
+            starts.Add((clock.Now-clock.Origin).TotalSeconds);
+            var etag = request.Headers.IfNoneMatch.FirstOrDefault()?.Tag;
+            if (starts.Count == 2 || etag == "\"new\"")
+            {
+                var notModified = new HttpResponseMessage(HttpStatusCode.NotModified);
+                notModified.Headers.ETag = new EntityTagHeaderValue("\"new\"");
+                notModified.Headers.CacheControl = new() { MaxAge=TimeSpan.FromSeconds(30) };
+                return notModified;
+            }
+            return Response(clock, starts.Count > 1 ? "new" : "old");
+        }));
+        var client = new GtfsRealtimeGpsClient(http,new Uri("https://fixture.invalid/gtfs"),new(),clock);
+        var first=await client.ReadAsync(default);
+        clock.Now=clock.Origin.AddSeconds(30);
+        var invalid304=await client.ReadAsync(default);
+        clock.Now=clock.Origin.AddSeconds(60);
+        var next=await client.ReadAsync(default);
+        System.Console.WriteLine($"review_mismatched_304_success={invalid304.Success} next_reused_old_body={ReferenceEquals(first.Snapshot,next.Snapshot)} gps_advanced={next.Snapshot?.Readings[0].TimestampGps>first.Snapshot!.Readings[0].TimestampGps}");
+        Assert.False(invalid304.Success);
+        Assert.True(next.Snapshot!.Readings[0].TimestampGps>first.Snapshot!.Readings[0].TimestampGps);
+    }
+    [Fact]
+    public async Task ReplacingCacheControlOn304MustNotRetainRemovedMaxAge()
+    {
+        var clock=new Clock(); var count=0;
+        using var http=new HttpClient(new Handler(_ =>
+        {
+            count++;
+            if(count==2) return new HttpResponseMessage(HttpStatusCode.NotModified)
+            { Headers={ ETag=new EntityTagHeaderValue("\"old\""),CacheControl=new(){NoStore=true}}};
+            var r=Response(clock,"old");r.Headers.CacheControl!.MaxAge=TimeSpan.FromSeconds(60);return r;
+        }));
+        var client=new GtfsRealtimeGpsClient(http,new Uri("https://fixture.invalid/gtfs"),new(),clock);
+        await client.ReadAsync(default);
+        clock.Now=clock.Origin.AddSeconds(60);await client.ReadAsync(default);
+        clock.Now=clock.Origin.AddSeconds(90);var after=await client.ReadAsync(default);
+        System.Console.WriteLine($"review_304_no_store_next_eligible_calls={count} read_success={after.Success} reason={after.Failure}");
+        Assert.Equal(3,count);
+        Assert.True(after.Success);
+    }
+    private static HttpResponseMessage Response(Clock clock,string tag)
+    {
+        var feed=new FeedMessage
+        {
+            Header=new FeedHeader{GtfsRealtimeVersion="2.0"},
+            Entity={new FeedEntity{Id="entity",Vehicle=new VehiclePosition
+            {Vehicle=new VehicleDescriptor{Id="fixture"},Trip=new TripDescriptor{RouteId="route"},
+            Position=new Position{Latitude=-22.9f,Longitude=-43.2f},Timestamp=(ulong)clock.Now.ToUnixTimeSeconds()}}}
+        };
+        var r=new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent(feed.ToByteArray())};
+        r.Headers.ETag=new EntityTagHeaderValue("\""+tag+"\"");
+        r.Headers.CacheControl=new(){MaxAge=TimeSpan.FromSeconds(30)};return r;
+    }
+    private sealed class Clock:TimeProvider
+    {
+        public DateTimeOffset Origin {get;}=new(2026,10,21,18,0,0,TimeSpan.Zero);
+        public DateTimeOffset Now;
+        public Clock()=>Now=Origin;
+        public override DateTimeOffset GetUtcNow()=>Now;
+    }
+    private sealed class Handler(Func<HttpRequestMessage,HttpResponseMessage> reply):HttpMessageHandler
+    {protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)=>Task.FromResult(reply(request));}
+}
