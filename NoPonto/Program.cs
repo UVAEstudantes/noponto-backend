@@ -475,6 +475,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(
 
 builder.Services.AddSingleton<IPosicaoVeiculoCacheRepository, PosicaoVeiculoCacheRepository>();
 builder.Services.AddSingleton<IVeiculosLinhaRuntimeReader, VeiculosLinhaRuntimeReader>();
+builder.Services.AddItsGpsShadow(builder.Configuration);
 builder.Services.AddSingleton<IViagemObservadaRepository, ViagemOperacionalRepository>();
 builder.Services.AddSingleton<IOcorrenciaParadaRepository, OcorrenciaParadaRepository>();
 builder.Services.AddSingleton<ViagemObservadaService>();

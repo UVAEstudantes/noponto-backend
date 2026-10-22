@@ -22,8 +22,9 @@ public sealed record GpsDatarioCollection(
     TimeSpan Duration,
     IReadOnlyDictionary<string, string> ProvidersStatus);
 
-public sealed class GpsDatarioClient(HttpClient http, ILogger<GpsDatarioClient> logger)
+public sealed class GpsDatarioClient(HttpClient http, ILogger<GpsDatarioClient> logger) : IDisposable
 {
+    public void Dispose() => http.Dispose();
     public const string Endpoint = "v1/geolocalizacao/veiculos";
     private static readonly TimeSpan MinimumPageInterval = TimeSpan.FromMilliseconds(200);
 
@@ -45,13 +46,7 @@ public sealed class GpsDatarioClient(HttpClient http, ILogger<GpsDatarioClient> 
         do
         {
             if (pages > 0) await Task.Delay(MinimumPageInterval, ct);
-            var uri = BuildUri(query, cursor);
-            using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct);
-            if (!response.IsSuccessStatusCode)
-                throw new HttpRequestException($"Data.Rio GPS respondeu HTTP {(int)response.StatusCode}.",
-                    null, response.StatusCode);
-            var page = await response.Content.ReadFromJsonAsync<GpsDatarioPage>(JsonOptions, ct)
-                ?? throw new JsonException("Resposta Data.Rio GPS nula.");
+            var page = await BuscarPaginaAsync(query, cursor, ct);
             pages++;
             minute ??= ParseTimestamp(page.MinutoUtc);
             data.AddRange(page.Data ?? []);
@@ -67,6 +62,48 @@ public sealed class GpsDatarioClient(HttpClient http, ILogger<GpsDatarioClient> 
         logger.LogDebug("Data.Rio GPS: {records} registros em {pages} páginas ({durationMs}ms).",
             data.Count, pages, watch.ElapsedMilliseconds);
         return new(minute, data, pages, watch.Elapsed, providers);
+    }
+
+    // A primitive shared with bounded diagnostic acquisition. Legacy pagination remains unchanged.
+    internal async Task<GpsDatarioPage> BuscarPaginaAsync(
+        GpsDatarioQuery query, string? cursor, CancellationToken ct, int? maxResponseBytes = null)
+    {
+        using var response = await http.GetAsync(BuildUri(query, cursor), HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = new HttpRequestException($"Data.Rio GPS respondeu HTTP {(int)response.StatusCode}.",
+                null, response.StatusCode);
+            // Preserve the existing exception type; only the isolated shadow consumer reads this metadata.
+            if (response.Headers.RetryAfter is not null)
+            {
+                if (response.Headers.RetryAfter?.Date is { } retryAt)
+                    error.Data["RetryAfterUtc"] = retryAt;
+                else if (response.Headers.RetryAfter?.Delta is { } retry && retry > TimeSpan.Zero)
+                    error.Data["RetryAfter"] = retry;
+            }
+            throw error;
+        }
+        // Only shadow callers opt into this bound. The existing all-pages client keeps its contract.
+        if (maxResponseBytes is { } maximum)
+        {
+            if (response.Content.Headers.ContentLength is long length && length > maximum)
+                throw new InvalidDataException("ITS response exceeds the shadow body limit.");
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var buffer = new MemoryStream();
+            var chunk = new byte[65536];
+            int read;
+            while ((read = await stream.ReadAsync(chunk, ct)) != 0)
+            {
+                if (buffer.Length + read > maximum)
+                    throw new InvalidDataException("ITS response exceeds the shadow body limit.");
+                buffer.Write(chunk, 0, read);
+            }
+            buffer.Position = 0;
+            return await JsonSerializer.DeserializeAsync<GpsDatarioPage>(buffer, JsonOptions, ct)
+                ?? throw new JsonException("Resposta Data.Rio GPS nula.");
+        }
+        return await response.Content.ReadFromJsonAsync<GpsDatarioPage>(JsonOptions, ct)
+            ?? throw new JsonException("Resposta Data.Rio GPS nula.");
     }
 
     internal static string BuildUri(GpsDatarioQuery query, string? cursor = null)
