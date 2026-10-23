@@ -1,0 +1,537 @@
+{
+  "base_commit": "d12736b",
+  "configuration": {
+    "postgres": "guarded random loopback port/exclusive schema",
+    "redis": "guarded random loopback port",
+    "api": "http://127.0.0.1:64549",
+    "hub": "/hub/gps",
+    "bus": "ITS_CURRENT",
+    "fallback": "ZIRIX_DIRECT",
+    "polling_seconds": 20,
+    "active_ttl": 40,
+    "recent_ttl": 180,
+    "max_gps_age": 300,
+    "matching_batch": false,
+    "subscribers": 1,
+    "other_modals": "disabled only in this isolated host",
+    "external_eta": "disabled"
+  },
+  "structure": {
+    "routes": 459,
+    "patterns": 873,
+    "occurrences": 53214,
+    "elapsed_ms": 105177.2195,
+    "source": "public GTFS; representative real trips; no synthetic geometry"
+  },
+  "healthy": {
+    "snapshots": 3,
+    "raw_records": 122750,
+    "rejected_raw_records": 9767,
+    "normalized_observations": 10495,
+    "until40_at_acquisition": 6032,
+    "until60_at_acquisition": 10152,
+    "until180_at_acquisition": 10495,
+    "polls": [
+      {
+        "inicio": "2026-10-23T21:55:24.1789875+00:00",
+        "total_ms": 62,
+        "entrada": 0,
+        "validas": 0,
+        "novas": 0,
+        "enriquecimento_solicitado": 0,
+        "enriquecidas": 0,
+        "matching_etapa_ms": 0,
+        "commit_viagem_ms": 0,
+        "redis_leitura_ms": 0,
+        "signalr_ms": 16,
+        "veiculos_enviados": 0
+      },
+      {
+        "inicio": "2026-10-23T21:55:42.8393337+00:00",
+        "total_ms": 3029,
+        "entrada": 3501,
+        "validas": 3501,
+        "novas": 3501,
+        "enriquecimento_solicitado": 21,
+        "enriquecidas": 21,
+        "matching_etapa_ms": 1401,
+        "commit_viagem_ms": 1290,
+        "redis_leitura_ms": 273,
+        "signalr_ms": 24,
+        "veiculos_enviados": 21
+      },
+      {
+        "inicio": "2026-10-23T21:56:02.852178+00:00",
+        "total_ms": 4,
+        "entrada": 0,
+        "validas": 0,
+        "novas": 0,
+        "enriquecimento_solicitado": 0,
+        "enriquecidas": 0,
+        "matching_etapa_ms": 0,
+        "commit_viagem_ms": 0,
+        "redis_leitura_ms": 0,
+        "signalr_ms": 3,
+        "veiculos_enviados": 21
+      },
+      {
+        "inicio": "2026-10-23T21:56:07.5654497+00:00",
+        "total_ms": 1799,
+        "entrada": 3502,
+        "validas": 3502,
+        "novas": 3332,
+        "enriquecimento_solicitado": 20,
+        "enriquecidas": 20,
+        "matching_etapa_ms": 711,
+        "commit_viagem_ms": 860,
+        "redis_leitura_ms": 104,
+        "signalr_ms": 2,
+        "veiculos_enviados": 21
+      },
+      {
+        "inicio": "2026-10-23T21:56:26.3882321+00:00",
+        "total_ms": 989,
+        "entrada": 3492,
+        "validas": 3492,
+        "novas": 2432,
+        "enriquecimento_solicitado": 13,
+        "enriquecidas": 12,
+        "matching_etapa_ms": 245,
+        "commit_viagem_ms": 537,
+        "redis_leitura_ms": 77,
+        "signalr_ms": 2,
+        "veiculos_enviados": 21
+      }
+    ],
+    "evidence": {
+      "phase": "healthy_background",
+      "accepted": 9265,
+      "cas_attempts": 9265,
+      "accepted_unique": 3512,
+      "matched": 53,
+      "history": 5752,
+      "next_stop": 45,
+      "accepted_freshness_at_evidence": {
+        "count": 9265,
+        "until40": 1,
+        "until60": 2252,
+        "until180": 9245,
+        "future": 0
+      },
+      "accepted_until40_at_write": 5368,
+      "accepted_until60_at_write": 9069,
+      "accepted_until180_at_write": 9265,
+      "active_keys_sample": 48,
+      "recent_keys_sample": 50,
+      "active_ttl_max": 22.395,
+      "recent_ttl_max": 162.392,
+      "redis_keys": 10864,
+      "postgres": {
+        "ViagensOperacionais": 21,
+        "OutboxViagens": 28,
+        "EventosViagem": 28,
+        "HistoricoPassagens": 8
+      },
+      "wire_messages": 4,
+      "wire_empty_messages": 1,
+      "wire_items": 84,
+      "wire_unique": 21,
+      "wire_gps_regressions": 0,
+      "wire_equal_gps": 30,
+      "wire_active_older40": 49,
+      "wire_no_signal": 0,
+      "wire_until40": 35,
+      "wire_until60": 77,
+      "wire_until180": 84,
+      "wire_future": 0,
+      "note": "SignalR full snapshots may repeat unchanged vehicles; equal GPS is not a duplicate accepted event",
+      "outbox_completed": 28,
+      "outbox_failures": 0
+    }
+  },
+  "all_complete_its_acquisitions": {
+    "count": 5,
+    "records": 182211,
+    "raw_rejected": 12920,
+    "duration_ms": [
+      18592.7817,
+      14701.3504,
+      8811.704,
+      7428.6552,
+      16145.5084
+    ]
+  },
+  "raw_validation_including_probe_bodies": {
+    "candidate": 194967,
+    "without_service": 6110,
+    "older180": 7576
+  },
+  "phases": [
+    {
+      "phase": "injected_unavailable",
+      "elapsed_ms": 5742.7525,
+      "status": "Sucesso",
+      "count": 3212,
+      "sources": {
+        "ZIRIX_DIRECT": 3212
+      },
+      "generation": 4,
+      "ack": true,
+      "accepted": 3184,
+      "freshness": {
+        "count": 3212,
+        "until40": 3149,
+        "until60": 3192,
+        "until180": 3212,
+        "future": 0
+      }
+    },
+    {
+      "phase": "injected_partial",
+      "elapsed_ms": 3526.7577,
+      "status": "Sucesso",
+      "count": 3211,
+      "sources": {
+        "ZIRIX_DIRECT": 3211
+      },
+      "generation": 5,
+      "ack": true,
+      "accepted": 734,
+      "freshness": {
+        "count": 3211,
+        "until40": 3159,
+        "until60": 3194,
+        "until180": 3211,
+        "future": 0
+      }
+    },
+    {
+      "phase": "injected_timeout",
+      "elapsed_ms": 13759.4805,
+      "status": "Sucesso",
+      "count": 3210,
+      "sources": {
+        "ZIRIX_DIRECT": 3210
+      },
+      "generation": 6,
+      "ack": true,
+      "accepted": 1483,
+      "freshness": {
+        "count": 3210,
+        "until40": 3149,
+        "until60": 3187,
+        "until180": 3209,
+        "future": 0
+      }
+    },
+    {
+      "phase": "injected_both_fail",
+      "elapsed_ms": 10.7889,
+      "status": "Falha",
+      "count": 0,
+      "sources": {},
+      "generation": null,
+      "ack": false,
+      "accepted": 0,
+      "freshness": {
+        "count": 0,
+        "until40": 0,
+        "until60": 0,
+        "until180": 0,
+        "future": 0
+      }
+    },
+    {
+      "phase": "recovery_fallback",
+      "elapsed_ms": 2783.9648,
+      "status": "Sucesso",
+      "count": 3211,
+      "sources": {
+        "ZIRIX_DIRECT": 3211
+      },
+      "generation": 7,
+      "ack": true,
+      "accepted": 468,
+      "freshness": {
+        "count": 3211,
+        "until40": 3152,
+        "until60": 3187,
+        "until180": 3209,
+        "future": 0
+      }
+    },
+    {
+      "phase": "recovery_probe1",
+      "elapsed_ms": 14396.0362,
+      "status": "Sucesso",
+      "count": 3206,
+      "sources": {
+        "ZIRIX_DIRECT": 3206
+      },
+      "generation": 8,
+      "ack": true,
+      "accepted": 3205,
+      "freshness": {
+        "count": 3206,
+        "until40": 3133,
+        "until60": 3172,
+        "until180": 3204,
+        "future": 0
+      }
+    },
+    {
+      "phase": "recovery_probe2",
+      "elapsed_ms": 19077.4643,
+      "status": "Sucesso",
+      "count": 3503,
+      "sources": {
+        "ITS_CURRENT": 3503
+      },
+      "generation": 9,
+      "ack": true,
+      "accepted": 3500,
+      "freshness": {
+        "count": 3503,
+        "until40": 1483,
+        "until60": 3344,
+        "until180": 3503,
+        "future": 0
+      }
+    }
+  ],
+  "handoffs": [
+    {
+      "utc": "2026-10-23T21:55:42.8223726+00:00",
+      "source": "ITS_CURRENT",
+      "status": "Sucesso",
+      "elapsed_ms": 18601.1791,
+      "freshness": {
+        "count": 3501,
+        "until40": 1844,
+        "until60": 3372,
+        "until180": 3501,
+        "future": 0
+      }
+    },
+    {
+      "utc": "2026-10-23T21:56:07.55565+00:00",
+      "source": "ITS_CURRENT",
+      "status": "Sucesso",
+      "elapsed_ms": 14709.4911,
+      "freshness": {
+        "count": 3502,
+        "until40": 2267,
+        "until60": 3394,
+        "until180": 3502,
+        "future": 0
+      }
+    },
+    {
+      "utc": "2026-10-23T21:56:26.3839209+00:00",
+      "source": "ITS_CURRENT",
+      "status": "Sucesso",
+      "elapsed_ms": 8813.6237,
+      "freshness": {
+        "count": 3492,
+        "until40": 1921,
+        "until60": 3386,
+        "until180": 3492,
+        "future": 0
+      }
+    },
+    {
+      "utc": "2026-10-23T21:56:48.6124074+00:00",
+      "source": "ZIRIX_DIRECT",
+      "status": "Sucesso",
+      "elapsed_ms": 4218.5881,
+      "freshness": {
+        "count": 3212,
+        "until40": 3161,
+        "until60": 3195,
+        "until180": 3212,
+        "future": 0
+      }
+    },
+    {
+      "utc": "2026-10-23T21:56:53.0606374+00:00",
+      "source": "ZIRIX_DIRECT",
+      "status": "Sucesso",
+      "elapsed_ms": 2916.0362,
+      "freshness": {
+        "count": 3211,
+        "until40": 3159,
+        "until60": 3194,
+        "until180": 3211,
+        "future": 0
+      }
+    },
+    {
+      "utc": "2026-10-23T21:57:06.6823031+00:00",
+      "source": "ZIRIX_DIRECT",
+      "status": "Sucesso",
+      "elapsed_ms": 13007.1345,
+      "freshness": {
+        "count": 3210,
+        "until40": 3150,
+        "until60": 3187,
+        "until180": 3208,
+        "future": 1
+      }
+    },
+    {
+      "utc": "2026-10-23T21:57:07.4404669+00:00",
+      "source": "none",
+      "status": "Falha",
+      "elapsed_ms": 2.2239,
+      "freshness": {
+        "count": 0,
+        "until40": 0,
+        "until60": 0,
+        "until180": 0,
+        "future": 0
+      }
+    },
+    {
+      "utc": "2026-10-23T21:57:09.9738004+00:00",
+      "source": "ZIRIX_DIRECT",
+      "status": "Sucesso",
+      "elapsed_ms": 2508.9606,
+      "freshness": {
+        "count": 3211,
+        "until40": 3153,
+        "until60": 3187,
+        "until180": 3209,
+        "future": 0
+      }
+    },
+    {
+      "utc": "2026-10-23T21:58:23.0857089+00:00",
+      "source": "ZIRIX_DIRECT",
+      "status": "Sucesso",
+      "elapsed_ms": 11824.6454,
+      "freshness": {
+        "count": 3206,
+        "until40": 3145,
+        "until60": 3176,
+        "until180": 3204,
+        "future": 0
+      }
+    },
+    {
+      "utc": "2026-10-23T21:59:42.8219534+00:00",
+      "source": "ITS_CURRENT",
+      "status": "Sucesso",
+      "elapsed_ms": 16148.6765,
+      "freshness": {
+        "count": 3503,
+        "until40": 1863,
+        "until60": 3374,
+        "until180": 3503,
+        "future": 0
+      }
+    }
+  ],
+  "handoff_wait_ms": [
+    2.6643,
+    0.3793,
+    0.1061,
+    0.662,
+    0.7798,
+    0.0493,
+    0.0836,
+    0.1617,
+    0.1907
+  ],
+  "final": {
+    "phase": "final",
+    "accepted": 21839,
+    "cas_attempts": 21839,
+    "accepted_unique": 3560,
+    "matched": 138,
+    "history": 18009,
+    "next_stop": 129,
+    "accepted_freshness_at_evidence": {
+      "count": 21839,
+      "until40": 1483,
+      "until60": 3344,
+      "until180": 9077,
+      "future": 0
+    },
+    "accepted_until40_at_write": 15821,
+    "accepted_until60_at_write": 21444,
+    "accepted_until180_at_write": 21838,
+    "active_keys_sample": 48,
+    "recent_keys_sample": 48,
+    "active_ttl_max": 39.09,
+    "recent_ttl_max": 179.089,
+    "redis_keys": 10906,
+    "postgres": {
+      "ViagensOperacionais": 21,
+      "OutboxViagens": 77,
+      "EventosViagem": 77,
+      "HistoricoPassagens": 52
+    },
+    "wire_messages": 11,
+    "wire_empty_messages": 1,
+    "wire_items": 231,
+    "wire_unique": 21,
+    "wire_gps_regressions": 0,
+    "wire_equal_gps": 91,
+    "wire_active_older40": 58,
+    "wire_no_signal": 0,
+    "wire_until40": 173,
+    "wire_until60": 224,
+    "wire_until180": 231,
+    "wire_future": 0,
+    "note": "SignalR full snapshots may repeat unchanged vehicles; equal GPS is not a duplicate accepted event",
+    "outbox_completed": 49,
+    "outbox_failures": 0
+  },
+  "process": {
+    "elapsed_ms": 367229.5778,
+    "cpu_ms": 124500,
+    "working_set_bytes": 437489664,
+    "peak_working_set_bytes": 705589248,
+    "scope": "testhost including import/observers; containers excluded"
+  },
+  "resources": {
+    "samples": 30,
+    "cpu_percent_max_sampled": {
+      "postgis": 99.19,
+      "redis": 38.45
+    },
+    "memory_mib_max_sampled": {
+      "postgis": 476.9,
+      "redis": 15.43
+    },
+    "active_sample_with_physical_gps_over40": 15
+  },
+  "teardown": {
+    "preexisting_unchanged": true,
+    "preexisting_count": 4,
+    "owned_containers_remaining": 0,
+    "owned_network_removed": true
+  },
+  "evidence_sha256": {
+    "run3/integration.trx": "77c509951264205f852ba4da072fa2c15b5c11113d62f5047553fe7184e4a1a8",
+    "run3/observations.jsonl": "d36f955ca7659b94965df11ff47dd54a940dbf7ebacb929aae739839e2c3cde6",
+    "run3/isolation.json": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+    "run3/teardown.json": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+    "run3/resources-and-ttl.jsonl": "ba1abd78226ec1f1af895b5398a05da743a73fa14bba0af48afcb381f45f137f",
+    "run2/integration.trx": "27bca0235c94794dc27947db45fe7fea113a8fdc7b11ee15e07700b97c0c2d52",
+    "run2/observations.jsonl": "e24b908002587d32976ed23952b3eae4b493601578582ad14dadf5cc86417774",
+    "run2/docker-resources.jsonl": "29a928e8f3502ea02149f67247f430e11d6dd845d9e867e9566533cc4cb1948e",
+    "run2/teardown.json": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+    "its-handoff-red-bus.trx": "9b556da236589194b2f1d95c8630fbcf527182b0c73252787eda746c18659fbe",
+    "its-handoff-green.trx": "0414fc89a5122924fa14e45b177e27cd2a9785051baa0d6f0bd6aeb05778af9b",
+    "its-e2e-regression.trx": "5c19290e59d042aa361e4d598e55557bb3ce3515d2e4be1d2669af6e91a25910",
+    "its-e2e-offline.trx": "29a10685f1f096389109835d27b403ead0a8d7df68e309d02de5a1b11e0de3a3"
+  },
+  "limits": [
+    "Functional validation with one subscribed line and all-network GPS acquisition; 459-line subscription load exceeded eight-minute budget.",
+    "Real background loops in healthy phase; controlled manual cycles in failure/recovery phases with real 61-second waits.",
+    "Public GTFS representative trips per route/direction/shape; not a copy of production structural state.",
+    "SignalR sends full snapshots; repeated unchanged GPS items are expected.",
+    "One preexisting synthetic history row in the guarded fixture is excluded from new passage totals."
+  ]
+}

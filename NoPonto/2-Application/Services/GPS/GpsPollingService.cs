@@ -24,6 +24,7 @@ public sealed class GpsPollingService : BackgroundService
     private readonly IStatusGpsSource _brtSource;
     private readonly bool _gtfsRealtimeSelected;
     private readonly bool _gtfsBusSelected;
+    private readonly bool _busSnapshotWakeup;
     private readonly GpsBrtPollingGate _brtGate = new();
 
     private readonly IPosicaoVeiculoCacheRepository _posicaoCache;
@@ -80,7 +81,10 @@ public sealed class GpsPollingService : BackgroundService
         _brtSource = sourceResolver.GetPrimary(GpsModalNames.Brt) as IStatusGpsSource
             ?? throw new InvalidOperationException(
                 "A fonte GPS primária BRT precisa expor status para preservar o cache/fail-open operacional.");
-        _gtfsBusSelected = sourceResolver.GetPrimary(GpsModalNames.Bus) is GtfsRealtimeGpsSource;
+        var busSource = sourceResolver.GetPrimary(GpsModalNames.Bus);
+        _gtfsBusSelected = busSource is GtfsRealtimeGpsSource;
+        _busSnapshotWakeup = _gtfsBusSelected || (busSource is ISnapshotGpsSource
+            && string.Equals(busSource.Name, GpsSourceNames.ItsCurrent, StringComparison.OrdinalIgnoreCase));
         _gtfsRealtimeSelected = _brtSource is GtfsRealtimeGpsSource || _gtfsBusSelected;
         _posicaoCache = posicaoCache;
         _viagemObservada = viagemObservada;
@@ -170,7 +174,7 @@ public sealed class GpsPollingService : BackgroundService
         CancellationToken ct, TimeProvider? relogio = null)
     {
         var clock = relogio ?? TimeProvider.System;
-        if (!_gtfsBusSelected || !repousoNormal)
+        if (!_busSnapshotWakeup || !repousoNormal)
         {
             await Task.Delay(delay, clock, ct);
             return;

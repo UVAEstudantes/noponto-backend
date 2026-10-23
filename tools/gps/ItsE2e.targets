@@ -1,0 +1,5 @@
+<Project>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'NoPonto'">
+    <Compile Include="$(MSBuildThisFileDirectory)ItsE2eLab.cs" />
+  </ItemGroup>
+</Project>

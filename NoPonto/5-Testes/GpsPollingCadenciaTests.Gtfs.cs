@@ -351,7 +351,7 @@ public sealed partial class GpsPollingCadenciaTests
         GpsEnriquecimentoService? enricher = null, GpsSppoSnapshotStore? store = null)
     {
         var other = new EmptyCadenceSource();
-        var isBus = source.Name == "GTFSRT_BUS";
+        var isBus = source.Name is "GTFSRT_BUS" or GpsSourceNames.ItsCurrent;
         var resolver = new GpsSourceResolver([source, other], Options.Create(new GpsSourcesOptions
         {
             BusPrimarySource = isBus ? source.Name : other.Name,

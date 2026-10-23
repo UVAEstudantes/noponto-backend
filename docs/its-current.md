@@ -1,5 +1,7 @@
 # ITS_CURRENT — plano e operação (2026-10-23)
 
+Homologação conectada executada na continuação: [resultado ponta a ponta, limites de carga e decisão](its-e2e-20261023.md). O fluxo com uma assinatura passou; a carga de 459 assinaturas excedeu o prazo e não foi aprovada. As pendências históricas abaixo devem ser lidas com essa atualização. Produção permanece inalterada.
+
 ## Estado atual — validação operacional e fallback
 
 Pronta para homologação conectada ao pipeline em desenvolvimento. A aquisição real SPPO foi executada isoladamente; o pipeline e a transição foram validados com fixtures em memória. Nenhuma posição real passou por coletor, Redis, matching ou SignalR nesta sessão. As seções posteriores preservam o plano e os resultados da primeira implementação; a indicação antiga de ausência de fallback foi superada nesta continuação.
