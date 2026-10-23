@@ -34,6 +34,8 @@ public static class TarifasModelConfiguration
                 "AND \"NomeNormalizado\" = normalize(\"NomeNormalizado\", NFC) AND \"Nome\" = normalize(\"Nome\", NFC)"));
             e.Property(x => x.Nome).HasMaxLength(100).IsRequired();
             e.Property(x => x.NomeNormalizado).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Icone).HasMaxLength(20).IsRequired(false);
+            e.Property(x => x.Cor).HasMaxLength(7).IsRequired(false);
             e.HasIndex(x => x.NomeNormalizado).IsUnique();
         });
         model.Entity<FormaPagamentoVinculo>(e =>
