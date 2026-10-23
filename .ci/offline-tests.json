@@ -21,6 +21,7 @@
     "NoPonto.Tests.DatabaseStartupPolicyTests",
     "NoPonto.Tests.TarifasRegrasTests",
     "NoPonto.Tests.FormaPagamentoAparenciaTests",
+    "NoPonto.Tests.FormaPagamentoEdicaoTests",
     "NoPonto.Tests.HistoricalEtaShadowTests",
     "NoPonto.Tests.HistoricalEtaOfflineExportTests",
     "NoPonto.Tests.HistoricalEtaGtfsPollingTests",

@@ -74,13 +74,7 @@ public sealed class TarifaService(TransporteDbContext db, TarifasStore store)
     public async Task<FormaPagamentoResposta> CriarFormaAsync(string? nome, string? icone, string? cor,
         CancellationToken ct = default)
     {
-        if (!RegrasTarifarias.IconeValido(icone))
-            throw new TarifasException(400, "Icone deve pertencer ao catálogo de formas de pagamento.");
-        if (!RegrasTarifarias.CorValida(cor))
-            throw new TarifasException(400, "Cor deve ser hexadecimal no formato #RRGGBB.");
-        (string Nome, string Chave) normalized;
-        try { normalized = RegrasTarifarias.NormalizarNome(nome); }
-        catch (ArgumentException) { throw new TarifasException(400, "Nome inválido; use de 1 a 100 caracteres."); }
+        var normalized = ValidarForma(nome, icone, cor);
         if (await db.FormasPagamento.AnyAsync(x => x.NomeNormalizado == normalized.Chave, ct))
             throw new TarifasException(409, "Forma de pagamento já cadastrada.");
         var forma = new FormaPagamento { Id = Guid.NewGuid(), Nome = normalized.Nome,
@@ -89,6 +83,31 @@ public sealed class TarifaService(TransporteDbContext db, TarifasStore store)
         try { await EscritaAsync(() => db.SaveChangesAsync(ct)); }
         catch { db.Entry(forma).State = EntityState.Detached; throw; }
         return new(forma.Id, forma.Nome, forma.Icone, forma.Cor);
+    }
+
+    public async Task<FormaPagamentoResposta> AtualizarFormaAsync(Guid id, string? nome, string? icone, string? cor,
+        CancellationToken ct = default)
+    {
+        var normalized = ValidarForma(nome, icone, cor);
+        if (!await db.FormasPagamento.AnyAsync(x => x.Id == id, ct))
+            throw new TarifasException(404, "Forma de pagamento não encontrada.");
+        if (await db.FormasPagamento.AnyAsync(x => x.Id != id && x.NomeNormalizado == normalized.Chave, ct))
+            throw new TarifasException(409, "Forma de pagamento já cadastrada.");
+        var affected = await EscritaAsync(() => db.FormasPagamento.Where(x => x.Id == id).ExecuteUpdateAsync(setters => setters
+            .SetProperty(x => x.Nome, normalized.Nome).SetProperty(x => x.NomeNormalizado, normalized.Chave)
+            .SetProperty(x => x.Icone, icone).SetProperty(x => x.Cor, cor), ct));
+        if (affected == 0) throw new TarifasException(404, "Forma de pagamento não encontrada.");
+        return new(id, normalized.Nome, icone, cor);
+    }
+
+    private static (string Nome, string Chave) ValidarForma(string? nome, string? icone, string? cor)
+    {
+        if (!RegrasTarifarias.IconeValido(icone))
+            throw new TarifasException(400, "Icone deve pertencer ao catálogo de formas de pagamento.");
+        if (!RegrasTarifarias.CorValida(cor))
+            throw new TarifasException(400, "Cor deve ser hexadecimal no formato #RRGGBB.");
+        try { return RegrasTarifarias.NormalizarNome(nome); }
+        catch (ArgumentException) { throw new TarifasException(400, "Nome inválido; use de 1 a 100 caracteres."); }
     }
 
     public async Task VincularAsync(Guid? modalId, Guid? linhaId, Guid formaId, bool remover, CancellationToken ct = default)
@@ -102,9 +121,9 @@ public sealed class TarifaService(TransporteDbContext db, TarifasStore store)
         else await EscritaAsync(() => store.VincularAsync(modalId, linhaId, formaId, ct));
     }
 
-    internal static async Task EscritaAsync(Func<Task<int>> action)
+    internal static async Task<int> EscritaAsync(Func<Task<int>> action)
     {
-        try { await action(); }
+        try { return await action(); }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg && pg.SqlState == "23505")
         { throw new TarifasException(409, "Registro já cadastrado."); }
         catch (PostgresException ex) when (ex.SqlState == "23505")

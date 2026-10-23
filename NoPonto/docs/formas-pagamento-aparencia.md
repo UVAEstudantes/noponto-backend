@@ -8,9 +8,9 @@ Base: `origin/main` f6c4a07; branch `feat/formas-pagamento-aparencia`, independe
 
 ## Registros existentes
 
-Não foi criada rota de atualização: o fluxo atual não possui autenticação/autorização administrativa ativa. Adicionar uma rota de edição pública permitiria alterar a aparência de todo o catálogo. Uma futura interface administrativa deve exigir uma política de autorização real antes de expor a operação.
+`PUT /formas-pagamento/{id}` agora permite editar nome, ícone e cor, protegido por segredo administrativo exclusivo do servidor. Ver [contrato, segurança e procedimento de publicação](formas-pagamento-publicacao.md). Nome obrigatório; ícone/cor omitidos ou null removem a personalização. Reenviar valores atuais para conservá-los. Retorna o DTO atualizado em 200, 400 para dados inválidos, 404 para ID inexistente e 409 para nome duplicado normalizado. Preserva identidade, criação, vínculos e tarifas.
 
-Por enquanto, a opção é uma operação restrita de banco por operador autorizado, por ID e com parâmetros, após a migration ser aplicada em uma implantação autorizada separadamente. Exemplo para revisão, **não executado**:
+O SQL abaixo é uma alternativa restrita de operador, documentada antes do PUT, por ID e com parâmetros. Não foi executado; preferir o PUT após implantação autorizada:
 
 ```sql
 BEGIN;
@@ -51,4 +51,4 @@ Evidências automatizadas:
 
 Os casos PostgreSQL exigem banco **novo e descartável**, loopback, prefixo `noponto_tarifas_`, fornecido explicitamente pela variável de teste existente; não utilizar banco real. Eles foram adicionados, mas não executados nesta tarefa por falta de banco descartável autorizado. A suíte direcionada offline valida contratos/regras/modelo/SQL, sem provar execução do DDL e persistência em PostgreSQL.
 
-Verificação local: 75/75 testes direcionados e 910/910 da seleção offline oficial, sem falhas ou ignorados. A seleção inclui os 27 casos novos; compilação do projeto aprovada com cinco avisos preexistentes. O problema inicial de restore NU1301/SSL no sandbox foi resolvido ao repetir o tooling com permissão. Nenhuma migration aplicada, serviço iniciado, infraestrutura alterada, implantação, merge ou alteração da release #142.
+Verificação anterior (`42f4ad9`): 75/75 testes direcionados e 910/910 da seleção offline oficial. Os testes adicionais do PUT e a publicação estão documentados no procedimento acima. Nenhuma migration aplicada, infraestrutura alterada, implantação, merge ou alteração da release #142.

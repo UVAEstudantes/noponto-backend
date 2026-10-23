@@ -20,6 +20,14 @@ public sealed class FormasPagamentoController(TarifaService service) : Controlle
     public async Task<ActionResult<FormaPagamentoResposta>> Criar(FormaPagamentoRequest body, CancellationToken ct)
     { var forma = await service.CriarFormaAsync(body.Nome, body.Icone, body.Cor, ct); return Created("/formas-pagamento", forma); }
 
+    /// <summary>Substitui nome e aparência; null remove a personalização. Requer segredo administrativo do servidor.</summary>
+    [HttpPut("formas-pagamento/{id}"), FormaPagamentoAdmin]
+    [ProducesResponseType(typeof(FormaPagamentoResposta), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 401)]
+    [ProducesResponseType(typeof(ProblemDetails), 503)]
+    public async Task<ActionResult<FormaPagamentoResposta>> Atualizar(Guid id, FormaPagamentoRequest body, CancellationToken ct) =>
+        Ok(await service.AtualizarFormaAsync(id, body.Nome, body.Icone, body.Cor, ct));
+
     [HttpPut("modais/{modalId:guid}/formas-pagamento/{formaPagamentoId:guid}"), ProducesResponseType(204)]
     public async Task<IActionResult> VincularModal(Guid modalId, Guid formaPagamentoId, CancellationToken ct)
     { await service.VincularAsync(modalId, null, formaPagamentoId, false, ct); return NoContent(); }
