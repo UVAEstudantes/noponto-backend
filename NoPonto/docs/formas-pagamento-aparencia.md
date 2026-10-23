@@ -8,7 +8,7 @@ Base: `origin/main` f6c4a07; branch `feat/formas-pagamento-aparencia`, independe
 
 ## Registros existentes
 
-`PUT /formas-pagamento/{id}` agora permite editar nome, ícone e cor, protegido por segredo administrativo exclusivo do servidor. Ver [contrato, segurança e procedimento de publicação](formas-pagamento-publicacao.md). Nome obrigatório; ícone/cor omitidos ou null removem a personalização. Reenviar valores atuais para conservá-los. Retorna o DTO atualizado em 200, 400 para dados inválidos, 404 para ID inexistente e 409 para nome duplicado normalizado. Preserva identidade, criação, vínculos e tarifas.
+`PUT /formas-pagamento/{id}` permite editar nome, ícone e cor, com o mesmo acesso do POST existente, sem segredo ou header específico. Autenticação/autorização ficará para uma etapa futura. Ver [contrato e procedimento de publicação](formas-pagamento-publicacao.md). Nome obrigatório; ícone/cor omitidos ou null removem a personalização. Reenviar valores atuais para conservá-los. Retorna o DTO atualizado em 200, 400 para dados inválidos, 404 para ID inexistente e 409 para nome duplicado normalizado. Preserva identidade, criação, vínculos e tarifas.
 
 O SQL abaixo é uma alternativa restrita de operador, documentada antes do PUT, por ID e com parâmetros. Não foi executado; preferir o PUT após implantação autorizada:
 
@@ -37,6 +37,8 @@ Não recriar nem excluir métodos para configurar aparência: isso comprometeria
 `20261023014903_FormaPagamentoAparencia` é incremental sobre `20261010002416_TarifasPagamentosMvp`. O [SQL gerado pelo EF](formas-pagamento-aparencia.sql) contém somente duas colunas nullable em `FormasPagamento`, além do registro padrão em `__EFMigrationsHistory`. Sem defaults, backfill, alteração de tarifas, índices, FKs ou vínculos. O snapshot foi gerado pelo tooling EF 9.0.10 e comparado ao modelo. A migração histórica anterior de tarifas não deve ser confundida com esta: revisar a faixa incremental, nunca aplicar todo o histórico sem avaliar o estado do banco.
 
 Aplicar o schema antes de executar o backend novo: consultas EF passam a referenciar as colunas. O backend antigo pode conviver com as colunas adicionais. O `Down` remove somente as duas colunas e perde a aparência configurada; preferir rollback do binário mantendo o schema aditivo. O DDL ainda exige lock de tabela, a avaliar na implantação futura.
+
+Em 2026-10-23, o usuário confirmou a aplicação bem-sucedida da migration no PostgreSQL produtivo e seu registro em `__EFMigrationsHistory`. Não reaplicar; merge e deploy seguem sem autorização automática.
 
 Evidências automatizadas:
 

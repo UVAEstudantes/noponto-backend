@@ -320,8 +320,6 @@ public sealed class TarifasPostgresTests(TarifasPostgresFixture fixture)
         var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(
             new Microsoft.AspNetCore.Builder.WebApplicationOptions { EnvironmentName = "Testing", Args = [] });
         Microsoft.AspNetCore.Hosting.HostingAbstractionsWebHostBuilderExtensions.UseUrls(builder.WebHost, "http://127.0.0.1:0");
-        const string adminSecret = "fixture-only-formas-pagamento-admin-key-123456789";
-        builder.Configuration[FormaPagamentoAdminAttribute.ConfigurationKey] = adminSecret;
         builder.Logging.ClearProviders();
         builder.Services.AddDbContext<TransporteDbContext>(options => options.UseNpgsql(fixture.Connection, x => { x.UseNetTopologySuite(); x.CommandTimeout(120); }));
         builder.Services.AddScoped<TarifasStore>(); builder.Services.AddScoped<TarifaService>();
@@ -356,8 +354,6 @@ public sealed class TarifasPostgresTests(TarifasPostgresFixture fixture)
             Assert.Equal("qr-code", appearance.Icone); Assert.Equal("#aB12cD", appearance.Cor);
             Assert.Equal(appearance, (await http.GetFromJsonAsync<FormaPagamentoResposta[]>("/formas-pagamento"))!.Single(x => x.Id == appearance.Id));
             var editUrl = $"/formas-pagamento/{appearance.Id}";
-            Assert.Equal(HttpStatusCode.Unauthorized, (await http.PutAsJsonAsync(editUrl, new { nome = "PIX editado" })).StatusCode);
-            http.DefaultRequestHeaders.Add(FormaPagamentoAdminAttribute.HeaderName, adminSecret);
             var editedName = "PIX editado " + Guid.NewGuid();
             var edit = await http.PutAsJsonAsync(editUrl, new { nome = "  " + editedName + "  ", icone = "smartphone", cor = "#AB12cd" });
             Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
@@ -375,7 +371,6 @@ public sealed class TarifasPostgresTests(TarifasPostgresFixture fixture)
             Assert.Equal(HttpStatusCode.NotFound, (await http.PutAsJsonAsync($"/formas-pagamento/{Guid.NewGuid()}", new { nome = "Inexistente" })).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await http.PutAsJsonAsync(editUrl, new { nome = editedName, icone = "invalid" })).StatusCode);
             Assert.Equal(edited, (await http.GetFromJsonAsync<FormaPagamentoResposta[]>("/formas-pagamento"))!.Single(x => x.Id == appearance.Id));
-            http.DefaultRequestHeaders.Remove(FormaPagamentoAdminAttribute.HeaderName);
             var conflictAppearance = await http.PostAsJsonAsync("/formas-pagamento", new { nome = editedName.ToUpperInvariant(), icone = "wallet", cor = "#FFFFFF" });
             Assert.Equal(HttpStatusCode.Conflict, conflictAppearance.StatusCode);
             Assert.Equal(edited, (await http.GetFromJsonAsync<FormaPagamentoResposta[]>("/formas-pagamento"))!.Single(x => x.Id == appearance.Id));

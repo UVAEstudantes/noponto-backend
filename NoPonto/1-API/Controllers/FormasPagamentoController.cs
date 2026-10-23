@@ -20,11 +20,9 @@ public sealed class FormasPagamentoController(TarifaService service) : Controlle
     public async Task<ActionResult<FormaPagamentoResposta>> Criar(FormaPagamentoRequest body, CancellationToken ct)
     { var forma = await service.CriarFormaAsync(body.Nome, body.Icone, body.Cor, ct); return Created("/formas-pagamento", forma); }
 
-    /// <summary>Substitui nome e aparência; null remove a personalização. Requer segredo administrativo do servidor.</summary>
-    [HttpPut("formas-pagamento/{id}"), FormaPagamentoAdmin]
+    /// <summary>Substitui nome e aparência; null remove a personalização.</summary>
+    [HttpPut("formas-pagamento/{id}")]
     [ProducesResponseType(typeof(FormaPagamentoResposta), 200)]
-    [ProducesResponseType(typeof(ProblemDetails), 401)]
-    [ProducesResponseType(typeof(ProblemDetails), 503)]
     public async Task<ActionResult<FormaPagamentoResposta>> Atualizar(Guid id, FormaPagamentoRequest body, CancellationToken ct) =>
         Ok(await service.AtualizarFormaAsync(id, body.Nome, body.Icone, body.Cor, ct));
 

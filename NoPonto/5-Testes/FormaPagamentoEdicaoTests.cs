@@ -6,14 +6,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Abstractions;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NoPonto.API.Controllers;
@@ -27,38 +21,6 @@ namespace NoPonto.Tests;
 
 public sealed class FormaPagamentoEdicaoTests
 {
-    private const string TestSecret = "test-only-not-a-production-secret-123456789";
-
-    [Theory]
-    [InlineData(null)] [InlineData("")] [InlineData("   ")] [InlineData("too-short")]
-    public void SemSegredoForteEdicaoFicaIndisponivel(string? configured)
-    {
-        var context = Authorization(configured, TestSecret);
-        new FormaPagamentoAdminAttribute().OnAuthorization(context);
-        Assert.Equal(503, Assert.IsType<ObjectResult>(context.Result).StatusCode);
-    }
-
-    [Theory]
-    [InlineData(null)] [InlineData("")] [InlineData("wrong")]
-    public void SegredoAusenteOuIncorretoRetorna401(string? supplied)
-    {
-        var context = Authorization(TestSecret, supplied);
-        new FormaPagamentoAdminAttribute().OnAuthorization(context);
-        Assert.IsType<UnauthorizedObjectResult>(context.Result);
-        Assert.Contains("ApiKey", context.HttpContext.Response.Headers.WWWAuthenticate.ToString());
-    }
-
-    [Fact]
-    public void SegredoCorretoAutorizaSemAceitarHeadersDuplicados()
-    {
-        var context = Authorization(TestSecret, TestSecret);
-        new FormaPagamentoAdminAttribute().OnAuthorization(context);
-        Assert.Null(context.Result);
-        context.HttpContext.Request.Headers.Append(FormaPagamentoAdminAttribute.HeaderName, TestSecret);
-        new FormaPagamentoAdminAttribute().OnAuthorization(context);
-        Assert.IsType<UnauthorizedObjectResult>(context.Result);
-    }
-
     [Theory]
     [InlineData(null, null, null)] [InlineData(" ", null, null)]
     [InlineData("PIX", "unknown", null)] [InlineData("PIX", null, "#123")]
@@ -117,12 +79,11 @@ public sealed class FormaPagamentoEdicaoTests
     }
 
     [Fact]
-    public async Task PutHttpProtegeAntesDoBodyEEntregaContratoAtualizado()
+    public async Task PutHttpSemCredencialValidaBodyEEntregaContratoAtualizado()
     {
         var banco = new BancoSimulado();
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing", Args = [] });
         builder.WebHost.UseUrls("http://127.0.0.1:0"); builder.Logging.ClearProviders();
-        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { [FormaPagamentoAdminAttribute.ConfigurationKey] = TestSecret });
         builder.Services.AddScoped(_ => Db(banco)); builder.Services.AddScoped<TarifasStore>(); builder.Services.AddScoped<TarifaService>();
         builder.Services.AddControllers().AddApplicationPart(typeof(FormasPagamentoController).Assembly);
         await using var app = builder.Build(); app.MapControllers(); await app.StartAsync();
@@ -130,10 +91,6 @@ public sealed class FormaPagamentoEdicaoTests
         {
             using var http = new HttpClient { BaseAddress = new Uri(Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses)) };
             var id = Guid.NewGuid(); var url = $"/formas-pagamento/{id}";
-            Assert.Equal(HttpStatusCode.Unauthorized, (await http.PutAsJsonAsync(url, new { })).StatusCode);
-            Assert.Equal(HttpStatusCode.Unauthorized, (await http.PutAsJsonAsync(url + "?" + FormaPagamentoAdminAttribute.HeaderName + "=" + TestSecret, new { })).StatusCode);
-            Assert.Empty(banco.Comandos);
-            http.DefaultRequestHeaders.Add(FormaPagamentoAdminAttribute.HeaderName, TestSecret);
             Assert.Equal(HttpStatusCode.BadRequest, (await http.PutAsJsonAsync(url, new { })).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await http.PutAsJsonAsync(url, new { nome = "PIX", cor = "red" })).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await http.PutAsJsonAsync("/formas-pagamento/not-a-guid", new { nome = "PIX" })).StatusCode);
@@ -154,14 +111,6 @@ public sealed class FormaPagamentoEdicaoTests
         finally { await app.StopAsync(); }
     }
 
-    private static AuthorizationFilterContext Authorization(string? configured, string? supplied)
-    {
-        var services = new ServiceCollection().AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
-            new Dictionary<string, string?> { [FormaPagamentoAdminAttribute.ConfigurationKey] = configured }).Build()).BuildServiceProvider();
-        var http = new DefaultHttpContext { RequestServices = services };
-        if (supplied is not null) http.Request.Headers[FormaPagamentoAdminAttribute.HeaderName] = supplied;
-        return new(new ActionContext(http, new RouteData(), new ActionDescriptor()), []);
-    }
     private static TarifaService Service(TransporteDbContext db) => new(db, new TarifasStore(db));
     private static TransporteDbContext Db(BancoSimulado banco) => new(new DbContextOptionsBuilder<TransporteDbContext>()
         .UseNpgsql("Host=127.0.0.1;Port=1;Database=not_opened", x => x.UseNetTopologySuite())
