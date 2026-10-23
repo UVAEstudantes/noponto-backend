@@ -6,8 +6,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../NoPonto/NoPonto.csproj" />
+    <ProjectReference Include="../../NoPonto/NoPonto.csproj">
+      <!-- Publish settings belong to this executable. Single-file can re-infer
+           SelfContained in the RID-agnostic backend even after the SDK removes the RID. -->
+      <GlobalPropertiesToRemove Condition="'$(RuntimeIdentifier)' == 'linux-x64'">SelfContained;PublishSelfContained;PublishSingleFile;PublishTrimmed;IncludeNativeLibrariesForSelfExtract</GlobalPropertiesToRemove>
+    </ProjectReference>
     <!-- Match the API's resolved EF version, as in the existing EtaMl.Export tool. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.10" />
   </ItemGroup>

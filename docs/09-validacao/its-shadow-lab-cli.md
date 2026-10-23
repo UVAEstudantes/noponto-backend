@@ -16,7 +16,9 @@ Requer SDK .NET 9 para compilar. A referência ao backend segue o padrão do
 exportador existente `EtaMl.Export`: importar sua assembly não executa seu
 entrypoint. O artefato mantém dependências transitivas do backend, incluindo
 `Microsoft.AspNetCore.App`; para executá-lo com `dotnet`, é necessário também o
-runtime ASP.NET Core 9, presente na instalação completa do SDK. Isso não implica
+runtime ASP.NET Core 9, presente na instalação completa do SDK, para o build
+framework-dependent normal. A publicação Linux self-contained abaixo inclui os
+runtimes e dispensa essa instalação na máquina de destino. Isso não implica
 inicializar um servidor. A referência EF Relational 9.0.10 alinha a resolução
 transitiva à versão usada pelo backend, como no exportador existente. Não há
 nova biblioteca de CLI ou outro cliente ITS.
@@ -41,8 +43,68 @@ dotnet tools/ItsShadowLab/bin/Release/net9.0/NoPonto.ItsShadowLab.dll --help
 ```
 
 Esses comandos não instalam SDKs, alteram serviços ou acessam bancos. O restore
-pode acessar NuGet. Executar o build completo acima continua sendo uma validação
-pendente fora do ambiente que o bloqueou.
+pode acessar NuGet. A repetição do build completo após as métricas de aquisição
+permanece para o PowerShell do usuário, conforme o fechamento anterior.
+
+## Publicação Linux x64 self-contained
+
+No checkout de desenvolvimento, com SDK e pacotes de runtime disponíveis:
+
+```bash
+dotnet publish tools/ItsShadowLab/ItsShadowLab.csproj -c Release -r linux-x64 \
+    -o tools/ItsShadowLab/bin/publish/linux-x64
+```
+
+O `ItsShadowLab.csproj` configura `SelfContained=true`, `PublishSingleFile=true`,
+`PublishTrimmed=false` e `IncludeNativeLibrariesForSelfExtract=true` somente para
+`RuntimeIdentifier=linux-x64`. O build normal e os testes Windows permanecem
+framework-dependent. Não é necessário repetir essas propriedades via `-p:`.
+
+A referência ao backend remove as propriedades globais `SelfContained`,
+`PublishSelfContained`, `PublishSingleFile`, `PublishTrimmed` e
+`IncludeNativeLibrariesForSelfExtract` nesse RID. O SDK já remove o RID de
+referências agnósticas como o backend, que também contém testes. Deixar
+`PublishSingleFile=true` global chegar à referência faz o SDK inferir
+`PublishSelfContained=true` e depois `SelfContained=true` sem RID, causando
+NETSDK1191. O isolamento impede essa reinferência sem alterar `NoPonto.csproj`.
+
+No Debian x64, depois de copiar a pasta publicada para um diretório local:
+
+```bash
+cd /caminho/local/its-shadow-lab
+chmod +x NoPonto.ItsShadowLab
+./NoPonto.ItsShadowLab --help
+# Para coleta, use os mesmos argumentos documentados abaixo, incluindo os route_ids.
+```
+
+Esse executável inclui os runtimes .NET e ASP.NET Core; self-contained não
+elimina dependências nativas do sistema operacional. Bibliotecas nativas do
+bundle são extraídas ao executar e precisam de diretório gravável. Não houve
+instalação nem execução no Debian/homeserver nesta validação.
+
+Validação em Windows com SDK9.0.306: publicação com as flags originais e
+publicação simplificada acima concluídas. Artefato `NoPonto.ItsShadowLab` com
+122.781.375bytes, cabeçalho ELF64/x86-64, reconhecido por
+`Microsoft.NET.HostModel.AppHost.HostWriter.IsBundle`; runtimeconfig de origem
+contém `includedFrameworks` para .NET/ASP.NETCore9.0.10, sem dependência de
+framework instalado. Binlog confirmou backend com `SelfContained=false` e
+remoção das propriedades globais. Os logs e binários ficam em diretório de
+laboratório ignorado pelo Git.
+
+Testes após a publicação: CLI50/50 aprovados no build Windows normal, incluindo
+recompilação dos três projetos; apphost Windows PE e `--help` verificados.
+Offline oficial teve inicialmente969/970, com o timeout já registrado em
+`HistoricalEtaGtfsPollingTests.PollingContinuesWithIndependentShadow`
+(BUS/sem batch/export_failure, espera3s). Sem alterar teste ou prazo, repetição
+970/970 e verificador oficial aprovados. Ambos os TRXs foram preservados;
+intermitência continua registrada, sem causa comprovada nesta correção.
+
+A saída também preserva conteúdos transitivos existentes do backend: JSONs de
+configuração/trem, horários, XML/PDBs e launchers auxiliares Windows
+`NoPonto.exe`/`testhost.exe`. Eles não são o entrypoint Linux e não são executados
+pela CLI. O comando de execução é sempre `./NoPonto.ItsShadowLab`; não houve
+mudança de conteúdo/configuração produtiva ou filtragem adicional dos arquivos
+do projeto referenciado nesta correção.
 
 ## Associar a linha ao route_id sem banco
 
