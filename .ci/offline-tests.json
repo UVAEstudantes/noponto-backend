@@ -20,6 +20,7 @@
     "NoPonto.Tests.EstadoCausalPosicaoTests",
     "NoPonto.Tests.DatabaseStartupPolicyTests",
     "NoPonto.Tests.TarifasRegrasTests",
+    "NoPonto.Tests.FormaPagamentoAparenciaTests",
     "NoPonto.Tests.HistoricalEtaShadowTests",
     "NoPonto.Tests.HistoricalEtaOfflineExportTests",
     "NoPonto.Tests.HistoricalEtaGtfsPollingTests",

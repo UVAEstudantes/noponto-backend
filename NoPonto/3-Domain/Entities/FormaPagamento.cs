@@ -5,6 +5,8 @@ public sealed class FormaPagamento
     public Guid Id { get; set; }
     public string Nome { get; set; } = null!;
     public string NomeNormalizado { get; set; } = null!;
+    public string? Icone { get; set; }
+    public string? Cor { get; set; }
     public DateTime CriadoEmUtc { get; set; }
 }
 

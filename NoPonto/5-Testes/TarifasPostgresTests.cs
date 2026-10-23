@@ -52,7 +52,27 @@ public sealed class TarifasPostgresFixture : IAsyncLifetime
         await Assert.ThrowsAsync<PostgresException>(() => db.Database.MigrateAsync());
         Assert.Equal(1, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM \"Tarifas\"").SingleAsync());
         await db.Database.ExecuteSqlRawAsync("DROP TABLE tarifa_dependencia_fixture");
+        await db.GetService<IMigrator>().MigrateAsync("20261010002416_TarifasPagamentosMvp");
+        // Dados anteriores às novas colunas: a migration incremental deve preservar todas as identidades.
+        var formaId = Guid.NewGuid(); var vinculoId = Guid.NewGuid(); var tarifaId = Guid.NewGuid();
+        var criadoEm = new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "FormasPagamento" ("Id", "Nome", "NomeNormalizado", "CriadoEmUtc")
+            VALUES ({formaId}, 'Legado', 'legado', {criadoEm});
+            INSERT INTO "FormasPagamentoVinculos" ("Id", "FormaPagamentoId", "ModalId")
+            VALUES ({vinculoId}, {formaId}, {ModalPreservado});
+            INSERT INTO "Tarifas" ("Id", "ModalId", "Valor", "Fonte", "CriadoEmUtc", "AtualizadoEmUtc")
+            VALUES ({tarifaId}, {ModalPreservado}, 5.25, 'MANUAL', {criadoEm}, {criadoEm});
+            """);
         await db.Database.MigrateAsync();
+        var legado = await db.FormasPagamento.AsNoTracking().SingleAsync(x => x.Id == formaId);
+        Assert.Equal("Legado", legado.Nome); Assert.Equal("legado", legado.NomeNormalizado);
+        Assert.Equal(criadoEm, legado.CriadoEmUtc); Assert.Null(legado.Icone); Assert.Null(legado.Cor);
+        var vinculo = await db.FormasPagamentoVinculos.AsNoTracking().SingleAsync(x => x.Id == vinculoId);
+        Assert.Equal(formaId, vinculo.FormaPagamentoId); Assert.Equal(ModalPreservado, vinculo.ModalId);
+        var tarifa = await db.Tarifas.AsNoTracking().SingleAsync(x => x.Id == tarifaId);
+        Assert.Equal(5.25m, tarifa.Valor); Assert.Equal("MANUAL", tarifa.Fonte);
+        Assert.Equal(criadoEm, tarifa.CriadoEmUtc); Assert.Equal(criadoEm, tarifa.AtualizadoEmUtc);
     }
     public Task DisposeAsync() => Task.CompletedTask; // container/banco removidos pelo operador do ensaio.
 }
@@ -78,7 +98,7 @@ public sealed class TarifasPostgresTests(TarifasPostgresFixture fixture)
         Assert.False(await db.Tarifas.AnyAsync(x => x.LinhaId == fixture.LinhaPreservada));
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
-        Assert.Equal(23, (await db.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Equal(24, (await db.Database.GetAppliedMigrationsAsync()).Count());
     }
 
     [Fact]
@@ -323,6 +343,23 @@ public sealed class TarifasPostgresTests(TarifasPostgresFixture fixture)
             Assert.Equal(HttpStatusCode.NoContent, (await http.PutAsJsonAsync($"/tarifas/modais/{scope.Modal}", new { valor = 5 })).StatusCode);
             var name = "RioCard " + Guid.NewGuid();
             Assert.Equal(HttpStatusCode.Created, (await http.PostAsJsonAsync("/formas-pagamento", new { nome = name })).StatusCode);
+            var legacy = (await http.GetFromJsonAsync<FormaPagamentoResposta[]>("/formas-pagamento"))!.Single(x => x.Nome == name);
+            Assert.Null(legacy.Icone); Assert.Null(legacy.Cor);
+            foreach (var invalid in new[] { new { nome = name, icone = "invalid", cor = "#123456" }, new { nome = name, icone = "wallet", cor = "#123" } })
+                Assert.Equal(HttpStatusCode.BadRequest, (await http.PostAsJsonAsync("/formas-pagamento", invalid)).StatusCode);
+            var appearanceName = "PIX " + Guid.NewGuid();
+            var createdAppearance = await http.PostAsJsonAsync("/formas-pagamento", new { nome = appearanceName, icone = "qr-code", cor = "#aB12cD" });
+            Assert.Equal(HttpStatusCode.Created, createdAppearance.StatusCode);
+            var appearance = (await createdAppearance.Content.ReadFromJsonAsync<FormaPagamentoResposta>())!;
+            Assert.Equal("qr-code", appearance.Icone); Assert.Equal("#aB12cD", appearance.Cor);
+            Assert.Equal(appearance, (await http.GetFromJsonAsync<FormaPagamentoResposta[]>("/formas-pagamento"))!.Single(x => x.Id == appearance.Id));
+            Assert.Equal(HttpStatusCode.NoContent, (await http.PutAsync($"/modais/{scope.Modal}/formas-pagamento/{appearance.Id}", null)).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await http.PutAsync($"/linhas/{scope.Linha}/formas-pagamento/{appearance.Id}", null)).StatusCode);
+            var resolvedAppearance = (await http.GetFromJsonAsync<TarifasResolvidasResposta>($"/tarifas/resolver?linhaId={scope.Linha}"))!;
+            Assert.Equal(appearance, Assert.Single(resolvedAppearance.FormasPagamento));
+            var conflictAppearance = await http.PostAsJsonAsync("/formas-pagamento", new { nome = appearanceName.ToUpperInvariant(), icone = "wallet", cor = "#FFFFFF" });
+            Assert.Equal(HttpStatusCode.Conflict, conflictAppearance.StatusCode);
+            Assert.Equal(appearance, (await http.GetFromJsonAsync<FormaPagamentoResposta[]>("/formas-pagamento"))!.Single(x => x.Id == appearance.Id));
             var duplicate = await http.PostAsJsonAsync("/formas-pagamento", new { nome = " " + name.ToUpperInvariant() + " " });
             Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
             var raceName = "Concorrente " + Guid.NewGuid();

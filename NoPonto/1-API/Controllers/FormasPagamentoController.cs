@@ -18,7 +18,7 @@ public sealed class FormasPagamentoController(TarifaService service) : Controlle
     /// <summary>Preserva o nome de exibição do primeiro cadastro. Duplicata normalizada retorna 409.</summary>
     [HttpPost("formas-pagamento"), ProducesResponseType(typeof(FormaPagamentoResposta), 201)]
     public async Task<ActionResult<FormaPagamentoResposta>> Criar(FormaPagamentoRequest body, CancellationToken ct)
-    { var forma = await service.CriarFormaAsync(body.Nome, ct); return Created("/formas-pagamento", forma); }
+    { var forma = await service.CriarFormaAsync(body.Nome, body.Icone, body.Cor, ct); return Created("/formas-pagamento", forma); }
 
     [HttpPut("modais/{modalId:guid}/formas-pagamento/{formaPagamentoId:guid}"), ProducesResponseType(204)]
     public async Task<IActionResult> VincularModal(Guid modalId, Guid formaPagamentoId, CancellationToken ct)

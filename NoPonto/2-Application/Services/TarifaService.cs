@@ -38,12 +38,13 @@ public sealed class TarifaService(TransporteDbContext db, TarifasStore store)
             ?? tarifas.FirstOrDefault(x => x.ModalId == modal);
         var formas = await db.FormasPagamentoVinculos.AsNoTracking()
             .Where(x => x.ModalId == modal || (linhaId != null && x.LinhaId == linhaId))
-            .Select(x => new { x.FormaPagamento.Id, x.FormaPagamento.Nome, x.FormaPagamento.NomeNormalizado })
+            .Select(x => new { x.FormaPagamento.Id, x.FormaPagamento.Nome, x.FormaPagamento.NomeNormalizado,
+                x.FormaPagamento.Icone, x.FormaPagamento.Cor })
             .Distinct().ToArrayAsync(ct);
         return new(modal, linhaId,
             new(tarifa?.Valor, tarifa is null ? null : tarifa.LinhaId is null ? "MODAL" : "LINHA", tarifa?.Fonte),
             formas.OrderBy(x => x.NomeNormalizado, StringComparer.Ordinal).ThenBy(x => x.Id)
-                .Select(x => new FormaPagamentoResposta(x.Id, x.Nome)).ToArray());
+                .Select(x => new FormaPagamentoResposta(x.Id, x.Nome, x.Icone, x.Cor)).ToArray());
     }
 
     public async Task DefinirAsync(Guid? modalId, Guid? linhaId, decimal? valor, CancellationToken ct = default)
@@ -64,22 +65,30 @@ public sealed class TarifaService(TransporteDbContext db, TarifasStore store)
     {
         var formas = await db.FormasPagamento.AsNoTracking().ToArrayAsync(ct);
         return formas.OrderBy(x => x.NomeNormalizado, StringComparer.Ordinal).ThenBy(x => x.Id)
-            .Select(x => new FormaPagamentoResposta(x.Id, x.Nome)).ToArray();
+            .Select(x => new FormaPagamentoResposta(x.Id, x.Nome, x.Icone, x.Cor)).ToArray();
     }
 
-    public async Task<FormaPagamentoResposta> CriarFormaAsync(string? nome, CancellationToken ct = default)
+    public Task<FormaPagamentoResposta> CriarFormaAsync(string? nome, CancellationToken ct = default) =>
+        CriarFormaAsync(nome, null, null, ct);
+
+    public async Task<FormaPagamentoResposta> CriarFormaAsync(string? nome, string? icone, string? cor,
+        CancellationToken ct = default)
     {
+        if (!RegrasTarifarias.IconeValido(icone))
+            throw new TarifasException(400, "Icone deve pertencer ao catálogo de formas de pagamento.");
+        if (!RegrasTarifarias.CorValida(cor))
+            throw new TarifasException(400, "Cor deve ser hexadecimal no formato #RRGGBB.");
         (string Nome, string Chave) normalized;
         try { normalized = RegrasTarifarias.NormalizarNome(nome); }
         catch (ArgumentException) { throw new TarifasException(400, "Nome inválido; use de 1 a 100 caracteres."); }
         if (await db.FormasPagamento.AnyAsync(x => x.NomeNormalizado == normalized.Chave, ct))
             throw new TarifasException(409, "Forma de pagamento já cadastrada.");
         var forma = new FormaPagamento { Id = Guid.NewGuid(), Nome = normalized.Nome,
-            NomeNormalizado = normalized.Chave, CriadoEmUtc = DateTime.UtcNow };
+            NomeNormalizado = normalized.Chave, Icone = icone, Cor = cor, CriadoEmUtc = DateTime.UtcNow };
         db.FormasPagamento.Add(forma);
         try { await EscritaAsync(() => db.SaveChangesAsync(ct)); }
         catch { db.Entry(forma).State = EntityState.Detached; throw; }
-        return new(forma.Id, forma.Nome);
+        return new(forma.Id, forma.Nome, forma.Icone, forma.Cor);
     }
 
     public async Task VincularAsync(Guid? modalId, Guid? linhaId, Guid formaId, bool remover, CancellationToken ct = default)
