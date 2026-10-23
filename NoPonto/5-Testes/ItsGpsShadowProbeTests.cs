@@ -12,6 +12,24 @@ namespace NoPonto.Tests;
 public sealed class ItsGpsShadowProbeTests
 {
     [Fact]
+    public async Task CaptureOnlySkipsRuntimeAndSerializationOmitsRawObservations()
+    {
+        var runtime = new ShadowRuntime { Failure = true };
+        var handler = new ShadowHandler((request, _, _) => Task.FromResult(Page(request,
+            [ItsGpsShadowMetricsTests.Item("private-capture-vehicle", 10)])));
+        using var probe = Probe(handler, runtime: runtime);
+        var capture = await probe.CaptureAsync(new() { RecentUtcWindows = 1 }, default);
+        Assert.Single(capture.Records);
+        Assert.Equal(1, capture.Report.Metrics.Vehicles);
+        Assert.Equal(0, runtime.Calls);
+        var json = JsonSerializer.Serialize(capture);
+        Assert.DoesNotContain("private-capture-vehicle", json);
+        Assert.DoesNotContain("latitude", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("longitude", json, StringComparison.OrdinalIgnoreCase);
+        Assert.False(JsonDocument.Parse(json).RootElement.TryGetProperty("Records", out _));
+    }
+
+    [Fact]
     public async Task ThreeWindowsCrossUtcMidnightWithoutChangingPhysicalTime()
     {
         var clock = new ShadowClock(DateTimeOffset.Parse("2026-10-23T00:00:30Z"));

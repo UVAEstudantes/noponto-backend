@@ -48,6 +48,13 @@ public static class GtfsRealtimeGpsParser
 {
     public static GtfsParsedSnapshot Parse(byte[] bytes, GtfsRealtimeGpsOptions options,
         DateTimeOffset now)
+        => ParseCore(bytes, options, now, diagnostic: false);
+
+    internal static GtfsParsedSnapshot ParseDiagnostic(byte[] bytes, GtfsRealtimeGpsOptions options,
+        DateTimeOffset now) => ParseCore(bytes, options, now, diagnostic: true);
+
+    private static GtfsParsedSnapshot ParseCore(byte[] bytes, GtfsRealtimeGpsOptions options,
+        DateTimeOffset now, bool diagnostic)
     {
         if (!options.LimitsValid() || bytes.Length > options.MaxResponseBytes)
             throw new InvalidDataException("GTFS-RT response limit.");
@@ -91,7 +98,7 @@ public static class GtfsRealtimeGpsParser
                 || !v.HasTimestamp || v.Timestamp == 0 || v.Timestamp > 253402300799UL)
             { rejected++; continue; }
             var timestamp = DateTimeOffset.FromUnixTimeSeconds((long)v.Timestamp);
-            if (timestamp > now.AddSeconds(120) || timestamp < now.AddSeconds(-options.MaxAgeSeconds))
+            if (!diagnostic && (timestamp > now.AddSeconds(120) || timestamp < now.AddSeconds(-options.MaxAgeSeconds)))
             { rejected++; continue; }
             var reading = new GtfsVehicleReading(entity.Id, v.Vehicle.Id.Trim(), v.Trip.RouteId,
                 v.Trip.HasTripId ? v.Trip.TripId : null,
@@ -131,6 +138,9 @@ internal enum GtfsHttpAcquisition { Failed, LocalCache, Downloaded, NotModified 
 public sealed class GtfsRealtimeGpsClient(HttpClient http, Uri endpoint,
     GtfsRealtimeGpsOptions options, TimeProvider? clock = null)
 {
+    private readonly bool _diagnostic;
+    internal GtfsRealtimeGpsClient(HttpClient http, Uri endpoint, GtfsRealtimeGpsOptions options,
+        TimeProvider clock, bool diagnostic) : this(http, endpoint, options, clock) => _diagnostic = diagnostic;
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private DateTimeOffset _nextRequest;
@@ -212,7 +222,9 @@ public sealed class GtfsRealtimeGpsClient(HttpClient http, Uri endpoint,
                     throw new InvalidDataException("GTFS-RT response limit.");
                 buffer.Write(chunk, 0, read);
             }
-            var parsed = GtfsRealtimeGpsParser.Parse(buffer.ToArray(), options, _clock.GetUtcNow());
+            var parsed = _diagnostic
+                ? GtfsRealtimeGpsParser.ParseDiagnostic(buffer.ToArray(), options, _clock.GetUtcNow())
+                : GtfsRealtimeGpsParser.Parse(buffer.ToArray(), options, _clock.GetUtcNow());
             _etag = response.Headers.ETag?.ToString();
             _lastModified = response.Content.Headers.LastModified;
             if (response.Headers.CacheControl?.NoStore == true)

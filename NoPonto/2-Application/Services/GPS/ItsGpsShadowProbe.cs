@@ -13,6 +13,13 @@ internal sealed class ItsGpsShadowProbe(GpsDatarioClient client, IVeiculosLinhaR
     internal DateTimeOffset RetryNotBeforeUtc { get; private set; }
 
     internal async Task<ItsGpsShadowReport> RunAsync(ItsGpsShadowOptions options, CancellationToken stoppingToken)
+        => (await ReadAsync(options, stoppingToken, acquisitionOnly: false)).Report;
+
+    internal Task<ItsGpsShadowCapture> CaptureAsync(ItsGpsShadowOptions options, CancellationToken stoppingToken)
+        => ReadAsync(options, stoppingToken, acquisitionOnly: true);
+
+    private async Task<ItsGpsShadowCapture> ReadAsync(ItsGpsShadowOptions options,
+        CancellationToken stoppingToken, bool acquisitionOnly)
     {
         if (HasPendingIo) throw new InvalidOperationException("Previous shadow I/O is still pending.");
         var start = clock.GetTimestamp();
@@ -104,9 +111,12 @@ internal sealed class ItsGpsShadowProbe(GpsDatarioClient client, IVeiculosLinhaR
         var runtimeStatus = "Unavailable";
         try
         {
-            ct.ThrowIfCancellationRequested();
-            positions = (await ReadWithinBudgetAsync(runtime.ListarAsync([options.ServiceCode], ct), ct)).Posicoes;
-            runtimeStatus = positions.Count == 0 ? "Empty" : "Available";
+            if (!acquisitionOnly)
+            {
+                ct.ThrowIfCancellationRequested();
+                positions = (await ReadWithinBudgetAsync(runtime.ListarAsync([options.ServiceCode], ct), ct)).Posicoes;
+                runtimeStatus = positions.Count == 0 ? "Empty" : "Available";
+            }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
@@ -116,8 +126,8 @@ internal sealed class ItsGpsShadowProbe(GpsDatarioClient client, IVeiculosLinhaR
         var observedAt = clock.GetUtcNow();
         var metrics = ItsGpsShadowMetrics.Calculate(records, positions, observedAt, options,
             itsAvailable: hasUsablePage, runtimeAvailable: runtimeStatus != "Unavailable");
-        return new(options.ServiceCode, observedAt, outcome, incomplete || outcome != "Complete", requests, pages, records.Count, windows,
-            acquisitionMs, runtimeStatus, metrics, statuses);
+        return new(new(options.ServiceCode, observedAt, outcome, incomplete || outcome != "Complete",
+            requests, pages, records.Count, windows, acquisitionMs, runtimeStatus, metrics, statuses), records);
     }
 
     private async Task<T> ReadWithinBudgetAsync<T>(Task<T> read, CancellationToken ct)

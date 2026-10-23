@@ -13,6 +13,17 @@ namespace NoPonto.Tests;
 
 public sealed class GtfsRealtimeGpsTests(ITestOutputHelper output)
 {
+    [Fact]
+    public void DiagnosticParserKeepsOldGpsWhileOperationalParserStillRejectsIt()
+    {
+        var feed = Feed();
+        var timestamp = Now.AddHours(-1);
+        feed.Entity[0].Vehicle.Timestamp = (ulong)timestamp.ToUnixTimeSeconds();
+        Assert.Empty(GtfsRealtimeGpsParser.Parse(feed.ToByteArray(), Options, Now).Readings);
+        var raw = GtfsRealtimeGpsParser.ParseDiagnostic(feed.ToByteArray(), Options, Now);
+        Assert.Equal(timestamp.ToUnixTimeSeconds(), Assert.Single(raw.Readings).TimestampGps.ToUnixTimeSeconds());
+    }
+
     [Theory]
     [InlineData("20000281130", "28", "20001", "700", "BRT")]
     [InlineData("20000671130", "67", "20001", "700", "BRT")]
