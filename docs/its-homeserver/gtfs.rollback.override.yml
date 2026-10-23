@@ -1,0 +1,6 @@
+# Retorno à fonte atual no mesmo binário, sem dependência de ZIRIX_DIRECT.
+services:
+  api:
+    environment:
+      GpsSources__BusPrimarySource: GTFSRT_BUS
+      GpsSources__BusFallbackSource: ""

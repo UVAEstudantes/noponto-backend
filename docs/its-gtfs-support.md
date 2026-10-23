@@ -1,5 +1,7 @@
 # ITS principal e GTFS-RT de suporte
 
+Atualização: [ensaio conectado dos dois feeds reais e prontidão da janela no homeserver](its-homeserver/validation.md) concluído. A pendência histórica de homologação do par abaixo foi atendida; ativação produtiva continua dependente de autorização específica e do procedimento controlado.
+
 ## Decisão e auditoria dirigida
 
 Esta revisão substitui a recomendação de fallback ITS → ZIRIX. A configuração operacional nova usa somente `ITS_CURRENT` e `GTFSRT_BUS`. O caminho legado permanece disponível para consumidores explícitos e para reproduzir testes históricos; não é dependência deste par. Nenhuma configuração produtiva foi alterada.
