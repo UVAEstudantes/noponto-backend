@@ -2,7 +2,21 @@
 
 Homologação conectada executada na continuação: [resultado ponta a ponta, limites de carga e decisão](its-e2e-20261023.md). O fluxo com uma assinatura passou; a carga de 459 assinaturas excedeu o prazo e não foi aprovada. As pendências históricas abaixo devem ser lidas com essa atualização. Produção permanece inalterada.
 
-## Estado atual — validação operacional e fallback
+## Estado atual — ITS com suporte GTFS-RT
+
+A arquitetura operacional indicada agora é ITS principal com fallback completo para GTFS-RT: [auditoria dirigida, decisão, configuração e validação](its-gtfs-support.md). Essa decisão substitui a recomendação anterior de ZIRIX_DIRECT como suporte. Os resultados ITS/ZIRIX abaixo são históricos e não aprovam a transição ITS/GTFS-RT.
+
+```powershell
+$env:GpsSources__BusPrimarySource = 'ITS_CURRENT'
+$env:GpsSources__BusFallbackSource = 'GTFSRT_BUS'
+$env:GtfsRealtimeGps__BusEnabled = 'true'
+$env:GtfsRealtimeGps__BusSpeedUnit = 'KilometresPerHour'
+$env:GtfsRealtimeGps__CrosswalkValidated = 'true'
+```
+
+As flags GTFS exigem unidade e crosswalk efetivamente validados no ambiente. Rollback deste par: selecionar `GTFSRT_BUS` como principal e remover `BusFallbackSource`, mantendo esses opt-ins. Requer novo processo. Nenhuma configuração foi aplicada nesta revisão; padrões legados permanecem para os consumidores existentes. Shadows continuam diagnósticos, sem fallback implícito.
+
+## Histórico — validação operacional e fallback ZIRIX anterior
 
 Pronta para homologação conectada ao pipeline em desenvolvimento. A aquisição real SPPO foi executada isoladamente; o pipeline e a transição foram validados com fixtures em memória. Nenhuma posição real passou por coletor, Redis, matching ou SignalR nesta sessão. As seções posteriores preservam o plano e os resultados da primeira implementação; a indicação antiga de ausência de fallback foi superada nesta continuação.
 

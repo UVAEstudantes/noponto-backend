@@ -15,20 +15,26 @@ namespace NoPonto.Tests;
 public sealed partial class GpsPollingCadenciaTests
 {
     [Theory]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    public async Task ItsHandoff_WakesHealthyRestWithoutChangingFailureDelayOrAck(bool fallback, bool normal)
+    [InlineData(null, true)]
+    [InlineData(GpsSourceNames.ZirixDirect, true)]
+    [InlineData(GpsSourceNames.GtfsRealtimeBus, true)]
+    [InlineData(null, false)]
+    [InlineData(GpsSourceNames.ZirixDirect, false)]
+    [InlineData(GpsSourceNames.GtfsRealtimeBus, false)]
+    public async Task ItsHandoff_WakesHealthyRestWithoutChangingFailureDelayOrAck(string? fallback, bool normal)
     {
         using var http = new HttpClient();
         IGpsSource source = new ItsCurrentGpsSource(new GpsDatarioClient(http, NullLogger<GpsDatarioClient>.Instance),
             Options.Create(new ItsCurrentOptions()), TimeProvider.System, NullLogger<ItsCurrentGpsSource>.Instance);
-        if (fallback)
+        if (fallback is not null)
         {
-            var zirix = new ZirixGpsSource(new GpsSppoClient(http, NullLogger<GpsSppoClient>.Instance));
-            source = new GpsSourceResolver([source, zirix], Options.Create(new GpsSourcesOptions
-            { BusPrimarySource = GpsSourceNames.ItsCurrent, BusFallbackSource = GpsSourceNames.ZirixDirect })).GetPrimary("BUS");
+            var options = new GtfsRealtimeGpsOptions { BusEnabled = true, CrosswalkValidated = true, BusSpeedUnit = GtfsSpeedUnit.KilometresPerHour };
+            IGpsSource support = fallback == GpsSourceNames.ZirixDirect
+                ? new ZirixGpsSource(new GpsSppoClient(http, NullLogger<GpsSppoClient>.Instance))
+                : new GtfsRealtimeGpsSource(GpsModalNames.Bus, new(http, new("https://fixture.invalid/"), options),
+                    new CadenceLookup(GpsModalNames.Bus), options, NullLogger<GtfsRealtimeGpsSource>.Instance);
+            source = new GpsSourceResolver([source, support], Options.Create(new GpsSourcesOptions
+            { BusPrimarySource = GpsSourceNames.ItsCurrent, BusFallbackSource = fallback })).GetPrimary("BUS");
         }
         var store = new GpsSppoSnapshotStore();
         using var polling = CreateCadencePolling(source, store: store);

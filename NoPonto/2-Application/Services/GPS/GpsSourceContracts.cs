@@ -7,6 +7,7 @@ public static class GpsSourceNames
     public const string ZirixDirect = "ZIRIX_DIRECT";
     public const string Datario = "DATARIO";
     public const string ItsCurrent = "ITS_CURRENT";
+    public const string GtfsRealtimeBus = "GTFSRT_BUS";
     public const string BrtCurrent = "BRT_CURRENT";
 }
 
@@ -106,12 +107,18 @@ public sealed class GpsSourceResolver : IGpsSourceResolver
         if (string.Equals(_options.BusPrimarySource, GpsSourceNames.ItsCurrent, StringComparison.OrdinalIgnoreCase)
             && !string.IsNullOrWhiteSpace(_options.BusFallbackSource))
         {
-            if (!string.Equals(_options.BusFallbackSource, GpsSourceNames.ZirixDirect, StringComparison.OrdinalIgnoreCase)
-                || _options.BusFallbackProbeIntervalSeconds is < 10 or > 600
+            var fallback = Resolve(_options.BusFallbackSource, GpsModalNames.Bus, "fallback");
+            var supported = (string.Equals(fallback.Name, GpsSourceNames.GtfsRealtimeBus, StringComparison.OrdinalIgnoreCase)
+                    && fallback is ISnapshotGpsSource)
+                || (string.Equals(fallback.Name, GpsSourceNames.ZirixDirect, StringComparison.OrdinalIgnoreCase)
+                    && fallback is IWindowedGpsSource); // Retained only for existing explicit legacy consumers.
+            if (!supported || _options.BusFallbackProbeIntervalSeconds is < 10 or > 600
                 || _options.BusFallbackTimeoutSeconds is < 1 or > 90
-                || Resolve(_options.BusPrimarySource, GpsModalNames.Bus, "primária") is not ISnapshotGpsSource primary
-                || Resolve(_options.BusFallbackSource, GpsModalNames.Bus, "fallback") is not IWindowedGpsSource fallback)
-                throw new InvalidOperationException("ITS BUS fallback requires ZIRIX_DIRECT and valid acquisition limits.");
+                || Resolve(_options.BusPrimarySource, GpsModalNames.Bus, "primária") is not ISnapshotGpsSource primary)
+                throw new InvalidOperationException("ITS BUS fallback requires GTFSRT_BUS snapshot (or explicit legacy ZIRIX_DIRECT window) and valid acquisition limits.");
+            // Validate opt-in, speed unit and crosswalk before starting ITS. A configured
+            // but unusable backup must fail selection, not remain hidden until an outage.
+            if (fallback is GtfsRealtimeGpsSource gtfs) gtfs.RequireOperational(GpsModalNames.Bus);
             _busWithFallback = new ItsFallbackGpsSource(primary, fallback, _options, clock ?? TimeProvider.System, logger);
         }
     }

@@ -2,7 +2,7 @@ namespace NoPonto.Application.GPS;
 
 // A single snapshot producer for the existing collector. Never merge providers from
 // failed acquisitions or run another publisher; source switching cannot change GPS time.
-internal sealed class ItsFallbackGpsSource(ISnapshotGpsSource primary, IWindowedGpsSource fallback,
+internal sealed class ItsFallbackGpsSource(ISnapshotGpsSource primary, IGpsSource fallback,
     GpsSourcesOptions options, TimeProvider clock, ILogger<GpsSourceResolver>? logger) : ISnapshotGpsSource
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -64,10 +64,16 @@ internal sealed class ItsFallbackGpsSource(ISnapshotGpsSource primary, IWindowed
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
         try
         {
-            // This is a current overlap snapshot, not collector catch-up. No historical
-            // watermark is invented; subsequent cycles query a new recent window.
+            // GTFS-RT supplies a complete current snapshot through its existing bounded
+            // client/cache/crosswalk. Only legacy explicit consumers query a time window.
+            // Neither form creates a historical collector watermark.
             var now = clock.GetUtcNow();
-            var read = fallback.GetPositionsAsync(now.AddSeconds(-60), now, linked.Token);
+            var read = fallback switch
+            {
+                ISnapshotGpsSource snapshot => snapshot.GetResultAsync(linked.Token),
+                IWindowedGpsSource window => window.GetPositionsAsync(now.AddSeconds(-60), now, linked.Token),
+                _ => throw new InvalidOperationException("Unsupported ITS fallback contract."),
+            };
             _pendingFallback = read;
             GpsSourceReadResult result;
             try { result = await read.WaitAsync(linked.Token); linked.Token.ThrowIfCancellationRequested(); }
