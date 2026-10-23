@@ -6,6 +6,7 @@ public static class GpsSourceNames
 {
     public const string ZirixDirect = "ZIRIX_DIRECT";
     public const string Datario = "DATARIO";
+    public const string ItsCurrent = "ITS_CURRENT";
     public const string BrtCurrent = "BRT_CURRENT";
 }
 
@@ -27,6 +28,7 @@ public sealed record GpsQuality(
 public sealed record GpsObservation
 {
     public required string VehicleId { get; init; }
+    public string? OriginalVehicleId { get; init; }
     public required double Latitude { get; init; }
     public required double Longitude { get; init; }
     public required DateTimeOffset GpsTimestamp { get; init; }
@@ -75,6 +77,10 @@ public sealed class GpsSourcesOptions
 {
     public const string Section = "GpsSources";
     public string BusPrimarySource { get; init; } = GpsSourceNames.ZirixDirect;
+    // Shadows are diagnostic only; fallback is an explicit operational opt-in.
+    public string? BusFallbackSource { get; init; }
+    public int BusFallbackProbeIntervalSeconds { get; init; } = 60;
+    public int BusFallbackTimeoutSeconds { get; init; } = 10;
     public string BrtPrimarySource { get; init; } = GpsSourceNames.BrtCurrent;
     public string[] BusShadowSources { get; init; } = [GpsSourceNames.Datario];
     public string[] BrtShadowSources { get; init; } = [GpsSourceNames.Datario];
@@ -90,15 +96,30 @@ public sealed class GpsSourceResolver : IGpsSourceResolver
 {
     private readonly IReadOnlyDictionary<string, IGpsSource> _sources;
     private readonly GpsSourcesOptions _options;
+    private readonly IGpsSource? _busWithFallback;
 
-    public GpsSourceResolver(IEnumerable<IGpsSource> sources, IOptions<GpsSourcesOptions> options)
+    public GpsSourceResolver(IEnumerable<IGpsSource> sources, IOptions<GpsSourcesOptions> options,
+        TimeProvider? clock = null, ILogger<GpsSourceResolver>? logger = null)
     {
         _sources = sources.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
         _options = options.Value;
+        if (string.Equals(_options.BusPrimarySource, GpsSourceNames.ItsCurrent, StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(_options.BusFallbackSource))
+        {
+            if (!string.Equals(_options.BusFallbackSource, GpsSourceNames.ZirixDirect, StringComparison.OrdinalIgnoreCase)
+                || _options.BusFallbackProbeIntervalSeconds is < 10 or > 600
+                || _options.BusFallbackTimeoutSeconds is < 1 or > 90
+                || Resolve(_options.BusPrimarySource, GpsModalNames.Bus, "primária") is not ISnapshotGpsSource primary
+                || Resolve(_options.BusFallbackSource, GpsModalNames.Bus, "fallback") is not IWindowedGpsSource fallback)
+                throw new InvalidOperationException("ITS BUS fallback requires ZIRIX_DIRECT and valid acquisition limits.");
+            _busWithFallback = new ItsFallbackGpsSource(primary, fallback, _options, clock ?? TimeProvider.System, logger);
+        }
     }
 
     public IGpsSource GetPrimary(string modal)
     {
+        if (string.Equals(modal, GpsModalNames.Bus, StringComparison.OrdinalIgnoreCase) && _busWithFallback is not null)
+            return _busWithFallback;
         var source = Resolve(PrimaryName(modal), modal, "primária");
         if (source is GtfsRealtimeGpsSource gtfs) gtfs.RequireOperational(modal.ToUpperInvariant());
         return source;

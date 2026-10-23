@@ -286,6 +286,32 @@ public sealed class GpsPhysicalPredecessorTests
             Assert.Null(f.Writer.Accepted[1].PadraoVersaoId);
     }
 
+    [Theory]
+    [InlineData("ZIRIX", "CONECTA")]
+    [InlineData("CONECTA", "ZIRIX")]
+    public async Task ItsZirixSourceTransitionsKeepMonotonicGpsAndSpatialHistory(string firstProvider, string nextProvider)
+    {
+        using var f = new Fixture(GpsModalNames.Bus, false, 45);
+        var first = f.First with { ProvedorFonte = firstProvider };
+        await f.Cycle(first, f.Route(.1));
+        var original = Assert.Single(f.Writer.Accepted);
+        f.Cache.Seconds = 10;
+        await f.Cycle(first with { ProvedorFonte = nextProvider, TimestampGps = first.TimestampGps.AddSeconds(-1), Latitude = -23 });
+        await f.Cycle(first with { ProvedorFonte = nextProvider, Latitude = -23 });
+        Assert.Single(f.Writer.Accepted); Assert.Equal(1, f.Writer.Attempts);
+        f.Cache.Seconds = 45;
+        var next = f.Next with { ProvedorFonte = nextProvider };
+        await f.Cycle(next, f.Route(.11));
+        var accepted = f.Writer.Accepted[1];
+        Assert.Equal(original.Ordem, accepted.Ordem); Assert.Equal(next.TimestampGps, accepted.TimestampGps);
+        Assert.Equal(original.TimestampGps, accepted.TimestampAnterior);
+        Assert.Equal(original.Latitude, accepted.LatitudeAnterior); Assert.Equal(original.Longitude, accepted.LongitudeAnterior);
+        Assert.Equal(next.Latitude, accepted.Latitude); Assert.Equal(next.Longitude, accepted.Longitude);
+        Assert.True(accepted.TemHistorico); Assert.True(accepted.MatchingOperacionalPlausivel);
+        await f.Cycle(next with { ProvedorFonte = firstProvider });
+        Assert.Equal(2, f.Writer.Accepted.Count); Assert.Equal(2, f.Writer.Attempts);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly ServiceProvider services = new ServiceCollection().AddLogging().AddSignalR().Services.BuildServiceProvider();

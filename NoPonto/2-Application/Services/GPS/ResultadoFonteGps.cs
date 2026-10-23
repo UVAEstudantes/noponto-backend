@@ -5,6 +5,7 @@ internal enum StatusFonteGps
     Sucesso,
     Vazio,
     Falha,
+    Parcial,
 }
 
 internal sealed record ResultadoFonteGps(
