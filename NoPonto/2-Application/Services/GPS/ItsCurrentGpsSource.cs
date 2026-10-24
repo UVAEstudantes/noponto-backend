@@ -25,6 +25,10 @@ public sealed class ItsCurrentGpsSource(GpsDatarioClient client, IOptions<ItsCur
         var o = options.Value;
         if (!o.IsValid()) throw new InvalidOperationException("Invalid ITS acquisition limits.");
         var start = clock.GetTimestamp();
+        var acquisitionStart = clock.GetUtcNow();
+        var acquisition = Guid.NewGuid().ToString("N");
+        double gateMs = 0, intervalMs = 0, pendingMs = 0, normalizeMs = 0;
+        var rejectedReasons = new Dictionary<string, int>(StringComparer.Ordinal);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(o.AcquisitionBudgetSeconds), clock);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(stopping, deadline.Token);
         var ct = linked.Token;
@@ -46,6 +50,12 @@ public sealed class ItsCurrentGpsSource(GpsDatarioClient client, IOptions<ItsCur
             if (status == StatusFonteGps.Sucesso && positions.Length == 0)
             { status = StatusFonteGps.Falha; reason = "no_valid_records"; }
             var ages = positions.Select(x => (now - x.GpsTimestamp).TotalSeconds).Order().ToArray();
+            var startAges = positions.Select(x => (acquisitionStart - x.GpsTimestamp).TotalSeconds).Order().ToArray();
+            logger.LogInformation("ITS timing acquisition={acquisition} status={status} gate_ms={gate_ms} interval_wait_ms={interval_ms} pending_wait_ms={pending_ms} normalize_ms={normalize_ms} rejected_reasons={reasons} age_at_start_p50={age_start} age_at_finish_p50={age_finish} expired_at_finish={expired}",
+                acquisition, status, gateMs, intervalMs, pendingMs, normalizeMs, JsonSerializer.Serialize(rejectedReasons),
+                startAges.Length == 0 ? (double?)null : startAges[(startAges.Length - 1) / 2],
+                ages.Length == 0 ? (double?)null : ages[(ages.Length - 1) / 2],
+                candidates.Values.Count(x => x.GpsTimestamp < now.AddSeconds(-o.MaxGpsAgeSeconds)));
             double? Percentile(double fraction) => ages.Length == 0 ? null : ages[(int)((ages.Length - 1) * fraction)];
             logger.LogInformation("ITS acquisition status={status} reason={reason} pages={pages} windows={windows} records={records} rejected={rejected} duration_ms={duration} vehicles={vehicles} recent40={recent40} recent60={recent60} age_p50={p50} age_p90={p90} zirix_available={za} conecta_available={ca} zirix_selected={zs} conecta_selected={cs} zirix_exclusive={ze} conecta_exclusive={ce}",
                 status, reason, pages, windows, records, rejected, clock.GetElapsedTime(start).TotalMilliseconds,
@@ -60,6 +70,7 @@ public sealed class ItsCurrentGpsSource(GpsDatarioClient client, IOptions<ItsCur
         try
         {
             await _gate.WaitAsync(ct);
+            gateMs = clock.GetElapsedTime(start).TotalMilliseconds;
             entered = true;
             if (_pendingIo is { IsCompleted: false }) return Finish(StatusFonteGps.Falha, "previous_io_pending");
             if (clock.GetUtcNow() < _retryNotBefore) return Finish(StatusFonteGps.Falha, "retry_after");
@@ -80,13 +91,18 @@ public sealed class ItsCurrentGpsSource(GpsDatarioClient client, IOptions<ItsCur
                     if (_lastRequest is { } last)
                     {
                         var delay = TimeSpan.FromMilliseconds(o.MinimumRequestIntervalMilliseconds) - clock.GetElapsedTime(last);
-                        if (delay > TimeSpan.Zero) await Task.Delay(delay, clock, ct);
+                        if (delay > TimeSpan.Zero)
+                        {
+                            var waiting = clock.GetTimestamp();
+                            try { await Task.Delay(delay, clock, ct); }
+                            finally { intervalMs += clock.GetElapsedTime(waiting).TotalMilliseconds; }
+                        }
                     }
                     ct.ThrowIfCancellationRequested();
                     _lastRequest = clock.GetTimestamp();
                     using var requestDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(o.RequestTimeoutSeconds), clock);
                     using var requestToken = CancellationTokenSource.CreateLinkedTokenSource(ct, requestDeadline.Token);
-                    var read = client.BuscarPaginaLimitadaAsync(query, cursor, o.MaxResponseBytes, requestToken.Token);
+                    var read = client.BuscarPaginaLimitadaAsync(query, cursor, o.MaxResponseBytes, requestToken.Token, clock, acquisition);
                     _pendingIo = read;
                     GpsDatarioPage page;
                     try
@@ -113,7 +129,11 @@ public sealed class ItsCurrentGpsSource(GpsDatarioClient client, IOptions<ItsCur
                         // prepares it. Retry exactly this page, discarding its incomplete body.
                         // Requests still consume the same page limit and cycle deadline.
                         pendingRetries++;
-                        await Task.Delay(TimeSpan.FromSeconds(2), clock, ct);
+                        logger.LogInformation("ITS provider wait acquisition={acquisition} window={window} minute_utc={minute} attempt={attempt} discarded_pending_rows={rows}",
+                            acquisition, window, query.MinutoUtc, pendingRetries, page.Data.Count);
+                        var waiting = clock.GetTimestamp();
+                        try { await Task.Delay(TimeSpan.FromSeconds(2), clock, ct); }
+                        finally { pendingMs += clock.GetElapsedTime(waiting).TotalMilliseconds; }
                         continue;
                     }
                     if (providerStates.Any(x => x != "ok")) return Finish(StatusFonteGps.Parcial, "provider_incomplete");
@@ -121,15 +141,32 @@ public sealed class ItsCurrentGpsSource(GpsDatarioClient client, IOptions<ItsCur
                     if (page.Data.Count > o.PageLimit || page.Data.Count > o.MaxRecords - records)
                         return Finish(StatusFonteGps.Parcial, "record_limit");
                     records += page.Data.Count;
+                    var normalizationStart = clock.GetTimestamp();
+                    var pageReasons = new Dictionary<string, int>(StringComparer.Ordinal);
+                    var pageProviders = new Dictionary<string, int>(StringComparer.Ordinal);
                     foreach (var raw in page.Data)
                     {
                         ct.ThrowIfCancellationRequested();
-                        var observation = Normalize(raw, clock.GetUtcNow(), o);
-                        if (observation is null) { rejected++; continue; }
+                        var provider = raw?.Fornecedor?.Trim().ToUpperInvariant() is "ZIRIX" ? "ZIRIX"
+                            : raw?.Fornecedor?.Trim().ToUpperInvariant() is "CONECTA" ? "CONECTA" : "OTHER";
+                        pageProviders[provider] = pageProviders.GetValueOrDefault(provider) + 1;
+                        var observation = Normalize(raw, clock.GetUtcNow(), o, out var rejection);
+                        if (observation is null)
+                        {
+                            rejected++;
+                            rejectedReasons[rejection!] = rejectedReasons.GetValueOrDefault(rejection!) + 1;
+                            pageReasons[rejection!] = pageReasons.GetValueOrDefault(rejection!) + 1;
+                            continue;
+                        }
                         providerVehicles[observation.Provider].Add(observation.VehicleId);
                         if (!candidates.TryGetValue(observation.VehicleId, out var previous)
                             || Compare(observation, previous) < 0) candidates[observation.VehicleId] = observation;
                     }
+                    var normalizationElapsed = clock.GetElapsedTime(normalizationStart).TotalMilliseconds;
+                    normalizeMs += normalizationElapsed;
+                    logger.LogInformation("ITS normalized page acquisition={acquisition} window={window} minute_utc={minute} page={page} records={records} providers={providers} rejections={rejections} normalize_ms={normalize_ms}",
+                        acquisition, window, query.MinutoUtc, pages, page.Data.Count, JsonSerializer.Serialize(pageProviders),
+                        JsonSerializer.Serialize(pageReasons), normalizationElapsed);
                     cursor = string.IsNullOrWhiteSpace(page.NextCursor) ? null : page.NextCursor;
                     if (cursor is not null && (cursor.Length > 48 || !seen.Add(cursor)))
                         return Finish(StatusFonteGps.Parcial, "invalid_cursor");
@@ -176,16 +213,24 @@ public sealed class ItsCurrentGpsSource(GpsDatarioClient client, IOptions<ItsCur
             DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out timestamp);
 
     internal static GpsObservation? Normalize(GpsDatarioVehicleDto? raw, DateTimeOffset now, ItsCurrentOptions options)
+        => Normalize(raw, now, options, out _);
+
+    internal static GpsObservation? Normalize(GpsDatarioVehicleDto? raw, DateTimeOffset now, ItsCurrentOptions options, out string? rejection)
     {
+        rejection = null;
         if (raw is null || !string.Equals(raw.Sistema?.Trim(), "sppo", StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(raw.Modo?.Trim(), "onibus", StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrWhiteSpace(raw.Servico) || !TryTimestamp(raw.Datetime, out var physical)
-            || physical <= DateTimeOffset.UnixEpoch || physical > now || physical < now.AddSeconds(-options.MaxGpsAgeSeconds))
-            return null;
+            || !string.Equals(raw.Modo?.Trim(), "onibus", StringComparison.OrdinalIgnoreCase))
+        { rejection = "scope"; return null; }
+        if (string.IsNullOrWhiteSpace(raw.Servico)) { rejection = "service"; return null; }
+        if (!TryTimestamp(raw.Datetime, out var physical) || physical <= DateTimeOffset.UnixEpoch)
+        { rejection = "physical_invalid"; return null; }
+        if (physical > now) { rejection = "physical_future"; return null; }
+        if (physical < now.AddSeconds(-options.MaxGpsAgeSeconds)) { rejection = "physical_stale"; return null; }
         var mapped = DatarioGpsSource.Map(raw);
-        if (mapped is null || mapped.Provider is not ("ZIRIX" or "CONECTA")
-            || mapped.VehicleId.Length > 64 || mapped.VehicleId.Any(char.IsControl)
-            || !double.IsFinite(mapped.SpeedKmh) || mapped.SpeedKmh < 0) return null;
+        if (mapped is null) { rejection = "payload"; return null; }
+        if (mapped.Provider is not ("ZIRIX" or "CONECTA")) { rejection = "provider"; return null; }
+        if (mapped.VehicleId.Length > 64 || mapped.VehicleId.Any(char.IsControl)) { rejection = "identity"; return null; }
+        if (!double.IsFinite(mapped.SpeedKmh) || mapped.SpeedKmh < 0) { rejection = "speed"; return null; }
         return mapped with
         {
             VehicleId = mapped.VehicleId.ToUpperInvariant(), OriginalVehicleId = raw.IdVeiculo,

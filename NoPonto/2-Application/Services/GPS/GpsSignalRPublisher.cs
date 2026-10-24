@@ -7,7 +7,7 @@ using NoPonto.Application.LegacyCompatibility.DTOs;
 namespace NoPonto.Application.GPS;
 
 // One instance per polling service; invoked serially after commits (or with no GPS).
-internal sealed class GpsSignalRPublisher(IDistributedCache cache, IHubContext<GpsHub> hub)
+internal sealed class GpsSignalRPublisher(IDistributedCache cache, IHubContext<GpsHub> hub, GpsPipelineTrace? trace = null)
 {
     private readonly ConcurrentDictionary<string, long> _vaziasPublicadas = new(StringComparer.OrdinalIgnoreCase);
 
@@ -68,8 +68,7 @@ internal sealed class GpsSignalRPublisher(IDistributedCache cache, IHubContext<G
                 _vaziasPublicadas.TryRemove(linha, out _);
                 performance.LinhasPublicadas++;
                 performance.VeiculosEnviados += veiculos.Count;
-                tarefas.Add(hub.Clients.Group(GpsHub.GrupoLinha(linha)).SendAsync("PosicaoAtualizada",
-                    veiculos.Select(FrontendLegacyPosicaoSignalRDto.From).ToArray(), ct));
+                tarefas.Add(PublicarPosicoesAsync(linha, veiculos, ct));
             }
             else if (!_vaziasPublicadas.TryGetValue(linha, out var enviada) || enviada != geracao)
             {
@@ -82,6 +81,13 @@ internal sealed class GpsSignalRPublisher(IDistributedCache cache, IHubContext<G
         await Task.WhenAll(tarefas);
         performance.SignalrBroadcastMs = (long)System.Diagnostics.Stopwatch.GetElapsedTime(inicioEspera).TotalMilliseconds;
         performance.SignalrEtapaMs = (long)System.Diagnostics.Stopwatch.GetElapsedTime(inicioSignalr).TotalMilliseconds;
+    }
+
+    private async Task PublicarPosicoesAsync(string linha, List<PosicaoVeiculoDto> positions, CancellationToken ct)
+    {
+        await hub.Clients.Group(GpsHub.GrupoLinha(linha)).SendAsync("PosicaoAtualizada",
+            positions.Select(FrontendLegacyPosicaoSignalRDto.From).ToArray(), ct);
+        trace?.Record("signalr_completed", positions);
     }
 
     private async Task PublicarVaziaAsync(string linha, long geracao, CancellationToken ct)

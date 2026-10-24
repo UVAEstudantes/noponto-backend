@@ -5,6 +5,7 @@
     "GpsTimestampDeduplicationTests",
     "NoPonto.Tests.GpsPhysicalPredecessorTests",
     "NoPonto.Tests.GpsSignalRPublisherTests",
+    "NoPonto.Tests.GpsPipelineTraceTests",
     "NoPonto.Tests.GpsEtaClientTests",
     "NoPonto.Tests.GpsBrtTelemetriaTests",
     "NoPonto.Tests.GpsSourceAbstractionTests",

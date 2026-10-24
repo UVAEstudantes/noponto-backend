@@ -579,6 +579,8 @@ builder.Services.AddHostedService<TelemetriaMlRetentionService>();
 builder.Services.AddSignalR();
 
 builder.Services.AddSingleton<GpsSppoSnapshotStore>();
+builder.Services.AddOptions<GpsPipelineTraceOptions>().Bind(builder.Configuration.GetSection("GpsPipelineTrace"));
+builder.Services.AddSingleton<GpsPipelineTrace>();
 builder.Services.AddSingleton<GpsSppoCollectorMetrics>();
 builder.Services.AddHostedService<GpsSppoCollectorService>();
 builder.Services.AddHostedService<GpsPollingService>();

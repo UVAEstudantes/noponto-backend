@@ -1,5 +1,7 @@
 # Ônibus híbridos ITS + GTFS-RT —24/10/2026
 
+Investigação da segunda janela, medições e rastreabilidade opt-in preparadas localmente: [hybrid-window2-investigation-20261024.md](its-homeserver/hybrid-window2-investigation-20261024.md). Sequência de aquisição, filtros, TTLs e fallback operacional preservados; nenhuma terceira janela executada.
+
 ## Arquitetura e configuração
 
 Auditoria dirigida dos contratos: ITS_CURRENT e GTFSRT_BUS já entregam `ISnapshotGpsSource`, GPS físico e observações normalizadas. GTFS passa pelo parser limitado e crosswalk validado, com unidade km/h explicitamente configurada, HTTP/cache/304/Retry-After próprios. `GpsSourceResolver` já cria `ItsFallbackGpsSource`; coletor/store/ACK e polling/CAS/Redis/SignalR são comuns. O problema era retornar imediatamente quando ITS estava saudável. Não há necessidade de outro coletor, HTTP por linha ou outro escritor.

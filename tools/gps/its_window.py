@@ -11,12 +11,47 @@ CONTROL_LINES = ('35', '60', '67')
 stop = threading.Event()
 guard = threading.Lock()
 state_guard = threading.Lock()
-wire = {'messages':0, 'duplicates':0, 'regressions':0, 'invalid':0, 'connections':0, 'errors':0, 'last':0, 'lines':{}}
+wire = {'messages':0, 'duplicates':0, 'regressions':0, 'invalid':0, 'connections':0, 'errors':0, 'last':0, 'lines':{}, 'connected':False, 'last_error_kind':None}
 last_gps = {}
+activation_epoch = None
+
+class CommandFailure(RuntimeError):
+    def __init__(self,args,code=None,timeout=False):
+        self.tool=pathlib.Path(args[0]).name
+        self.operation=args[1] if self.tool=='docker' and len(args)>1 and args[1] in ('logs','inspect','stats','ps','compose') else 'command'
+        self.code=code;self.reason='command_timeout' if timeout else 'command_interrupted' if code is not None and code<0 else 'command_failed'
+        super().__init__(self.reason+':'+self.tool+':'+self.operation)
+    def evidence(self):
+        return {'type':'CommandFailure','reason':self.reason,'tool':self.tool,'operation':self.operation,'exit_code':self.code}
+
+def failure_evidence(error):
+    if isinstance(error,ProbeError):
+        return {**error.evidence(),'classification':'backend_transport' if error.reason in ('transport_failure','timeout') else 'backend_http' if error.reason=='http_failure' else 'backend_contract'}
+    return error.evidence() if isinstance(error,(ProbeError,CommandFailure)) else {'type':type(error).__name__,'reason':'unclassified_failure'}
+
+def stop_reason():
+    try:
+        request=json.loads((ROOT/'stop-request.json').read_text())
+        if request.get('reason') in ('operator_rollback','gate_898_unproven','safety_degradation'):
+            return request['reason']
+    except (OSError,ValueError):pass
+    return 'supervisor_interrupted'
+
+def request_stop(reason):
+    if reason not in ('operator_rollback','gate_898_unproven','safety_degradation'):raise ValueError('invalid_stop_reason')
+    s=load()
+    if s['phase'] not in ('baseline','its'):raise RuntimeError('not_running')
+    pid=s['pid']
+    if pathlib.Path('/proc/'+str(pid)+'/stat').read_text().split()[21]!=s['pid_start']:raise RuntimeError('pid_changed')
+    if str(pathlib.Path(__file__).resolve()).encode() not in pathlib.Path('/proc/'+str(pid)+'/cmdline').read_bytes():raise RuntimeError('command_changed')
+    target=ROOT/'stop-request.tmp';target.write_text(json.dumps({'reason':reason,'time':time.time()}));os.chmod(target,0o600);os.replace(target,ROOT/'stop-request.json')
+    # Notify only the controller. Killing its process group also interrupts docker/logs.
+    os.kill(pid,signal.SIGTERM)
 
 def run(args, timeout=15, data=None, env=None):
-    r = subprocess.run(args, input=data, capture_output=True, text=True, timeout=timeout, env=env)
-    if r.returncode: raise RuntimeError('command_failed:' + args[0])
+    try:r = subprocess.run(args, input=data, capture_output=True, text=True, timeout=timeout, env=env)
+    except subprocess.TimeoutExpired:raise CommandFailure(args,timeout=True) from None
+    if r.returncode: raise CommandFailure(args,r.returncode)
     return r.stdout+(r.stderr if args[:2]==['docker','logs'] else '')
 
 def load(): return json.loads((ROOT/'state.json').read_text())
@@ -42,7 +77,33 @@ def fresh(positions):
     for p in positions:
         ts=p.get('timestampGps') or p.get('TimestampGps')
         ages.append(now-dt.datetime.fromisoformat(ts.replace('Z','+00:00')).timestamp())
-    return {'vehicles':len(ages),'until40':sum(0<=a<=40 for a in ages),'until60':sum(0<=a<=60 for a in ages),'until180':sum(0<=a<=180 for a in ages),'older180':sum(a>180 for a in ages),'future':sum(a<0 for a in ages),'max_age':max(ages,default=None)}
+    ordered=sorted(ages)
+    return {'vehicles':len(ages),'until40':sum(0<=a<=40 for a in ages),'until60':sum(0<=a<=60 for a in ages),'until180':sum(0<=a<=180 for a in ages),'older180':sum(a>180 for a in ages),'future':sum(a<0 for a in ages),'max_age':max(ages,default=None),
+            'median':statistics.median(ages) if ages else None,'p90':ordered[max(0,math.ceil(len(ordered)*.9)-1)] if ages else None,
+            'new_after_activation':sum(now-a>=activation_epoch for a in ages) if activation_epoch is not None else 0}
+
+def data_state(stats):
+    if not stats['vehicles']:return 'valid_empty'
+    if stats.get('future',0):return 'invalid_physical_time'
+    if stats['older180']==stats['vehicles']:return 'present_stale'
+    return 'present_recent' if stats['until60'] else 'present_aging'
+
+def parse_flow_logs(logs):
+    frames=[]
+    for line in logs.splitlines():
+        if 'GPS flow: ' not in line:continue
+        raw=line.split('GPS flow: ',1)[1]
+        if len(raw)>4096:continue
+        try:
+            value=json.loads(raw)
+            if isinstance(value,dict) and value.get('line') in LINES and isinstance(value.get('generation'),int):frames.append(value)
+        except ValueError:continue
+    return frames
+
+def correlation_state(frames,wire):
+    server=any(f.get('line')=='898' and f.get('source')=='GTFSRT_BUS' and f.get('linked_complete_new',0)>0 for f in frames)
+    client=wire.get('lines',{}).get('898',{}).get('new_after_activation',0)>0
+    return 'proven' if server and client else 'server_only' if server else 'client_only' if client else 'unproven'
 
 def send_frame(sock,payload,opcode=1):
     b=payload if isinstance(payload,bytes) else payload.encode(); mask=os.urandom(4); n=len(b)
@@ -86,7 +147,7 @@ def socket_worker():
             if b' 101 ' not in header or accept not in header: raise RuntimeError('upgrade_failed')
             send_frame(sock,'{"protocol":"json","version":1}\x1e')
             for i,line in enumerate(LINES+CONTROL_LINES): send_frame(sock,json.dumps({'type':1,'invocationId':str(i),'target':'InscreverseLinha','arguments':[line]})+'\x1e')
-            with guard: wire['connections']+=1
+            with guard: wire['connections']+=1; wire['connected']=True
             pending=''; fragments=bytearray(); last_ping=time.monotonic()
             while not stop.is_set():
                 if time.monotonic()-last_ping>10: send_frame(sock,'{"type":6}\x1e'); last_ping=time.monotonic()
@@ -112,9 +173,12 @@ def socket_worker():
                     if obj.get('target')=='PosicaoAtualizada': observe_snapshot(obj['arguments'][0])
                     if obj.get('target')=='LinhaEsvaziada':
                         with guard: wire['last']=time.time(); wire['lines'][obj['arguments'][0]['codigoLinha']]=[]
-        except Exception:
-            with guard: wire['errors']+=1
+        except Exception as error:
+            with guard:
+                wire['errors']+=1
+                wire['last_error_kind']='contract_failure' if isinstance(error,(ValueError,KeyError)) else 'connection_failure'
         finally:
+            with guard:wire['connected']=False
             if sock:
                 try: send_frame(sock,b'',8)
                 except Exception: pass
@@ -123,7 +187,7 @@ def socket_worker():
 
 def wire_summary():
     with guard:
-        return {**{k:v for k,v in wire.items() if k!='lines'},'lines':{k:fresh(v) for k,v in wire['lines'].items()}}
+        return {**{k:v for k,v in wire.items() if k!='lines'},'connection_state':'connected' if wire['connected'] else 'reconnecting' if wire['connections'] else 'not_connected','lines':{k:fresh(v) for k,v in wire['lines'].items()}}
 
 def parse_logs(text):
     cycles=[]; acquisitions=[]; selection=[]
@@ -153,6 +217,7 @@ def sample():
         body,seconds=get(path); payload=json.loads(body)
         (lines if line in LINES else controls)[line]=fresh(payload['posicoes'])
         line_http[line]={'path':path,'seconds':seconds,**payload.get('probe',{'http_status':200,'empty_line':False})}
+        line_http[line]['data_state']=data_state((lines if line in LINES else controls)[line])
     stat=[json.loads(x) for x in run(['docker','stats','--no-stream','--format','{{json .}}',*[x['Name'].lstrip('/') for x in state]],timeout=12).splitlines()]
     logs=run(['docker','logs','--timestamps','--since','100s','--tail','6000','noponto_api'],timeout=10)
     cycles,acquisitions,selection=parse_logs(logs)
@@ -162,7 +227,7 @@ def sample():
             'running':api['State']['Running'],'oom':api['State']['OOMKilled'],'restarts':api['RestartCount'],
             'http_seconds':latency,'lines':lines,'controls':controls,'line_http':line_http,'wire':wire_summary(),'memory_kib':memory,'load':os.getloadavg(),
             'resources':[{k:x[k] for k in ('Name','CPUPerc','MemUsage','MemPerc','PIDs')} for x in stat],
-            'cycles':cycles,'acquisitions':acquisitions,'selection':selection,
+            'cycles':cycles,'acquisitions':acquisitions,'selection':selection,'flow':parse_flow_logs(logs),
             'containers':{x['Name'].lstrip('/'):{'started':x['State']['StartedAt'],'running':x['State']['Running'],'health':x['State'].get('Health',{}).get('Status'),'restarts':x['RestartCount']} for x in state}}
 
 def validate(image):
@@ -173,11 +238,12 @@ def validate(image):
     assert source(api).get('GpsSources__BrtPrimarySource')=='GTFSRT_BRT'
     assert api['HostConfig']['Memory']==805306368 and api['HostConfig']['NanoCpus']==1000000000
     cmd,env=compose(image); original=json.loads(run(cmd+['config','--format','json'],env=env))
-    for filename,primary,fallback,mode in [('its.primary.override.yml','ITS_CURRENT','GTFSRT_BUS','Hybrid'),('gtfs.rollback.override.yml','GTFSRT_BUS','','FullFallback')]:
+    for filename,primary,fallback,mode,trace in [('its.primary.override.yml','ITS_CURRENT','GTFSRT_BUS','Hybrid','true'),('gtfs.rollback.override.yml','GTFSRT_BUS','','FullFallback','false')]:
         cmd,env=compose(image,filename); desired=json.loads(run(cmd+['config','--format','json'],env=env)); normalized=copy.deepcopy(desired)
         e=desired['services']['api']['environment']; assert e['GpsSources__BusPrimarySource']==primary and e['GpsSources__BusFallbackSource']==fallback
         assert e['GpsSources__BusSupportMode']==mode
-        for k in ('GpsSources__BusPrimarySource','GpsSources__BusFallbackSource','GpsSources__BusSupportMode'):
+        assert e['GpsPipelineTrace__Enabled']==trace
+        for k in ('GpsSources__BusPrimarySource','GpsSources__BusFallbackSource','GpsSources__BusSupportMode','GpsPipelineTrace__Enabled'):
             old=original['services']['api']['environment']
             if k in old: normalized['services']['api']['environment'][k]=old[k]
             else: normalized['services']['api']['environment'].pop(k,None)
@@ -224,6 +290,9 @@ def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None)
     if current['oom'] or current['restarts'] or not current['running']: return 'api_restart_or_oom',long_streak,poor_streak,low_since
     w=current['wire']
     if w['regressions'] or w['duplicates'] or w['invalid']: return 'signalr_gps_integrity',long_streak,poor_streak,low_since
+    if baseline['lines']['898']['vehicles']>=5 and watch.get('activated') is not None:
+        if now-watch['activated']<=90 and correlation_state(current.get('flow',[]),current['wire'])=='proven':watch['898_proven']=True
+        if now-watch['activated']>=90 and not watch.get('898_proven'):return 'gate_898_unproven',long_streak,poor_streak,low_since
     for c in current['cycles']:
         if c['stamp'] in seen:continue
         seen.add(c['stamp']); long_streak=long_streak+1 if c['total_ms']>24000 else 0
@@ -269,6 +338,7 @@ def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None)
     return None,long_streak,poor_streak,low_since
 
 def supervise(s):
+    global activation_epoch
     if os.getpgrp()!=os.getpid():os.setsid()
     lock=take_lock(); s.update(pid=os.getpid(),pid_start=pathlib.Path('/proc/self/stat').read_text().split()[21],phase='baseline',heartbeat=time.time(),deadline=time.time()+960); save(s)
     thread=threading.Thread(target=socket_worker,daemon=True); thread.start()
@@ -288,21 +358,29 @@ def supervise(s):
         if baseline['wire']['messages']==0 or any(line not in baseline['wire']['lines'] for line in LINES):raise RuntimeError('signalr_baseline_not_confirmed')
         if baseline['wire']['regressions'] or baseline['wire']['duplicates'] or baseline['wire']['invalid']:raise RuntimeError('signalr_baseline_integrity')
         validate(s['image']); s.update(phase='its',activated=time.time(),deadline=time.time()+600); save(s); activated=True
+        activation_epoch=s['activated']
         switch(s['image'],'its.primary.override.yml'); healthy(s['image'],'ITS_CURRENT')
-        seen={c['stamp'] for x in baseline_samples for c in x['cycles']}; long_streak=poor_streak=0; low_since=None; reason='ten_minutes_completed';watch={}
+        seen={c['stamp'] for x in baseline_samples for c in x['cycles']}; long_streak=poor_streak=0; low_since=None; reason='ten_minutes_completed';watch={'activated':s['activated']}
         while time.time()<s['deadline'] and not stop.is_set():
+            if baseline['lines']['898']['vehicles']>=5 and not watch.get('898_proven') and time.time()-s['activated']>=90:
+                reason='gate_898_unproven';break
             x=sample(); record('its_sample',x)
             reason_now,long_streak,poor_streak,low_since=decision(x,baseline,seen,long_streak,poor_streak,low_since,watch)
             if reason_now:reason=reason_now;break
-            stop.wait(min(15,max(0,s['deadline']-time.time())))
-        if stop.is_set():reason='supervisor_interrupted'
+            delay=min(15,max(0,s['deadline']-time.time()))
+            if baseline['lines']['898']['vehicles']>=5 and not watch.get('898_proven'):
+                delay=min(delay,max(0,s['activated']+90-time.time()))
+            stop.wait(delay)
+        if stop.is_set():reason=stop_reason()
         rollback(s,reason)
         for _ in range(3):
             x=sample(); record('final_gtfs_sample',x); time.sleep(5)
     except Exception as error:
-        record('supervisor_error',{**(error.evidence() if isinstance(error,ProbeError) else {'type':type(error).__name__}),'activated':activated})
+        cause=failure_evidence(error)
+        reason=stop_reason() if stop.is_set() else 'exception_'+type(error).__name__
+        record('supervisor_error',{**cause,'activated':activated,'operational_reason':reason})
         if activated:
-            try:rollback(s,'exception_'+type(error).__name__)
+            try:rollback(s,reason)
             except Exception as failure:s.update(phase='rollback_failed',failure=type(failure).__name__,heartbeat=time.time());save(s)
         else:s.update(phase='precondition_failed',failure=type(error).__name__,heartbeat=time.time());save(s)
     finally:stop.set();thread.join(6);lock.close()
@@ -343,6 +421,7 @@ def tick():
 if __name__=='__main__':
     os.umask(0o077)
     if sys.argv[1:]==['--tick']:tick()
+    elif len(sys.argv)==3 and sys.argv[1]=='--request-stop':request_stop(sys.argv[2])
     elif sys.argv[1:]==['--probe-signalr']:
         t=threading.Thread(target=socket_worker,daemon=True);t.start();time.sleep(40);print(json.dumps(wire_summary()));stop.set();t.join(5)
     elif sys.argv[1:]==['--validate']:validate(load()['image']);print('preflight_ok')
