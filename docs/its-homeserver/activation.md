@@ -1,5 +1,7 @@
 # Janela controlada ITS + GTFS-RT — preparação atualizada em24/10/2026
 
+Preflight somente leitura atualizado da segunda janela, estado exato e gates ainda pendentes: [second-window-preflight-20261024.md](second-window-preflight-20261024.md). Os comandos desse relatório são futuros; não houve nova publicação/deploy/ativação.
+
 **Segunda janela ainda não autorizada.** A proposta atual usa `BusSupportMode=Hybrid`, complementação por veículo ITS_CURRENT + GTFSRT_BUS, conforme [implementação e validação local](../its-hybrid.md). O padrão permanece `FullFallback`. Publicar uma nova imagem validada exige autorização; a imagem da primeira janela não implementa híbrido. Manter uma única API e watchdog independente do SSH, com retorno obrigatório aGTFS após10min. Os overrides deste diretório agora incluem a terceira chave de modo, inclusive no rollback. Nenhuma alteração produtiva foi realizada nesta preparação.
 
 A inspeção abaixo é histórica de23/10; o estado posterior e o quinto override efetivo constam em [primeira janela](production-window-20261024.md). Antes de qualquer deploy autorizado, inspecionar novamente os labels/configuração efetiva, preservar todos os overrides não relacionados e renderizar candidata/rollback. Não copiar uma composição histórica sem essa conferência.
