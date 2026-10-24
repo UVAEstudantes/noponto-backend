@@ -1,5 +1,6 @@
 {
   "classes": [
+    "NoPonto.Tests.ItsCurrentGpsSourceTests",
     "GpsLeituraValidatorTests",
     "GpsTimestampDeduplicationTests",
     "NoPonto.Tests.GpsPhysicalPredecessorTests",

@@ -286,6 +286,111 @@ public sealed class GpsPhysicalPredecessorTests
             Assert.Null(f.Writer.Accepted[1].PadraoVersaoId);
     }
 
+    [Theory]
+    [InlineData("ZIRIX", "CONECTA")]
+    [InlineData("CONECTA", "ZIRIX")]
+    public async Task ItsZirixSourceTransitionsKeepMonotonicGpsAndSpatialHistory(string firstProvider, string nextProvider)
+    {
+        using var f = new Fixture(GpsModalNames.Bus, false, 45);
+        var first = f.First with { ProvedorFonte = firstProvider };
+        await f.Cycle(first, f.Route(.1));
+        var original = Assert.Single(f.Writer.Accepted);
+        f.Cache.Seconds = 10;
+        await f.Cycle(first with { ProvedorFonte = nextProvider, TimestampGps = first.TimestampGps.AddSeconds(-1), Latitude = -23 });
+        await f.Cycle(first with { ProvedorFonte = nextProvider, Latitude = -23 });
+        Assert.Single(f.Writer.Accepted); Assert.Equal(1, f.Writer.Attempts);
+        f.Cache.Seconds = 45;
+        var next = f.Next with { ProvedorFonte = nextProvider };
+        await f.Cycle(next, f.Route(.11));
+        var accepted = f.Writer.Accepted[1];
+        Assert.Equal(original.Ordem, accepted.Ordem); Assert.Equal(next.TimestampGps, accepted.TimestampGps);
+        Assert.Equal(original.TimestampGps, accepted.TimestampAnterior);
+        Assert.Equal(original.Latitude, accepted.LatitudeAnterior); Assert.Equal(original.Longitude, accepted.LongitudeAnterior);
+        Assert.Equal(next.Latitude, accepted.Latitude); Assert.Equal(next.Longitude, accepted.Longitude);
+        Assert.True(accepted.TemHistorico); Assert.True(accepted.MatchingOperacionalPlausivel);
+        await f.Cycle(next with { ProvedorFonte = firstProvider });
+        Assert.Equal(2, f.Writer.Accepted.Count); Assert.Equal(2, f.Writer.Attempts);
+    }
+
+    [Theory]
+    [InlineData("CONECTA", false)] [InlineData("ZIRIX", false)]
+    [InlineData("CONECTA", true)] [InlineData("ZIRIX", true)]
+    public async Task ItsGtfsFallbackAndRecovery_KeepNewestGpsAndPhysicalPredecessor(string provider, bool jump)
+    {
+        var primary = new ContinuitySnapshot(GpsSourceNames.ItsCurrent);
+        var support = new ContinuitySnapshot(GpsSourceNames.GtfsRealtimeBus);
+        var clock = new ContinuityClock();
+        var brt = new Source();
+        var resolver = new GpsSourceResolver([primary, support, brt], Options.Create(new GpsSourcesOptions
+        { BusPrimarySource = primary.Name, BusFallbackSource = support.Name, BrtPrimarySource = brt.Name }), clock);
+        using var f = new Fixture(GpsModalNames.Bus, false, 130, resolver: resolver);
+        clock.Now = f.First.TimestampGps;
+        using var collector = new GpsSppoCollectorService(resolver, f.Store, new CollectorMonitor(), NullLogger<GpsSppoCollectorService>.Instance);
+        async Task Cycle(int seconds, EnriquecimentoRotaDto? route = null)
+        {
+            f.Cache.Seconds = seconds; clock.Now = f.First.TimestampGps.AddSeconds(seconds);
+            await collector.ColetarUmaVezAsync(clock.Now);
+            await f.Poll(clock.Now, route);
+        }
+        primary.Position = f.First with { ProvedorFonte = provider };
+        await Cycle(0, f.Route(.1));
+        var first = Assert.Single(f.Writer.Accepted);
+        primary.Fail = true;
+        support.Position = f.First with { ProvedorFonte = "GTFSRT_BUS", TimestampGps = first.TimestampGps.AddSeconds(-1), Latitude = -23 };
+        await Cycle(10); // Older support cannot move the vehicle or reach CAS.
+        support.Position = support.Position with { TimestampGps = first.TimestampGps };
+        await Cycle(15); // Equal physical GPS with different coordinates is also ignored.
+        Assert.Single(f.Writer.Accepted); Assert.Equal(1, f.Writer.Attempts);
+        support.Position = f.Next with { ProvedorFonte = "GTFSRT_BUS", TimestampGps = first.TimestampGps.AddSeconds(45) };
+        await Cycle(45, f.Route(.11)); // Active expired; recent physical evidence remains.
+        var fallback = f.Writer.Accepted[1];
+        Assert.Equal(first.TimestampGps, fallback.TimestampAnterior);
+        Assert.Equal(first.Latitude, fallback.LatitudeAnterior);
+        Assert.Equal(first.Longitude, fallback.LongitudeAnterior);
+        Assert.True(fallback.TemHistorico); Assert.True(fallback.MatchingOperacionalPlausivel);
+        primary.Fail = false;
+        primary.Position = f.First with { ProvedorFonte = provider, TimestampGps = first.TimestampGps.AddSeconds(30), Latitude = -23 };
+        await Cycle(70); // First healthy ITS probe still uses GTFS-RT.
+        await Cycle(130); // Recovery to ITS with older GPS cannot regress accepted state.
+        Assert.Equal(2, f.Writer.Accepted.Count); Assert.Equal(2, f.Writer.Attempts);
+        primary.Position = f.Next with { ProvedorFonte = provider, Longitude = jump ? -44.2 : -43.1998 };
+        await Cycle(131, f.Route(.12));
+        var recovered = f.Writer.Accepted[2];
+        Assert.Equal(first.Ordem, recovered.Ordem);
+        Assert.Equal(fallback.TimestampGps, recovered.TimestampAnterior);
+        Assert.Equal(fallback.Latitude, recovered.LatitudeAnterior);
+        Assert.Equal(fallback.Longitude, recovered.LongitudeAnterior);
+        Assert.Equal(primary.Position.TimestampGps, recovered.TimestampGps);
+        Assert.Equal(!jump, recovered.PadraoVersaoId.HasValue);
+        Assert.Equal(!jump, recovered.MatchingOperacionalPlausivel);
+        await Cycle(132); // Repeated ITS observation after recovery creates no accepted event.
+        Assert.Equal(3, f.Writer.Accepted.Count); Assert.Equal(3, f.Writer.Attempts);
+        Assert.Equal(3, f.Writer.Accepted.Select(x => (x.Ordem, x.TimestampGps)).Distinct().Count());
+        Assert.Equal(jump ? 2 : 3, f.Trips.Calls);
+    }
+
+    private sealed class ContinuitySnapshot(string name) : ISnapshotGpsSource
+    {
+        public string Name => name;
+        public PosicaoVeiculoDto? Position;
+        public bool Fail;
+        public async Task<IReadOnlyList<GpsObservation>> GetPositionsAsync(CancellationToken ct) => (await GetResultAsync(ct)).Observations;
+        public Task<GpsSourceReadResult> GetResultAsync(CancellationToken ct) => Task.FromResult(new GpsSourceReadResult(
+            Fail ? StatusFonteGps.Falha : StatusFonteGps.Sucesso,
+            Fail || Position is null ? [] : [GpsObservationMapper.FromPosition(Position, Name, Position.ProvedorFonte!)], TimeSpan.Zero));
+    }
+    private sealed class ContinuityClock : TimeProvider
+    {
+        public DateTimeOffset Now;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+    private sealed class CollectorMonitor : IOptionsMonitor<GpsSppoCollectorOptions>
+    {
+        public GpsSppoCollectorOptions CurrentValue { get; } = new();
+        public GpsSppoCollectorOptions Get(string? name) => CurrentValue;
+        public IDisposable? OnChange(Action<GpsSppoCollectorOptions, string?> listener) => null;
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly ServiceProvider services = new ServiceCollection().AddLogging().AddSignalR().Services.BuildServiceProvider();
@@ -301,7 +406,8 @@ public sealed class GpsPhysicalPredecessorTests
         public PosicaoVeiculoDto First { get; }
         public PosicaoVeiculoDto Next { get; }
         private readonly string modal;
-        public Fixture(string modal, bool batch, int seconds, ExpiringCache? cache = null)
+        public GpsSppoSnapshotStore Store => store;
+        public Fixture(string modal, bool batch, int seconds, ExpiringCache? cache = null, IGpsSourceResolver? resolver = null)
         {
             this.modal = modal;
             Cache = cache ?? new();
@@ -314,7 +420,7 @@ public sealed class GpsPhysicalPredecessorTests
                 ModalFonte = modal, ProvedorFonte = modal == GpsModalNames.Brt ? "GTFSRT_BRT" : "GTFSRT_BUS" };
             Next = First with { Longitude = -43.1999, TimestampGps = now, TimestampServidor = now };
             Writer = new(Cache);
-            var resolver = new GpsSourceResolver([source], Options.Create(new GpsSourcesOptions
+            resolver ??= new GpsSourceResolver([source], Options.Create(new GpsSourcesOptions
                 { BusPrimarySource = source.Name, BrtPrimarySource = source.Name }));
             polling = new(store, Cache, services.GetRequiredService<IHubContext<GpsHub>>(),
                 NullLogger<GpsPollingService>.Instance, null!, services.GetRequiredService<IServiceScopeFactory>(),
@@ -333,12 +439,16 @@ public sealed class GpsPhysicalPredecessorTests
         };
         public async Task Cycle(PosicaoVeiculoDto p, EnriquecimentoRotaDto? route = null)
         {
-            if (route is not null) Matching.Respostas.Enqueue(route);
             source.Position = modal == GpsModalNames.Brt ? p : null;
             if (modal == GpsModalNames.Bus) await store.PublicarAsync(null, null, p.TimestampGps, p.TimestampGps, null, [p]);
+            await Poll(p.TimestampGps, route);
+        }
+        public async Task Poll(DateTimeOffset now, EnriquecimentoRotaDto? route = null)
+        {
+            if (route is not null) Matching.Respostas.Enqueue(route);
             var method = typeof(GpsPollingService).GetMethod("ProcessarCicloAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
             Assert.True(await ((Task<bool>)method.Invoke(polling,
-                [p.TimestampGps, options, Stopwatch.GetTimestamp(), null, CancellationToken.None])!).WaitAsync(TimeSpan.FromSeconds(5)));
+                [now, options, Stopwatch.GetTimestamp(), null, CancellationToken.None])!).WaitAsync(TimeSpan.FromSeconds(5)));
             Assert.Null(store.Ler());
         }
         public void Dispose() { polling.Dispose(); http.Dispose(); services.Dispose(); }

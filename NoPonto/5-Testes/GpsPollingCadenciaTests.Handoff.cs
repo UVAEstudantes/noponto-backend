@@ -15,6 +15,45 @@ namespace NoPonto.Tests;
 public sealed partial class GpsPollingCadenciaTests
 {
     [Theory]
+    [InlineData(null, true)]
+    [InlineData(GpsSourceNames.ZirixDirect, true)]
+    [InlineData(GpsSourceNames.GtfsRealtimeBus, true)]
+    [InlineData(null, false)]
+    [InlineData(GpsSourceNames.ZirixDirect, false)]
+    [InlineData(GpsSourceNames.GtfsRealtimeBus, false)]
+    public async Task ItsHandoff_WakesHealthyRestWithoutChangingFailureDelayOrAck(string? fallback, bool normal)
+    {
+        using var http = new HttpClient();
+        IGpsSource source = new ItsCurrentGpsSource(new GpsDatarioClient(http, NullLogger<GpsDatarioClient>.Instance),
+            Options.Create(new ItsCurrentOptions()), TimeProvider.System, NullLogger<ItsCurrentGpsSource>.Instance);
+        if (fallback is not null)
+        {
+            var options = new GtfsRealtimeGpsOptions { BusEnabled = true, CrosswalkValidated = true, BusSpeedUnit = GtfsSpeedUnit.KilometresPerHour };
+            IGpsSource support = fallback == GpsSourceNames.ZirixDirect
+                ? new ZirixGpsSource(new GpsSppoClient(http, NullLogger<GpsSppoClient>.Instance))
+                : new GtfsRealtimeGpsSource(GpsModalNames.Bus, new(http, new("https://fixture.invalid/"), options),
+                    new CadenceLookup(GpsModalNames.Bus), options, NullLogger<GtfsRealtimeGpsSource>.Instance);
+            source = new GpsSourceResolver([source, support], Options.Create(new GpsSourcesOptions
+            { BusPrimarySource = GpsSourceNames.ItsCurrent, BusFallbackSource = fallback })).GetPrimary("BUS");
+        }
+        var store = new GpsSppoSnapshotStore();
+        using var polling = CreateCadencePolling(source, store: store);
+        var clock = new HandoffTimerClock();
+        var wait = polling.AguardarProximoCicloAsync(TimeSpan.FromSeconds(20), normal, default, clock);
+        clock.Advance(15);
+        var batch = await PublishHandoff(store);
+        if (!normal)
+        {
+            Assert.False(wait.IsCompleted);
+            clock.Advance(5);
+        }
+        await wait.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(normal ? 15 : 20, clock.Seconds);
+        Assert.Same(batch, store.Ler()); Assert.Equal(0, clock.ActiveTimers);
+        Assert.True(store.Confirmar(batch.Geracao));
+    }
+
+    [Theory]
     [InlineData("LocalCache", 10)]
     [InlineData("NotModified", 30)]
     [InlineData("Downloaded", 30)]

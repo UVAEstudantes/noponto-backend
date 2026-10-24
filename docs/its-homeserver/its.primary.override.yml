@@ -1,0 +1,7 @@
+# Proposta local. Aplicar somente após autorização específica e publicação da imagem validada.
+# Último arquivo da composição já existente; não muda imagem, recursos ou outros serviços.
+services:
+  api:
+    environment:
+      GpsSources__BusPrimarySource: ITS_CURRENT
+      GpsSources__BusFallbackSource: GTFSRT_BUS

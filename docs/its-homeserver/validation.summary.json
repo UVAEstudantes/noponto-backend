@@ -1,0 +1,922 @@
+{
+  "scope": "Real ITS + GTFS-RT; disposable local PostGIS/Redis; real WebSocket; 838/898/006; no production writes",
+  "structure": {
+    "routes": 459,
+    "patterns": 873,
+    "occurrences": 53214,
+    "elapsed_ms": 107342.4162,
+    "source": "public GTFS; representative real trips; no synthetic geometry"
+  },
+  "configuration": {
+    "postgres": "guarded random loopback port/exclusive schema",
+    "redis": "guarded random loopback port",
+    "api": "http://127.0.0.1:59749",
+    "hub": "/hub/gps",
+    "bus": "ITS_CURRENT",
+    "fallback": "GTFSRT_BUS",
+    "polling_seconds": 20,
+    "active_ttl": 40,
+    "recent_ttl": 180,
+    "max_gps_age": 300,
+    "matching_batch": false,
+    "subscribers": 3,
+    "other_modals": "disabled only in this isolated host",
+    "external_eta": "disabled"
+  },
+  "its_complete_acquisitions": [
+    {
+      "status": "Sucesso",
+      "reason": null,
+      "pages": 9,
+      "windows": 3,
+      "records": 36523,
+      "rejected": 2950,
+      "duration": 17820.8458,
+      "vehicles": 3212,
+      "recent40": 1491,
+      "recent60": 2997,
+      "p50": 40.20686,
+      "p90": 55.20686,
+      "za": 2801,
+      "ca": 3126,
+      "zs": 2103,
+      "cs": 1109,
+      "ze": 86,
+      "ce": 411
+    },
+    {
+      "status": "Sucesso",
+      "reason": null,
+      "pages": 11,
+      "windows": 3,
+      "records": 44191,
+      "rejected": 8288,
+      "duration": 22574.1839,
+      "vehicles": 3217,
+      "recent40": 1013,
+      "recent60": 2945,
+      "p50": 44.8386266,
+      "p90": 59.8386266,
+      "za": 2802,
+      "ca": 3132,
+      "zs": 2035,
+      "cs": 1182,
+      "ze": 85,
+      "ce": 415
+    },
+    {
+      "status": "Sucesso",
+      "reason": null,
+      "pages": 10,
+      "windows": 3,
+      "records": 39925,
+      "rejected": 4383,
+      "duration": 16461.9845,
+      "vehicles": 3206,
+      "recent40": 881,
+      "recent60": 2859,
+      "p50": 45.0397768,
+      "p90": 60.0397768,
+      "za": 2789,
+      "ca": 3130,
+      "zs": 2121,
+      "cs": 1085,
+      "ze": 78,
+      "ce": 419
+    },
+    {
+      "status": "Sucesso",
+      "reason": null,
+      "pages": 6,
+      "windows": 3,
+      "records": 17512,
+      "rejected": 1407,
+      "duration": 8981.3307,
+      "vehicles": 3161,
+      "recent40": 677,
+      "recent60": 678,
+      "p50": 83.7775589,
+      "p90": 98.7775589,
+      "za": 2753,
+      "ca": 3033,
+      "zs": 2059,
+      "cs": 1102,
+      "ze": 128,
+      "ce": 408
+    }
+  ],
+  "its_total_observations": {
+    "records": 138151,
+    "rejected": 17028,
+    "vehicles": 12796,
+    "recent40": 4062,
+    "recent60": 9479
+  },
+  "phases": [
+    {
+      "phase": "injected_unavailable",
+      "elapsed_ms": 2595.0553,
+      "status": "Sucesso",
+      "count": 1946,
+      "sources": {
+        "GTFSRT_BUS": 1946
+      },
+      "generation": 3,
+      "ack": true,
+      "accepted": 1315,
+      "freshness": {
+        "count": 1946,
+        "until40": 526,
+        "until60": 1812,
+        "until180": 1945,
+        "future": 1
+      }
+    },
+    {
+      "phase": "injected_partial",
+      "elapsed_ms": 126.045,
+      "status": "Sucesso",
+      "count": 1946,
+      "sources": {
+        "GTFSRT_BUS": 1946
+      },
+      "generation": 4,
+      "ack": true,
+      "accepted": 0,
+      "freshness": {
+        "count": 1946,
+        "until40": 526,
+        "until60": 1812,
+        "until180": 1945,
+        "future": 1
+      }
+    },
+    {
+      "phase": "injected_timeout",
+      "elapsed_ms": 10105.4169,
+      "status": "Sucesso",
+      "count": 1946,
+      "sources": {
+        "GTFSRT_BUS": 1946
+      },
+      "generation": 5,
+      "ack": true,
+      "accepted": 0,
+      "freshness": {
+        "count": 1946,
+        "until40": 0,
+        "until60": 1256,
+        "until180": 1945,
+        "future": 1
+      }
+    },
+    {
+      "phase": "injected_both_fail",
+      "elapsed_ms": 12.6336,
+      "status": "Falha",
+      "count": 0,
+      "sources": {},
+      "generation": null,
+      "ack": false,
+      "accepted": 0,
+      "freshness": {
+        "count": 0,
+        "until40": 0,
+        "until60": 0,
+        "until180": 0,
+        "future": 0
+      }
+    },
+    {
+      "phase": "recovery_fallback",
+      "elapsed_ms": 90.9185,
+      "status": "Sucesso",
+      "count": 1946,
+      "sources": {
+        "GTFSRT_BUS": 1946
+      },
+      "generation": 6,
+      "ack": true,
+      "accepted": 0,
+      "freshness": {
+        "count": 1946,
+        "until40": 0,
+        "until60": 1256,
+        "until180": 1945,
+        "future": 1
+      }
+    },
+    {
+      "phase": "recovery_probe1",
+      "elapsed_ms": 19205.1401,
+      "status": "Sucesso",
+      "count": 1901,
+      "sources": {
+        "GTFSRT_BUS": 1901
+      },
+      "generation": 7,
+      "ack": true,
+      "accepted": 1901,
+      "freshness": {
+        "count": 1901,
+        "until40": 535,
+        "until60": 1774,
+        "until180": 1900,
+        "future": 1
+      }
+    },
+    {
+      "phase": "recovery_probe2",
+      "elapsed_ms": 12268.3117,
+      "status": "Sucesso",
+      "count": 3161,
+      "sources": {
+        "ITS_CURRENT": 3161
+      },
+      "generation": 8,
+      "ack": true,
+      "accepted": 3152,
+      "freshness": {
+        "count": 3161,
+        "until40": 674,
+        "until60": 677,
+        "until180": 3158,
+        "future": 0
+      }
+    }
+  ],
+  "identity_witnesses": [
+    {
+      "identity_overlap": 0,
+      "equal_gps_pairs": 0,
+      "same_service": 0,
+      "equal_gps_speed_kmh_matches": 0,
+      "equal_gps_coordinate_matches": 0,
+      "note": "aggregate observations only; physical time not receipt/header; ITS+GTFS samples at different instants"
+    },
+    {
+      "identity_overlap": 0,
+      "equal_gps_pairs": 0,
+      "same_service": 0,
+      "equal_gps_speed_kmh_matches": 0,
+      "equal_gps_coordinate_matches": 0,
+      "note": "aggregate observations only; physical time not receipt/header; ITS+GTFS samples at different instants"
+    },
+    {
+      "identity_overlap": 1868,
+      "equal_gps_pairs": 631,
+      "same_service": 1778,
+      "equal_gps_speed_kmh_matches": 623,
+      "equal_gps_coordinate_matches": 619,
+      "note": "aggregate observations only; physical time not receipt/header; ITS+GTFS samples at different instants"
+    },
+    {
+      "identity_overlap": 1868,
+      "equal_gps_pairs": 631,
+      "same_service": 1778,
+      "equal_gps_speed_kmh_matches": 623,
+      "equal_gps_coordinate_matches": 619,
+      "note": "aggregate observations only; physical time not receipt/header; ITS+GTFS samples at different instants"
+    },
+    {
+      "identity_overlap": 1868,
+      "equal_gps_pairs": 631,
+      "same_service": 1778,
+      "equal_gps_speed_kmh_matches": 623,
+      "equal_gps_coordinate_matches": 619,
+      "note": "aggregate observations only; physical time not receipt/header; ITS+GTFS samples at different instants"
+    },
+    {
+      "identity_overlap": 1868,
+      "equal_gps_pairs": 631,
+      "same_service": 1778,
+      "equal_gps_speed_kmh_matches": 623,
+      "equal_gps_coordinate_matches": 619,
+      "note": "aggregate observations only; physical time not receipt/header; ITS+GTFS samples at different instants"
+    },
+    {
+      "identity_overlap": 1826,
+      "equal_gps_pairs": 0,
+      "same_service": 1738,
+      "equal_gps_speed_kmh_matches": 0,
+      "equal_gps_coordinate_matches": 0,
+      "note": "aggregate observations only; physical time not receipt/header; ITS+GTFS samples at different instants"
+    },
+    {
+      "identity_overlap": 1824,
+      "equal_gps_pairs": 9,
+      "same_service": 1740,
+      "equal_gps_speed_kmh_matches": 9,
+      "equal_gps_coordinate_matches": 9,
+      "note": "aggregate observations only; physical time not receipt/header; ITS+GTFS samples at different instants"
+    }
+  ],
+  "gtfs_real_http": [
+    {
+      "utc": "2026-10-23T23:27:30.2510419+00:00",
+      "status": 200,
+      "retry_after": null,
+      "note": "real GET; no body/vehicle metadata emitted"
+    },
+    {
+      "utc": "2026-10-23T23:29:00.5170582+00:00",
+      "status": 200,
+      "retry_after": null,
+      "note": "real GET; no body/vehicle metadata emitted"
+    }
+  ],
+  "pipeline_totals": {
+    "entrada": 19275,
+    "validas": 19275,
+    "novas": 12602,
+    "enriquecimento_solicitado": 123,
+    "enriquecidas": 120,
+    "commits_tentados": 12602,
+    "commits_aceitos": 12602,
+    "commits_rejeitados": 0,
+    "commits_infra": 0,
+    "commit_lua_execucoes": 12602,
+    "viagem_infra": 0
+  },
+  "nonempty_poll_ms": [
+    3088,
+    1956,
+    1245,
+    106,
+    92,
+    68,
+    1662,
+    3279
+  ],
+  "stage_sums_ms": {
+    "matching_etapa_ms": 5251,
+    "commit_viagem_ms": 4332,
+    "redis_leitura_ms": 955,
+    "signalr_ms": 98
+  },
+  "evidence": [
+    {
+      "phase": "healthy_background",
+      "accepted": 6234,
+      "cas_attempts": 6234,
+      "accepted_unique": 3229,
+      "matched": 43,
+      "history": 3005,
+      "next_stop": 40,
+      "accepted_freshness_at_evidence": {
+        "count": 6234,
+        "until40": 1,
+        "until60": 1637,
+        "until180": 6206,
+        "future": 0
+      },
+      "accepted_until40_at_write": 2003,
+      "accepted_until60_at_write": 5806,
+      "accepted_until180_at_write": 6234,
+      "active_keys_sample": 44,
+      "recent_keys_sample": 50,
+      "active_ttl_max": 26.214,
+      "recent_ttl_max": 166.211,
+      "redis_keys": 9862,
+      "postgres": {
+        "ViagensOperacionais": 23,
+        "OutboxViagens": 31,
+        "EventosViagem": 31,
+        "HistoricoPassagens": 9
+      },
+      "wire_messages": 6,
+      "wire_empty_messages": 3,
+      "wire_items": 69,
+      "wire_unique": 23,
+      "wire_gps_regressions": 0,
+      "wire_equal_gps": 26,
+      "wire_active_older40": 54,
+      "wire_no_signal": 0,
+      "wire_until40": 15,
+      "wire_until60": 55,
+      "wire_until180": 69,
+      "wire_future": 0,
+      "note": "SignalR full snapshots may repeat unchanged vehicles; equal GPS is not a duplicate accepted event",
+      "outbox_completed": 31,
+      "outbox_failures": 0
+    },
+    {
+      "phase": "final",
+      "accepted": 12602,
+      "cas_attempts": 12602,
+      "accepted_unique": 3361,
+      "matched": 120,
+      "history": 8776,
+      "next_stop": 117,
+      "accepted_freshness_at_evidence": {
+        "count": 12602,
+        "until40": 674,
+        "until60": 677,
+        "until180": 5048,
+        "future": 0
+      },
+      "accepted_until40_at_write": 3785,
+      "accepted_until60_at_write": 9559,
+      "accepted_until180_at_write": 12598,
+      "active_keys_sample": 47,
+      "recent_keys_sample": 47,
+      "active_ttl_max": 39.106,
+      "recent_ttl_max": 179.105,
+      "redis_keys": 10123,
+      "postgres": {
+        "ViagensOperacionais": 35,
+        "OutboxViagens": 112,
+        "EventosViagem": 112,
+        "HistoricoPassagens": 78
+      },
+      "wire_messages": 27,
+      "wire_empty_messages": 3,
+      "wire_items": 315,
+      "wire_unique": 36,
+      "wire_gps_regressions": 0,
+      "wire_equal_gps": 192,
+      "wire_active_older40": 258,
+      "wire_no_signal": 17,
+      "wire_until40": 40,
+      "wire_until60": 217,
+      "wire_until180": 314,
+      "wire_future": 0,
+      "note": "SignalR full snapshots may repeat unchanged vehicles; equal GPS is not a duplicate accepted event",
+      "outbox_completed": 81,
+      "outbox_failures": 0
+    }
+  ],
+  "process": {
+    "elapsed_ms": 340381.7504,
+    "cpu_ms": 122218.75,
+    "working_set_bytes": 385359872,
+    "peak_working_set_bytes": 592117760,
+    "scope": "testhost including import/observers; containers excluded"
+  },
+  "isolation": {
+    "scope": "disposable",
+    "dedicated_network": true,
+    "network_internal": false,
+    "mounts": "tmpfs only",
+    "postgres_image": "sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5",
+    "redis_image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+    "preexisting_container_count": 4,
+    "ports": "random loopback only"
+  },
+  "teardown": {
+    "preexisting_unchanged": true,
+    "preexisting_count": 4,
+    "owned_containers_remaining": 0,
+    "owned_network_removed": true
+  },
+  "local_resource_samples": 25,
+  "local_resource_peaks": {
+    "postgis": {
+      "cpu_percent": 31.55,
+      "memory_bytes": 499331891
+    },
+    "redis": {
+      "cpu_percent": 33.51,
+      "memory_bytes": 15298723
+    }
+  },
+  "moving_units_witness": {
+    "kind": "gtfs_units_witness",
+    "its": 3189,
+    "gtfs": 2010,
+    "shared_identities": 1935,
+    "same_physical_gps_coordinates_moving": 500,
+    "raw_matches_kmh": 500,
+    "raw_times_3_6_matches_kmh": 0,
+    "confirmed": true,
+    "note": "non-zero speeds at same vehicle/physical timestamp/coordinate; aggregate only"
+  },
+  "tests": {
+    "integration.trx": {
+      "total": "1",
+      "executed": "1",
+      "passed": "1",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "homeserver-directed.trx": {
+      "total": "464",
+      "executed": "464",
+      "passed": "464",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "homeserver-offline.trx": {
+      "total": "1015",
+      "executed": "1015",
+      "passed": "1015",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    }
+  },
+  "hashes": {
+    "connected-run2\\integration.trx": "745cfdd5c7337e2fa0c1921218db35587ad400354e8cdd55d6e4eb3594a07b85",
+    "connected-run2\\observations.jsonl": "861dad32e19ea511f1546bee7d4c289a4f0b23be0329032cab7dad9dbbbaf85e",
+    "connected-run2\\isolation.json": "c52c6d5f5964f182eeff7e6d05df5cda58349794a9fa117cf82cb0898f087ac4",
+    "connected-run2\\teardown.json": "dd20a72d151e5dedacff6dd782e231c955618590cd77b1316e6ebea5a1a4cf21",
+    "connected-run2\\local-resources.jsonl": "9a9bd7eb2d9d240e3001cdb9d914aa3f86ed6d6ae7a6d8c35157199abc8e6aba",
+    "homeserver-gps-baseline.jsonl": "2802a01e8ec21f2939867f8e478c0f5f31a02445fc6aa38913a03691929fb779",
+    "homeserver-crosswalk.jsonl": "8dc5d2fd02e20bc231db34f64bbbab271a756b15ba3acf201c1da7f0dde53809",
+    "homeserver-final.jsonl": "e2006e0e7dcaf77340d5bedff8b3ace97b045960ddd64e0419eb258e09d95226",
+    "units-smoke.log": "517752606197cfc71f5398adc339562787d46aecb20430fc4682162ff405b4b5",
+    "homeserver-directed.trx": "d0bfda4d665f1e8f75da54a55dd55e232652efb280d08f53f95a75449c0a19af",
+    "homeserver-offline.trx": "b0992bfe91792aaa0d3848dcf2db65e28436e4dc02d7ea3b0b2b86e66eadc7a8",
+    "overrides-render.jsonl": "33d3834af7a7a46e4b3f8993f6282e023aa26fe9af0bf43723899e81c6ea7029",
+    "planned-window-syntax.json": "518861252c71437c0d1696f0e6ae1cefdd947eb6ac5d69f746092a46ed629017",
+    "crosswalk-probe.py": "df815b9f6016c1b1f965c414f5714c0e541c9dff3c893d6c29ebe69c8918a544",
+    "homeserver-its-network.jsonl": "57cc7fa0b3ef1c8c8c87b670982017e7a3ebf62f7b5b61351c6ce52103ceafc5"
+  },
+  "homeserver": [
+    {
+      "stage": "connection_configuration",
+      "value": {
+        "keys_only": [
+          "POSTGRES_DB",
+          "POSTGRES_HOST",
+          "POSTGRES_PASSWORD",
+          "POSTGRES_PORT",
+          "POSTGRES_USER",
+          "REDIS_HOST",
+          "REDIS_PORT"
+        ],
+        "render_matches_running": true,
+        "values": "omitted"
+      }
+    },
+    {
+      "stage": "proposed_render",
+      "value": {
+        "only_two_source_keys_change": true,
+        "other_services_unchanged": true,
+        "source": "ITS_CURRENT",
+        "fallback": "GTFSRT_BUS",
+        "current_image_preserved_for_render_only": true,
+        "applied": false
+      }
+    },
+    {
+      "stage": "compose",
+      "value": {
+        "files": [
+          "/opt/stacks/noponto/docker-compose.yml",
+          "/home/guilherme/noponto-release-artifacts/docker-compose.gtfsrt-production.proposed.yml",
+          "/home/guilherme/.noponto-deploy/physical-eta.override.yml",
+          "/home/guilherme/.noponto-deploy/historical-eta-shadow.override.yml"
+        ],
+        "project_directory": "/opt/stacks/noponto",
+        "env_file": "/opt/stacks/noponto/.env",
+        "image": "ghcr.io/guilhermedesales/noponto-api@sha256:5536a5a38ff3d17d6cf6d8c0aadb3654c284490c2b1c29c5861ad7bfc09a6022",
+        "rendered_image_matches": true,
+        "environment": {
+          "GpsPolling__VelocidadeMinimaBearingKmh": "3",
+          "GpsSources__BrtPrimarySource": "GTFSRT_BRT",
+          "GpsPolling__JanelaVelocidadeLeituras": "3",
+          "GpsPolling__IntervaloSegundos": "15",
+          "GpsPolling__TtlAtivoSegundos": "40",
+          "GPS_MATCHING_BATCH_ENABLED": "true",
+          "PhysicalEta__MaxAgeSeconds": "90",
+          "GpsPolling__TtlRecenteSegundos": "180",
+          "GtfsRealtimeGps__BusEnabled": "true",
+          "GpsPolling__MudancaOperacionalHabilitada": "false",
+          "GpsSppoCollector__OverlapSegundos": "10",
+          "GpsPolling__EnriquecerTodasLinhas": "true",
+          "GtfsRealtimeGps__BrtEnabled": "true",
+          "GpsMatching__CombinadoSetBasedEnabled": "true",
+          "ASPNETCORE_ENVIRONMENT": "Production",
+          "GpsSppoCollector__JanelaInicialSegundos": "20",
+          "GtfsRealtimeGps__BusSpeedUnit": "KilometresPerHour",
+          "GtfsRealtimeGps__BrtSpeedUnit": "KilometresPerHour",
+          "PhysicalEta__Enabled": "true",
+          "GpsSppoCollector__TimeoutSegundos": "90",
+          "GpsSppoCollector__MaxLagRecuperavelSegundos": "300",
+          "GpsSources__BusShadowSources__0": "DATARIO",
+          "GpsPolling__DistanciaMaximaRotaMetros": "250",
+          "GpsSources__BrtShadowSources__0": "DATARIO",
+          "GtfsRealtimeGps__CrosswalkValidated": "true",
+          "GpsPolling__VelocidadeMaximaKmh": "90",
+          "GpsPolling__MaxCiclosSemRota": "3",
+          "GtfsRealtimeGps__IntervalSeconds": "30",
+          "GpsPolling__GrauParalelismoViagemObservada": "4",
+          "GpsSources__BusPrimarySource": "GTFSRT_BUS",
+          "GpsPolling__GrauParalelismoEnriquecimento": "4",
+          "GpsPolling__TtlLinhaSegundos": "180",
+          "GpsSppoCollector__IntervaloEntreColetasSegundos": "10",
+          "GpsSppoCollector__CatchupChunkSegundos": "60",
+          "GpsPolling__MaxIdadeGpsSegundos": "300",
+          "GpsPolling__IntervaloBrtSegundos": "20"
+        },
+        "rendered_environment": {
+          "ASPNETCORE_ENVIRONMENT": "Production",
+          "GPS_MATCHING_BATCH_ENABLED": "true",
+          "GpsMatching__CombinadoSetBasedEnabled": "true",
+          "GpsPolling__DistanciaMaximaRotaMetros": "250",
+          "GpsPolling__EnriquecerTodasLinhas": "true",
+          "GpsPolling__GrauParalelismoEnriquecimento": "4",
+          "GpsPolling__GrauParalelismoViagemObservada": "4",
+          "GpsPolling__IntervaloBrtSegundos": "20",
+          "GpsPolling__IntervaloSegundos": "15",
+          "GpsPolling__JanelaVelocidadeLeituras": "3",
+          "GpsPolling__MaxCiclosSemRota": "3",
+          "GpsPolling__MaxIdadeGpsSegundos": "300",
+          "GpsPolling__MudancaOperacionalHabilitada": "false",
+          "GpsPolling__TtlAtivoSegundos": "40",
+          "GpsPolling__TtlLinhaSegundos": "180",
+          "GpsPolling__TtlRecenteSegundos": "180",
+          "GpsPolling__VelocidadeMaximaKmh": "90",
+          "GpsPolling__VelocidadeMinimaBearingKmh": "3",
+          "GpsSources__BrtPrimarySource": "GTFSRT_BRT",
+          "GpsSources__BrtShadowSources__0": "DATARIO",
+          "GpsSources__BusPrimarySource": "GTFSRT_BUS",
+          "GpsSources__BusShadowSources__0": "DATARIO",
+          "GpsSppoCollector__CatchupChunkSegundos": "60",
+          "GpsSppoCollector__IntervaloEntreColetasSegundos": "10",
+          "GpsSppoCollector__JanelaInicialSegundos": "20",
+          "GpsSppoCollector__MaxLagRecuperavelSegundos": "300",
+          "GpsSppoCollector__OverlapSegundos": "10",
+          "GpsSppoCollector__TimeoutSegundos": "90",
+          "GtfsRealtimeGps__BrtEnabled": "true",
+          "GtfsRealtimeGps__BrtSpeedUnit": "KilometresPerHour",
+          "GtfsRealtimeGps__BusEnabled": "true",
+          "GtfsRealtimeGps__BusSpeedUnit": "KilometresPerHour",
+          "GtfsRealtimeGps__CrosswalkValidated": "true",
+          "GtfsRealtimeGps__IntervalSeconds": "30",
+          "PhysicalEta__Enabled": "true",
+          "PhysicalEta__MaxAgeSeconds": "90"
+        },
+        "memory_bytes": 805306368,
+        "nano_cpus": 1000000000,
+        "pids_limit": 256,
+        "restarts": 0,
+        "oom_killed": false,
+        "started": "2026-10-23T03:12:49.749947831Z"
+      }
+    },
+    {
+      "stage": "host",
+      "value": {
+        "utc": "2026-10-23T23:31:21.581799+00:00",
+        "cpus": 4,
+        "load": [
+          0.53466796875,
+          0.6337890625,
+          0.70361328125
+        ],
+        "memory_kib": {
+          "MemTotal": 3919728,
+          "MemAvailable": 2246292,
+          "SwapTotal": 5192696,
+          "SwapFree": 4857592
+        }
+      }
+    },
+    {
+      "stage": "containers",
+      "value": [
+        {
+          "Name": "noponto_api",
+          "CPUPerc": "1.83%",
+          "MemUsage": "284.3MiB / 768MiB",
+          "MemPerc": "37.01%",
+          "PIDs": "30"
+        },
+        {
+          "Name": "transporte_redis",
+          "CPUPerc": "0.43%",
+          "MemUsage": "93.78MiB / 640MiB",
+          "MemPerc": "14.65%",
+          "PIDs": "6"
+        },
+        {
+          "Name": "transporte_postgres",
+          "CPUPerc": "100.26%",
+          "MemUsage": "890.5MiB / 3.738GiB",
+          "MemPerc": "23.26%",
+          "PIDs": "12"
+        },
+        {
+          "Name": "auth_api",
+          "CPUPerc": "0.10%",
+          "MemUsage": "189.8MiB / 3.738GiB",
+          "MemPerc": "4.96%",
+          "PIDs": "42"
+        },
+        {
+          "Name": "auth_postgres",
+          "CPUPerc": "0.00%",
+          "MemUsage": "42.49MiB / 3.738GiB",
+          "MemPerc": "1.11%",
+          "PIDs": "16"
+        },
+        {
+          "Name": "auth_redis",
+          "CPUPerc": "0.40%",
+          "MemUsage": "11.19MiB / 3.738GiB",
+          "MemPerc": "0.29%",
+          "PIDs": "6"
+        },
+        {
+          "Name": "portainer",
+          "CPUPerc": "0.00%",
+          "MemUsage": "23.22MiB / 3.738GiB",
+          "MemPerc": "0.61%",
+          "PIDs": "7"
+        },
+        {
+          "Name": "dozzle",
+          "CPUPerc": "0.20%",
+          "MemUsage": "21.99MiB / 3.738GiB",
+          "MemPerc": "0.57%",
+          "PIDs": "10"
+        }
+      ]
+    },
+    {
+      "stage": "database_binding",
+      "value": {
+        "database_matches_api": true,
+        "host_matches_postgres_container": true,
+        "credentials": "never emitted",
+        "transaction": "READ ONLY"
+      }
+    },
+    {
+      "stage": "structure",
+      "value": [
+        {
+          "route_ids": 494,
+          "distinct_route_ids": 494,
+          "lines": 494,
+          "agency_ids": 344,
+          "origin_ids": 344
+        }
+      ]
+    },
+    {
+      "stage": "schema",
+      "value": [
+        {
+          "migrations": 24,
+          "latest": "20261023014903_FormaPagamentoAparencia"
+        }
+      ]
+    },
+    {
+      "stage": "line_baseline",
+      "value": {
+        "line": "838",
+        "vehicles": 18,
+        "until40": 0,
+        "until60": 4,
+        "until180": 18,
+        "future": 0,
+        "max_age": 91.511314
+      }
+    },
+    {
+      "stage": "line_baseline",
+      "value": {
+        "line": "898",
+        "vehicles": 11,
+        "until40": 0,
+        "until60": 3,
+        "until180": 11,
+        "future": 0,
+        "max_age": 84.514897
+      }
+    },
+    {
+      "stage": "line_baseline",
+      "value": {
+        "line": "006",
+        "vehicles": 1,
+        "until40": 0,
+        "until60": 0,
+        "until180": 1,
+        "future": 0,
+        "max_age": 79.51713
+      }
+    }
+  ],
+  "crosswalk_exact": [
+    {
+      "rows": 494,
+      "bus_valid": 312,
+      "brt_valid": 32,
+      "unvalidated": 150,
+      "without_directions": 0,
+      "focus": [
+        {
+          "code": "006",
+          "validated": true,
+          "brt": false,
+          "directions": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "code": "838",
+          "validated": true,
+          "brt": false,
+          "directions": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "code": "898",
+          "validated": true,
+          "brt": false,
+          "directions": [
+            "0",
+            "1"
+          ]
+        }
+      ]
+    }
+  ],
+  "proposed_overrides": [
+    {
+      "stage": "actual_override_render",
+      "value": {
+        "file": "its.primary.override.yml",
+        "only_two_bus_keys": true,
+        "applied": false
+      }
+    },
+    {
+      "stage": "actual_override_render",
+      "value": {
+        "file": "gtfs.rollback.override.yml",
+        "only_two_bus_keys": true,
+        "applied": false
+      }
+    }
+  ],
+  "planned_shell_syntax": {
+    "exit": 0,
+    "diagnostics": false,
+    "transport": "LF bytes",
+    "execution": "bash -n only",
+    "code_sha256": "2582c9d10735bed4fc0d06d4433e98dab7987879fcd5c5a7c70cbbb1c028245f"
+  },
+  "production_runtime_preserved": {
+    "image": true,
+    "started": true,
+    "restarts": true,
+    "source": true
+  },
+  "homeserver_its_network": [
+    {
+      "scope": "homeserver host only; public read-only single GET; no backend publication",
+      "http": 200,
+      "bytes": 729,
+      "seconds": 7.023,
+      "rows": 1,
+      "provider_status": {
+        "conecta": "ok",
+        "zirix": "ok"
+      },
+      "cursor_present": true,
+      "container_tls": "not independently exercised"
+    }
+  ]
+}

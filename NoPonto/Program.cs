@@ -272,7 +272,7 @@ builder.Services.AddHttpClient<GpsBrtClient>(client =>
         System.Net.DecompressionMethods.Brotli
 });
 
-// Data.Rio agregada — cliente isolado de diagnóstico; não participa do polling operacional.
+// Shared Data.Rio contract. ITS_CURRENT opts into bounded acquisition; DATARIO keeps its legacy path.
 builder.Services.AddHttpClient<GpsDatarioClient>(client =>
 {
     client.BaseAddress = new Uri("https://its.mobilidade.rio/");
@@ -290,6 +290,12 @@ builder.Services
 builder.Services.AddSingleton<ZirixGpsSource>();
 builder.Services.AddSingleton<BrtCurrentGpsSource>();
 builder.Services.AddSingleton<DatarioGpsSource>();
+builder.Services.AddOptions<ItsCurrentOptions>()
+    .Bind(builder.Configuration.GetSection(ItsCurrentOptions.Section))
+    .Validate(o => o.IsValid(), "Invalid ITS acquisition limits.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<ItsCurrentGpsSource>();
+builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<ItsCurrentGpsSource>());
 builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<ZirixGpsSource>());
 builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<BrtCurrentGpsSource>());
 builder.Services.AddSingleton<IGpsSource>(sp => sp.GetRequiredService<DatarioGpsSource>());

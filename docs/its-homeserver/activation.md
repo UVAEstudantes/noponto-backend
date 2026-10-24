@@ -1,0 +1,115 @@
+# Janela controlada ITS + GTFS-RT — 23/10/2026
+
+**Proposta para aprovação; nenhuma mudança produtiva executada.** Fallback completo, sem complementação por veículo. Esta janela não exige benchmark de 459 assinaturas. Primeiro aprovar/publicar o binário validado e depois testar a configuração, com uma única API e rollback GTFS-RT pronto.
+
+## Inspeção efetiva, somente leitura
+
+SSH via agente, host verificado. Projeto `noponto`, serviço `api`, container `noponto_api`, uma instância. Composição efetiva:
+
+1. `/opt/stacks/noponto/docker-compose.yml`
+2. `/home/guilherme/noponto-release-artifacts/docker-compose.gtfsrt-production.proposed.yml`
+3. `/home/guilherme/.noponto-deploy/physical-eta.override.yml`
+4. `/home/guilherme/.noponto-deploy/historical-eta-shadow.override.yml`
+
+Diretório `/opt/stacks/noponto`, env `/opt/stacks/noponto/.env`. O render com um quinto arquivo em stdin comprovou que a proposta altera **somente as duas chaves de fonte BUS**; imagem, recursos e demais serviços ficaram iguais. Render não foi aplicado. O binário atualmente implantado não é apresentado como contendo ITS.
+
+Fonte atual `GTFSRT_BUS`; BRT `GTFSRT_BRT`. Opt-ins BUS/BRT/crosswalk GTFS já `true`, velocidades `KilometresPerHour`, aquisição GTFS 30 s. Polling 15 s, coletor 10 s após aquisição, TTL ativo/recente 40/180 s. `EnriquecerTodasLinhas=true`, matching batch e combinado set-based ativos. Manter essas opções; não desligar enriquecimento nem ajustar TTLs para fazer a janela passar.
+
+Host: quatro CPUs, 3.738 GiB de RAM; ~2,15–2,19 GiB disponíveis nas amostras. API limitada a uma CPU/768 MiB/256 PIDs, sem OOM/restarts. Amostras API 275–285 MiB e 5,26–103,89% CPU; PostgreSQL 898–903 MiB e 4,21–91,97%; Redis ~97 MiB/640 MiB e 1,06–28,21%. Percentual próximo de 100 é uma CPU; são amostras, não médias/capacidade garantida. Swap já utilizada ~325 MiB, sem atribuir seu uso a ITS.
+
+Crosswalk consultado com **a mesma SQL do adaptador**, em transação READ ONLY, statement timeout 3 s e lock timeout 500 ms: 494 identidades únicas, 312 BUS e 32 BRT validadas, 150 sem validação modal; todas com direções cadastradas. 838, 898 e 006 são BUS validadas nas direções 0/1. As 150 identidades permanecem recusadas pelo GTFS-RT, como hoje; a flag global não torna todas as linhas elegíveis. Não corrigir/importar dados estruturais durante a janela. Schema tem 24 migrations, última `20261023014903_FormaPagamentoAparencia`; esta revisão não cria migration.
+
+Baseline dos logs, janela limitada a 10 min/12.000 linhas: 48 ciclos completos, p95 11,822 s, máximo 13,424 s; matching p95 7,513 s; zero falhas CAS/viagem/crosswalk/timeout nos agregados. Leituras REST em instantes diferentes: 838 com 17–18 veículos, 898 com 12–13 e 006 com um. O frescor já oscila: na 838, 0–11 até60 s por amostra; até234,8 s no veículo mais antigo observado. Usar baseline imediatamente anterior à ativação, não esses números como SLA permanente.
+
+## Publicação do binário, após autorização específica
+
+O código/testes estão na branch de trabalho; falta a autorização para push/merge/publicação/deploy. Obter o digest imutável da **mesma revisão testada** no pipeline aprovado, sem usar `latest`. Registrar commit, digest, origem do build e imagem anterior. Não escolher uma tag de data parecida como prova de revisão.
+
+O `.deploy/deploy-api.sh` atual exige BUS=GTFSRT_BUS. **Não remover esse guard.** A sequência recomendada é publicar/implantar primeiro o binário novo com as quatro composições e GTFS-RT atual, pelo mecanismo existente. Conferir health e GPS antes da janela ITS. Assim, o teste de fonte usa a imagem já implantada e seu rollback por configuração é imediato. Se esse deploy não passar, usar o rollback de imagem já existente; não iniciar ITS.
+
+Somente após essa autorização e implantação, colocar os dois pequenos overrides desta pasta em diretório privado do operador, por exemplo `/home/guilherme/.noponto-deploy/its-window`. Não modificar os quatro arquivos efetivos, `.env`, bancos, Redis, BRT ou limites de recursos. Antes de mudar a fonte, observar por2min as mesmas linhas no aplicativo/SignalR ainda em GTFS-RT, para obter um baseline comparável com as assinaturas abertas.
+
+## Troca de fonte e rollback — terminal supervisionado
+
+Comandos abaixo são **futuros**, executados no homeserver após autorização. O operador deve manter o lock durante a janela e supervisionar os critérios de interrupção. Não executar outro deploy em paralelo; nenhuma segunda API, processo de laboratório ou fonte shadow deve escrever no Redis produtivo.
+
+```bash
+set -Eeuo pipefail
+umask 077
+state=/home/guilherme/.noponto-deploy
+trial=$state/its-window
+exec 9>"$state/deploy.lock"
+flock -n 9 || { echo 'Outro deploy em andamento'; exit 1; }
+export GTFSRT_API_IMAGE
+GTFSRT_API_IMAGE=$(docker inspect --format '{{.Config.Image}}' noponto_api)
+[[ $GTFSRT_API_IMAGE =~ ^ghcr\.io/guilhermedesales/noponto-api@sha256:[a-f0-9]{64}$ ]]
+# Conferir esse digest com a revisão ITS aprovada, já implantada em modo GTFS.
+base=(docker compose --project-name noponto --project-directory /opt/stacks/noponto
+  --env-file /opt/stacks/noponto/.env
+  -f /opt/stacks/noponto/docker-compose.yml
+  -f /home/guilherme/noponto-release-artifacts/docker-compose.gtfsrt-production.proposed.yml
+  -f "$state/physical-eta.override.yml"
+  -f "$state/historical-eta-shadow.override.yml")
+test -r "$trial/its.primary.override.yml"
+test -r "$trial/gtfs.rollback.override.yml"
+
+switch_source() {
+  local override=$1 running
+  "${base[@]}" -f "$override" stop --timeout 30 api || return 1
+  # Uma API antiga ainda em execução impede iniciar outra escritora.
+  running=$(docker ps -q --filter label=com.docker.compose.project=noponto --filter label=com.docker.compose.service=api) || return 1
+  test -z "$running" || return 1
+  "${base[@]}" -f "$override" up -d --no-deps --no-build --pull never api
+}
+rollback() { switch_source "$trial/gtfs.rollback.override.yml"; }
+# Em erro, saída ou interrupção, voltar uma vez a GTFS, mantendo o lock.
+armed=1
+finish() {
+  local rc=$?
+  trap - EXIT HUP INT TERM
+  if [[ $armed == 1 ]]; then
+    if ! rollback; then echo 'ROLLBACK FALHOU: intervenção necessária' >&2; rc=1; fi
+  fi
+  exit "$rc"
+}
+trap finish EXIT
+trap 'exit 130' HUP INT TERM
+switch_source "$trial/its.primary.override.yml"
+
+# Conferir HTTP, origem no log, snapshot/ACK, CAS e socket; HTTP sozinho não aprova GPS.
+curl --fail --silent --output /dev/null --connect-timeout 2 --max-time 5 http://127.0.0.1:8080/
+docker stats --no-stream noponto_api transporte_postgres transporte_redis auth_api
+# Executar as sondas de leitura descritas abaixo durante até10 minutos.
+# Ao final do primeiro ensaio, retornar a GTFS, salvo nova aprovação explícita de permanência:
+rollback
+armed=0
+trap - EXIT HUP INT TERM
+# Liberar o lock apenas após conferir GTFS ativo/health/GPS e nenhuma API duplicada.
+```
+
+Antes do `switch_source`, renderizar em memória baseline, candidata e rollback e comparar: candidata deve diferir apenas nas duas chaves BUS; rollback deve retornar GTFSRT_BUS/fallback vazio. Conferir os opt-ins GTFS atuais, os quatro paths, imagem e limites. Não imprimir `compose config` nem ambientes completos, pois contêm segredos. O teste de render só prova a configuração; boot da imagem e disponibilidade dos feeds são etapas distintas. A ferramenta `tools/gps/inspect_its_homeserver.py` faz o render proposto sem gravar/aplicar configuração.
+
+O bloco mostra os comandos, não automatiza a observação. Não colar o bloco completo e considerar isso um ensaio de 10 min: manter o terminal aberto entre ativação e rollback. Em encerramento brusco/queda do SSH, SIGKILL ou daemon indisponível, a trap não é garantia; manter acesso alternativo e o comando `rollback` pronto. Para retorno emergencial em outro terminal, reconstruir `base` com os mesmos paths e digest aprovado e usar o override GTFS, parando API antes de recriar. Nenhum `down`, `prune`, `rm` de cache ou restart de dependências.
+
+O próximo deploy automático com os quatro arquivos volta à política GTFS. Durante o ensaio o lock impede concorrência; para permanência ITS depois do ensaio é necessária decisão/configuração operacional adicional. Não alterar silenciosamente o contrato do deploy nesta etapa.
+
+## Observação e condições de interrupção
+
+Antes da troca e a cada ~30 s, observar 838, 898 e 006 no aplicativo conectado a `/hub/gps`, com uma inscrição por linha. Registrar somente agregados: veículos únicos, até40/60/180 s de GPS físico, regressões/duplicatas na mesma lista, status ativo/sem sinal e próxima parada. REST auxilia baseline; não substitui confirmação do socket. Não abrir um segundo backend apontando para o Redis produtivo.
+
+Usar as métricas já emitidas para aquisição/completude, fonte efetiva, duração, geração/ACK, entrada/válidas/novas, CAS aceito/rejeitado/infra, matching, viagens e publicações. `tools/gps/inspect_its_homeserver.py` e `docs/00-auditoria/gps-readonly-probe.py` podem ser transmitidos por stdin ao Python remoto, sem instalar/escrever scripts no servidor; filtram dados sensíveis. CPU/RAM de todos os serviços e HTTP da autenticação também precisam acompanhamento pelo operador. Não forçar falhas no provedor/infraestrutura produtiva.
+
+Interromper e voltar a GTFS se ocorrer qualquer um:
+
+- OOM/restart da API, falha de boot/HTTP persistente por30 s, regressão de GPS aceito/publicado, identidade duplicada na mesma lista ou coordenada inválida aceita.
+- Três ciclos consecutivos acima24 s (aprox. duas vezes o p95 anterior), um ciclo acima60 s, ou geração pendente sem ACK por90 s.
+- Duas falhas consecutivas de ambas as fontes, falha CAS de infraestrutura recorrente em dois ciclos, ou fallback contínuo por5 min. Uma falha ITS com fallback saudável é comportamento previsto, não perda de ônibus.
+- Memória API acima90% de768 MiB por60 s, RAM disponível do host abaixo512 MiB por60 s, aumento rápido de swap, ou CPU saturada com degradação dos demais serviços. A API já pode atingir100% de uma CPU em picos; não tratar um pico isolado como falha.
+- Na 838/898 com baseline de pelo menos cinco veículos, queda de quantidade maior30% junto com queda de pelo menos20 pontos percentuais na fração até60 s por três observações consecutivas. Mais da metade dos itens publicados acima180 s em três observações também interrompe; não aumentar TTLs para mascarar isso.
+- Autenticação ou BRT apresenta erros/latência maior que duas vezes o baseline por60 s, ou qualquer efeito nos outros serviços. Interromper mesmo que ITS esteja adquirindo mais veículos.
+
+O primeiro erro ITS pode consumir até90 s antes de consultar o suporte, cujo deadline externo padrão é10 s; há risco transitório de `SemSinal`. ITS saudável pode entregar menos GPS até40 s em alguns ciclos. Ambas as fontes podem compartilhar falhas de infraestrutura do fornecedor; fallback não é redundância independente garantida. Os filtros de timestamp, matching e retenção continuam obrigatórios. Não esperar que toda posição adquirida apareça nas linhas observadas.
+
+## Decisão e evidências
+
+Os resultados finais do ensaio conectado, testes e hashes estão no [relatório desta continuação](validation.md). Prontidão funcional é diferente de autorização: a janela só começa após aprovação específica do artefato e da mudança produtiva. Não foi feito push, merge, deploy, aplicação de override ou escrita/migration/limpeza de dados produtivos.

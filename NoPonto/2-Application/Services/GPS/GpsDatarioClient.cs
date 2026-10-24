@@ -22,7 +22,7 @@ public sealed record GpsDatarioCollection(
     TimeSpan Duration,
     IReadOnlyDictionary<string, string> ProvidersStatus);
 
-public sealed class GpsDatarioClient(HttpClient http, ILogger<GpsDatarioClient> logger)
+public sealed partial class GpsDatarioClient(HttpClient http, ILogger<GpsDatarioClient> logger)
 {
     public const string Endpoint = "v1/geolocalizacao/veiculos";
     private static readonly TimeSpan MinimumPageInterval = TimeSpan.FromMilliseconds(200);
