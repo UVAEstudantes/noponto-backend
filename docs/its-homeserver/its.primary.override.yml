@@ -5,3 +5,4 @@ services:
     environment:
       GpsSources__BusPrimarySource: ITS_CURRENT
       GpsSources__BusFallbackSource: GTFSRT_BUS
+      GpsSources__BusSupportMode: Hybrid

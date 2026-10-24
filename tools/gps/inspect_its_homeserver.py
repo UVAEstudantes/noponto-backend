@@ -48,7 +48,8 @@ try:
         "render_matches_running": all(candidate.get("environment", {}).get(k) == environment[k] for k in connection_keys),
         "values": "omitted"})
     override = {"services": {"api": {"environment": {
-        "GpsSources__BusPrimarySource": "ITS_CURRENT", "GpsSources__BusFallbackSource": "GTFSRT_BUS"}}}}
+        "GpsSources__BusPrimarySource": "ITS_CURRENT", "GpsSources__BusFallbackSource": "GTFSRT_BUS",
+        "GpsSources__BusSupportMode": "Hybrid"}}}}
     desired = json.loads(run(command + ["-f", "-", "config", "--format", "json"], stdin=json.dumps(override), timeout=30,
                             env=dict(os.environ, GTFSRT_API_IMAGE=api["Config"]["Image"])))
     normalized = copy.deepcopy(desired)
@@ -58,7 +59,7 @@ try:
         else:
             normalized["services"]["api"]["environment"].pop(key, None)
     assert normalized == rendered
-    emit("proposed_render", {"only_two_source_keys_change": True, "other_services_unchanged": True,
+    emit("proposed_render", {"only_three_bus_source_keys_change": True, "other_services_unchanged": True,
                              "source": "ITS_CURRENT", "fallback": "GTFSRT_BUS", "current_image_preserved_for_render_only": True,
                              "applied": False})
     emit("compose", {"files": files, "project_directory": directory, "env_file": env_file,

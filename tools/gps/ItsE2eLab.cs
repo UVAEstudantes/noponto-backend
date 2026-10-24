@@ -65,6 +65,8 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         {
             await h.LiveLoops(TimeSpan.FromSeconds(65), ct);
             await h.Evidence("healthy_background", ct);
+            Assert.True(h.HealthyHybrid898, "No real GTFS-only 898 observation reached a healthy hybrid snapshot.");
+            Assert.True(h.HealthyHybridIts, "No ITS contribution reached a healthy hybrid snapshot.");
 
             foreach (var failure in new[] { "unavailable", "partial", "timeout", "both_fail" })
             {
@@ -85,7 +87,8 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
             await Task.Delay(TimeSpan.FromSeconds(61), ct);
             var probe2 = await h.Cycle("recovery_probe2", ct);
             Assert.Equal(StatusFonteGps.Sucesso, probe2.Status);
-            Assert.True(probe2.Posicoes.All(x => x.ObservacaoEstrutural?.Source == GpsSourceNames.ItsCurrent));
+            Assert.Contains(probe2.Posicoes,x=>x.ObservacaoEstrutural?.Source==GpsSourceNames.ItsCurrent);
+            Assert.Contains(probe2.Posicoes,x=>x.CodigoLinha=="898" && x.ObservacaoEstrutural?.Source==GpsSourceNames.GtfsRealtimeBus);
             await h.Evidence("final", ct);
             Assert.True(h.Acquisitions.Any(x => x.Source == GpsSourceNames.ItsCurrent && x.Count > 0), "No complete real ITS snapshot reached the collector.");
             Assert.True(h.Acquisitions.Any(x => x.Source == GpsSourceNames.GtfsRealtimeBus && x.Count > 0), "No real GTFS-RT snapshot reached the collector.");
@@ -180,7 +183,7 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
             var fields = pairs.ToDictionary(x => x.Key, x => x.Value is Enum e ? e.ToString() : x.Value);
             // Only known aggregate events. Never serialize arbitrary logger/vehicle payloads.
             if (fields.ContainsKey("linhas_publicadas") || (stage == "acquisition" && fields.ContainsKey("records"))
-                || (stage == "selection" && fields.ContainsKey("active_source"))
+                || (stage == "selection" && (fields.ContainsKey("active_source") || fields.ContainsKey("selected")))
                 || (stage == "gtfs" && (fields.ContainsKey("promoted") || fields.ContainsKey("acquisition")))
                 || (stage == "polling" && fields.ContainsKey("generation")))
             { fields.Remove("{OriginalFormat}"); ItsRecord(stage, fields); }
@@ -194,9 +197,12 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         public async Task<GpsSourceReadResult> GetResultAsync(CancellationToken ct)
         {
             var read = await inner.GetResultAsync(ct);
-            var source = read.Observations.FirstOrDefault()?.Source ?? "none";
-            owner.Acquisitions.Add((source, read.Observations.Count));
-            owner.CompareFeeds(read);
+            var source = "hybrid";
+            if (owner.ItsFault.Mode=="healthy" && owner.GtfsFault.Mode=="healthy")
+            {
+                owner.HealthyHybrid898 |= read.Observations.Any(x=>x.ServiceCode=="898" && x.Source==GpsSourceNames.GtfsRealtimeBus);
+                owner.HealthyHybridIts |= read.Observations.Any(x=>x.Source==GpsSourceNames.ItsCurrent);
+            }
             ItsRecord("handoff_input", new { utc = DateTimeOffset.UtcNow, source, status = read.Status.ToString(),
                 elapsed_ms = read.Duration.TotalMilliseconds,
                 freshness = Fresh(read.Observations.Select(x => GpsObservationMapper.ToPosition(x, "ONIBUS"))) });
@@ -237,6 +243,7 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
         public int WireItems, WireRegressions, WireEqualGps, WireActiveOlder40, WireNoSignal;
         private Dictionary<string, GpsObservation> latestIts = new(StringComparer.OrdinalIgnoreCase), latestGtfs = new(StringComparer.OrdinalIgnoreCase);
         public int IdentityOverlap, EqualPhysicalPairs, EqualPhysicalSpeedMatches, EqualPhysicalCoordinateMatches;
+        public bool HealthyHybrid898, HealthyHybridIts;
         private readonly Dictionary<string, DateTimeOffset> wireLatest = new(StringComparer.OrdinalIgnoreCase);
         private readonly long[] wireAges = new long[4];
         private bool running;
@@ -251,7 +258,7 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
                 new(gtfsHttp, new("https://dados.mobilidade.rio/gtfs/realtime/onibus/vehicle-positions"), gtfsOptions),
                 new GtfsRealtimeRouteLookup(resources.Db.Source), gtfsOptions, new ItsAggregateLog<GtfsRealtimeGpsSource>("gtfs"));
             gtfs.RequireOperational(GpsModalNames.Bus);
-            gtfsSupport = new ItsControlledSupport(gtfs, GtfsFault);
+            gtfsSupport = new ItsInputRecordingSource(new ItsControlledSupport(gtfs, GtfsFault), this);
             noEtaHttp = new() { BaseAddress = new("http://127.0.0.1:1/") };
             options = new();
             // Read only the non-secret polling section; no .env or application startup.
@@ -271,16 +278,17 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
                 new ViagemObservadaService(Trips, NullLogger<ViagemObservadaService>.Instance, Options.Create(options)));
             wireReader = ObserveWire();
             ItsRecord("configuration", new { postgres = "guarded random loopback port/exclusive schema", redis = "guarded random loopback port",
-                api = app.Urls.Single(), hub = "/hub/gps", bus = "ITS_CURRENT", fallback = "GTFSRT_BUS", polling_seconds = options.IntervaloSegundos,
+                api = app.Urls.Single(), hub = "/hub/gps", bus = "ITS_CURRENT", fallback = "GTFSRT_BUS", support_mode="Hybrid", polling_seconds = options.IntervaloSegundos,
                 active_ttl = options.TtlAtivoSegundos, recent_ttl = options.TtlRecenteSegundos, max_gps_age = options.MaxIdadeGpsSegundos,
                 matching_batch = false, subscribers = lines.Count, other_modals = "disabled only in this isolated host", external_eta = "disabled" });
         }
         private IGpsSourceResolver Resolver()
         {
-            var primary = new ItsCurrentGpsSource(new(itsHttp, NullLogger<GpsDatarioClient>.Instance), Options.Create(new ItsCurrentOptions()), TimeProvider.System,
-                new ItsAggregateLog<ItsCurrentGpsSource>("acquisition"));
+            var primary = new ItsInputRecordingSource(new ItsCurrentGpsSource(new(itsHttp, NullLogger<GpsDatarioClient>.Instance), Options.Create(new ItsCurrentOptions()), TimeProvider.System,
+                new ItsAggregateLog<ItsCurrentGpsSource>("acquisition")), this);
             var real = new GpsSourceResolver([primary, gtfsSupport], Options.Create(new GpsSourcesOptions
-            { BusPrimarySource = GpsSourceNames.ItsCurrent, BusFallbackSource = GpsSourceNames.GtfsRealtimeBus }), TimeProvider.System,
+            { BusPrimarySource = GpsSourceNames.ItsCurrent, BusFallbackSource = GpsSourceNames.GtfsRealtimeBus,
+                BusSupportMode=GpsBusSupportMode.Hybrid }), TimeProvider.System,
                 new ItsAggregateLog<GpsSourceResolver>("selection"));
             return new ItsResolver(new ItsRecordingSource((ISnapshotGpsSource)real.GetPrimary("BUS"), this), new ItsNoBrt());
         }
@@ -302,7 +310,9 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
             var lines = await scope.ServiceProvider.GetRequiredService<TransporteDbContext>().Linhas.Where(x => x.Codigo != "VIAGEM3").Select(x => x.Codigo).ToListAsync(ct);
             var maximum = int.Parse(Environment.GetEnvironmentVariable("NOPONTO_ITS_E2E_SUBSCRIBED_LINES") ?? "1");
             Assert.InRange(maximum, 1, 459);
-            var subscribed = lines.OrderBy(x => x == "838" ? 0 : x == "898" ? 1 : 2).ThenBy(x => x, StringComparer.Ordinal).Take(maximum).ToList();
+            var cohort=new[]{"838","898","006","457","483","355","805"};
+            var subscribed = lines.OrderBy(x => Array.IndexOf(cohort,x) is var index && index>=0?index:cohort.Length)
+                .ThenBy(x => x, StringComparer.Ordinal).Take(maximum).ToList();
             var wire = await WireClient.Connect(app.Urls.Single());
             foreach (var line in subscribed) await wire.Invoke("InscreverseLinha", line);
             return new(resources, app, wire, subscribed);
@@ -408,6 +418,16 @@ public sealed partial class GpsPipelineDisposableIntegrationTests
             wireStop.Cancel(); await wireReader; await wire.DisposeAsync();
             collector.Dispose(); polling.Dispose(); itsHttp.Dispose(); gtfsHttp.Dispose(); noEtaHttp.Dispose();
             await app.StopAsync(); await app.DisposeAsync(); wireStop.Dispose();
+        }
+    }
+    private sealed class ItsInputRecordingSource(ISnapshotGpsSource inner, ItsLiveHarness owner):ISnapshotGpsSource
+    {
+        public string Name=>inner.Name;
+        public async Task<IReadOnlyList<GpsObservation>> GetPositionsAsync(CancellationToken ct)=>(await GetResultAsync(ct)).Observations;
+        public async Task<GpsSourceReadResult> GetResultAsync(CancellationToken ct)
+        {
+            var read=await inner.GetResultAsync(ct);
+            owner.Acquisitions.Add((Name,read.Observations.Count));owner.CompareFeeds(read);return read;
         }
     }
     // Preserve the actual GTFS client/cache/rate limit across intentional resolver

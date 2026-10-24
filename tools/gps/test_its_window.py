@@ -10,6 +10,17 @@ def sample():
      'lines':{x:{'vehicles':20,'until60':15,'older180':0} for x in w.LINES}}
 
 class Safety(unittest.TestCase):
+    def test_hybrid_binary_proof_requires_both_healthy_contributions(self):
+        good='2026-10-24T17:00:00Z BUS hybrid: primary_status=Sucesso, support_status=Sucesso, selected_its=100, selected_gtfs=200'
+        self.assertTrue(w.hybrid_proof(good))
+        for bad in ('',good.replace('selected_gtfs=200','selected_gtfs=0'),good.replace('support_status=Sucesso','support_status=Falha')):
+            self.assertFalse(w.hybrid_proof(bad))
+    def test_repeated_hybrid_support_failure_interrupts_window(self):
+        x=sample();x['selection']=[{'stamp':str(i),'mode':'Hybrid','primary_status':'Sucesso','support_status':'Falha'} for i in range(3)]
+        self.assertEqual('hybrid_support_failed',self.decide(x))
+    def test_both_hybrid_sources_failed_interrupts_earlier(self):
+        x=sample();x['selection']=[{'stamp':str(i),'mode':'Hybrid','primary_status':'Falha','support_status':'Falha'} for i in range(2)]
+        self.assertEqual('both_sources_failed',self.decide(x))
     def decide(self,current,**kw):return w.decision(current,sample(),kw.get('seen',set()),0,0,kw.get('low'),kw.get('watch'))[0]
     def test_healthy(self):self.assertIsNone(self.decide(sample()))
     def test_wire_integrity(self):

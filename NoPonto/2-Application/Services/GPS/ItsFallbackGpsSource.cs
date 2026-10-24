@@ -1,7 +1,7 @@
 namespace NoPonto.Application.GPS;
 
-// A single snapshot producer for the existing collector. Never merge providers from
-// failed acquisitions or run another publisher; source switching cannot change GPS time.
+// A single snapshot producer for the existing collector. Hybrid is explicit and
+// consumes only complete source reads. Legacy full fallback retains its behavior.
 internal sealed class ItsFallbackGpsSource(ISnapshotGpsSource primary, IGpsSource fallback,
     GpsSourcesOptions options, TimeProvider clock, ILogger<GpsSourceResolver>? logger) : ISnapshotGpsSource
 {
@@ -36,6 +36,11 @@ internal sealed class ItsFallbackGpsSource(ISnapshotGpsSource primary, IGpsSourc
                         if (_usingFallback) logger?.LogInformation("BUS fallback recovered: active_source={source}, healthy_probes={probes}", primary.Name, _healthyProbes);
                         _usingFallback = false;
                         _healthyProbes = 0;
+                        if (options.BusSupportMode == GpsBusSupportMode.Hybrid)
+                        {
+                            var support = await ReadFallbackAsync(ct);
+                            return ItsHybridGpsComposition.Compose(read, support, clock.GetUtcNow(), clock.GetElapsedTime(started), logger);
+                        }
                         return read with { Duration = clock.GetElapsedTime(started), SourceWatermark = null };
                     }
                 }
@@ -51,6 +56,9 @@ internal sealed class ItsFallbackGpsSource(ISnapshotGpsSource primary, IGpsSourc
             var result = await ReadFallbackAsync(ct);
             logger?.LogInformation("BUS fallback acquisition: active_source={source}, status={status}, count={count}, healthy_probes={probes}",
                 fallback.Name, result.Status, result.Observations.Count, _healthyProbes);
+            if (options.BusSupportMode == GpsBusSupportMode.Hybrid)
+                return ItsHybridGpsComposition.Compose(new(StatusFonteGps.Falha, [], TimeSpan.Zero, "primary_in_recovery"),
+                    result, clock.GetUtcNow(), clock.GetElapsedTime(started), logger);
             return result with { Duration = clock.GetElapsedTime(started), SourceWatermark = null };
         }
         finally { _gate.Release(); }

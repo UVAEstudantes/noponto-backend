@@ -4,3 +4,4 @@ services:
     environment:
       GpsSources__BusPrimarySource: GTFSRT_BUS
       GpsSources__BusFallbackSource: ""
+      GpsSources__BusSupportMode: FullFallback

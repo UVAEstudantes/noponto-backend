@@ -6,7 +6,8 @@ import threading
 import time
 import its_window as window
 
-window.LINES = ('838', '898', '006', '457', '483', '355', '805', '35', '60', '67')
+window.LINES = ('838', '898', '006', '457', '483', '355', '805')
+window.CONTROL_LINES = ('35', '60', '67')
 original_fresh = window.fresh
 
 

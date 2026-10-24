@@ -1,6 +1,8 @@
-# Janela controlada ITS + GTFS-RT — 23/10/2026
+# Janela controlada ITS + GTFS-RT — preparação atualizada em24/10/2026
 
-**Proposta para aprovação; nenhuma mudança produtiva executada.** Fallback completo, sem complementação por veículo. Esta janela não exige benchmark de 459 assinaturas. Primeiro aprovar/publicar o binário validado e depois testar a configuração, com uma única API e rollback GTFS-RT pronto.
+**Segunda janela ainda não autorizada.** A proposta atual usa `BusSupportMode=Hybrid`, complementação por veículo ITS_CURRENT + GTFSRT_BUS, conforme [implementação e validação local](../its-hybrid.md). O padrão permanece `FullFallback`. Publicar uma nova imagem validada exige autorização; a imagem da primeira janela não implementa híbrido. Manter uma única API e watchdog independente do SSH, com retorno obrigatório aGTFS após10min. Os overrides deste diretório agora incluem a terceira chave de modo, inclusive no rollback. Nenhuma alteração produtiva foi realizada nesta preparação.
+
+A inspeção abaixo é histórica de23/10; o estado posterior e o quinto override efetivo constam em [primeira janela](production-window-20261024.md). Antes de qualquer deploy autorizado, inspecionar novamente os labels/configuração efetiva, preservar todos os overrides não relacionados e renderizar candidata/rollback. Não copiar uma composição histórica sem essa conferência.
 
 ## Inspeção efetiva, somente leitura
 
@@ -87,7 +89,7 @@ trap - EXIT HUP INT TERM
 # Liberar o lock apenas após conferir GTFS ativo/health/GPS e nenhuma API duplicada.
 ```
 
-Antes do `switch_source`, renderizar em memória baseline, candidata e rollback e comparar: candidata deve diferir apenas nas duas chaves BUS; rollback deve retornar GTFSRT_BUS/fallback vazio. Conferir os opt-ins GTFS atuais, os quatro paths, imagem e limites. Não imprimir `compose config` nem ambientes completos, pois contêm segredos. O teste de render só prova a configuração; boot da imagem e disponibilidade dos feeds são etapas distintas. A ferramenta `tools/gps/inspect_its_homeserver.py` faz o render proposto sem gravar/aplicar configuração.
+Antes do `switch_source`, renderizar em memória baseline, candidata e rollback e comparar: candidata deve diferir apenas nas três chaves BUS primária/fallback/modo; rollback deve retornar GTFSRT_BUS/fallback vazio/FullFallback. Conferir opt-ins GTFS, paths efetivos, imagem nova e limites. Não imprimir `compose config` nem ambientes completos. O render só prova configuração; o supervisor atualizado exige também log `BUS hybrid` com duas fontes saudáveis e contribuições positivas de ambas, impedindo considerar um binário antigo como híbrido só porque recebeu a variável. `tools/gps/inspect_its_homeserver.py` renderiza em memória, sem gravar/aplicar configuração.
 
 O bloco mostra os comandos, não automatiza a observação. Não colar o bloco completo e considerar isso um ensaio de 10 min: manter o terminal aberto entre ativação e rollback. Em encerramento brusco/queda do SSH, SIGKILL ou daemon indisponível, a trap não é garantia; manter acesso alternativo e o comando `rollback` pronto. Para retorno emergencial em outro terminal, reconstruir `base` com os mesmos paths e digest aprovado e usar o override GTFS, parando API antes de recriar. Nenhum `down`, `prune`, `rm` de cache ou restart de dependências.
 
@@ -109,6 +111,8 @@ Interromper e voltar a GTFS se ocorrer qualquer um:
 - Autenticação ou BRT apresenta erros/latência maior que duas vezes o baseline por60 s, ou qualquer efeito nos outros serviços. Interromper mesmo que ITS esteja adquirindo mais veículos.
 
 O primeiro erro ITS pode consumir até90 s antes de consultar o suporte, cujo deadline externo padrão é10 s; há risco transitório de `SemSinal`. ITS saudável pode entregar menos GPS até40 s em alguns ciclos. Ambas as fontes podem compartilhar falhas de infraestrutura do fornecedor; fallback não é redundância independente garantida. Os filtros de timestamp, matching e retenção continuam obrigatórios. Não esperar que toda posição adquirida apareça nas linhas observadas.
+
+Na segunda janela, acompanhar BUS838/898/006/457/483/355/805 e BRT35/60/67 apenas como controles, mantidos emGTFSRT_BRT. O supervisor separa `lines` de `controls`, registra status/latência HTTP por linha e assina as dez no socket. Três leituras novas consecutivas com suporte GTFS falho, duas com ambas falhas, ou a degradação por linha já definida interrompem o ensaio. Logs repetidos não contam como novas falhas. Não modificar TTLs/cadência. Usar o supervisor versionado com cron/watchdog comprovado; o trecho shell acima é ilustrativo e não substitui supervisão independente. A segunda janela requer nova autorização explícita e publicação do novo digest; esta preparação não arma nem instala o supervisor.
 
 ## Decisão e evidências
 

@@ -7,6 +7,7 @@ from probe_http import get, ProbeError
 ROOT = pathlib.Path(__file__).resolve().parent
 STATE = pathlib.Path('/home/guilherme/.noponto-deploy')
 LINES = ('838', '898', '006', '457', '483', '355', '805')
+CONTROL_LINES = ('35', '60', '67')
 stop = threading.Event()
 guard = threading.Lock()
 state_guard = threading.Lock()
@@ -84,7 +85,7 @@ def socket_worker():
             accept=base64.b64encode(hashlib.sha1((key+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').encode()).digest())
             if b' 101 ' not in header or accept not in header: raise RuntimeError('upgrade_failed')
             send_frame(sock,'{"protocol":"json","version":1}\x1e')
-            for i,line in enumerate(LINES): send_frame(sock,json.dumps({'type':1,'invocationId':str(i),'target':'InscreverseLinha','arguments':[line]})+'\x1e')
+            for i,line in enumerate(LINES+CONTROL_LINES): send_frame(sock,json.dumps({'type':1,'invocationId':str(i),'target':'InscreverseLinha','arguments':[line]})+'\x1e')
             with guard: wire['connections']+=1
             pending=''; fragments=bytearray(); last_ping=time.monotonic()
             while not stop.is_set():
@@ -135,24 +136,31 @@ def parse_logs(text):
         if 'ITS acquisition:' in line or 'ITS_CURRENT acquisition:' in line or ('records=' in line and 'vehicles=' in line):
             acquisitions.append({'stamp':line.split(' ',1)[0],**{k:v for k,v in re.findall(r'([A-Za-z0-9_]+)=([^\s,;]+)',line) if k in ('status','reason','pages','windows','records','rejected','duration_ms','vehicles','recent40','recent60','age_p50','age_p90','zirix_selected','conecta_selected')}})
         if 'BUS fallback' in line: selection.append({'stamp':line.split(' ',1)[0],**{k:v for k,v in re.findall(r'([A-Za-z0-9_]+)=([^\s,;]+)',line) if k in ('primary','status','active_source','healthy_probes','count')}})
+        if 'BUS hybrid:' in line:
+            selection.append({'stamp':line.split(' ',1)[0],'mode':'Hybrid',**dict(re.findall(r'([A-Za-z0-9_]+)=([^\s,;]+)',line))})
     return cycles,acquisitions,selection
+
+def hybrid_proof(logs):
+    return any(x.get('mode')=='Hybrid' and x.get('primary_status')=='Sucesso' and x.get('support_status')=='Sucesso'
+               and int(x.get('selected_its','0'))>0 and int(x.get('selected_gtfs','0'))>0 for x in parse_logs(logs)[2])
 
 def sample():
     state=inspect(); api=state[0]
     http,latency=get('/')
-    lines={}; line_http={}
-    for line in LINES:
+    lines={}; controls={}; line_http={}
+    for line in LINES+CONTROL_LINES:
         path='/veiculos/linha/'+line
-        payload=json.loads(get(path)[0])
-        lines[line]=fresh(payload['posicoes'])
-        line_http[line]={'path':path,**payload.get('probe',{'http_status':200,'empty_line':False})}
+        body,seconds=get(path); payload=json.loads(body)
+        (lines if line in LINES else controls)[line]=fresh(payload['posicoes'])
+        line_http[line]={'path':path,'seconds':seconds,**payload.get('probe',{'http_status':200,'empty_line':False})}
     stat=[json.loads(x) for x in run(['docker','stats','--no-stream','--format','{{json .}}',*[x['Name'].lstrip('/') for x in state]],timeout=12).splitlines()]
     logs=run(['docker','logs','--timestamps','--since','100s','--tail','6000','noponto_api'],timeout=10)
     cycles,acquisitions,selection=parse_logs(logs)
     memory=dict((x.split(':')[0],int(x.split()[1])) for x in open('/proc/meminfo') if x.startswith(('MemAvailable:','SwapFree:')))
     return {'source':source(api).get('GpsSources__BusPrimarySource'),'fallback':source(api).get('GpsSources__BusFallbackSource',''),
+            'support_mode':source(api).get('GpsSources__BusSupportMode','FullFallback'),
             'running':api['State']['Running'],'oom':api['State']['OOMKilled'],'restarts':api['RestartCount'],
-            'http_seconds':latency,'lines':lines,'line_http':line_http,'wire':wire_summary(),'memory_kib':memory,'load':os.getloadavg(),
+            'http_seconds':latency,'lines':lines,'controls':controls,'line_http':line_http,'wire':wire_summary(),'memory_kib':memory,'load':os.getloadavg(),
             'resources':[{k:x[k] for k in ('Name','CPUPerc','MemUsage','MemPerc','PIDs')} for x in stat],
             'cycles':cycles,'acquisitions':acquisitions,'selection':selection,
             'containers':{x['Name'].lstrip('/'):{'started':x['State']['StartedAt'],'running':x['State']['Running'],'health':x['State'].get('Health',{}).get('Status'),'restarts':x['RestartCount']} for x in state}}
@@ -162,12 +170,14 @@ def validate(image):
     api=inspect()[0]; assert api['Config']['Image']==image
     assert api['Config']['Labels']['com.docker.compose.project']=='noponto'
     assert source(api).get('GpsSources__BusPrimarySource')=='GTFSRT_BUS'
+    assert source(api).get('GpsSources__BrtPrimarySource')=='GTFSRT_BRT'
     assert api['HostConfig']['Memory']==805306368 and api['HostConfig']['NanoCpus']==1000000000
     cmd,env=compose(image); original=json.loads(run(cmd+['config','--format','json'],env=env))
-    for filename,primary,fallback in [('its.primary.override.yml','ITS_CURRENT','GTFSRT_BUS'),('gtfs.rollback.override.yml','GTFSRT_BUS','')]:
+    for filename,primary,fallback,mode in [('its.primary.override.yml','ITS_CURRENT','GTFSRT_BUS','Hybrid'),('gtfs.rollback.override.yml','GTFSRT_BUS','','FullFallback')]:
         cmd,env=compose(image,filename); desired=json.loads(run(cmd+['config','--format','json'],env=env)); normalized=copy.deepcopy(desired)
         e=desired['services']['api']['environment']; assert e['GpsSources__BusPrimarySource']==primary and e['GpsSources__BusFallbackSource']==fallback
-        for k in ('GpsSources__BusPrimarySource','GpsSources__BusFallbackSource'):
+        assert e['GpsSources__BusSupportMode']==mode
+        for k in ('GpsSources__BusPrimarySource','GpsSources__BusFallbackSource','GpsSources__BusSupportMode'):
             old=original['services']['api']['environment']
             if k in old: normalized['services']['api']['environment'][k]=old[k]
             else: normalized['services']['api']['environment'].pop(k,None)
@@ -187,6 +197,10 @@ def healthy(image,primary):
         try:
             api=inspect()[0]; get('/')
             assert api['Config']['Image']==image and source(api).get('GpsSources__BusPrimarySource')==primary
+            assert source(api).get('GpsSources__BusSupportMode','FullFallback')==('Hybrid' if primary=='ITS_CURRENT' else 'FullFallback')
+            assert source(api).get('GpsSources__BrtPrimarySource')=='GTFSRT_BRT'
+            if primary=='ITS_CURRENT':
+                assert hybrid_proof(run(['docker','logs','--timestamps','--since','90s','--tail','4000','noponto_api']))
             assert api['State']['Running'] and not api['State']['OOMKilled'] and api['RestartCount']==0
             good+=1
             if good==3:return
@@ -222,6 +236,13 @@ def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None)
         key='selection:'+selected['stamp']
         if key in seen:continue
         seen.add(key)
+        if selected.get('mode')=='Hybrid':
+            support_bad=selected.get('support_status') not in ('Sucesso','Vazio')
+            watch['support_fail']=watch.get('support_fail',0)+1 if support_bad else 0
+            if watch['support_fail']>=3:return 'hybrid_support_failed',long_streak,poor_streak,low_since
+            both_bad=support_bad and selected.get('primary_status') not in ('Sucesso','Vazio')
+            watch['hybrid_both_fail']=watch.get('hybrid_both_fail',0)+1 if both_bad else 0
+            if watch['hybrid_both_fail']>=2:return 'both_sources_failed',long_streak,poor_streak,low_since
         if selected.get('active_source')=='ITS_CURRENT':watch.pop('fallback_since',None)
         if selected.get('active_source')=='GTFSRT_BUS' and 'count' in selected:
             watch.setdefault('fallback_since',now)
