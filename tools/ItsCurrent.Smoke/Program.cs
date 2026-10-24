@@ -5,6 +5,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NoPonto.Application.GPS;
 
+if (args is ["--compare-read-only", var routeMap, var output, var rounds])
+    return await Comparison.Run(routeMap, output, int.Parse(rounds));
+if (args is ["--trace-898-read-only", var traceMap, var traceOutput])
+    return await Comparison.Trace898(traceMap, traceOutput);
+
 // Deliberately constructs acquisition only. No host, configuration files, DI startup,
 // database/cache clients, collector, matching or SignalR publisher are instantiated.
 var verifyUnits = args is ["--read-only", "--verify-gtfs-units"];

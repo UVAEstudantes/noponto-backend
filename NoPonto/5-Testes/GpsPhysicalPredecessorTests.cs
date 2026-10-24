@@ -313,16 +313,19 @@ public sealed class GpsPhysicalPredecessorTests
     }
 
     [Theory]
-    [InlineData("CONECTA", false)] [InlineData("ZIRIX", false)]
-    [InlineData("CONECTA", true)] [InlineData("ZIRIX", true)]
-    public async Task ItsGtfsFallbackAndRecovery_KeepNewestGpsAndPhysicalPredecessor(string provider, bool jump)
+    [InlineData("CONECTA", false, false)] [InlineData("ZIRIX", false, false)]
+    [InlineData("CONECTA", true, false)] [InlineData("ZIRIX", true, false)]
+    [InlineData("CONECTA", false, true)] [InlineData("ZIRIX", false, true)]
+    [InlineData("CONECTA", true, true)] [InlineData("ZIRIX", true, true)]
+    public async Task ItsGtfsFallbackAndRecovery_KeepNewestGpsAndPhysicalPredecessor(string provider, bool jump, bool hybrid)
     {
         var primary = new ContinuitySnapshot(GpsSourceNames.ItsCurrent);
         var support = new ContinuitySnapshot(GpsSourceNames.GtfsRealtimeBus);
         var clock = new ContinuityClock();
         var brt = new Source();
         var resolver = new GpsSourceResolver([primary, support, brt], Options.Create(new GpsSourcesOptions
-        { BusPrimarySource = primary.Name, BusFallbackSource = support.Name, BrtPrimarySource = brt.Name }), clock);
+        { BusPrimarySource = primary.Name, BusFallbackSource = support.Name, BrtPrimarySource = brt.Name,
+            BusSupportMode = hybrid ? GpsBusSupportMode.Hybrid : GpsBusSupportMode.FullFallback }), clock);
         using var f = new Fixture(GpsModalNames.Bus, false, 130, resolver: resolver);
         clock.Now = f.First.TimestampGps;
         using var collector = new GpsSppoCollectorService(resolver, f.Store, new CollectorMonitor(), NullLogger<GpsSppoCollectorService>.Instance);
@@ -369,6 +372,76 @@ public sealed class GpsPhysicalPredecessorTests
         Assert.Equal(jump ? 2 : 3, f.Trips.Calls);
     }
 
+    [Theory]
+    [InlineData("42")] [InlineData("898")]
+    public async Task Hybrid_HealthySwitchAndConflictingTieKeepCasAndSignalRMonotonic(string line)
+    {
+        var primary=new ContinuitySnapshot(GpsSourceNames.ItsCurrent);
+        var support=new ContinuitySnapshot(GpsSourceNames.GtfsRealtimeBus);
+        var clock=new ContinuityClock();var brt=new Source();var hub=new HybridCaptureHub();
+        var resolver=new GpsSourceResolver([primary,support,brt],Options.Create(new GpsSourcesOptions
+        {BusPrimarySource=primary.Name,BusFallbackSource=support.Name,BrtPrimarySource=brt.Name,BusSupportMode=GpsBusSupportMode.Hybrid}),clock);
+        using var f=new Fixture(GpsModalNames.Bus,false,60,resolver:resolver,line:line);
+        var publisher=new GpsSignalRPublisher(f.Cache,hub);
+        using var collector=new GpsSppoCollectorService(resolver,f.Store,new CollectorMonitor(),NullLogger<GpsSppoCollectorService>.Instance);
+        async Task Cycle(int seconds,double fraction)
+        {
+            clock.Now=f.First.TimestampGps.AddSeconds(seconds);f.Cache.Seconds=seconds;
+            await collector.ColetarUmaVezAsync(clock.Now);await f.Poll(clock.Now,f.Route(fraction));
+            // Explicit subscription snapshot avoids mutating process-global Hub subscriptions.
+            var performance=new GpsCicloPerformance(clock.Now,Stopwatch.GetTimestamp());
+            await publisher.PublicarAsync([],new(StringComparer.OrdinalIgnoreCase){[line]=[f.First.Ordem]},
+                new GpsRecenteCicloCache(f.Cache,performance),performance,new Dictionary<string,long>{[line]=1},default);
+        }
+        primary.Position=line=="898"?null:f.First with {ProvedorFonte="CONECTA"};
+        support.Position=f.First with {TimestampGps=f.First.TimestampGps.AddSeconds(line=="898"?0:-1)};
+        await Cycle(0,.1);
+        if(line=="898")Assert.Equal(GpsSourceNames.GtfsRealtimeBus,Assert.Single(f.Writer.Accepted).ProvedorFonte);
+        support.Position=f.Next with {TimestampGps=f.First.TimestampGps.AddSeconds(45)};
+        await Cycle(45,.11);
+        Assert.Equal(2,f.Writer.Accepted.Count);Assert.True(f.Writer.Accepted[1].TemHistorico);
+        Assert.Equal(f.First.TimestampGps,f.Writer.Accepted[1].TimestampAnterior);
+        primary.Position=support.Position with {Longitude=-44.2};
+        await Cycle(45,.11);Assert.Equal(2,f.Writer.Accepted.Count); // Same-GPS conflict cannot move the vehicle.
+        primary.Position=f.Next with {TimestampGps=f.First.TimestampGps.AddSeconds(46)};
+        await Cycle(46,.12);Assert.Equal(3,f.Writer.Accepted.Count);
+        Assert.Equal(support.Position.TimestampGps,f.Writer.Accepted[2].TimestampAnterior);
+        primary.Fail=true;support.Fail=true;await Cycle(47,.12);Assert.Equal(3,f.Writer.Accepted.Count);
+        Assert.Equal(3,f.Writer.Accepted.Select(x=>(x.Ordem,x.TimestampGps)).Distinct().Count());
+        Assert.NotEmpty(hub.Frames);DateTimeOffset? previous=null;
+        foreach(var frame in hub.Frames)
+        {
+            var points=frame.EnumerateArray().ToArray();
+            Assert.Equal(points.Length,points.Select(x=>x.GetProperty("ordem").GetString()).Distinct().Count());
+            foreach(var point in points)
+            {
+                var gps=point.GetProperty("timestampGps").GetDateTimeOffset();
+                Assert.Equal(line,point.GetProperty("codigoLinha").GetString());
+                Assert.True(previous is null || gps>=previous.Value);previous=gps;
+                Assert.NotEqual(-44.2,point.GetProperty("longitude").GetDouble());
+            }
+        }
+        Assert.Equal(primary.Position.TimestampGps,previous);
+    }
+
+    private sealed class HybridCaptureHub:IHubContext<GpsHub>,IHubClients,IClientProxy
+    {
+        public readonly List<JsonElement> Frames=[];
+        public IHubClients Clients=>this;
+        public IGroupManager Groups=>throw new NotSupportedException();
+        public IClientProxy Group(string name)=>this;
+        public Task SendCoreAsync(string method,object?[] args,CancellationToken ct=default)
+        {if(method=="PosicaoAtualizada")Frames.Add(JsonSerializer.SerializeToElement(args[0],new JsonSerializerOptions(JsonSerializerDefaults.Web)));return Task.CompletedTask;}
+        public IClientProxy All=>throw new NotSupportedException();
+        public IClientProxy AllExcept(IReadOnlyList<string> ids)=>throw new NotSupportedException();
+        public IClientProxy Client(string id)=>throw new NotSupportedException();
+        IClientProxy IHubClients<IClientProxy>.Clients(IReadOnlyList<string> ids)=>throw new NotSupportedException();
+        public IClientProxy GroupExcept(string group,IReadOnlyList<string> ids)=>throw new NotSupportedException();
+        IClientProxy IHubClients<IClientProxy>.Groups(IReadOnlyList<string> groups)=>throw new NotSupportedException();
+        public IClientProxy User(string id)=>throw new NotSupportedException();
+        public IClientProxy Users(IReadOnlyList<string> ids)=>throw new NotSupportedException();
+    }
+
     private sealed class ContinuitySnapshot(string name) : ISnapshotGpsSource
     {
         public string Name => name;
@@ -377,7 +450,7 @@ public sealed class GpsPhysicalPredecessorTests
         public async Task<IReadOnlyList<GpsObservation>> GetPositionsAsync(CancellationToken ct) => (await GetResultAsync(ct)).Observations;
         public Task<GpsSourceReadResult> GetResultAsync(CancellationToken ct) => Task.FromResult(new GpsSourceReadResult(
             Fail ? StatusFonteGps.Falha : StatusFonteGps.Sucesso,
-            Fail || Position is null ? [] : [GpsObservationMapper.FromPosition(Position, Name, Position.ProvedorFonte!)], TimeSpan.Zero));
+            Fail || Position is null ? [] : [GpsObservationMapper.FromPosition(Position, Name, Position.ProvedorFonte!) with { Modal="ONIBUS" }], TimeSpan.Zero));
     }
     private sealed class ContinuityClock : TimeProvider
     {
@@ -407,14 +480,14 @@ public sealed class GpsPhysicalPredecessorTests
         public PosicaoVeiculoDto Next { get; }
         private readonly string modal;
         public GpsSppoSnapshotStore Store => store;
-        public Fixture(string modal, bool batch, int seconds, ExpiringCache? cache = null, IGpsSourceResolver? resolver = null)
+        public Fixture(string modal, bool batch, int seconds, ExpiringCache? cache = null, IGpsSourceResolver? resolver = null, string line = "42")
         {
             this.modal = modal;
             Cache = cache ?? new();
             // PhysicalEta's current wall-clock check remains real; GPS intervals
             // and cache expiration are independently advanced without waiting.
             var now = DateTimeOffset.UtcNow.AddSeconds(-2);
-            First = new() { Ordem = modal == GpsModalNames.Brt ? "BRT-00123" : "00123", CodigoLinha = "42",
+            First = new() { Ordem = modal == GpsModalNames.Brt ? "BRT-00123" : "00123", CodigoLinha = line,
                 TipoRota = modal == GpsModalNames.Brt ? "brt" : "onibus", Latitude = -22.9, Longitude = -43.2,
                 Bearing = 90, Velocidade = 20, TimestampGps = now.AddSeconds(-seconds), TimestampServidor = now.AddSeconds(-seconds),
                 ModalFonte = modal, ProvedorFonte = modal == GpsModalNames.Brt ? "GTFSRT_BRT" : "GTFSRT_BUS" };

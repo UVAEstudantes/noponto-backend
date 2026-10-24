@@ -74,12 +74,15 @@ internal sealed record GpsSourceReadResult(
     string? FailureReason = null,
     DateTimeOffset? SourceWatermark = null);
 
+public enum GpsBusSupportMode { FullFallback, Hybrid }
+
 public sealed class GpsSourcesOptions
 {
     public const string Section = "GpsSources";
     public string BusPrimarySource { get; init; } = GpsSourceNames.ZirixDirect;
     // Shadows are diagnostic only; fallback is an explicit operational opt-in.
     public string? BusFallbackSource { get; init; }
+    public GpsBusSupportMode BusSupportMode { get; init; } = GpsBusSupportMode.FullFallback;
     public int BusFallbackProbeIntervalSeconds { get; init; } = 60;
     public int BusFallbackTimeoutSeconds { get; init; } = 10;
     public string BrtPrimarySource { get; init; } = GpsSourceNames.BrtCurrent;
@@ -104,6 +107,11 @@ public sealed class GpsSourceResolver : IGpsSourceResolver
     {
         _sources = sources.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
         _options = options.Value;
+        if (!Enum.IsDefined(_options.BusSupportMode)
+            || (_options.BusSupportMode == GpsBusSupportMode.Hybrid
+                && (!string.Equals(_options.BusPrimarySource, GpsSourceNames.ItsCurrent, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(_options.BusFallbackSource, GpsSourceNames.GtfsRealtimeBus, StringComparison.OrdinalIgnoreCase))))
+            throw new InvalidOperationException("Hybrid BUS support requires ITS_CURRENT primary and GTFSRT_BUS support.");
         if (string.Equals(_options.BusPrimarySource, GpsSourceNames.ItsCurrent, StringComparison.OrdinalIgnoreCase)
             && !string.IsNullOrWhiteSpace(_options.BusFallbackSource))
         {

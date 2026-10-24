@@ -1,0 +1,441 @@
+{
+  "release": {
+    "image": "ghcr.io/guilhermedesales/noponto-api@sha256:3ea342210229e489f2e987ee8b919a15ea9d20ded23929905bf2b50200c345a3",
+    "run": 40107661744,
+    "sequence": 147,
+    "merge": "bb774fffdfa708bb561cfe16347a07f41b5da725",
+    "validated": "d56f6d82dbfdd631146d2ea893c569adced2a774",
+    "tree": "e71570ab189667d1e242b593422fa485769e44f3",
+    "pr": "https://github.com/UVAEstudantes/noponto-backend/pull/83",
+    "workflow": "https://github.com/UVAEstudantes/noponto-backend/actions/runs/40107661744",
+    "ci_offline": {
+      "passed": 1015,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "result": "interrupted; ITS ten-minute validation not approved",
+  "window": {
+    "activated_utc": "2026-10-24T15:48:13.638999+00:00",
+    "error_utc": "2026-10-24T15:51:11.230824+00:00",
+    "rollback_confirmed_utc": "2026-10-24T15:51:51.391192+00:00",
+    "until_error_seconds": 177.5918254852295,
+    "until_rollback_confirmed_seconds": 217.75219321250916,
+    "reason": "exception_HTTPError",
+    "http_status_and_path": "not captured by supervisor; 404 for an empty line is possible but unconfirmed"
+  },
+  "baseline": {
+    "samples": 8,
+    "lines": {
+      "838": {
+        "min": 20,
+        "max": 20,
+        "median": 20.0,
+        "mean_until60": 2.5,
+        "first": {
+          "vehicles": 20,
+          "until40": 0,
+          "until60": 0,
+          "until180": 20,
+          "older180": 0,
+          "future": 0,
+          "max_age": 91.49499106407166
+        },
+        "last": {
+          "vehicles": 20,
+          "until40": 0,
+          "until60": 2,
+          "until180": 18,
+          "older180": 2,
+          "future": 0,
+          "max_age": 184.95975399017334
+        }
+      },
+      "898": {
+        "min": 8,
+        "max": 9,
+        "median": 9.0,
+        "mean_until60": 2.625,
+        "first": {
+          "vehicles": 9,
+          "until40": 0,
+          "until60": 0,
+          "until180": 9,
+          "older180": 0,
+          "future": 0,
+          "max_age": 134.5033814907074
+        },
+        "last": {
+          "vehicles": 8,
+          "until40": 0,
+          "until60": 1,
+          "until180": 8,
+          "older180": 0,
+          "future": 0,
+          "max_age": 151.96920323371887
+        }
+      },
+      "006": {
+        "min": 2,
+        "max": 2,
+        "median": 2.0,
+        "mean_until60": 1,
+        "first": {
+          "vehicles": 2,
+          "until40": 0,
+          "until60": 0,
+          "until180": 2,
+          "older180": 0,
+          "future": 0,
+          "max_age": 80.50578379631042
+        },
+        "last": {
+          "vehicles": 2,
+          "until40": 0,
+          "until60": 0,
+          "until180": 2,
+          "older180": 0,
+          "future": 0,
+          "max_age": 61.971616983413696
+        }
+      }
+    },
+    "bounded_cycles": {
+      "count": 10,
+      "p50_ms": 929.0,
+      "p95_ms": 7810.0,
+      "max_ms": 7810.0,
+      "accepted": 4706.0,
+      "infra": 0.0,
+      "acked_inferred": 3
+    },
+    "api_cpu_max": 102.45,
+    "host_available_kib_min": 2270380,
+    "api_memory_samples": [
+      "186MiB / 768MiB",
+      "195.9MiB / 768MiB",
+      "197.6MiB / 768MiB",
+      "200.4MiB / 768MiB",
+      "182.1MiB / 768MiB",
+      "183.6MiB / 768MiB",
+      "184.2MiB / 768MiB",
+      "184.4MiB / 768MiB"
+    ],
+    "wire_integrity": {
+      "messages": 33,
+      "duplicates": 0,
+      "regressions": 0,
+      "invalid": 0,
+      "connections": 1,
+      "errors": 0
+    },
+    "acquisitions": [],
+    "fallback_events": []
+  },
+  "its": {
+    "samples": 10,
+    "lines": {
+      "838": {
+        "min": 20,
+        "max": 24,
+        "median": 24.0,
+        "mean_until60": 13.8,
+        "first": {
+          "vehicles": 20,
+          "until40": 0,
+          "until60": 2,
+          "until180": 18,
+          "older180": 2,
+          "future": 0,
+          "max_age": 212.82689714431763
+        },
+        "last": {
+          "vehicles": 24,
+          "until40": 0,
+          "until60": 14,
+          "until180": 23,
+          "older180": 1,
+          "future": 0,
+          "max_age": 183.92328453063965
+        }
+      },
+      "898": {
+        "min": 7,
+        "max": 8,
+        "median": 7.0,
+        "mean_until60": 0.3,
+        "first": {
+          "vehicles": 8,
+          "until40": 0,
+          "until60": 3,
+          "until180": 8,
+          "older180": 0,
+          "future": 0,
+          "max_age": 179.83289289474487
+        },
+        "last": {
+          "vehicles": 7,
+          "until40": 0,
+          "until60": 0,
+          "until180": 0,
+          "older180": 7,
+          "future": 0,
+          "max_age": 227.92609906196594
+        }
+      },
+      "006": {
+        "min": 2,
+        "max": 2,
+        "median": 2.0,
+        "mean_until60": 2,
+        "first": {
+          "vehicles": 2,
+          "until40": 0,
+          "until60": 2,
+          "until180": 2,
+          "older180": 0,
+          "future": 0,
+          "max_age": 59.835819721221924
+        },
+        "last": {
+          "vehicles": 2,
+          "until40": 0,
+          "until60": 2,
+          "until180": 2,
+          "older180": 0,
+          "future": 0,
+          "max_age": 46.92820405960083
+        }
+      }
+    },
+    "bounded_cycles": {
+      "count": 13,
+      "p50_ms": 3925.0,
+      "p95_ms": 12947.0,
+      "max_ms": 12947.0,
+      "accepted": 13568.0,
+      "infra": 0.0,
+      "acked_inferred": 7
+    },
+    "api_cpu_max": 61.71,
+    "host_available_kib_min": 2296224,
+    "api_memory_samples": [
+      "135.5MiB / 768MiB",
+      "162.1MiB / 768MiB",
+      "150.9MiB / 768MiB",
+      "189.2MiB / 768MiB",
+      "178.9MiB / 768MiB",
+      "169.9MiB / 768MiB",
+      "166.9MiB / 768MiB",
+      "208.8MiB / 768MiB",
+      "163.1MiB / 768MiB",
+      "166.3MiB / 768MiB"
+    ],
+    "wire_integrity": {
+      "messages": 78,
+      "duplicates": 0,
+      "regressions": 0,
+      "invalid": 0,
+      "connections": 2,
+      "errors": 6
+    },
+    "acquisitions": [
+      {
+        "stamp": "2026-10-24T15:48:28.951249083Z",
+        "status": "Sucesso",
+        "reason": "(null)",
+        "pages": "7",
+        "windows": "3",
+        "records": "26896",
+        "rejected": "2048",
+        "duration_ms": "9469.8352",
+        "vehicles": "2442",
+        "recent40": "2108",
+        "recent60": "2321",
+        "age_p50": "26.9431181",
+        "age_p90": "42.9431181",
+        "zirix_selected": "1606",
+        "conecta_selected": "836"
+      },
+      {
+        "stamp": "2026-10-24T15:48:58.238643271Z",
+        "status": "Sucesso",
+        "reason": "(null)",
+        "pages": "8",
+        "windows": "3",
+        "records": "32717",
+        "rejected": "3487",
+        "duration_ms": "9278.1384",
+        "vehicles": "2453",
+        "recent40": "2124",
+        "recent60": "2312",
+        "age_p50": "26.2343529",
+        "age_p90": "42.2343529",
+        "zirix_selected": "1573",
+        "conecta_selected": "880"
+      },
+      {
+        "stamp": "2026-10-24T15:49:25.679969855Z",
+        "status": "Sucesso",
+        "reason": "(null)",
+        "pages": "7",
+        "windows": "3",
+        "records": "24713",
+        "rejected": "1751",
+        "duration_ms": "7438.7612",
+        "vehicles": "2421",
+        "recent40": "1777",
+        "recent60": "2311",
+        "age_p50": "32.6736523",
+        "age_p90": "48.6736523",
+        "zirix_selected": "853",
+        "conecta_selected": "1568"
+      },
+      {
+        "stamp": "2026-10-24T15:49:43.145374581Z",
+        "status": "Sucesso",
+        "reason": "(null)",
+        "pages": "7",
+        "windows": "3",
+        "records": "27939",
+        "rejected": "2113",
+        "duration_ms": "7458.5217",
+        "vehicles": "2430",
+        "recent40": "1739",
+        "recent60": "2306",
+        "age_p50": "33.1415599",
+        "age_p90": "48.1415599",
+        "zirix_selected": "734",
+        "conecta_selected": "1696"
+      },
+      {
+        "stamp": "2026-10-24T15:50:03.386701860Z",
+        "status": "Sucesso",
+        "reason": "(null)",
+        "pages": "8",
+        "windows": "3",
+        "records": "32031",
+        "rejected": "4078",
+        "duration_ms": "10231.8881",
+        "vehicles": "2431",
+        "recent40": "1826",
+        "recent60": "2297",
+        "age_p50": "32.380777",
+        "age_p90": "47.380777",
+        "zirix_selected": "1588",
+        "conecta_selected": "843"
+      },
+      {
+        "stamp": "2026-10-24T15:50:18.324370252Z",
+        "status": "Sucesso",
+        "reason": "(null)",
+        "pages": "5",
+        "windows": "3",
+        "records": "12704",
+        "rejected": "994",
+        "duration_ms": "4912.6735",
+        "vehicles": "2351",
+        "recent40": "640",
+        "recent60": "641",
+        "age_p50": "88.3205905",
+        "age_p90": "103.3205905",
+        "zirix_selected": "1555",
+        "conecta_selected": "796"
+      },
+      {
+        "stamp": "2026-10-24T15:50:35.231851642Z",
+        "status": "Sucesso",
+        "reason": "(null)",
+        "pages": "7",
+        "windows": "3",
+        "records": "26150",
+        "rejected": "2031",
+        "duration_ms": "6903.7724",
+        "vehicles": "2415",
+        "recent40": "1641",
+        "recent60": "2290",
+        "age_p50": "34.2279621",
+        "age_p90": "49.2279621",
+        "zirix_selected": "1566",
+        "conecta_selected": "849"
+      },
+      {
+        "stamp": "2026-10-24T15:50:53.670698555Z",
+        "status": "Sucesso",
+        "reason": "(null)",
+        "pages": "8",
+        "windows": "3",
+        "records": "29257",
+        "rejected": "2891",
+        "duration_ms": "8435.7249",
+        "vehicles": "2432",
+        "recent40": "1491",
+        "recent60": "2291",
+        "age_p50": "36.6668172",
+        "age_p90": "52.6668172",
+        "zirix_selected": "1607",
+        "conecta_selected": "825"
+      }
+    ],
+    "fallback_events": []
+  },
+  "final_server": {
+    "image": "ghcr.io/guilhermedesales/noponto-api@sha256:3ea342210229e489f2e987ee8b919a15ea9d20ded23929905bf2b50200c345a3",
+    "image_id": "sha256:3ea342210229e489f2e987ee8b919a15ea9d20ded23929905bf2b50200c345a3",
+    "started": "2026-10-24T15:51:42.235437375Z",
+    "source": "GTFSRT_BUS",
+    "brt_source": "GTFSRT_BRT",
+    "fallback": "",
+    "other_containers_unchanged": {
+      "transporte_postgres": true,
+      "transporte_redis": true,
+      "auth_api": true,
+      "auth_postgres": true,
+      "auth_redis": true,
+      "portainer": true,
+      "dozzle": true
+    },
+    "api_restarts": 0,
+    "oom": false,
+    "api_instances": 1,
+    "release_sequence": "147"
+  },
+  "scheduler_cleanup": {
+    "owned_cron_removed": true,
+    "original_crontab_absence_restored": true,
+    "source": "GTFSRT_BUS",
+    "fallback": "",
+    "image": "ghcr.io/guilhermedesales/noponto-api@sha256:3ea342210229e489f2e987ee8b919a15ea9d20ded23929905bf2b50200c345a3",
+    "private_audit_files": "retained; no cron job remains",
+    "time": 1792857642.6330035
+  },
+  "post_rollback_signalr": {
+    "messages": 12,
+    "connections": 1,
+    "errors": 0,
+    "duplicates": 0,
+    "regressions": 0,
+    "invalid": 0,
+    "vehicles": {
+      "838": 19,
+      "898": 7,
+      "006": 2
+    },
+    "note": "captured from completed post-rollback probe; subsequent to REST recovery snapshot"
+  },
+  "evidence_sha256": {
+    "candidate.json": "7e1d7d5f8783d281700eaf81672976ee79f8fed62edaa2efcc4e146c908da6de",
+    "server-state.json": "10bba8c19f8cd1241d743808b9bfd2d5de51e55946b0293c33d53c7980519b1c",
+    "server-events.jsonl": "ebe82d2c843360f8c682b9641467625ff049a05e7f10f50a4bfb0d283b0eb971",
+    "server-preflight.json": "8c8d3475a5e2eb64acba3bf450e7fb120c57b711c402cbc3f3880280b58ff322",
+    "server-cron-proof.json": "ebbd7398cb52749815d25f66b61a636ebd05be77329938a804bc741e5e4d8d44",
+    "server-window.py": "8cccdbb46fab248dd9b6207d4a57fdb010cc70bd89ee02715fdcc59e83e1512f",
+    "after-rollback.jsonl": "9f7d32b880ae65aa7771f9cdacf6b4e1d29bb857df07596fd19c05238dfa326e",
+    "cron-cleanup.json": "3cfc85f52252bc8c362d9d1f8200bb56222d0b7aad9e4eaa379fb8f60192baed",
+    "final-server.json": "43f6785cb7ed960d755ee8b35d6cf2151835242b29d8fdb1cb7128a32d404fbc",
+    "final-gtfs-acquisition.json": "8aba41dafa120e0638c27c6b772ceb6ad1295ed454eb0477ddd1fd4975b30ba3",
+    "observed-live.jsonl": "79bf7b6a591a78a50c996a77799fae4ff58446c8b4e3e5bedbd8ed1d1ba38da1",
+    "predeployment-proof.json": "145f6dbf756de7d89c9a40d5658de9d02345abfb767b02067d31ff3e851e418a",
+    "window-scheduled.json": "4c7c1dc4e3112b5c289aaa05559e326c814ea00640748fdfeedf75dea4825263"
+  }
+}

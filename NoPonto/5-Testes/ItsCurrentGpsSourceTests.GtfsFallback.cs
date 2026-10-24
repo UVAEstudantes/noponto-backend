@@ -225,12 +225,12 @@ public sealed partial class ItsCurrentGpsSourceTests
             Response = () => new(HttpStatusCode.OK) { Content = new ByteArrayContent(Body) };
             _http = new HttpClient(new Handler((_, ct) => { ct.ThrowIfCancellationRequested(); Requests++; return Task.FromResult(Response()); }));
         }
-        public GpsSourceResolver Resolver(GtfsRealtimeGpsOptions? options = null)
+        public GpsSourceResolver Resolver(GtfsRealtimeGpsOptions? options = null, bool hybrid = false)
         {
             options ??= new() { BusEnabled = true, CrosswalkValidated = true, BusSpeedUnit = GtfsSpeedUnit.KilometresPerHour };
             var gtfs = new GtfsRealtimeGpsSource("BUS", new(_http, new("https://fixture.invalid/"), options, Clock), Lookup, options,
                 NullLogger<GtfsRealtimeGpsSource>.Instance);
-            return SupportResolver(Primary, gtfs, Clock);
+            return hybrid ? HybridResolver(Primary, gtfs, Clock) : SupportResolver(Primary, gtfs, Clock);
         }
         public void Advance(int seconds) { Clock.Advance(TimeSpan.FromSeconds(seconds)); Gps = Clock.GetUtcNow(); }
         public void Dispose() => _http.Dispose();

@@ -1,5 +1,7 @@
 # ITS principal e GTFS-RT de suporte
 
+Atualização24/10: há um modo opt-in [híbrido por veículo](its-hybrid.md), `GpsSources:BusSupportMode=Hybrid`, mantendo o mesmo coletor. O restante deste documento registra a decisão anterior de fallback completo, ainda disponível e padrão como `FullFallback`. Não confundir as evidências históricas com validação do novo modo.
+
 Atualização: [ensaio conectado dos dois feeds reais e prontidão da janela no homeserver](its-homeserver/validation.md) concluído. A pendência histórica de homologação do par abaixo foi atendida; ativação produtiva continua dependente de autorização específica e do procedimento controlado.
 
 ## Decisão e auditoria dirigida

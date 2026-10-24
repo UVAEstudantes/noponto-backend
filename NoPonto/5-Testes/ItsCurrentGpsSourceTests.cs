@@ -13,6 +13,24 @@ public sealed partial class ItsCurrentGpsSourceTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 23, 12, 0, 30, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData("rio", "maxtrack")]
+    [InlineData("rio", "zirix")]
+    [InlineData("sppo", "maxtrack")]
+    public async Task HealthySppoSnapshotDoesNotPromiseCoverageOfRio898(string system, string provider)
+    {
+        var sppo = Row("SPPO-TEST", "ZIRIX");
+        var rio = Row("RIO-TEST", provider); rio["sistema"] = system; rio["servico"] = "898";
+        var result = await Source(new Clock(), (_, _) => Task.FromResult(
+            Page(Now.AddSeconds(-30), [sppo, rio]))).ReadAsync(default);
+
+        Assert.Equal(StatusFonteGps.Sucesso, result.Status);
+        var accepted = Assert.Single(result.Observations);
+        Assert.Equal("SPPO-TEST", accepted.VehicleId);
+        Assert.Equal("006", accepted.ServiceCode);
+        Assert.DoesNotContain(result.Observations, x => x.ServiceCode == "898");
+    }
+
     [Fact]
     public async Task WholeNetworkTraversesAllPagesAndUtcWindowsWithoutServiceOrProviderFilter()
     {
