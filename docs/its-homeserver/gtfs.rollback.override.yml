@@ -5,3 +5,4 @@ services:
       GpsSources__BusPrimarySource: GTFSRT_BUS
       GpsSources__BusFallbackSource: ""
       GpsSources__BusSupportMode: FullFallback
+      GpsPipelineTrace__Enabled: "false"

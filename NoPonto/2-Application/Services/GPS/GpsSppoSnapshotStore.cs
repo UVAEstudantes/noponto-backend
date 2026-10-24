@@ -12,8 +12,9 @@ public sealed record LoteSppoSnapshot(
     public bool SnapshotAtual => JanelaInicio is null && JanelaFim is null;
 }
 
-public sealed class GpsSppoSnapshotStore
+public sealed class GpsSppoSnapshotStore(GpsPipelineTrace? trace = null)
 {
+    internal GpsPipelineTrace? Trace => trace;
     private readonly object _publicacao = new();
     private readonly SemaphoreSlim _vaga = new(1, 1);
     private LoteSppoSnapshot? _atual;
@@ -61,6 +62,7 @@ public sealed class GpsSppoSnapshotStore
                     watermarkConfirmado,
                     Array.AsReadOnly(posicoes.ToArray()));
 
+                trace?.Begin(lote.Geracao, lote.Posicoes, coletaIniciadaEmUtc, coletaConcluidaEmUtc);
                 Volatile.Write(ref _atual, lote);
                 _disponivel.TrySetResult();
                 return lote;
@@ -82,6 +84,7 @@ public sealed class GpsSppoSnapshotStore
                 return false;
 
             Volatile.Write(ref _atual, null);
+            trace?.Ack(geracao);
             _disponivel = NovaNotificacao();
             _vaga.Release();
             return true;

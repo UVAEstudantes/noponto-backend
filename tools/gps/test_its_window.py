@@ -10,6 +10,16 @@ def sample():
      'lines':{x:{'vehicles':20,'until60':15,'older180':0} for x in w.LINES}}
 
 class Safety(unittest.TestCase):
+    def test_interrupted_command_keeps_exit_and_safe_operation(self):
+        import types
+        result=types.SimpleNamespace(returncode=-15,stdout='',stderr='secret payload')
+        with patch.object(w.subprocess,'run',return_value=result):
+            with self.assertRaises(w.CommandFailure) as caught:
+                w.run(['docker','logs','--since','private','noponto_api'])
+        self.assertEqual({'type':'CommandFailure','reason':'command_interrupted','tool':'docker',
+                          'operation':'logs','exit_code':-15},caught.exception.evidence())
+        self.assertNotIn('secret',str(caught.exception))
+
     def test_hybrid_binary_proof_requires_both_healthy_contributions(self):
         good='2026-10-24T17:00:00Z BUS hybrid: primary_status=Sucesso, support_status=Sucesso, selected_its=100, selected_gtfs=200'
         self.assertTrue(w.hybrid_proof(good))
@@ -136,5 +146,95 @@ class HttpSafety(unittest.TestCase):
         with patch.object(w.urllib.request,'urlopen',side_effect=error):
             body,_=w.get('/veiculos/linha/898')
         self.assertEqual([],w.json.loads(body)['posicoes'])
+
+class TraceProof(unittest.TestCase):
+    def test_connection_state_is_separate_from_empty_data(self):
+        for connected,connections,expected in ((False,0,'not_connected'),(True,1,'connected'),(False,1,'reconnecting')):
+            with self.subTest(expected=expected),patch.dict(w.wire,connected=connected,connections=connections,lines={}):
+                self.assertEqual(expected,w.wire_summary()['connection_state'])
+
+    def test_freshness_uses_physical_time_not_recent_receipt(self):
+        import datetime
+        def point(epoch):return {'timestampGps':datetime.datetime.fromtimestamp(epoch,datetime.timezone.utc).isoformat(),'recebidoEmUtc':'just-now'}
+        with patch.object(w.time,'time',return_value=1000),patch.object(w,'activation_epoch',900):
+            old=w.fresh([point(819)]);new=w.fresh([point(980)])
+        self.assertEqual(0,old['until180']);self.assertEqual(0,old['new_after_activation']);self.assertEqual(181,old['median'])
+        self.assertEqual(1,new['until40']);self.assertEqual(1,new['new_after_activation'])
+
+    def test_trace_override_is_only_additional_permitted_setting(self):
+        import json
+        image='ghcr.io/guilhermedesales/noponto-api@sha256:'+'a'*64
+        env={'GpsSources__BusPrimarySource':'GTFSRT_BUS','GpsSources__BrtPrimarySource':'GTFSRT_BRT','GtfsRealtimeGps__BusEnabled':'true','GtfsRealtimeGps__CrosswalkValidated':'true'}
+        api={'Config':{'Image':image,'Labels':{'com.docker.compose.project':'noponto'},'Env':[k+'='+v for k,v in env.items()]},'HostConfig':{'Memory':805306368,'NanoCpus':1000000000}}
+        def render(args,**kw):
+            result={'services':{'api':{'environment':dict(env)},'other':{'image':'preserve'}}}
+            if any(x.endswith(('its.primary.override.yml','gtfs.rollback.override.yml')) for x in args):
+                its=any('its.primary.override.yml' in x for x in args)
+                result['services']['api']['environment'].update(GpsSources__BusPrimarySource='ITS_CURRENT' if its else 'GTFSRT_BUS',GpsSources__BusFallbackSource='GTFSRT_BUS' if its else '',GpsSources__BusSupportMode='Hybrid' if its else 'FullFallback',GpsPipelineTrace__Enabled='true' if its else 'false')
+            return json.dumps(result)
+        with patch.object(w,'inspect',return_value=[api]),patch.object(w,'run',side_effect=render):w.validate(image)
+        def unsafe(args,**kw):
+            value=json.loads(render(args,**kw))
+            if any('its.primary.override.yml' in x for x in args):value['services']['other']['image']='changed'
+            return json.dumps(value)
+        with patch.object(w,'inspect',return_value=[api]),patch.object(w,'run',side_effect=unsafe):
+            with self.assertRaises(AssertionError):w.validate(image)
+
+    def test_http_failure_and_contract_failure_stay_distinct(self):
+        from probe_http import ProbeError
+        self.assertEqual('backend_http',w.failure_evidence(ProbeError('/',503,'http_failure'))['classification'])
+        self.assertEqual('backend_transport',w.failure_evidence(ProbeError('/',None,'timeout'))['classification'])
+        self.assertEqual('backend_contract',w.failure_evidence(ProbeError('/veiculos/linha/898',200,'invalid_positions_contract'))['classification'])
+
+    def test_gate_898_keeps_90_second_boundary(self):
+        baseline=sample();current=sample()
+        for at,expected in ((1089.99,None),(1090,'gate_898_unproven')):
+            with self.subTest(at=at),patch.object(w.time,'time',return_value=at):
+                self.assertEqual(expected,w.decision(current,baseline,set(),0,0,None,{'activated':1000})[0])
+
+    def test_server_generation_and_client_renewal_both_required(self):
+        frame={'line':'898','source':'GTFSRT_BUS','linked_complete_new':1}
+        wire={'lines':{'898':{'new_after_activation':1}}}
+        self.assertEqual('proven',w.correlation_state([frame],wire))
+        self.assertEqual('client_only',w.correlation_state([dict(frame,linked_complete_new=0)],wire))
+        self.assertEqual('server_only',w.correlation_state([frame],{}))
+        with patch.object(w.time,'time',return_value=1090):
+            current=sample();current.update(flow=[frame],wire={**current['wire'],**wire})
+            self.assertIsNone(w.decision(current,sample(),set(),0,0,None,{'activated':1000})[0])
+        with patch.object(w.time,'time',return_value=1090.001):
+            self.assertEqual('gate_898_unproven',w.decision(current,sample(),set(),0,0,None,{'activated':1000})[0])
+
+    def test_empty_stale_and_aging_are_not_backend_failures(self):
+        self.assertEqual('valid_empty',w.data_state({'vehicles':0}))
+        self.assertEqual('present_stale',w.data_state({'vehicles':4,'older180':4,'until60':0}))
+        self.assertEqual('present_aging',w.data_state({'vehicles':4,'older180':0,'until60':0}))
+        self.assertEqual('present_recent',w.data_state({'vehicles':4,'older180':0,'until60':1}))
+
+    def test_timeout_preserves_safe_command_cause(self):
+        import subprocess
+        with patch.object(w.subprocess,'run',side_effect=subprocess.TimeoutExpired(['docker','logs','secret'],5)):
+            with self.assertRaises(w.CommandFailure) as caught:w.run(['docker','logs','secret'])
+        self.assertEqual('command_timeout',caught.exception.evidence()['reason'])
+        self.assertNotIn('secret',str(caught.exception))
+
+    def test_request_stop_only_signals_verified_controller_and_keeps_reason(self):
+        import tempfile,os,json
+        pid=os.getpid()
+        # No /proc access or signal is performed by this test, on Windows or Linux.
+        with tempfile.TemporaryDirectory() as tmp,patch.object(w,'ROOT',Path(tmp)),patch.object(w,'load',return_value={'phase':'its','pid':pid,'pid_start':'birth'}),patch.object(Path,'read_text',return_value=' '.join(['0']*21+['birth'])),patch.object(Path,'read_bytes',return_value=str(Path(w.__file__).resolve()).encode()),patch.object(w.os,'kill') as kill,patch.object(w.os,'killpg',create=True) as killpg:
+            w.request_stop('gate_898_unproven')
+            kill.assert_called_once_with(pid,w.signal.SIGTERM);killpg.assert_not_called()
+        with tempfile.TemporaryDirectory() as tmp,patch.object(w,'ROOT',Path(tmp)):
+            (Path(tmp)/'stop-request.json').write_text(json.dumps({'reason':'gate_898_unproven'}))
+            self.assertEqual('gate_898_unproven',w.stop_reason())
+
+    def test_wrong_pid_never_signalled(self):
+        with patch.object(w,'load',return_value={'phase':'its','pid':123,'pid_start':'correct'}),patch.object(Path,'read_text',return_value=' '.join(['0']*21+['wrong'])),patch.object(w.os,'kill') as kill:
+            with self.assertRaises(RuntimeError):w.request_stop('operator_rollback')
+            kill.assert_not_called()
+
+    def test_flow_parser_rejects_malformed_frames_without_inventing_evidence(self):
+        self.assertEqual([],w.parse_flow_logs('GPS flow: []\nGPS flow: {broken\nGPS flow: null'))
+        self.assertEqual('unproven',w.correlation_state([],{}))
 
 unittest.main()

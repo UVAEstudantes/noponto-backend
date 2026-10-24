@@ -1,0 +1,1357 @@
+{
+  "result": "INCONCLUSIVO",
+  "approved_for_permanent_hybrid": false,
+  "reason": "898 renewal not proven in REST and SignalR inside 90-second gate; operator interruption; limited acquisition freshness evidence",
+  "image": "ghcr.io/guilhermedesales/noponto-api@sha256:44b006a8e7f515572b4fe457b6d56cc757cac306cfc9964d0ad05031c3725835",
+  "release": 149,
+  "merge": "6f2c8d66380865812210f4ea70e4cb72a6ea991c",
+  "authorization_scope": "temporary hybrid <=600 seconds; mandatory GTFS rollback",
+  "timeline": {
+    "activation_requested_utc": "2026-10-24T21:20:12.832767+00:00",
+    "hybrid_container_started_utc": "2026-10-24T21:20:15.829190+00:00",
+    "interruption_utc": "2026-10-24T21:21:59.259806+00:00",
+    "hybrid_container_died_utc": "2026-10-24T21:22:30.227279+00:00",
+    "gtfs_container_started_utc": "2026-10-24T21:22:30.814282+00:00",
+    "rollback_confirmed_utc": "2026-10-24T21:22:41.038846+00:00",
+    "hybrid_container_seconds": 134.3980894088745,
+    "activation_to_stop_seconds": 137.39451241493225,
+    "activation_to_gtfs_start_seconds": 137.98151540756226,
+    "activation_to_health_seconds": 148.2060785293579,
+    "interruption_after_activation_seconds": 106.42703890800476
+  },
+  "stats": {
+    "baseline": {
+      "lines": {
+        "838": {
+          "vehicles": 13.285714285714286,
+          "until40": 0.5714285714285714,
+          "until60": 6.857142857142857,
+          "until180": 13.285714285714286,
+          "median": 59.11207127571106,
+          "p90": 80.11207127571106
+        },
+        "898": {
+          "vehicles": 11.714285714285714,
+          "until40": 0,
+          "until60": 5.857142857142857,
+          "until180": 11.428571428571429,
+          "median": 60.614351987838745,
+          "p90": 72.00337767601013
+        },
+        "006": {
+          "vehicles": 0,
+          "until40": 0,
+          "until60": 0,
+          "until180": 0,
+          "median": null,
+          "p90": null
+        },
+        "457": {
+          "vehicles": 18,
+          "until40": 0.42857142857142855,
+          "until60": 7,
+          "until180": 17.428571428571427,
+          "median": 66.05537986755371,
+          "p90": 103.0119936466217
+        },
+        "483": {
+          "vehicles": 31,
+          "until40": 1.2857142857142858,
+          "until60": 15,
+          "until180": 30.571428571428573,
+          "median": 62.058881521224976,
+          "p90": 74.0132246017456
+        },
+        "355": {
+          "vehicles": 6,
+          "until40": 0,
+          "until60": 3,
+          "until180": 6,
+          "median": 54.56099510192871,
+          "p90": 64.06099510192871
+        },
+        "805": {
+          "vehicles": 2,
+          "until40": 0,
+          "until60": 1,
+          "until180": 2,
+          "median": 58.53993034362793,
+          "p90": 62.03993034362793
+        }
+      },
+      "controls": {
+        "35": {
+          "vehicles": 4.714285714285714,
+          "until40": 1.8571428571428572,
+          "until60": 4.142857142857143,
+          "until180": 4.571428571428571,
+          "median": 42.06639742851257,
+          "p90": 60.01754808425903
+        },
+        "60": {
+          "vehicles": 18.714285714285715,
+          "until40": 5.285714285714286,
+          "until60": 14.142857142857142,
+          "until180": 18.142857142857142,
+          "median": 46.069308042526245,
+          "p90": 117.02164721488953
+        },
+        "67": {
+          "vehicles": 9,
+          "until40": 3.2857142857142856,
+          "until60": 8.571428571428571,
+          "until180": 9,
+          "median": 42.071497201919556,
+          "p90": 53.13297986984253
+        }
+      },
+      "samples": 7
+    },
+    "its": {
+      "lines": {
+        "838": {
+          "vehicles": 18.2,
+          "until40": 0,
+          "until60": 2.6,
+          "until180": 18,
+          "median": 76.00308561325073,
+          "p90": 109.00256514549255
+        },
+        "898": {
+          "vehicles": 12,
+          "until40": 2.2,
+          "until60": 3.8,
+          "until180": 12,
+          "median": 66.08299422264099,
+          "p90": 75.42332124710083
+        },
+        "006": {
+          "vehicles": 0,
+          "until40": 0,
+          "until60": 0,
+          "until180": 0,
+          "median": null,
+          "p90": null
+        },
+        "457": {
+          "vehicles": 20.2,
+          "until40": 0.4,
+          "until60": 4,
+          "until180": 20.2,
+          "median": 75.09352946281433,
+          "p90": 105.01114845275879
+        },
+        "483": {
+          "vehicles": 44.2,
+          "until40": 0,
+          "until60": 7.6,
+          "until180": 44,
+          "median": 72.10124039649963,
+          "p90": 87.01513290405273
+        },
+        "355": {
+          "vehicles": 9.2,
+          "until40": 0.2,
+          "until60": 1.8,
+          "until180": 8.8,
+          "median": 72.01785445213318,
+          "p90": 83.10553359985352
+        },
+        "805": {
+          "vehicles": 2,
+          "until40": 0,
+          "until60": 0.4,
+          "until180": 2,
+          "median": 78.6087498664856,
+          "p90": 82.1087498664856
+        }
+      },
+      "controls": {
+        "35": {
+          "vehicles": 5,
+          "until40": 2,
+          "until60": 3.8,
+          "until180": 5,
+          "median": 42.44104480743408,
+          "p90": 51.44104480743408
+        },
+        "60": {
+          "vehicles": 17.8,
+          "until40": 7,
+          "until60": 12.8,
+          "until180": 17.4,
+          "median": 44.44574427604675,
+          "p90": 53.44574427604675
+        },
+        "67": {
+          "vehicles": 9,
+          "until40": 3.6,
+          "until60": 7,
+          "until180": 9,
+          "median": 42.44849228858948,
+          "p90": 53.44849228858948
+        }
+      },
+      "samples": 5
+    }
+  },
+  "method": "means of per-sample vehicle and freshness counts; median of sample medians and median of sample p90; not pooled population percentiles",
+  "controller_sample_counts": {
+    "baseline": 8,
+    "hybrid": 5
+  },
+  "selections": [
+    {
+      "stamp": "2026-10-24T21:20:28.790706674Z",
+      "mode": "Hybrid",
+      "primary_status": "Sucesso",
+      "support_status": "Sucesso",
+      "status": "Sucesso",
+      "reason": "(null)",
+      "its_input": "2374",
+      "gtfs_input": "1409",
+      "selected": "2373",
+      "selected_its": "1702",
+      "selected_gtfs": "671",
+      "shared": "1354",
+      "ties": "672",
+      "coordinate_conflicts": "31",
+      "line_conflicts": "28",
+      "direction_conflicts": "0",
+      "invalid": "0",
+      "recent40": "1682",
+      "recent60": "2259",
+      "recent180": "2372",
+      "duration_ms": "8927.731"
+    },
+    {
+      "stamp": "2026-10-24T21:21:38.068662419Z",
+      "mode": "Hybrid",
+      "primary_status": "Sucesso",
+      "support_status": "Sucesso",
+      "status": "Sucesso",
+      "reason": "(null)",
+      "its_input": "2375",
+      "gtfs_input": "1385",
+      "selected": "2431",
+      "selected_its": "1046",
+      "selected_gtfs": "1385",
+      "shared": "1329",
+      "ties": "2",
+      "coordinate_conflicts": "0",
+      "line_conflicts": "0",
+      "direction_conflicts": "0",
+      "invalid": "0",
+      "recent40": "1365",
+      "recent60": "1687",
+      "recent180": "2428",
+      "duration_ms": "49211.2141"
+    }
+  ],
+  "selection_totals_repeated_vehicles": {
+    "selected": 4804,
+    "its": 2748,
+    "gtfs": 2056,
+    "its_percent": 57.20233139050791,
+    "gtfs_percent": 42.79766860949209
+  },
+  "acquisitions": [
+    {
+      "stamp": "2026-10-24T21:20:28.008855726Z",
+      "status": "Sucesso",
+      "reason": "(null)",
+      "pages": "7",
+      "windows": "3",
+      "records": "24934",
+      "rejected": "1855",
+      "duration_ms": "8235.0497",
+      "vehicles": "2374",
+      "recent40": "1676",
+      "recent60": "2260",
+      "age_p50": "34.0015031",
+      "age_p90": "48.0015031",
+      "zirix_selected": "789",
+      "conecta_selected": "1585"
+    },
+    {
+      "stamp": "2026-10-24T21:21:37.362324208Z",
+      "status": "Sucesso",
+      "reason": "(null)",
+      "pages": "8",
+      "windows": "3",
+      "records": "32488",
+      "rejected": "10082",
+      "duration_ms": "48553.6583",
+      "vehicles": "2375",
+      "recent40": "0",
+      "recent60": "909",
+      "age_p50": "63.3570381",
+      "age_p90": "78.3570381",
+      "zirix_selected": "1572",
+      "conecta_selected": "803"
+    }
+  ],
+  "cycles": {
+    "baseline": {
+      "count": 12,
+      "max_ms": 8354.0,
+      "cas_accepted": 6148.0,
+      "cas_infra": 0.0,
+      "snapshots_consumed": 4,
+      "pending_samples": 0,
+      "max_matching_ms": 5187.0
+    },
+    "hybrid": {
+      "count": 8,
+      "max_ms": 12272.0,
+      "cas_accepted": 4255.0,
+      "cas_infra": 0.0,
+      "snapshots_consumed": 2,
+      "pending_samples": 0,
+      "max_matching_ms": 4458.0
+    }
+  },
+  "proof898_during_hybrid": {
+    "feed": {
+      "http_status": 200,
+      "seconds": 1.052217129006749,
+      "entities": 1501,
+      "normalized898": 12,
+      "rejected898": 0,
+      "conflicts898": 0
+    },
+    "matches": {
+      "rest": {
+        "published898": 12,
+        "matched_gtfs": 12,
+        "matched_physical_after_activation": 12
+      },
+      "socket": {
+        "published898": 12,
+        "matched_gtfs": 0,
+        "matched_physical_after_activation": 0
+      }
+    },
+    "unique_new_rest": 12,
+    "unique_new_socket": 0,
+    "first_new_delay_seconds": 97.63194155693054
+  },
+  "controller_reason": "exception_RuntimeError",
+  "operator_reason": "898 gate not demonstrated within 90 seconds",
+  "proof": {
+    "time": 1792876621.4650376,
+    "ancestor_processes": [
+      "python3",
+      "sh",
+      "cron",
+      "cron",
+      "systemd"
+    ],
+    "independent_cron": true
+  },
+  "cleanup": {
+    "time": 1792877003.802575,
+    "only_marked_job_removed": true,
+    "remaining_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "original_restored": true
+  },
+  "final_config": {
+    "image": "ghcr.io/guilhermedesales/noponto-api@sha256:44b006a8e7f515572b4fe457b6d56cc757cac306cfc9964d0ad05031c3725835",
+    "primary": "GTFSRT_BUS",
+    "fallback": "",
+    "mode": "FullFallback",
+    "brt": "GTFSRT_BRT",
+    "compose_files": [
+      "/opt/stacks/noponto/docker-compose.yml",
+      "/home/guilherme/noponto-release-artifacts/docker-compose.gtfsrt-production.proposed.yml",
+      "/home/guilherme/.noponto-deploy/physical-eta.override.yml",
+      "/home/guilherme/.noponto-deploy/historical-eta-shadow.override.yml",
+      "/home/guilherme/.noponto-deploy/hybrid-window-20261024-b5e2b75c68/gtfs.rollback.override.yml"
+    ]
+  },
+  "active_release": "149",
+  "active_matches": true,
+  "final_independent": {
+    "utc": "2026-10-24T21:23:24.335612+00:00",
+    "image": "ghcr.io/guilhermedesales/noponto-api@sha256:44b006a8e7f515572b4fe457b6d56cc757cac306cfc9964d0ad05031c3725835",
+    "image_id": "sha256:44b006a8e7f515572b4fe457b6d56cc757cac306cfc9964d0ad05031c3725835",
+    "writers": 1,
+    "primary": "GTFSRT_BUS",
+    "fallback": "",
+    "mode_effective": "FullFallback",
+    "mode_configured": "FullFallback",
+    "brt": "GTFSRT_BRT",
+    "active_image_matches": true,
+    "release": "149",
+    "window_jobs": 0,
+    "containers": {
+      "noponto_api": {
+        "image": "ghcr.io/guilhermedesales/noponto-api@sha256:44b006a8e7f515572b4fe457b6d56cc757cac306cfc9964d0ad05031c3725835",
+        "started": "2026-10-24T21:22:30.629394721Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      },
+      "transporte_postgres": {
+        "image": "postgis/postgis:16-3.4",
+        "started": "2026-10-22T14:26:01.764086606Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "transporte_redis": {
+        "image": "redis:7",
+        "started": "2026-10-22T14:26:01.676775384Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "auth_api": {
+        "image": "ghcr.io/guilhermedesales/auth-api:latest",
+        "started": "2026-10-22T14:26:01.748137946Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      },
+      "auth_postgres": {
+        "image": "postgres:16",
+        "started": "2026-10-22T14:26:01.638382942Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "auth_redis": {
+        "image": "redis:7",
+        "started": "2026-10-22T14:26:01.735834335Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "portainer": {
+        "image": "portainer/portainer-ce",
+        "started": "2026-10-22T14:26:01.71478912Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      },
+      "dozzle": {
+        "image": "amir20/dozzle:latest",
+        "started": "2026-10-22T14:26:01.659325823Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      }
+    },
+    "samples": [
+      {
+        "lines": {
+          "838": {
+            "vehicles": 20,
+            "until40": 7,
+            "until60": 13,
+            "until180": 19,
+            "older180": 1,
+            "future": 0,
+            "max_age": 190.42131900787354
+          },
+          "898": {
+            "vehicles": 12,
+            "until40": 11,
+            "until60": 12,
+            "until180": 12,
+            "older180": 0,
+            "future": 0,
+            "max_age": 52.424394607543945
+          },
+          "006": {
+            "vehicles": 0,
+            "until40": 0,
+            "until60": 0,
+            "until180": 0,
+            "older180": 0,
+            "future": 0,
+            "max_age": null
+          },
+          "457": {
+            "vehicles": 22,
+            "until40": 8,
+            "until60": 15,
+            "until180": 22,
+            "older180": 0,
+            "future": 0,
+            "max_age": 176.42970514297485
+          },
+          "483": {
+            "vehicles": 46,
+            "until40": 24,
+            "until60": 33,
+            "until180": 46,
+            "older180": 0,
+            "future": 0,
+            "max_age": 122.43649005889893
+          },
+          "355": {
+            "vehicles": 10,
+            "until40": 5,
+            "until60": 6,
+            "until180": 10,
+            "older180": 0,
+            "future": 0,
+            "max_age": 122.43941807746887
+          },
+          "805": {
+            "vehicles": 2,
+            "until40": 0,
+            "until60": 2,
+            "until180": 2,
+            "older180": 0,
+            "future": 0,
+            "max_age": 48.441662549972534
+          }
+        },
+        "controls": {
+          "35": {
+            "vehicles": 6,
+            "until40": 0,
+            "until60": 5,
+            "until180": 6,
+            "older180": 0,
+            "future": 0,
+            "max_age": 142.44404816627502
+          },
+          "60": {
+            "vehicles": 18,
+            "until40": 1,
+            "until60": 18,
+            "until180": 18,
+            "older180": 0,
+            "future": 0,
+            "max_age": 57.44689154624939
+          },
+          "67": {
+            "vehicles": 10,
+            "until40": 0,
+            "until60": 10,
+            "until180": 10,
+            "older180": 0,
+            "future": 0,
+            "max_age": 58.44941544532776
+          }
+        },
+        "line_http": {
+          "838": {
+            "path": "/veiculos/linha/838",
+            "seconds": 0.0032222110021393746,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "898": {
+            "path": "/veiculos/linha/898",
+            "seconds": 0.0028159759822301567,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "006": {
+            "path": "/veiculos/linha/006",
+            "seconds": 0.0018627099925652146,
+            "http_status": 404,
+            "empty_line": true
+          },
+          "457": {
+            "path": "/veiculos/linha/457",
+            "seconds": 0.003073940984904766,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "483": {
+            "path": "/veiculos/linha/483",
+            "seconds": 0.0061602049972862005,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "355": {
+            "path": "/veiculos/linha/355",
+            "seconds": 0.0026756119914352894,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "805": {
+            "path": "/veiculos/linha/805",
+            "seconds": 0.0021505699842236936,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "35": {
+            "path": "/veiculos/linha/35",
+            "seconds": 0.0022485299850814044,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "60": {
+            "path": "/veiculos/linha/60",
+            "seconds": 0.002563593996455893,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "67": {
+            "path": "/veiculos/linha/67",
+            "seconds": 0.0023210909857880324,
+            "http_status": 200,
+            "empty_line": false
+          }
+        },
+        "wire": {
+          "messages": 0,
+          "duplicates": 0,
+          "regressions": 0,
+          "invalid": 0,
+          "connections": 1,
+          "errors": 0,
+          "last": 0,
+          "lines": {}
+        },
+        "resources": [
+          {
+            "Name": "noponto_api",
+            "CPUPerc": "38.53%",
+            "MemUsage": "173.2MiB / 768MiB",
+            "MemPerc": "22.55%",
+            "PIDs": "31"
+          },
+          {
+            "Name": "transporte_postgres",
+            "CPUPerc": "0.15%",
+            "MemUsage": "640.2MiB / 3.738GiB",
+            "MemPerc": "16.73%",
+            "PIDs": "11"
+          },
+          {
+            "Name": "transporte_redis",
+            "CPUPerc": "3.59%",
+            "MemUsage": "70.1MiB / 640MiB",
+            "MemPerc": "10.95%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "auth_api",
+            "CPUPerc": "0.12%",
+            "MemUsage": "214.9MiB / 3.738GiB",
+            "MemPerc": "5.61%",
+            "PIDs": "42"
+          },
+          {
+            "Name": "auth_postgres",
+            "CPUPerc": "0.00%",
+            "MemUsage": "43.54MiB / 3.738GiB",
+            "MemPerc": "1.14%",
+            "PIDs": "16"
+          },
+          {
+            "Name": "auth_redis",
+            "CPUPerc": "3.59%",
+            "MemUsage": "11.25MiB / 3.738GiB",
+            "MemPerc": "0.29%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "portainer",
+            "CPUPerc": "0.04%",
+            "MemUsage": "22.03MiB / 3.738GiB",
+            "MemPerc": "0.58%",
+            "PIDs": "7"
+          },
+          {
+            "Name": "dozzle",
+            "CPUPerc": "0.72%",
+            "MemUsage": "26.14MiB / 3.738GiB",
+            "MemPerc": "0.68%",
+            "PIDs": "10"
+          }
+        ],
+        "memory_kib": {
+          "MemAvailable": 2377908,
+          "SwapFree": 4856824
+        },
+        "source": "GTFSRT_BUS",
+        "fallback": "",
+        "support_mode": "FullFallback"
+      },
+      {
+        "lines": {
+          "838": {
+            "vehicles": 20,
+            "until40": 0,
+            "until60": 9,
+            "until180": 19,
+            "older180": 1,
+            "future": 0,
+            "max_age": 207.2123818397522
+          },
+          "898": {
+            "vehicles": 12,
+            "until40": 0,
+            "until60": 11,
+            "until180": 12,
+            "older180": 0,
+            "future": 0,
+            "max_age": 69.21543335914612
+          },
+          "006": {
+            "vehicles": 0,
+            "until40": 0,
+            "until60": 0,
+            "until180": 0,
+            "older180": 0,
+            "future": 0,
+            "max_age": null
+          },
+          "457": {
+            "vehicles": 22,
+            "until40": 0,
+            "until60": 11,
+            "until180": 21,
+            "older180": 1,
+            "future": 0,
+            "max_age": 193.2208993434906
+          },
+          "483": {
+            "vehicles": 46,
+            "until40": 0,
+            "until60": 27,
+            "until180": 46,
+            "older180": 0,
+            "future": 0,
+            "max_age": 139.22544860839844
+          },
+          "355": {
+            "vehicles": 10,
+            "until40": 0,
+            "until60": 5,
+            "until180": 10,
+            "older180": 0,
+            "future": 0,
+            "max_age": 139.2284436225891
+          },
+          "805": {
+            "vehicles": 2,
+            "until40": 0,
+            "until60": 1,
+            "until180": 2,
+            "older180": 0,
+            "future": 0,
+            "max_age": 65.23068952560425
+          }
+        },
+        "controls": {
+          "35": {
+            "vehicles": 6,
+            "until40": 0,
+            "until60": 0,
+            "until180": 6,
+            "older180": 0,
+            "future": 0,
+            "max_age": 159.23315382003784
+          },
+          "60": {
+            "vehicles": 18,
+            "until40": 0,
+            "until60": 3,
+            "until180": 18,
+            "older180": 0,
+            "future": 0,
+            "max_age": 74.2460036277771
+          },
+          "67": {
+            "vehicles": 10,
+            "until40": 0,
+            "until60": 0,
+            "until180": 10,
+            "older180": 0,
+            "future": 0,
+            "max_age": 75.2486515045166
+          }
+        },
+        "line_http": {
+          "838": {
+            "path": "/veiculos/linha/838",
+            "seconds": 0.003752517979592085,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "898": {
+            "path": "/veiculos/linha/898",
+            "seconds": 0.0026659909926820546,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "006": {
+            "path": "/veiculos/linha/006",
+            "seconds": 0.0019308209884911776,
+            "http_status": 404,
+            "empty_line": true
+          },
+          "457": {
+            "path": "/veiculos/linha/457",
+            "seconds": 0.003096887987339869,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "483": {
+            "path": "/veiculos/linha/483",
+            "seconds": 0.003906005003955215,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "355": {
+            "path": "/veiculos/linha/355",
+            "seconds": 0.002634030010085553,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "805": {
+            "path": "/veiculos/linha/805",
+            "seconds": 0.0021311200107447803,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "35": {
+            "path": "/veiculos/linha/35",
+            "seconds": 0.0023324760259129107,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "60": {
+            "path": "/veiculos/linha/60",
+            "seconds": 0.01246695700683631,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "67": {
+            "path": "/veiculos/linha/67",
+            "seconds": 0.0024357869988307357,
+            "http_status": 200,
+            "empty_line": false
+          }
+        },
+        "wire": {
+          "messages": 9,
+          "duplicates": 0,
+          "regressions": 0,
+          "invalid": 0,
+          "connections": 1,
+          "errors": 0,
+          "last": 1792877018.5101624,
+          "lines": {
+            "60": {
+              "vehicles": 18,
+              "until40": 0,
+              "until60": 3,
+              "until180": 18,
+              "older180": 0,
+              "future": 0,
+              "max_age": 75.49847936630249
+            },
+            "898": {
+              "vehicles": 12,
+              "until40": 0,
+              "until60": 11,
+              "until180": 12,
+              "older180": 0,
+              "future": 0,
+              "max_age": 70.49855160713196
+            },
+            "006": {
+              "vehicles": 0,
+              "until40": 0,
+              "until60": 0,
+              "until180": 0,
+              "older180": 0,
+              "future": 0,
+              "max_age": null
+            },
+            "805": {
+              "vehicles": 2,
+              "until40": 0,
+              "until60": 1,
+              "until180": 2,
+              "older180": 0,
+              "future": 0,
+              "max_age": 66.4986035823822
+            },
+            "838": {
+              "vehicles": 20,
+              "until40": 0,
+              "until60": 8,
+              "until180": 19,
+              "older180": 1,
+              "future": 0,
+              "max_age": 208.49861884117126
+            },
+            "35": {
+              "vehicles": 6,
+              "until40": 0,
+              "until60": 0,
+              "until180": 6,
+              "older180": 0,
+              "future": 0,
+              "max_age": 160.498681306839
+            },
+            "483": {
+              "vehicles": 46,
+              "until40": 0,
+              "until60": 27,
+              "until180": 46,
+              "older180": 0,
+              "future": 0,
+              "max_age": 140.49870467185974
+            },
+            "355": {
+              "vehicles": 10,
+              "until40": 0,
+              "until60": 5,
+              "until180": 10,
+              "older180": 0,
+              "future": 0,
+              "max_age": 140.49884939193726
+            },
+            "67": {
+              "vehicles": 10,
+              "until40": 0,
+              "until60": 0,
+              "until180": 10,
+              "older180": 0,
+              "future": 0,
+              "max_age": 76.4988853931427
+            },
+            "457": {
+              "vehicles": 22,
+              "until40": 0,
+              "until60": 9,
+              "until180": 21,
+              "older180": 1,
+              "future": 0,
+              "max_age": 194.49891781806946
+            }
+          }
+        },
+        "resources": [
+          {
+            "Name": "noponto_api",
+            "CPUPerc": "1.68%",
+            "MemUsage": "174.7MiB / 768MiB",
+            "MemPerc": "22.75%",
+            "PIDs": "31"
+          },
+          {
+            "Name": "transporte_postgres",
+            "CPUPerc": "106.34%",
+            "MemUsage": "644.1MiB / 3.738GiB",
+            "MemPerc": "16.83%",
+            "PIDs": "11"
+          },
+          {
+            "Name": "transporte_redis",
+            "CPUPerc": "0.43%",
+            "MemUsage": "69.55MiB / 640MiB",
+            "MemPerc": "10.87%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "auth_api",
+            "CPUPerc": "0.10%",
+            "MemUsage": "214.9MiB / 3.738GiB",
+            "MemPerc": "5.61%",
+            "PIDs": "42"
+          },
+          {
+            "Name": "auth_postgres",
+            "CPUPerc": "0.00%",
+            "MemUsage": "43.57MiB / 3.738GiB",
+            "MemPerc": "1.14%",
+            "PIDs": "16"
+          },
+          {
+            "Name": "auth_redis",
+            "CPUPerc": "0.42%",
+            "MemUsage": "11.25MiB / 3.738GiB",
+            "MemPerc": "0.29%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "portainer",
+            "CPUPerc": "0.00%",
+            "MemUsage": "22.03MiB / 3.738GiB",
+            "MemPerc": "0.58%",
+            "PIDs": "7"
+          },
+          {
+            "Name": "dozzle",
+            "CPUPerc": "0.41%",
+            "MemUsage": "26.14MiB / 3.738GiB",
+            "MemPerc": "0.68%",
+            "PIDs": "10"
+          }
+        ],
+        "memory_kib": {
+          "MemAvailable": 2359664,
+          "SwapFree": 4856824
+        },
+        "source": "GTFSRT_BUS",
+        "fallback": "",
+        "support_mode": "FullFallback"
+      },
+      {
+        "lines": {
+          "838": {
+            "vehicles": 20,
+            "until40": 6,
+            "until60": 13,
+            "until180": 19,
+            "older180": 1,
+            "future": 0,
+            "max_age": 223.52839136123657
+          },
+          "898": {
+            "vehicles": 12,
+            "until40": 9,
+            "until60": 12,
+            "until180": 12,
+            "older180": 0,
+            "future": 0,
+            "max_age": 55.53097414970398
+          },
+          "006": {
+            "vehicles": 0,
+            "until40": 0,
+            "until60": 0,
+            "until180": 0,
+            "older180": 0,
+            "future": 0,
+            "max_age": null
+          },
+          "457": {
+            "vehicles": 22,
+            "until40": 8,
+            "until60": 16,
+            "until180": 21,
+            "older180": 1,
+            "future": 0,
+            "max_age": 209.53563785552979
+          },
+          "483": {
+            "vehicles": 46,
+            "until40": 24,
+            "until60": 32,
+            "until180": 46,
+            "older180": 0,
+            "future": 0,
+            "max_age": 155.54189085960388
+          },
+          "355": {
+            "vehicles": 10,
+            "until40": 1,
+            "until60": 5,
+            "until180": 10,
+            "older180": 0,
+            "future": 0,
+            "max_age": 155.54455661773682
+          },
+          "805": {
+            "vehicles": 2,
+            "until40": 0,
+            "until60": 2,
+            "until180": 2,
+            "older180": 0,
+            "future": 0,
+            "max_age": 51.54653525352478
+          }
+        },
+        "controls": {
+          "35": {
+            "vehicles": 6,
+            "until40": 0,
+            "until60": 5,
+            "until180": 6,
+            "older180": 0,
+            "future": 0,
+            "max_age": 175.54863166809082
+          },
+          "60": {
+            "vehicles": 18,
+            "until40": 0,
+            "until60": 13,
+            "until180": 18,
+            "older180": 0,
+            "future": 0,
+            "max_age": 86.55135536193848
+          },
+          "67": {
+            "vehicles": 10,
+            "until40": 0,
+            "until60": 8,
+            "until180": 10,
+            "older180": 0,
+            "future": 0,
+            "max_age": 61.553624391555786
+          }
+        },
+        "line_http": {
+          "838": {
+            "path": "/veiculos/linha/838",
+            "seconds": 0.0032490279991179705,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "898": {
+            "path": "/veiculos/linha/898",
+            "seconds": 0.002345889020944014,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "006": {
+            "path": "/veiculos/linha/006",
+            "seconds": 0.0016151989984791726,
+            "http_status": 404,
+            "empty_line": true
+          },
+          "457": {
+            "path": "/veiculos/linha/457",
+            "seconds": 0.0026772960263770074,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "483": {
+            "path": "/veiculos/linha/483",
+            "seconds": 0.005627272999845445,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "355": {
+            "path": "/veiculos/linha/355",
+            "seconds": 0.0024154100101441145,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "805": {
+            "path": "/veiculos/linha/805",
+            "seconds": 0.0018818459939211607,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "35": {
+            "path": "/veiculos/linha/35",
+            "seconds": 0.001964110997505486,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "60": {
+            "path": "/veiculos/linha/60",
+            "seconds": 0.0024354750057682395,
+            "http_status": 200,
+            "empty_line": false
+          },
+          "67": {
+            "path": "/veiculos/linha/67",
+            "seconds": 0.0020560520060826093,
+            "http_status": 200,
+            "empty_line": false
+          }
+        },
+        "wire": {
+          "messages": 27,
+          "duplicates": 0,
+          "regressions": 0,
+          "invalid": 0,
+          "connections": 1,
+          "errors": 0,
+          "last": 1792877034.179944,
+          "lines": {
+            "60": {
+              "vehicles": 18,
+              "until40": 0,
+              "until60": 12,
+              "until180": 18,
+              "older180": 0,
+              "future": 0,
+              "max_age": 87.7903265953064
+            },
+            "898": {
+              "vehicles": 12,
+              "until40": 9,
+              "until60": 12,
+              "until180": 12,
+              "older180": 0,
+              "future": 0,
+              "max_age": 56.790374994277954
+            },
+            "006": {
+              "vehicles": 0,
+              "until40": 0,
+              "until60": 0,
+              "until180": 0,
+              "older180": 0,
+              "future": 0,
+              "max_age": null
+            },
+            "805": {
+              "vehicles": 2,
+              "until40": 0,
+              "until60": 2,
+              "until180": 2,
+              "older180": 0,
+              "future": 0,
+              "max_age": 52.79039931297302
+            },
+            "838": {
+              "vehicles": 20,
+              "until40": 6,
+              "until60": 13,
+              "until180": 19,
+              "older180": 1,
+              "future": 0,
+              "max_age": 224.79040670394897
+            },
+            "35": {
+              "vehicles": 6,
+              "until40": 0,
+              "until60": 4,
+              "until180": 6,
+              "older180": 0,
+              "future": 0,
+              "max_age": 176.79043650627136
+            },
+            "483": {
+              "vehicles": 46,
+              "until40": 23,
+              "until60": 32,
+              "until180": 46,
+              "older180": 0,
+              "future": 0,
+              "max_age": 156.79044914245605
+            },
+            "355": {
+              "vehicles": 10,
+              "until40": 1,
+              "until60": 5,
+              "until180": 10,
+              "older180": 0,
+              "future": 0,
+              "max_age": 156.79050946235657
+            },
+            "67": {
+              "vehicles": 10,
+              "until40": 0,
+              "until60": 8,
+              "until180": 10,
+              "older180": 0,
+              "future": 0,
+              "max_age": 62.79052662849426
+            },
+            "457": {
+              "vehicles": 22,
+              "until40": 7,
+              "until60": 16,
+              "until180": 21,
+              "older180": 1,
+              "future": 0,
+              "max_age": 210.7905433177948
+            }
+          }
+        },
+        "resources": [
+          {
+            "Name": "noponto_api",
+            "CPUPerc": "0.66%",
+            "MemUsage": "180.1MiB / 768MiB",
+            "MemPerc": "23.45%",
+            "PIDs": "30"
+          },
+          {
+            "Name": "transporte_postgres",
+            "CPUPerc": "0.10%",
+            "MemUsage": "642.5MiB / 3.738GiB",
+            "MemPerc": "16.78%",
+            "PIDs": "11"
+          },
+          {
+            "Name": "transporte_redis",
+            "CPUPerc": "0.56%",
+            "MemUsage": "69.7MiB / 640MiB",
+            "MemPerc": "10.89%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "auth_api",
+            "CPUPerc": "0.12%",
+            "MemUsage": "214.9MiB / 3.738GiB",
+            "MemPerc": "5.61%",
+            "PIDs": "42"
+          },
+          {
+            "Name": "auth_postgres",
+            "CPUPerc": "6.53%",
+            "MemUsage": "43.57MiB / 3.738GiB",
+            "MemPerc": "1.14%",
+            "PIDs": "16"
+          },
+          {
+            "Name": "auth_redis",
+            "CPUPerc": "0.46%",
+            "MemUsage": "11.25MiB / 3.738GiB",
+            "MemPerc": "0.29%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "portainer",
+            "CPUPerc": "0.00%",
+            "MemUsage": "22.03MiB / 3.738GiB",
+            "MemPerc": "0.58%",
+            "PIDs": "7"
+          },
+          {
+            "Name": "dozzle",
+            "CPUPerc": "0.66%",
+            "MemUsage": "26.14MiB / 3.738GiB",
+            "MemPerc": "0.68%",
+            "PIDs": "10"
+          }
+        ],
+        "memory_kib": {
+          "MemAvailable": 2357152,
+          "SwapFree": 4856824
+        },
+        "source": "GTFSRT_BUS",
+        "fallback": "",
+        "support_mode": "FullFallback"
+      }
+    ],
+    "cycles": {
+      "count": 3,
+      "max_ms": 8588.0,
+      "accepted": 1516.0,
+      "infra": 0.0
+    },
+    "hybrid_logs_present": false
+  },
+  "generation_id_archived": false,
+  "ack_evidence": "snapshot_sppo_consumido with pending=false; inferred handoff/ACK, no explicit per-generation ACK record",
+  "tests": {
+    "supervisor_passed": 24,
+    "dotnet_rerun": false
+  },
+  "hashes": {
+    "setup.json": "9e62b64fef0de2dbe6e8d71bcf0577f81939f667c671b25023994cdf8988b32c",
+    "observer.jsonl": "a4ca347011fc3cea7dd8ad43fdcc3eb3332557dbbde721797225b193315d74af",
+    "remote-evidence.json": "840011114d5802f3568bb92acacb6d14105ef3632195cd2845d9b327a97cd7d7",
+    "final-independent.json": "66b8612041f96b496d06c2a16d0633c6a5f070ae86ba3216cea717611df4a9c1",
+    "preview.jsonl": "66e902ad83e828da304cd4cde483a6e0511ef091df48a920dd7fa29c565b7031"
+  }
+}

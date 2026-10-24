@@ -72,7 +72,7 @@ public sealed class GpsPollingService : BackgroundService
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
-        _signalR = new(cache, hubContext);
+        _signalR = new(cache, hubContext, snapshotSppo?.Trace);
         _logger = logger;
         _opcoesMonitor = opcoes;
         _scopeFactory = scopeFactory;
@@ -263,6 +263,7 @@ public sealed class GpsPollingService : BackgroundService
             brtPolling.MotivoFalhaConsulta);
 
         inicioEtapa = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (loteSppo is not null) _snapshotSppo.Trace?.Record("polling", loteSppo.Posicoes, loteSppo.Geracao);
         var posicoes = (loteSppo?.Posicoes ?? []).Concat(resultadoBrt.Posicoes).ToList();
         performance.Entrada = posicoes.Count;
 
@@ -303,6 +304,7 @@ public sealed class GpsPollingService : BackgroundService
             })
             .ToList();
         performance.Validas = maisRecentesFiltrados.Count;
+        _snapshotSppo.Trace?.Record("age_valid", maisRecentesFiltrados);
         performance.NormalizacaoMs = (long)System.Diagnostics.Stopwatch
             .GetElapsedTime(inicioEtapa).TotalMilliseconds;
 
@@ -368,6 +370,7 @@ public sealed class GpsPollingService : BackgroundService
             paraProcessar.Add((nova, predecessoresFisicos[i]));
         }
         performance.Novas = paraProcessar.Count;
+        _snapshotSppo.Trace?.Record("timestamp_new", paraProcessar.Select(x => x.Nova));
 
         if (trocouDeLinha.Count > 0)
         {
@@ -530,6 +533,7 @@ public sealed class GpsPollingService : BackgroundService
             todosProcessados = todosProcessados.Select(x => PhysicalEta.Apply(x, physicalNow, physicalOptions, capturePhysicalDiagnostic)).ToList();
         }
 
+        _snapshotSppo.Trace?.Record("matched", todosProcessados.Select(x => x.Posicao));
         // C é estritamente auxiliar: com a flag OFF não há leitura, serialização
         // ou cálculo causal. O candidato é preparado antes do CAS B, mas só pode
         // ser persistido depois que B confirmar o aceite da mesma observação.
@@ -569,6 +573,10 @@ public sealed class GpsPollingService : BackgroundService
                     break;
             }
         }
+
+        _snapshotSppo.Trace?.Record("cas_accepted", aceitos);
+        _snapshotSppo.Trace?.Record("cas_rejected_timestamp", resultadosGravacao.Where(x => x.Resultado.Status == PosicaoVeiculoCacheStatus.RejectedOlderOrEqual).Select(x => x.Posicao));
+        _snapshotSppo.Trace?.Record("cas_infrastructure_failure", resultadosGravacao.Where(x => x.Resultado.Status == PosicaoVeiculoCacheStatus.InfrastructureFailure).Select(x => x.Posicao));
 
         if (preparacaoCausal is not null && aceitos.Count > 0)
         {

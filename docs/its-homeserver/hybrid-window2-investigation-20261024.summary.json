@@ -1,0 +1,148 @@
+{
+  "base_commit": "75c9932",
+  "production_accessed": false,
+  "production_modified": false,
+  "new_real_provider_queries": false,
+  "historical_latency_ms": [
+    8235.0497,
+    48553.6583
+  ],
+  "hybrid_duration_ms": [
+    8927.731,
+    49211.2141
+  ],
+  "remainder_after_its_ms": [
+    692.6813000000002,
+    657.5557999999946
+  ],
+  "historical_records": [
+    24934,
+    32488
+  ],
+  "historical_rejected": [
+    1855,
+    10082
+  ],
+  "valid_records_before_vehicle_dedup": [
+    23079,
+    22406
+  ],
+  "per_page_historical_timings_available": false,
+  "historical_rejection_causes_available": false,
+  "root_cause_of_48s_proven": false,
+  "proven_findings": [
+    "sequential source acquisition postpones support until ITS ends",
+    "complete acquisition barrier ages observations",
+    "normalization rejection is distinct from deduplication and expiry at Finish",
+    "independent probe and backend can consume different GTFS snapshots",
+    "complete SignalR snapshots repeat GPS without refreshing physical time",
+    "group SIGTERM can interrupt docker subprocesses; operational stop reason was not separately preserved"
+  ],
+  "changes": [
+    "bounded HTTP page timing",
+    "per-window/provider/rejection counters",
+    "OFF-by-default bounded ephemeral generation correlation",
+    "same-observation intersection across CAS/REST/SignalR/ACK",
+    "structured probe failures and controller-only stop request",
+    "strict unchanged 90-second proof gate",
+    "future templates enable trace only in Hybrid and disable on rollback"
+  ],
+  "trace_limits": {
+    "enabled_default": false,
+    "lines_default": [
+      "898"
+    ],
+    "window_seconds": 900,
+    "generations": 8,
+    "records_per_generation": 128,
+    "logs": 256
+  },
+  "results": {
+    "targeted": {
+      "total": 464,
+      "passed": 464,
+      "failed": 0,
+      "notExecuted": 0,
+      "sha256": "d7fb29cceaa847c0d0e2eb717790421ec4809ae1fba8588a008626ab4be96269"
+    },
+    "redis": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "notExecuted": 0,
+      "sha256": "13cb1889deee3e71132f373a0087c0804fafb9c6bd5f97398262e43ea97a82b1"
+    },
+    "offline": {
+      "total": 1076,
+      "passed": 1076,
+      "failed": 0,
+      "notExecuted": 0,
+      "sha256": "d9a2962dff1073936896be5eeef7c76700b68429ddebed308553c516b7866b6c"
+    },
+    "python": {
+      "passed": 36,
+      "failed": 0
+    }
+  },
+  "offline_configuration": "Debug, Docker --network none, read-only workspace, official selection and verifier",
+  "release_rebuild": "not executed: automatic approval review required unavailable approval",
+  "redis_isolation": {
+    "container": "e2d61ba64271d080bc2f4b0ac9b0446a51ac3bfb2d465bd89a16fcc7b20c3961",
+    "image": "sha256:24ea35ee039d7345bef2377611e3b1a615231746de4cfea74c1414575ee56167",
+    "loopback_only": true,
+    "endpoint": "127.0.0.1:52780",
+    "exit_code": 0,
+    "preexisting_container_ids": [
+      "49b9f4ada442",
+      "20bde8231cab",
+      "37a86abe7ce3",
+      "9e323626bee6",
+      "cdaf6d976325",
+      "2ad4c72ebd45",
+      "5f424ebaa2bb",
+      "ca1a1a138ee9",
+      "0cd25390bbdf",
+      "57faa52f20ec",
+      "f7f55ab79cad",
+      "609100a084f8",
+      "e042d5e8c471",
+      "32505f222266",
+      "f87bf6a2c91f",
+      "7791e077ada2",
+      "f78a72100d6a",
+      "da22bf06b999",
+      "8b4509c9b219"
+    ],
+    "owned_remaining": false
+  },
+  "third_window": "preparation justified; no execution until publication/CI, instrumented preflight and separate authorization",
+  "known_test_attempts": [
+    "initial 4 Redis tests failed connecting to absent localhost:6380; rerun with disposable loopback Redis passed",
+    "one existing virtual-timer assertion transiently failed; isolated six and final selection passed without relaxing it",
+    "offline caught null-store constructor fixture compatibility; optional trace access corrected, full rerun passed",
+    "new flow fixture initially omitted BRT dependency; fixture corrected, actual flow and final selection passed"
+  ],
+  "prepared_hashes": {
+    "tools/gps/its_window.py": "d3094713ecdd0a105455bf7f7f958cd94850531528a1aebd6fff42b4cf205476",
+    "tools/gps/probe_http.py": "b774a3cde28e3b3dadec0a8372d293515f900709194ef96bdbfa0e93e3724248",
+    "docs/its-homeserver/its.primary.override.yml": "f2b920b24263bf4a81ed2300fc85ec788cfeb257229f2c7cf22c3288bc948ea1",
+    "docs/its-homeserver/gtfs.rollback.override.yml": "4490a0d521653a1b0fab0e51f5839c8c6d593b9f6d10562342f61f0e14b11900"
+  },
+  "commands": {
+    "targeted": "dotnet test NoPonto/NoPonto.csproj --no-build --filter \"FullyQualifiedName~ItsCurrentGpsSourceTests|FullyQualifiedName~GpsPipelineTraceTests|FullyQualifiedName~GpsSignalRPublisherTests|FullyQualifiedName~GpsSppoSnapshotStore|FullyQualifiedName~GpsPolling|FullyQualifiedName~GpsPhysicalPredecessorTests|FullyQualifiedName~GpsDatarioClientTests|FullyQualifiedName~EstadoCausalPosicaoTests\" --logger \"trx;LogFileName=targeted-complete.trx\" --results-directory artifacts/its-latency-tests -v quiet",
+    "python": "python -B tools/gps/test_its_window.py",
+    "offline_selection": "python -B .ci/offline_tests.py filter",
+    "offline_runner": "Docker SDK9 --network none --cap-drop ALL --security-opt no-new-privileges --user 1000:1000; dotnet vstest NoPonto/bin/Debug/net9.0/NoPonto.dll with official TestCaseFilter, workspace readonly",
+    "offline_verifier": "python -B .ci/offline_tests.py verify artifacts/its-latency-tests/offline-debug/offline.trx",
+    "redis": "dotnet test NoPonto/NoPonto.csproj --no-restore --filter FullyQualifiedName~VeiculosLinhaRuntimeReaderTests --logger \"trx;LogFileName=redis-disposable.trx\" --results-directory artifacts/its-latency-tests -v quiet; REDIS_TEST_CONNECTION scoped to disposable loopback Docker container"
+  },
+  "runtime_hashes": {
+    "NoPonto/2-Application/Services/GPS/GpsDatarioClient.Bounded.cs": "900a34824706970751f019c92af0c37729d9f14d695a6d11005601cbfa1dae1f",
+    "NoPonto/2-Application/Services/GPS/GpsPipelineTrace.cs": "6cb12c8e9e2a37c2048205bb841bb0f3b360ed82356aaa77cac9cfd11f658959",
+    "NoPonto/2-Application/Services/GPS/GpsPollingService.cs": "dd8ded81d3f8a44d48175001730ea82b09ac87aaab9fc3774d1f99f89bbd5f25",
+    "NoPonto/2-Application/Services/GPS/GpsSignalRPublisher.cs": "f788337eb1140eb4247164b6454f2973facc04114ecdf0bebd3be3ee07a260d6",
+    "NoPonto/2-Application/Services/GPS/GpsSppoSnapshotStore.cs": "b018cdd24e4da4bba752f474f8ff1c5e30dde4a586afc72b4f88bdae0defd565",
+    "NoPonto/2-Application/Services/GPS/ItsCurrentGpsSource.cs": "1932745bbf7f8abfe37a4674dca47e610c4395364d4889db3a69705ef277de98",
+    "NoPonto/2-Application/Services/GPS/VeiculosLinhaRuntimeReader.cs": "41aec17ece076e0a1c8d953a3f3cf53e9036281a42a123bae0db6384a417a3df"
+  }
+}

@@ -18,7 +18,7 @@ public interface IVeiculosLinhaRuntimeReader
 /// Leitura oficial do runtime rodoviário por linha. Preserva a mesma política
 /// público-observável de /veiculos/linha: ativo primeiro, recente como SemSinal.
 /// </summary>
-public sealed class VeiculosLinhaRuntimeReader(IDistributedCache cache)
+public sealed class VeiculosLinhaRuntimeReader(IDistributedCache cache, GpsPipelineTrace? trace = null)
     : IVeiculosLinhaRuntimeReader
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -48,7 +48,9 @@ public sealed class VeiculosLinhaRuntimeReader(IDistributedCache cache)
         var recentValues = await Task.WhenAll(missingIndexes.Select(index =>
             cache.GetStringAsync(GpsPollingService.ChaveVeiculoRecente(ordens[index]), ct)));
 
-        return new(codigos, ordens, Decode(ordens, activeValues, missingIndexes, recentValues));
+        var positions = Decode(ordens, activeValues, missingIndexes, recentValues);
+        trace?.Record("rest_returned", positions);
+        return new(codigos, ordens, positions);
     }
 
     internal static IReadOnlyList<PosicaoVeiculoDto> Decode(string[] ordens,

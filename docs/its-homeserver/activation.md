@@ -1,5 +1,7 @@
 # Janela controlada ITS + GTFS-RT — preparação atualizada em24/10/2026
 
+Investigação posterior e instrumentação local, ainda sem nova publicação/ativação: [hybrid-window2-investigation-20261024.md](hybrid-window2-investigation-20261024.md). Os templates atuais acrescentam somente o toggle diagnóstico GpsPipelineTrace ao escopo BUS; exigem o novo binário e hashes, não a release149. Gate898 permanece90s; usar a parada verificada --request-stop no supervisor novo.
+
 Preflight somente leitura atualizado da segunda janela, estado exato e gates ainda pendentes: [second-window-preflight-20261024.md](second-window-preflight-20261024.md). Os comandos desse relatório são futuros; não houve nova publicação/deploy/ativação.
 
 **Segunda janela ainda não autorizada.** A proposta atual usa `BusSupportMode=Hybrid`, complementação por veículo ITS_CURRENT + GTFSRT_BUS, conforme [implementação e validação local](../its-hybrid.md). O padrão permanece `FullFallback`. Publicar uma nova imagem validada exige autorização; a imagem da primeira janela não implementa híbrido. Manter uma única API e watchdog independente do SSH, com retorno obrigatório aGTFS após10min. Os overrides deste diretório agora incluem a terceira chave de modo, inclusive no rollback. Nenhuma alteração produtiva foi realizada nesta preparação.

@@ -16,6 +16,38 @@ namespace NoPonto.Tests;
 // are in memory: no sleeps, network, database, API startup or ML service.
 public sealed class GpsPhysicalPredecessorTests
 {
+    [Fact]
+    public async Task FlowTraceFollowsActualHybrid898CollectorPollingCasAckAndPublications()
+    {
+        var clock = new ContinuityClock { Now = DateTimeOffset.UtcNow.AddMinutes(-1) };
+        var log = new CaptureGpsLog<GpsPipelineTrace>();
+        var trace = new GpsPipelineTrace(Options.Create(new GpsPipelineTraceOptions { Enabled = true }), clock, log);
+        var primary = new ContinuitySnapshot(GpsSourceNames.ItsCurrent);
+        var support = new ContinuitySnapshot(GpsSourceNames.GtfsRealtimeBus);
+        var resolver = new GpsSourceResolver([primary, support, new Source()], Options.Create(new GpsSourcesOptions
+        { BusPrimarySource = GpsSourceNames.ItsCurrent, BusFallbackSource = GpsSourceNames.GtfsRealtimeBus, BusSupportMode = GpsBusSupportMode.Hybrid, BrtPrimarySource = "GTFSRT_BRT" }), clock);
+        using var f = new Fixture(GpsModalNames.Bus, false, 0, resolver: resolver, line: "898", trace: trace);
+        clock.Now = DateTimeOffset.UtcNow;
+        support.Position = f.First with { ModalFonte = "ONIBUS" };
+        using var collector = new GpsSppoCollectorService(resolver, f.Store, new CollectorMonitor(), NullLogger<GpsSppoCollectorService>.Instance);
+        await collector.ColetarUmaVezAsync(clock.Now);
+        var generation = f.Store.Ler()!.Geracao;
+        await f.Poll(clock.Now, f.Route(.1));
+        Assert.Single(f.Writer.Accepted); Assert.Null(f.Store.Ler());
+        var hub = new HybridCaptureHub(); var publisher = new GpsSignalRPublisher(f.Cache, hub, trace);
+        var performance = new GpsCicloPerformance(clock.Now, Stopwatch.GetTimestamp());
+        await publisher.PublicarAsync([], new(StringComparer.OrdinalIgnoreCase) { ["898"] = [f.First.Ordem] },
+            new GpsRecenteCicloCache(f.Cache, performance), performance, new Dictionary<string, long> { ["898"] = 1 }, default);
+        var reader = new VeiculosLinhaRuntimeReader(f.Cache, trace);
+        Assert.Equal(f.First.TimestampGps, Assert.Single((await reader.ListarAsync(["898"])).Posicoes).TimestampGps);
+        Assert.Single(hub.Frames);
+        foreach (var stage in new[] { "selected", "polling", "age_valid", "timestamp_new", "matched", "cas_accepted", "ack", "signalr_completed", "rest_returned" })
+            Assert.Contains(log.Flow, x => x.GetProperty("stage").GetString() == stage && x.GetProperty("generation").GetInt64() == generation);
+        Assert.Equal(1, log.Flow[^1].GetProperty("linked_complete_new").GetInt32());
+        await collector.ColetarUmaVezAsync(clock.Now);
+        Assert.Null(f.Store.Ler()); Assert.Single(log.Flow, x => x.GetProperty("stage").GetString() == "selected");
+    }
+
     public static IEnumerable<object[]> Cadences()
     {
         foreach (var modal in new[] { GpsModalNames.Bus, GpsModalNames.Brt })
@@ -468,7 +500,7 @@ public sealed class GpsPhysicalPredecessorTests
     {
         private readonly ServiceProvider services = new ServiceCollection().AddLogging().AddSignalR().Services.BuildServiceProvider();
         private readonly HttpClient http = new(new NoHttp());
-        private readonly GpsSppoSnapshotStore store = new();
+        private readonly GpsSppoSnapshotStore store;
         private readonly Source source = new();
         private readonly GpsPollingOptions options = new() { EnriquecerTodasLinhas = true, IntervaloBrtSegundos = 0 };
         private readonly GpsPollingService polling;
@@ -480,8 +512,9 @@ public sealed class GpsPhysicalPredecessorTests
         public PosicaoVeiculoDto Next { get; }
         private readonly string modal;
         public GpsSppoSnapshotStore Store => store;
-        public Fixture(string modal, bool batch, int seconds, ExpiringCache? cache = null, IGpsSourceResolver? resolver = null, string line = "42")
+        public Fixture(string modal, bool batch, int seconds, ExpiringCache? cache = null, IGpsSourceResolver? resolver = null, string line = "42", GpsPipelineTrace? trace = null)
         {
+            store = new(trace);
             this.modal = modal;
             Cache = cache ?? new();
             // PhysicalEta's current wall-clock check remains real; GPS intervals

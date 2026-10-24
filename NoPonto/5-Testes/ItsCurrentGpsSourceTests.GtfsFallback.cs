@@ -199,13 +199,14 @@ public sealed partial class ItsCurrentGpsSourceTests
 
     private sealed class SupportLookup : IGtfsRealtimeRouteLookup
     {
+        public string Code = "006";
         public bool Unavailable;
         public int Calls;
         public Task<IReadOnlyList<GtfsRouteMapping>> FindAsync(string[] ids, CancellationToken ct)
         {
             Calls++;
             if (Unavailable) throw new IOException("isolated crosswalk failure");
-            return Task.FromResult<IReadOnlyList<GtfsRouteMapping>>([new("route", Guid.NewGuid(), "006", false, Directions: ["0"])]);
+            return Task.FromResult<IReadOnlyList<GtfsRouteMapping>>([new("route", Guid.NewGuid(), Code, false, Directions: ["0"])]);
         }
     }
 

@@ -11,6 +11,42 @@ namespace NoPonto.Tests;
 public sealed class GpsSignalRPublisherTests
 {
     [Fact]
+    public async Task FlowTraceWaitsForSuccessfulSignalRSendAndCorrelatesRestWithoutProviderPayload()
+    {
+        var clock = new FlowTestClock(); var log = new CaptureGpsLog<GpsPipelineTrace>();
+        var trace = new GpsPipelineTrace(Microsoft.Extensions.Options.Options.Create(new GpsPipelineTraceOptions { Enabled = true }), clock, log);
+        using var f = new Fixture(trace);
+        var p = GpsPipelineTraceTests.Point(clock.GetUtcNow());
+        var store = new GpsSppoSnapshotStore(trace);
+        var batch = await store.PublicarAsync(null, null, clock.GetUtcNow(), clock.GetUtcNow(), null, [p]);
+        trace.Record("polling", batch.Posicoes, batch.Geracao); trace.Record("cas_accepted", [p]);
+        await f.Seed(p);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); f.Hub.Gate = gate.Task;
+        var send = f.Publish(new() { ["898"] = 1 }, [p]);
+        Assert.False(send.IsCompleted);
+        Assert.DoesNotContain(log.Flow, x => x.GetProperty("stage").GetString() == "signalr_completed");
+        clock.Advance(20); gate.SetResult(); await send;
+        Assert.Equal("PosicaoAtualizada", Assert.Single(f.Hub.Sent).Event);
+        var reader = new VeiculosLinhaRuntimeReader(f.Cache, trace); var result = await reader.ListarAsync(["898"]);
+        Assert.Equal(p.TimestampGps, Assert.Single(result.Posicoes).TimestampGps);
+        Assert.True(store.Confirmar(batch.Geracao));
+        Assert.Equal(1, log.Flow[^1].GetProperty("linked_complete_new").GetInt32());
+        Assert.Contains(log.Flow, x => x.GetProperty("stage").GetString() == "signalr_completed" && x.GetProperty("age_p50").GetDouble() == 20);
+    }
+
+    [Fact]
+    public async Task FailedSignalRSendCannotBecomeCompletedTraceAndRetryCanRecover()
+    {
+        var clock = new FlowTestClock(); var log = new CaptureGpsLog<GpsPipelineTrace>();
+        var trace = new GpsPipelineTrace(Microsoft.Extensions.Options.Options.Create(new GpsPipelineTraceOptions { Enabled = true }), clock, log);
+        using var f = new Fixture(trace); var p = GpsPipelineTraceTests.Point(clock.GetUtcNow());
+        trace.Begin(1, [p], clock.GetUtcNow(), clock.GetUtcNow()); trace.Record("cas_accepted", [p]); await f.Seed(p);
+        f.Hub.FailNext = true; await Assert.ThrowsAsync<IOException>(() => f.Publish(new() { ["898"] = 1 }, [p]));
+        Assert.DoesNotContain(log.Flow, x => x.GetProperty("stage").GetString() == "signalr_completed");
+        await f.Publish(new() { ["898"] = 1 }, [p]);
+        Assert.Single(log.Flow, x => x.GetProperty("stage").GetString() == "signalr_completed");
+    }
+    [Fact]
     public async Task EmptySnapshots_IdentifyGroupsAndSuppressUntilSubscriptionChanges()
     {
         using var f = new Fixture();
@@ -197,7 +233,7 @@ public sealed class GpsSignalRPublisherTests
         public CaptureHub Hub { get; } = new();
         private readonly GpsSignalRPublisher publisher;
         public GpsCicloPerformance Last { get; private set; } = null!;
-        public Fixture() { Cache = new(services.GetRequiredService<IDistributedCache>()); publisher = new(Cache, Hub); }
+        public Fixture(GpsPipelineTrace? trace = null) { Cache = new(services.GetRequiredService<IDistributedCache>()); publisher = new(Cache, Hub, trace); }
         public async Task Seed(PosicaoVeiculoDto p)
         {
             await Cache.SetStringAsync(GpsPollingService.ChaveLinha(p.CodigoLinha), p.Ordem);
@@ -240,17 +276,18 @@ public sealed class GpsSignalRPublisherTests
     {
         public List<(string Group, string Event, JsonElement Payload)> Sent { get; } = [];
         public bool FailNext;
+        public Task? Gate;
         public IHubClients Clients => this;
         public IGroupManager Groups => throw new NotSupportedException();
         public IClientProxy Group(string groupName) => new Proxy(this, groupName);
         private sealed class Proxy(CaptureHub owner, string group) : IClientProxy
         {
-            public Task SendCoreAsync(string method, object?[] args, CancellationToken ct = default)
+            public async Task SendCoreAsync(string method, object?[] args, CancellationToken ct = default)
             {
-                if (owner.FailNext) { owner.FailNext = false; return Task.FromException(new IOException("fixture transport failure")); }
+                if (owner.FailNext) { owner.FailNext = false; throw new IOException("fixture transport failure"); }
+                if (owner.Gate is not null) await owner.Gate.WaitAsync(ct);
                 owner.Sent.Add((group, method, JsonSerializer.SerializeToElement(args[0], new JsonSerializerOptions(JsonSerializerDefaults.Web)
                     { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } })));
-                return Task.CompletedTask;
             }
         }
         public IClientProxy All => throw new NotSupportedException();
