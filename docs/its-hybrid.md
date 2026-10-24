@@ -1,5 +1,7 @@
 # Ônibus híbridos ITS + GTFS-RT —24/10/2026
 
+Revisão instrumentada implantada na release151, com operação exclusivamente GTFS e trace desligado: [resultado e pré-condições da terceira janela](its-homeserver/instrumented-release-deploy-20261024.md). Nenhuma terceira janela executada.
+
 Investigação da segunda janela, medições e rastreabilidade opt-in preparadas localmente: [hybrid-window2-investigation-20261024.md](its-homeserver/hybrid-window2-investigation-20261024.md). Sequência de aquisição, filtros, TTLs e fallback operacional preservados; nenhuma terceira janela executada.
 
 ## Arquitetura e configuração

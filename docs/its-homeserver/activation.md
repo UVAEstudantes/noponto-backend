@@ -1,5 +1,7 @@
 # Janela controlada ITS + GTFS-RT — preparação atualizada em24/10/2026
 
+Estado após publicação autorizada: [release151 implantada em GTFS-only, trace OFF e pendências da terceira janela](instrumented-release-deploy-20261024.md). Nenhum supervisor/cron da terceira janela foi instalado. Antes de armá-la, provar retenção dos logs por página e obter nova autorização.
+
 Investigação posterior e instrumentação local, ainda sem nova publicação/ativação: [hybrid-window2-investigation-20261024.md](hybrid-window2-investigation-20261024.md). Os templates atuais acrescentam somente o toggle diagnóstico GpsPipelineTrace ao escopo BUS; exigem o novo binário e hashes, não a release149. Gate898 permanece90s; usar a parada verificada --request-stop no supervisor novo.
 
 Preflight somente leitura atualizado da segunda janela, estado exato e gates ainda pendentes: [second-window-preflight-20261024.md](second-window-preflight-20261024.md). Os comandos desse relatório são futuros; não houve nova publicação/deploy/ativação.
