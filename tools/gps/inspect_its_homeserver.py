@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import urllib.request
+from probe_http import get, ProbeError
 
 
 def run(args, stdin=None, timeout=15, env=None):
@@ -93,9 +94,7 @@ try:
         FROM "LinhasIdentidadesExternas" lie JOIN "FontesEstruturais" f ON f."Id"=lie."FonteEstruturalId" WHERE f."Codigo"='DATARIO_GTFS' AND lie."Tipo"='ROUTE_ID' '''))
     emit("schema", sql('''SELECT json_build_object('migrations',count(*),'latest',max("MigrationId")) FROM "__EFMigrationsHistory"'''))
     for line in ("838", "898", "006"):
-        with urllib.request.urlopen("http://127.0.0.1:8080/veiculos/linha/" + line, timeout=5) as response:
-            body = response.read(1_000_001)
-        assert len(body) <= 1_000_000
+        body, _ = get("/veiculos/linha/" + line)
         payload = json.loads(body)
         positions = payload.get("posicoes", [])
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -104,5 +103,5 @@ try:
                                "until60": sum(0 <= x <= 60 for x in ages), "until180": sum(0 <= x <= 180 for x in ages),
                                "future": sum(x < 0 for x in ages), "max_age": max(ages, default=None)})
 except Exception as error:
-    emit("blocked", {"type": type(error).__name__, "detail": "values omitted; no writes attempted"})
+    emit("blocked", error.evidence() if isinstance(error, ProbeError) else {"type": type(error).__name__, "detail": "values omitted; no writes attempted"})
     raise SystemExit(1)
