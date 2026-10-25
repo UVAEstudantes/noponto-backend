@@ -237,4 +237,69 @@ class TraceProof(unittest.TestCase):
         self.assertEqual([],w.parse_flow_logs('GPS flow: []\nGPS flow: {broken\nGPS flow: null'))
         self.assertEqual('unproven',w.correlation_state([],{}))
 
+class CaptureSafety(unittest.TestCase):
+    def test_capture_health_rejects_dead_stale_wrong_container_and_gaps(self):
+        import tempfile,json,types
+        contract={'session':'a'*32,'source_sha256':'b'*64}
+        good={**contract,'pid':123,'image':w.APPROVED_IMAGE,'heartbeat':1000,
+              'state':'running','ready':True,'failure':None,'gap_count':0,'truncated':False,
+              'container_id':'c'*64,'records':4,'bytes':500}
+        proc=types.SimpleNamespace(pid=123,poll=lambda:None)
+        with tempfile.TemporaryDirectory() as tmp,patch.object(w,'ROOT',Path(tmp)),patch.object(w,'capture_process',proc),patch.object(w,'capture_contract',contract),patch.object(w.time,'time',return_value=1005):
+            root=Path(tmp)/'capture';root.mkdir();path=root/'health.json'
+            path.write_text(json.dumps(good));self.assertTrue(w.capture_health('c'*64)['healthy'])
+            for change in ({'heartbeat':994},{'heartbeat':float('nan')},{'container_id':'d'*64},
+                           {'gap_count':1},{'truncated':True},{'ready':False},{'session':'d'*32},
+                           {'state':'closed'},{'failure':'input_budget'}):
+                with self.subTest(change=change):
+                    path.write_text(json.dumps({**good,**change}));self.assertFalse(w.capture_health('c'*64)['healthy'])
+            path.unlink();self.assertFalse(w.capture_health()['healthy'])
+            path.write_text(json.dumps(good));proc.poll=lambda:23
+            self.assertFalse(w.capture_health()['healthy'])
+
+    def test_capture_failure_interrupts_without_relaxing_gps_gate(self):
+        for capture in (None,{'healthy':False,'reason':'capture_evidence_failed'},{'healthy':True,'families':{}}):
+            current=sample();current['capture']=capture
+            self.assertEqual('capture_evidence_failed',w.decision(current,sample(),set(),0,0,None,{'capture_required':True})[0])
+        current=sample();current['capture']={'healthy':True,'families':dict.fromkeys(('http_page','normalized_page','timing','acquisition','hybrid'),1)}
+        with patch.object(w.time,'time',return_value=1090):
+            self.assertEqual('gate_898_unproven',w.decision(current,sample(),set(),0,0,None,{'capture_required':True,'activated':1000})[0])
+        self.assertEqual('evidence_capture',w.failure_evidence(w.CaptureFailure())['classification'])
+
+    def test_capture_requires_exact_release_and_all_five_hashes(self):
+        import tempfile,hashlib,types
+        names=('its_window.py','its_log_capture.py','probe_http.py','its.primary.override.yml','gtfs.rollback.override.yml')
+        with tempfile.TemporaryDirectory() as tmp,patch.object(w,'ROOT',Path(tmp)),patch.object(w,'save'),patch.object(w.subprocess,'Popen',return_value=types.SimpleNamespace(pid=123)) as popen,patch.object(w,'capture_contract'),patch.object(w,'capture_process'):
+            hashes={}
+            for name in names:
+                data=name.encode();(Path(tmp)/name).write_bytes(data);hashes[name]=hashlib.sha256(data).hexdigest()
+            for state in ({'image':'wrong','operational_sha256':hashes},{'image':w.APPROVED_IMAGE},
+                          {'image':w.APPROVED_IMAGE,'operational_sha256':{**hashes,'probe_http.py':'wrong'}}):
+                with self.assertRaises(w.CaptureFailure):w.start_capture(state)
+            popen.assert_not_called()
+            state={'image':w.APPROVED_IMAGE,'operational_sha256':hashes};w.start_capture(state)
+            command=popen.call_args.args[0];options=popen.call_args.kwargs
+            self.assertIn('--seconds',command);self.assertEqual('1000',command[-1])
+            self.assertTrue(options['start_new_session']);self.assertTrue(options['close_fds'])
+            self.assertEqual(w.subprocess.DEVNULL,options['stdout'])
+            self.assertEqual(123,state['capture']['pid'])
+
+    def test_capture_stop_does_not_wait_or_take_deploy_lock(self):
+        from unittest.mock import Mock
+        proc=Mock();proc.poll.return_value=None
+        with patch.object(w,'capture_process',proc),patch.object(w,'take_lock') as lock:
+            w.stop_capture()
+        proc.terminate.assert_called_once();proc.wait.assert_not_called();proc.join.assert_not_called();lock.assert_not_called()
+
+    def test_supervisor_rolls_back_before_stopping_capture(self):
+        from unittest.mock import Mock
+        # Abort immediately after activation; no clocks, threads, sockets, Docker or /proc I/O.
+        # Exercise real supervisor control flow with a baseline ending on its second clock check.
+        order=[];lock=Mock();thread=Mock();baseline=sample()
+        baseline['capture']={'healthy':True};baseline['wire'].update(messages=7,lines={x:{} for x in w.LINES})
+        with patch.object(w.os,'getpgrp',create=True,return_value=123),patch.object(w.os,'getpid',return_value=123),patch.object(Path,'read_text',return_value=' '.join(['0']*22)),patch.object(w,'take_lock',return_value=lock),patch.object(w,'save'),patch.object(w,'record'),patch.object(w.threading,'Thread',return_value=thread),patch.object(w.signal,'signal'),patch.object(w,'validate'),patch.object(w,'start_capture'),patch.object(w,'capture_health',return_value={'healthy':True}),patch.object(w,'inspect',return_value=[{'Id':'c'*64}]),patch.object(w,'sample',return_value=baseline),patch.object(w.time,'monotonic',side_effect=[0,0,1,121]),patch.object(w.stop,'wait'),patch.object(w.stop,'is_set',return_value=False),patch.object(w,'switch',side_effect=RuntimeError('controlled_activation_failure')),patch.object(w,'rollback',side_effect=lambda *_:order.append('rollback')),patch.object(w,'stop_capture',side_effect=lambda:order.append('capture_stop')):
+            w.supervise({'image':w.APPROVED_IMAGE})
+        w.stop.clear()
+        self.assertEqual(['rollback','capture_stop'],order);lock.close.assert_called_once()
+
 unittest.main()

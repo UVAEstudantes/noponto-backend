@@ -14,6 +14,56 @@ state_guard = threading.Lock()
 wire = {'messages':0, 'duplicates':0, 'regressions':0, 'invalid':0, 'connections':0, 'errors':0, 'last':0, 'lines':{}, 'connected':False, 'last_error_kind':None}
 last_gps = {}
 activation_epoch = None
+APPROVED_IMAGE = 'ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8'
+capture_process = None
+capture_contract = None
+
+class CaptureFailure(RuntimeError):
+    def evidence(self):
+        return {'type':'CaptureFailure','classification':'evidence_capture','reason':'capture_evidence_failed'}
+
+
+def start_capture(s):
+    global capture_process,capture_contract
+    if s['image']!=APPROVED_IMAGE:raise CaptureFailure('capture_image_mismatch')
+    names=('its_window.py','its_log_capture.py','probe_http.py','its.primary.override.yml','gtfs.rollback.override.yml')
+    expected=s.get('operational_sha256',{})
+    for name in names:
+        if expected.get(name)!=hashlib.sha256((ROOT/name).read_bytes()).hexdigest():
+            raise CaptureFailure('operational_hash_mismatch')
+    session=os.urandom(16).hex()
+    capture_contract={'session':session,'source_sha256':expected['its_log_capture.py']}
+    # New session, no inherited lock descriptor/stdout/SSH. Never wait for this child on rollback.
+    capture_process=subprocess.Popen([sys.executable,'-B',str(ROOT/'its_log_capture.py'),
+        '--directory',str(ROOT/'capture'),'--session',session,'--seconds','1000'],
+        stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
+        close_fds=True,start_new_session=True)
+    s['capture']={**capture_contract,'pid':capture_process.pid};save(s)
+
+
+def capture_health(container=None):
+    try:
+        if capture_process is None or capture_process.poll() is not None:raise CaptureFailure()
+        path=ROOT/'capture'/'health.json'
+        if path.stat().st_size>4096:raise CaptureFailure()
+        value=json.loads(path.read_text())
+        if any(value.get(k)!=v for k,v in capture_contract.items()):raise CaptureFailure()
+        age=time.time()-value['heartbeat']
+        if not math.isfinite(age) or not 0<=age<=10:raise CaptureFailure()
+        if value.get('pid')!=capture_process.pid or value.get('image')!=APPROVED_IMAGE:raise CaptureFailure()
+        if value.get('state')!='running' or value.get('ready') is not True or value.get('failure') or value.get('gap_count')!=0 or value.get('truncated') is not False:raise CaptureFailure()
+        if container and value.get('container_id')!=container:raise CaptureFailure()
+        return {'healthy':True,'session':value['session'],'records':value['records'],'bytes':value['bytes'],'families':value.get('families',{})}
+    except (OSError,ValueError,TypeError,KeyError,CaptureFailure):
+        return {'healthy':False,'reason':'capture_evidence_failed'}
+
+
+def stop_capture():
+    # Called only after rollback attempt. No wait/join/fsync or deploy lock in the collector.
+    if capture_process is not None and capture_process.poll() is None:
+        try:capture_process.terminate()
+        except ProcessLookupError:pass
+
 
 class CommandFailure(RuntimeError):
     def __init__(self,args,code=None,timeout=False):
@@ -27,7 +77,7 @@ class CommandFailure(RuntimeError):
 def failure_evidence(error):
     if isinstance(error,ProbeError):
         return {**error.evidence(),'classification':'backend_transport' if error.reason in ('transport_failure','timeout') else 'backend_http' if error.reason=='http_failure' else 'backend_contract'}
-    return error.evidence() if isinstance(error,(ProbeError,CommandFailure)) else {'type':type(error).__name__,'reason':'unclassified_failure'}
+    return error.evidence() if isinstance(error,(ProbeError,CommandFailure,CaptureFailure)) else {'type':type(error).__name__,'reason':'unclassified_failure'}
 
 def stop_reason():
     try:
@@ -228,6 +278,7 @@ def sample():
             'http_seconds':latency,'lines':lines,'controls':controls,'line_http':line_http,'wire':wire_summary(),'memory_kib':memory,'load':os.getloadavg(),
             'resources':[{k:x[k] for k in ('Name','CPUPerc','MemUsage','MemPerc','PIDs')} for x in stat],
             'cycles':cycles,'acquisitions':acquisitions,'selection':selection,'flow':parse_flow_logs(logs),
+            'capture':capture_health(api['Id']) if capture_contract is not None else None,
             'containers':{x['Name'].lstrip('/'):{'started':x['State']['StartedAt'],'running':x['State']['Running'],'health':x['State'].get('Health',{}).get('Status'),'restarts':x['RestartCount']} for x in state}}
 
 def validate(image):
@@ -287,6 +338,11 @@ def rollback(s,reason):
 def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None):
     watch=watch if watch is not None else {}
     now=time.time()
+    if watch.get('capture_required'):
+        captured=current.get('capture') or {}
+        families=captured.get('families',{})
+        if not captured.get('healthy') or any(families.get(k,0)<1 for k in ('http_page','normalized_page','timing','acquisition','hybrid')):
+            return 'capture_evidence_failed',long_streak,poor_streak,low_since
     if current['oom'] or current['restarts'] or not current['running']: return 'api_restart_or_oom',long_streak,poor_streak,low_since
     w=current['wire']
     if w['regressions'] or w['duplicates'] or w['invalid']: return 'signalr_gps_integrity',long_streak,poor_streak,low_since
@@ -350,17 +406,26 @@ def supervise(s):
     signal.signal(signal.SIGTERM,lambda *_:stop.set()); signal.signal(signal.SIGINT,lambda *_:stop.set())
     activated=False
     try:
-        validate(s['image']); baseline_samples=[]; end=time.monotonic()+120
+        validate(s['image']); start_capture(s)
+        ready_deadline=time.monotonic()+5
+        while not capture_health(inspect()[0]['Id'])['healthy']:
+            if stop.is_set() or time.monotonic()>=ready_deadline:raise CaptureFailure()
+            stop.wait(.25)
+        baseline_samples=[]; end=time.monotonic()+120
         while time.monotonic()<end and not stop.is_set():
-            x=sample(); record('baseline_sample',x); baseline_samples.append(x); stop.wait(15)
+            x=sample(); record('baseline_sample',x)
+            if not x['capture']['healthy']:raise CaptureFailure()
+            baseline_samples.append(x); stop.wait(15)
         if stop.is_set():raise RuntimeError('stopped_before_activation')
         baseline=baseline_samples[-1]
         if baseline['wire']['messages']==0 or any(line not in baseline['wire']['lines'] for line in LINES):raise RuntimeError('signalr_baseline_not_confirmed')
         if baseline['wire']['regressions'] or baseline['wire']['duplicates'] or baseline['wire']['invalid']:raise RuntimeError('signalr_baseline_integrity')
-        validate(s['image']); s.update(phase='its',activated=time.time(),deadline=time.time()+600); save(s); activated=True
+        validate(s['image'])
+        if not capture_health(inspect()[0]['Id'])['healthy']:raise CaptureFailure()
+        s.update(phase='its',activated=time.time(),deadline=time.time()+600); save(s); activated=True
         activation_epoch=s['activated']
         switch(s['image'],'its.primary.override.yml'); healthy(s['image'],'ITS_CURRENT')
-        seen={c['stamp'] for x in baseline_samples for c in x['cycles']}; long_streak=poor_streak=0; low_since=None; reason='ten_minutes_completed';watch={'activated':s['activated']}
+        seen={c['stamp'] for x in baseline_samples for c in x['cycles']}; long_streak=poor_streak=0; low_since=None; reason='ten_minutes_completed';watch={'activated':s['activated'],'capture_required':True}
         while time.time()<s['deadline'] and not stop.is_set():
             if baseline['lines']['898']['vehicles']>=5 and not watch.get('898_proven') and time.time()-s['activated']>=90:
                 reason='gate_898_unproven';break
@@ -377,13 +442,16 @@ def supervise(s):
             x=sample(); record('final_gtfs_sample',x); time.sleep(5)
     except Exception as error:
         cause=failure_evidence(error)
-        reason=stop_reason() if stop.is_set() else 'exception_'+type(error).__name__
+        reason=stop_reason() if stop.is_set() else 'capture_evidence_failed' if isinstance(error,CaptureFailure) else 'exception_'+type(error).__name__
         record('supervisor_error',{**cause,'activated':activated,'operational_reason':reason})
         if activated:
             try:rollback(s,reason)
             except Exception as failure:s.update(phase='rollback_failed',failure=type(failure).__name__,heartbeat=time.time());save(s)
         else:s.update(phase='precondition_failed',failure=type(error).__name__,heartbeat=time.time());save(s)
-    finally:stop.set();thread.join(6);lock.close()
+    finally:
+        try:stop_capture()
+        finally:
+            stop.set();thread.join(6);lock.close()
 
 def tick():
     s=load()

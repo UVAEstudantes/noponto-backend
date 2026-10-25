@@ -1,5 +1,7 @@
 # Ônibus híbridos ITS + GTFS-RT —24/10/2026
 
+Atualização local após release151: [captura dedicada e preflight da terceira janela](its-homeserver/log-capture-preflight-20261024.md). Este procedimento prevalece sobre comandos/hashes históricos abaixo: cinco arquivos operacionais, captura independente obrigatória antes do baseline, digest151 exato, gate89890s e rollback GTFS/FullFallback/trace=false. Nenhuma terceira janela autorizada/instalada/executada.
+
 Revisão instrumentada implantada na release151, com operação exclusivamente GTFS e trace desligado: [resultado e pré-condições da terceira janela](its-homeserver/instrumented-release-deploy-20261024.md). Nenhuma terceira janela executada.
 
 Investigação da segunda janela, medições e rastreabilidade opt-in preparadas localmente: [hybrid-window2-investigation-20261024.md](its-homeserver/hybrid-window2-investigation-20261024.md). Sequência de aquisição, filtros, TTLs e fallback operacional preservados; nenhuma terceira janela executada.
