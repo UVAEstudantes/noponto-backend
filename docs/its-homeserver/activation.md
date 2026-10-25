@@ -1,5 +1,7 @@
 # Janela controlada ITS + GTFS-RT — preparação atualizada em24/10/2026
 
+Prova operacional limitada no Debian concluída, sem ITS: [cron, captura passiva, recursos e limpeza](log-capture-debian-preflight-20261024.md). GO para solicitar autorização separada; preflight e prova cron frescos continuam obrigatórios na futura janela.
+
 Atualização local após release151: [captura dedicada e preflight da terceira janela](log-capture-preflight-20261024.md). Este procedimento prevalece sobre comandos/hashes históricos abaixo: cinco arquivos operacionais, captura independente obrigatória antes do baseline, digest151 exato, gate89890s e rollback GTFS/FullFallback/trace=false. Nenhuma terceira janela autorizada/instalada/executada.
 
 Estado após publicação autorizada: [release151 implantada em GTFS-only, trace OFF e pendências da terceira janela](instrumented-release-deploy-20261024.md). Nenhum supervisor/cron da terceira janela foi instalado. Antes de armá-la, provar retenção dos logs por página e obter nova autorização.

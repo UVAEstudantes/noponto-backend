@@ -1,0 +1,230 @@
+{
+  "date_local": "2026-10-24",
+  "utc_interval": [
+    "2026-10-25T02:12:42.113299+00:00",
+    "2026-10-25T02:16:24.112309+00:00"
+  ],
+  "revision": "3fcbce87f63fbee3d1d87ed360757e8f6e3d9e98",
+  "os": {
+    "VERSION_ID": "12",
+    "ID": "debian"
+  },
+  "python": "3.11.2",
+  "decision": "GO_to_request_separate_third_window_authorization",
+  "release": 151,
+  "image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+  "remote_private_directory": "/home/guilherme/.noponto-deploy/log-capture-proof-20261025T021126Z",
+  "operational_sha256": {
+    "its_window.py": "d166f170e773c60f5024c895eb32e43c8016c775060cff2fd7e9e70231ba7eed",
+    "its_log_capture.py": "d1ce61448534750fb005c1952b81149062bd9bd3217836d47b75fd61a5f1ca31",
+    "probe_http.py": "b774a3cde28e3b3dadec0a8372d293515f900709194ef96bdbfa0e93e3724248",
+    "its.primary.override.yml": "f2b920b24263bf4a81ed2300fc85ec788cfeb257229f2c7cf22c3288bc948ea1",
+    "gtfs.rollback.override.yml": "4490a0d521653a1b0fab0e51f5839c8c6d593b9f6d10562342f61f0e14b11900"
+  },
+  "production": {
+    "initial": {
+      "GpsSources__BusPrimarySource": "GTFSRT_BUS",
+      "GpsSources__BusFallbackSource": "",
+      "GpsSources__BusSupportMode": "FullFallback",
+      "GpsPipelineTrace__Enabled": "false",
+      "GpsSources__BrtPrimarySource": "GTFSRT_BRT"
+    },
+    "final": {
+      "GpsSources__BusPrimarySource": "GTFSRT_BUS",
+      "GpsSources__BusFallbackSource": "",
+      "GpsSources__BusSupportMode": "FullFallback",
+      "GpsPipelineTrace__Enabled": "false",
+      "GpsSources__BrtPrimarySource": "GTFSRT_BRT"
+    },
+    "writer_count": 1,
+    "all_eight_container_fingerprints_unchanged": true,
+    "api_id": "70cdd6392397b8c3a5fe01b01568fde30a55021c211cf042463bcb296cc9980a",
+    "api_started": "2026-10-24T22:38:01.65925157Z",
+    "api_restarts": 0,
+    "redis": "PONG",
+    "postgres": "accepting",
+    "http_seconds_initial": 0.04235560799133964,
+    "http_seconds_final": 0.008268513018265367,
+    "signalr_initial": {
+      "messages": 24,
+      "connections": 1,
+      "errors": 0,
+      "duplicates": 0,
+      "regressions": 0,
+      "invalid": 0
+    },
+    "signalr_final": {
+      "messages": 24,
+      "connections": 1,
+      "errors": 0,
+      "duplicates": 0,
+      "regressions": 0,
+      "invalid": 0
+    },
+    "compose_files_preserved": [
+      "/opt/stacks/noponto/docker-compose.yml",
+      "/home/guilherme/noponto-release-artifacts/docker-compose.gtfsrt-production.proposed.yml",
+      "/home/guilherme/.noponto-deploy/physical-eta.override.yml",
+      "/home/guilherme/.noponto-deploy/historical-eta-shadow.override.yml"
+    ],
+    "final_host": {
+      "utc": "2026-10-25T02:16:24.112309+00:00",
+      "cpus": 4,
+      "load": [
+        0.1337890625,
+        0.34130859375,
+        0.3525390625
+      ],
+      "memory_kib": {
+        "MemAvailable": 2338088,
+        "SwapTotal": 5192696,
+        "SwapFree": 4857336
+      },
+      "disk": {
+        "total": 116547325952,
+        "used": 89050038272,
+        "free": 21529739264
+      }
+    },
+    "api_stats_initial": {
+      "BlockIO": "50.7MB / 0B",
+      "CPUPerc": "4.56%",
+      "Container": "70cdd6392397b8c3a5fe01b01568fde30a55021c211cf042463bcb296cc9980a",
+      "ID": "70cdd6392397",
+      "MemPerc": "30.88%",
+      "MemUsage": "237.1MiB / 768MiB",
+      "Name": "noponto_api",
+      "NetIO": "2.76GB / 2.74GB",
+      "PIDs": "32"
+    },
+    "api_stats_final": {
+      "BlockIO": "52.6MB / 0B",
+      "CPUPerc": "4.92%",
+      "Container": "70cdd6392397b8c3a5fe01b01568fde30a55021c211cf042463bcb296cc9980a",
+      "ID": "70cdd6392397",
+      "MemPerc": "30.44%",
+      "MemUsage": "233.8MiB / 768MiB",
+      "Name": "noponto_api",
+      "NetIO": "2.79GB / 2.76GB",
+      "PIDs": "30"
+    }
+  },
+  "proof": {
+    "mode": "proof_only",
+    "scheduled_baseline_its_entered": false,
+    "posix_permissions_verified": true,
+    "immutable_id_follow": true,
+    "capture_seconds": 117.05051445960999,
+    "input_bytes": 356797,
+    "archive_bytes": 573,
+    "archive_lines": 3,
+    "actual_recognized_aggregate_families": {},
+    "dedup_live_duplicates": 0,
+    "synthetic_posix_dedup_duplicates": 1,
+    "synthetic_posix_line_limit": 4,
+    "synthetic_posix_line_limit_truncated": true,
+    "limits_unchanged": true,
+    "ssh_disconnected_capture_survived": true,
+    "capture_reparented_to_pid": 1,
+    "capture_verified_pid_birth_session_and_image": true,
+    "capture_own_session_no_ssh_fds_no_deploy_lock": true,
+    "mutual_exclusion_second_lock_attempt_rejected": true,
+    "deploy_lock_free_while_capture_alive": true,
+    "cron": {
+      "time": 1792894441.3427134,
+      "ancestor_processes": [
+        "python3",
+        "sh",
+        "cron",
+        "cron",
+        "systemd"
+      ],
+      "independent_cron": true
+    },
+    "watchdog_recovery_branch_exercised": false,
+    "watchdog_pid_birth_command_and_lock_guards_verified_in_approved_code": true,
+    "rollback_render_validated_not_applied": true,
+    "verification": {
+      "kind": "end",
+      "at": 1792894521.3949234,
+      "session": "477fed4ab79f98b2d4c3aac2b595eddd",
+      "content_sha256": "5c83060e23ad64895e0f550c51f2b1a99ec8c1e3b7044e65e3adbf29a3730f7f",
+      "records_before_footer": 2,
+      "archive_complete": true,
+      "evidence_complete": true,
+      "truncated": false,
+      "gap_count": 0,
+      "acquisitions_without_timing": 0,
+      "integrity_valid": true,
+      "file_sha256": "339428d45d9f54c70bfee7273672717a6911dde4bc239e6ddba041c3006468ab"
+    }
+  },
+  "python_resource_measurement": {
+    "sampling_seconds": 55.18086385726929,
+    "cpu_seconds": 0.1,
+    "cpu_percent_one_core": 0.18122224446985788,
+    "rss_mib": 18.94140625,
+    "read_bytes_delta": 94208,
+    "write_bytes_delta": 221184,
+    "write_kib_per_second": 3.9144004805489305,
+    "rchar_delta": 1480758,
+    "wchar_delta": 56846
+  },
+  "cleanup": {
+    "cron_original_absent": true,
+    "cron_final_absent": true,
+    "only_owned_marker_removed": true,
+    "active_preflight_processes": [],
+    "lock_free": true,
+    "private_evidence_preserved": true,
+    "state_final": "proof"
+  },
+  "budget": {
+    "capture_seconds": 1000,
+    "archive_bytes": 8388608,
+    "archive_lines": 12000,
+    "input_bytes": 67108864,
+    "baseline_seconds": 120,
+    "hybrid_seconds": 600,
+    "nominal_lifecycle_margin_seconds": 280,
+    "limits_increased": false,
+    "real_full_1000_second_test_run": false,
+    "gtfs_input_extrapolation_1000_seconds_bytes": 3048231,
+    "its_detailed_volume_measured": false,
+    "gate_898_seconds": 90
+  },
+  "limitations": [
+    "GTFS-only proof contains no ITS page or GPS flow aggregates; detailed ITS volume and timings remain for authorized window",
+    "Container replacement not performed; retained deterministic local coverage",
+    "Cron proof establishes independent execution; destructive watchdog/rollback path deliberately not executed",
+    "1000 seconds covers nominal120+600 with280 seconds margin; does not guarantee completion under arbitrary Docker stalls or compounded timeouts; capture expiry is incomplete evidence and must not delay rollback",
+    "Resource costs are sampled Python-only in GTFS mode, exclude Docker child CPU and do not benchmark detailed ITS fsync volume"
+  ],
+  "not_executed": [
+    "ITS activation",
+    "scheduled/baseline/its phases",
+    "API/container recreation",
+    "rollback configuration application",
+    "image deployment",
+    "push/merge/remote CI",
+    "migrations or database/Redis maintenance",
+    "third window"
+  ],
+  "evidence_sha256": {
+    "initial.json": "740542fdebaa2909e331f3b890d1d0429d68da703b206fa086c6d5ac131a050b",
+    "setup.json": "c89e5da36701c362d45a093f878b0c3c357b7da5d922d84b0f4f6b8010930a65",
+    "observe.json": "8aa8fbc56a16bcc0006700d526eeb5929785af7d16dcd9a4f76e192605cde81e",
+    "close.json": "abe0b54f8a178a37967b3b51b633eea45d85eaf83ddd72ce4c473987ca4cf766",
+    "final.json": "535733d08d7a15167fb1f29017db0d468c32c0942c71c0c1024ca3fca56e6293",
+    "evidence.json": "b8bf45d00fd2bf7c6fab762e871a4b36c9debc199ca5f79edd2af0795ce3d441",
+    "capture-aggregates.jsonl": "339428d45d9f54c70bfee7273672717a6911dde4bc239e6ddba041c3006468ab"
+  },
+  "next_required": [
+    "Separate explicit authorization for a supervised hybrid window of at most600seconds",
+    "Fresh immediate production/digest/lock/single-writer/service/resource preflight",
+    "New private window directory and matching five canonical file hashes",
+    "Fresh real proof-only cron evidence and healthy capture before arming",
+    "Baseline120seconds; sevenBUS and threeBRT controls; unchanged898 gate90seconds",
+    "Mandatory same-image rollback to GTFSRT_BUS/empty fallback/FullFallback/tracefalse, then verify archive and remove only owned cron"
+  ]
+}
