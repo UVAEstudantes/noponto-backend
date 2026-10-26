@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-26",
+  "base_commit": "3ca6db3e6f37107c18b2e486577b3f336ea634e4",
+  "production_image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+  "status": "local_fix_validated_linux_preflight_pending",
+  "operational_sha256": {
+    "its_window.py": "d166f170e773c60f5024c895eb32e43c8016c775060cff2fd7e9e70231ba7eed",
+    "its_log_capture.py": "9eaeaec2475fb084f9085dfecb83fc28a2a86e1c2867211d9af8f6608760859f",
+    "probe_http.py": "b774a3cde28e3b3dadec0a8372d293515f900709194ef96bdbfa0e93e3724248",
+    "its.primary.override.yml": "f2b920b24263bf4a81ed2300fc85ec788cfeb257229f2c7cf22c3288bc948ea1",
+    "gtfs.rollback.override.yml": "4490a0d521653a1b0fab0e51f5839c8c6d593b9f6d10562342f61f0e14b11900"
+  },
+  "hash_bytes": "canonical UTF-8 LF",
+  "test_results": {
+    "capture": 27,
+    "supervisor": 41,
+    "total": 68,
+    "failed": 0,
+    "commands": [
+      "python -B tools/gps/test_its_log_capture.py",
+      "python -B tools/gps/test_its_window.py"
+    ]
+  },
+  "unchanged_limits": {
+    "archive_bytes": 8388608,
+    "archive_lines": 12000,
+    "input_bytes": 67108864,
+    "line_bytes": 16384,
+    "queue_lines": 256,
+    "streams": 2,
+    "containers": 4,
+    "opens": 32,
+    "duration_seconds": 1000,
+    "line_898_gate_seconds": 90
+  },
+  "passive_reader_wait_seconds": 6,
+  "red_green": [
+    "test_daytime_burst_of_unrelated_logs_keeps_its_page_without_overflow",
+    "test_valid_burst_waits_for_bounded_consumer_without_losing_pages",
+    "test_reader_overflow_is_terminal_without_reconnect_storm"
+  ],
+  "production_accessed": false,
+  "production_changed": false,
+  "remaining": [
+    "new Debian GTFS-only capture preflight under representative load",
+    "new private directory and exact five file hashes",
+    "fresh cron/lock proof before any future window",
+    "separate authorization for any hybrid activation"
+  ]
+}

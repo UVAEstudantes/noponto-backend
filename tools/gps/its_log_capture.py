@@ -33,6 +33,10 @@ FAILURES = {'no_valid_records', 'previous_io_pending', 'retry_after', 'acquisiti
 PREFIXES = {'ITS HTTP page ': 'http_page', 'ITS normalized page ': 'normalized_page',
             'ITS timing ': 'timing', 'ITS provider wait ': 'provider_wait',
             'ITS acquisition ': 'acquisition', 'BUS hybrid: ': 'hybrid', 'GPS flow: ': 'flow'}
+LOG_ENVELOPE = re.compile(('^(' + STAMP + r')\s+').encode())
+AGGREGATE_PREFIXES = tuple(prefix.encode() for prefix in PREFIXES)
+TERMINAL_STREAM_FAILURES = {'input_queue_overflow', 'input_line_limit',
+                            'log_reader_stalled', 'log_reader_failure'}
 
 
 class InvalidRecord(ValueError):
@@ -360,8 +364,10 @@ class DockerStream:
         self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                         stdin=subprocess.DEVNULL)
         self.queue = queue.Queue(maxsize=256)
+        self.closed_tail = []
         self.bytes = 0
         self.error = None
+        self.cursor = None
         self.done = threading.Event()
         self.code = None
         self.thread = threading.Thread(target=self._read, args=(max_line, input_limit, budget), daemon=True)
@@ -378,8 +384,21 @@ class DockerStream:
                     self.error = 'input_budget'; break
                 if len(raw) > cap:
                     self.error = 'input_line_limit'; break
+                envelope = LOG_ENVELOPE.match(raw)
+                if envelope:
+                    stamp = envelope[1].decode('ascii')
+                    try: utc(stamp)
+                    except ValueError: pass
+                    else:
+                        if self.cursor is None or stamp > self.cursor:
+                            self.cursor = stamp
+                if not envelope or not any(raw.startswith(prefix, envelope.end())
+                                           for prefix in AGGREGATE_PREFIXES):
+                    continue
                 try:
-                    self.queue.put_nowait(raw)
+                    # Preserve matching aggregates during a short burst. The queue stays
+                    # bounded; a stalled consumer still fails explicitly after six seconds.
+                    self.queue.put(raw, timeout=6)
                 except queue.Full:
                     self.error = 'input_queue_overflow'; break
             self.code = self.process.wait(timeout=.2)
@@ -391,7 +410,7 @@ class DockerStream:
             self.done.set()
 
     def drain(self):
-        values = []
+        values, self.closed_tail = self.closed_tail, []
         for _ in range(256):
             try: values.append(self.queue.get_nowait())
             except queue.Empty: break
@@ -401,8 +420,22 @@ class DockerStream:
         if self.process.poll() is None:
             self.process.terminate()
             try: self.process.wait(timeout=.2)
-            except subprocess.TimeoutExpired: self.process.kill()
-        self.thread.join(.3)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=.2)
+        # A producer may be waiting on a full queue when rollback stops this
+        # reader. Drain into a bounded tail so the caller can archive every line.
+        deadline = time.monotonic() + 7
+        while self.thread.is_alive() and time.monotonic() < deadline:
+            for _ in range(256):
+                try: self.closed_tail.append(self.queue.get_nowait())
+                except queue.Empty: break
+            self.thread.join(.05)
+        if self.thread.is_alive():
+            self.error = 'log_reader_stalled'
+        for _ in range(256):
+            try: self.closed_tail.append(self.queue.get_nowait())
+            except queue.Empty: break
         if self.process.stdout:
             self.process.stdout.close()
 
@@ -466,6 +499,10 @@ class Engine:
                     except ValueError:continue
                     if stamp > self.cursors.get(container, ''):
                         self.cursors[container] = stamp
+            # Unrelated logs are never queued, but still advance the reconnect cursor.
+            cursor = getattr(stream, 'cursor', None)
+            if cursor and cursor > self.cursors.get(container, ''):
+                self.cursors[container] = cursor
             if error:
                 self.archive.gap(error, container); self.failure = error
             if container != active and not done:
@@ -490,7 +527,8 @@ class Engine:
                 self.read_bytes.pop(container, None)
         if self.archive.input_bytes >= self.archive.limits.max_input_bytes:
             self.failure = 'input_budget'; self.archive.gap('input_budget', active)
-        if active and active not in self.streams and not self.archive.truncated and self.failure != 'input_budget':
+        if active and active not in self.streams and not self.archive.truncated \
+                and self.failure not in TERMINAL_STREAM_FAILURES | {'input_budget'}:
             if self.opens >= 32:
                 self.archive.gap('stream_budget', active); self.failure = 'stream_budget'
             elif len(self.streams) >= 2 or len(self.containers | {active}) > self.archive.limits.max_containers:
@@ -542,7 +580,7 @@ def run_capture(directory, session, seconds=1000):
         while not stop.is_set() and time.monotonic() < deadline:
             status = engine.step()
             archive.status({**meta, **status})
-            if archive.truncated or engine.failure in ('input_budget', 'container_budget', 'stream_budget'):
+            if archive.truncated or engine.failure in TERMINAL_STREAM_FAILURES | {'input_budget', 'container_budget', 'stream_budget'}:
                 break
             stop.wait(1)
         clean = stop.is_set()

@@ -1,5 +1,7 @@
 # Janela controlada ITS + GTFS-RT — preparação atualizada em24/10/2026
 
+Correção local após NO-GO26/10: [captura tolerante a bursts, testes e novos hashes](log-capture-burst-fix-20261026.md). **Nova provaGTFS no Debian ainda obrigatória; não armar ITS.**
+
 Estado26/10: [terceira janela bloqueada no preflight — captura com input_queue_overflow](hybrid-window3-20261026.md). **NO-GO para nova ativação** até correção local/testes e nova provaGTFS. ITS não foi ativada; produção permanece GTFS-only/traceOFF. Este resultado posterior substitui o GO limitado da prova de24/10.
 
 Prova operacional limitada no Debian concluída, sem ITS: [cron, captura passiva, recursos e limpeza](log-capture-debian-preflight-20261024.md). GO para solicitar autorização separada; preflight e prova cron frescos continuam obrigatórios na futura janela.

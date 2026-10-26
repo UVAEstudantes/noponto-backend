@@ -2,9 +2,11 @@ import datetime as dt
 import json
 import os
 import pathlib
+import queue
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -244,6 +246,150 @@ class CaptureTests(unittest.TestCase):
             self.assertEqual(1, len(lines)); self.assertIsNone(error); self.assertTrue(done); self.assertEqual(7, code)
             self.assertEqual(len(lines[0]), size)
         finally: stream.close()
+
+    def test_daytime_burst_of_unrelated_logs_keeps_its_page_without_overflow(self):
+        unrelated = b'2026-10-24T21:00:00Z unrelated service log\n' * 300
+        page = line('http_page', http(), 1)
+        command = [sys.executable, '-B', '-c',
+                   'import sys;sys.stdout.buffer.write(' + repr(unrelated + page) + ')']
+        stream = c.DockerStream(command, 16384, 100000)
+        try:
+            self.assertEqual(256, stream.queue.maxsize)
+            self.assertTrue(stream.done.wait(3))
+            lines, error, done, code, size = stream.drain()
+            self.assertIsNone(error)
+            self.assertTrue(done)
+            self.assertEqual(0, code)
+            self.assertEqual([page], lines)
+            self.assertEqual(len(unrelated + page), size)
+        finally: stream.close()
+
+    def test_valid_burst_waits_for_bounded_consumer_without_losing_pages(self):
+        pages = [line('http_page', http(), i) for i in range(400)]
+        body = pages[0].split(b'      ', 1)[1]
+        command = [sys.executable, '-B', '-c',
+                   'import sys,datetime as d;body=' + repr(body) + ';start=' + repr(int(BASE.timestamp())) +
+                   ';sys.stdout.buffer.write(b"".join(d.datetime.fromtimestamp(start+i,d.timezone.utc)'
+                   '.isoformat().replace("+00:00","Z").encode()+b"      "+body for i in range(400)))']
+        stream = c.DockerStream(command, 16384, 500000)
+        archive = self.archive()
+        received = []
+        try:
+            time.sleep(.1)  # The producer reaches the bounded queue before the consumer.
+            deadline = time.monotonic() + 8
+            while time.monotonic() < deadline:
+                lines, error, done, code, _ = stream.drain()
+                for raw in lines: archive.ingest(CID, raw)
+                received.extend(lines)
+                if done: break
+                time.sleep(.01)
+            self.assertIsNone(error)
+            self.assertTrue(done)
+            self.assertEqual(0, code)
+            self.assertEqual(pages, received)
+        finally: stream.close()
+        archive.close()
+        self.assertEqual(400, archive.families['http_page'])
+        self.assertTrue(c.verify(self.directory)['integrity_valid'])
+
+    def test_unrelated_lines_advance_reconnect_cursor_without_entering_archive(self):
+        raw = b'2026-10-24T21:02:03Z unrelated service log\n'
+        command = [sys.executable, '-B', '-c',
+                   'import sys;sys.stdout.buffer.write(' + repr(raw) + ')']
+        stream = c.DockerStream(command, 16384, 100000)
+        try:
+            self.assertTrue(stream.done.wait(3))
+            self.assertEqual([], stream.drain()[0])
+            self.assertEqual('2026-10-24T21:02:03Z', stream.cursor)
+        finally: stream.close()
+
+    def test_recognized_malformed_aggregate_still_marks_incomplete_evidence(self):
+        raw = b'2026-10-24T21:00:00Z GPS flow: {PRIVATE_TOKEN\n'
+        command = [sys.executable, '-B', '-c',
+                   'import sys;sys.stdout.buffer.write(' + repr(raw) + ')']
+        stream = c.DockerStream(command, 16384, 100000)
+        archive = self.archive()
+        try:
+            self.assertTrue(stream.done.wait(3))
+            lines, error, done, _, _ = stream.drain()
+            self.assertIsNone(error)
+            self.assertTrue(done)
+            for item in lines: archive.ingest(CID, item)
+        finally: stream.close()
+        archive.close()
+        self.assertEqual(1, archive.gaps['schema_rejected'])
+        self.assertNotIn('PRIVATE_TOKEN', (self.directory / 'aggregates.jsonl').read_text())
+        self.assertFalse(c.verify(self.directory)['archive_complete'])
+
+    def test_matching_log_cannot_be_queued_marks_explicit_failure(self):
+        raw = line('http_page', http())
+        command = [sys.executable, '-B', '-c',
+                   'import sys,time;time.sleep(.2);sys.stdout.buffer.write(' + repr(raw) + ')']
+        stream = c.DockerStream(command, 16384, 100000)
+        try:
+            with patch.object(stream.queue, 'put', side_effect=queue.Full):
+                self.assertTrue(stream.done.wait(3))
+            lines, error, done, _, size = stream.drain()
+            self.assertEqual([], lines)
+            self.assertEqual('input_queue_overflow', error)
+            self.assertTrue(done)
+            self.assertEqual(len(raw), size)
+        finally: stream.close()
+
+    def test_reader_overflow_is_terminal_without_reconnect_storm(self):
+        archive = self.archive()
+        docker = FakeDocker()
+        docker.plans = {CID: [FakeStream(done=True, error='input_queue_overflow')]}
+        engine = c.Engine(archive, docker, self.clock)
+        engine.step()
+        engine.step()
+        self.assertEqual('input_queue_overflow', engine.failure)
+        engine.step()
+        self.assertEqual(1, len([call for call in docker.calls if call[0] == 'logs']))
+        self.assertEqual(1, archive.gaps['input_queue_overflow'])
+        engine.close()
+        archive.close()
+        self.assertFalse(c.verify(self.directory)['archive_complete'])
+
+    def test_reconnect_uses_timestamp_from_filtered_logs(self):
+        archive = self.archive()
+        first = FakeStream(done=True, code=1)
+        first.cursor = '2026-10-24T21:02:03Z'
+        second = FakeStream()
+        docker = FakeDocker()
+        docker.plans = {CID: [first, second]}
+        engine = c.Engine(archive, docker, self.clock)
+        engine.step()
+        engine.step()
+        calls = [x for x in docker.calls if x[0] == 'logs']
+        self.assertEqual(2, len(calls))
+        self.assertEqual('2026-10-24T21:02:01+00:00', calls[-1][2])
+        engine.close(); archive.close()
+        self.assertFalse(c.verify(self.directory)['archive_complete'])
+
+    def test_close_flushes_waiting_reader_queue_before_archive_footer(self):
+        body = line('http_page', http()).split(b'      ', 1)[1]
+        command = [sys.executable, '-B', '-c',
+                   'import sys,datetime as d;body=' + repr(body) + ';start=' + repr(int(BASE.timestamp())) +
+                   ';sys.stdout.buffer.write(b"".join(d.datetime.fromtimestamp(start+i,d.timezone.utc)'
+                   '.isoformat().replace("+00:00","Z").encode()+b"      "+body for i in range(400)))']
+        stream = c.DockerStream(command, 16384, 500000)
+        archive = self.archive()
+        time.sleep(.1)
+        pending = stream.queue.qsize()
+        self.assertGreater(pending, 0)
+        stream.close()
+        rows, error, _, _, _ = stream.drain()
+        self.assertIsNone(error)
+        self.assertGreaterEqual(len(rows), pending)
+        for row in rows: archive.ingest(CID, row)
+        archive.close()
+        # Terminating the producer mid-write may leave one partial line. It must
+        # become an explicit schema gap, never a silently complete archive.
+        self.assertEqual(len(rows), archive.families['http_page'] + archive.gaps.get('schema_rejected', 0))
+        self.assertTrue(c.verify(self.directory)['integrity_valid'])
+        if archive.gaps:
+            self.assertFalse(c.verify(self.directory)['archive_complete'])
 
     def test_reader_limits_reject_oversized_input_without_archiving_payload(self):
         for cap,budget,data,expected in ((1024,5000,b'x'*1025+b'\n','input_line_limit'),
