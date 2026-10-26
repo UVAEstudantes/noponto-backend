@@ -620,6 +620,7 @@ class ActivationDeadline:
         if threading.current_thread() is not threading.main_thread() or signal.getitimer(signal.ITIMER_REAL)!=(0.,0.):
             raise SafetyFailure('deadline_interrupt_unavailable')
         self.require898=require898;self.beta=beta;self.proven=False;self.first_complete_elapsed=None;self.failure=None;self.http_bad_since=None
+        self.observation_bad_since=None
         self.startup_deadline=None;self.healthy_seen=False
         self.on_proof=lambda elapsed:None
 
@@ -630,6 +631,7 @@ class ActivationDeadline:
         if self.require898 and not self.proven and elapsed>=90 and not self.beta:raise SafetyFailure('gate_898_unproven')
         if self.failure:raise SafetyFailure(self.failure)
         if self.http_bad_since is not None and time.monotonic()-self.http_bad_since>=30:raise SafetyFailure('backend_unavailable')
+        if self.observation_bad_since is not None and time.monotonic()-self.observation_bad_since>=30:raise SafetyFailure('observation_unavailable')
         if self.startup_deadline is not None and not self.healthy_seen and time.monotonic()>=self.startup_deadline and not self.beta:
             raise SafetyFailure('hybrid_startup_unconfirmed')
         if stop.is_set():raise SafetyFailure(stop_reason())
@@ -650,6 +652,7 @@ class ActivationDeadline:
     def arm(self):
         remaining=min(600-self.elapsed(),90-self.elapsed() if self.require898 and not self.proven and not self.beta else 600)
         if self.http_bad_since is not None:remaining=min(remaining,self.http_bad_since+30-time.monotonic())
+        if self.observation_bad_since is not None:remaining=min(remaining,self.observation_bad_since+30-time.monotonic())
         if self.startup_deadline is not None and not self.healthy_seen and not self.beta:remaining=min(remaining,self.startup_deadline-time.monotonic())
         signal.setitimer(signal.ITIMER_REAL,max(.000001,min(.25,remaining)))
 
@@ -705,14 +708,19 @@ class ActivationObserver:
     def observe(self):
         while not self.finished.is_set() and not stop.is_set():
             self.observe_once()
-            self.finished.wait(15)
+            recovery=self.safety.beta and (self.safety.http_bad_since is not None or self.safety.observation_bad_since is not None)
+            self.finished.wait(2 if recovery else 15)
 
     def observe_once(self):
         began=time.monotonic()
         try:
+            if self.safety.beta and self.safety.http_bad_since is not None:
+                # Verify root recovery before expensive multi-line/stats/log sampling.
+                get('/');self.safety.http_bad_since=None
             current=sample()
             if self.finished.is_set():return
             self.safety.http_bad_since=None
+            self.safety.observation_bad_since=None
             current['hybrid_state']=hybrid_state(current)
             current['activation_elapsed']=self.safety.elapsed()
             if current['hybrid_state']=='healthy':self.safety.healthy_seen=True
@@ -730,13 +738,14 @@ class ActivationObserver:
             if reason:self.safety.trip(reason)
             self.publish('its_sample',current)
         except ProbeError as error:
-            if self.safety.http_bad_since is None:self.safety.http_bad_since=began
+            field='observation_bad_since' if self.safety.beta and error.path!='/' else 'http_bad_since'
+            if getattr(self.safety,field) is None:setattr(self.safety,field,began)
             if error.reason in ('invalid_json','invalid_positions_contract','body_limit'):self.safety.trip('observation_failed')
             self.publish('its_observation_error',{'hybrid_state':'starting' if not self.safety.healthy_seen else 'failure',
                    'activation_elapsed':self.safety.elapsed(),**failure_evidence(error)})
         except Exception as error:
             if self.safety.beta:
-                if self.safety.http_bad_since is None:self.safety.http_bad_since=began
+                if self.safety.observation_bad_since is None:self.safety.observation_bad_since=began
             else:self.safety.trip('observation_failed')
             self.publish('its_observation_error',{'hybrid_state':'failure',**failure_evidence(error)})
 

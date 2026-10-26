@@ -627,7 +627,7 @@ class ActivationLoop(unittest.TestCase):
             (w.signal,'SIGALRM',14),(w.signal,'ITIMER_REAL',0),(w.signal,'setitimer',self.clock.arm),
             (w.signal,'getitimer',lambda *_:(0.,0.)),(w.signal,'getsignal',lambda *_:None),
             (w.signal,'signal',lambda key,fn:self.clock.handlers.__setitem__(key,fn)),(w,'stop',self.stopping),(w,'activation_epoch',None),
-            (w.threading,'Thread',Mock()),(w.ActivationObserver,'start',start),(w,'sample',self.observation),
+            (w.threading,'Thread',Mock()),(w.ActivationObserver,'start',start),(w,'sample',self.observation),(w,'get',Mock(return_value=(b'',0))),
             (w,'switch',self.switch),(w,'inspect',lambda:[{'Config':{'Image':w.APPROVED_IMAGE,'Env':[
                 'GpsSources__BusPrimarySource=ITS_CURRENT','GpsSources__BusSupportMode=Hybrid','GpsSources__BrtPrimarySource=GTFSRT_BRT']}}]),
             (w,'save',lambda s:self.saved.append(copy.deepcopy(s))),
@@ -750,8 +750,40 @@ class ActivationLoop(unittest.TestCase):
     def test_beta_keeps_persistent_backend_outage_critical(self):
         from probe_http import ProbeError
         self.state.update(experiment_mode='beta_diagnostic',beta_authorized=True)
-        with patch.object(w,'sample',side_effect=ProbeError('/',503,'http_failure')):self.run_until_abort('backend_unavailable')
+        with patch.object(w,'sample',side_effect=ProbeError('/',503,'http_failure')),patch.object(w,'get',side_effect=ProbeError('/',503,'http_failure')):self.run_until_abort('backend_unavailable')
         self.assertEqual(30,self.clock.now)
+
+    def test_beta_rechecks_recovery_before_outage_deadline_between_full_samples(self):
+        from unittest.mock import Mock
+        from probe_http import ProbeError
+        self.clock.now=16;self.events=[];finished={'value':False};waits=[]
+        done=Mock();done.is_set.side_effect=lambda:finished['value'];done.set.side_effect=lambda:finished.update(value=True)
+        def wait(seconds):
+            waits.append(seconds)
+            if not finished['value']:self.clock.advance(seconds)
+        done.wait.side_effect=wait
+        def root_probe(*_):
+            if self.clock.now<36:raise ProbeError('/',None,'transport_failure')
+            return b'',0
+        def full_sample():root_probe();return self.observation()
+        def record(kind,value):
+            self.events.append((kind,value))
+            if kind=='its_sample':finished['value']=True
+        with w.ActivationDeadline(True,beta=True) as safety:
+            observer=w.ActivationObserver(safety,self.baseline);observer.finished=done
+            with patch.object(w,'sample',side_effect=full_sample),patch.object(w,'get',side_effect=root_probe),patch.object(w,'record',side_effect=record):observer.observe()
+            self.assertIsNone(safety.http_bad_since)
+        self.assertEqual(36,self.clock.now)
+        self.assertEqual(1,sum(kind=='its_sample' for kind,_ in self.events))
+        self.assertTrue(all(seconds==2 for seconds in waits[:-1]))
+
+    def test_beta_metadata_failure_is_not_misreported_as_backend_http_outage(self):
+        with w.ActivationDeadline(True,beta=True) as safety:
+            observer=w.ActivationObserver(safety,self.baseline)
+            with patch.object(w,'sample',side_effect=w.CommandFailure(['docker','stats'],1)):observer.observe_once()
+            self.assertIsNone(safety.http_bad_since);self.assertEqual(0,safety.observation_bad_since)
+            with self.assertRaises(w.SafetyFailure) as error:self.clock.advance(30)
+            self.assertEqual('observation_unavailable',error.exception.reason)
 
     def test_operator_stop_interrupts_boot_and_keeps_operational_reason(self):
         self.clock.schedule(10,lambda:self.clock.handlers[w.signal.SIGTERM](w.signal.SIGTERM,None))
