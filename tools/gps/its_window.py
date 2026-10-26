@@ -1,7 +1,7 @@
 """Manual controlled-window supervisor. Only --tick reads an explicitly prepared state.
 No raw positions, identities, configuration or provider exceptions are written to output.
 """
-import base64, copy, datetime as dt, hashlib, json, math, os, pathlib, re, signal, socket, statistics, struct, subprocess, sys, threading, time, urllib.request
+import base64, copy, datetime as dt, hashlib, json, math, os, pathlib, re, signal, socket, stat, statistics, struct, subprocess, sys, threading, time, urllib.request
 from probe_http import get, ProbeError
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -17,42 +17,200 @@ activation_epoch = None
 APPROVED_IMAGE = 'ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8'
 capture_process = None
 capture_contract = None
+PROC_ROOT = pathlib.Path('/proc')
+CAPTURE_FILES = ('its_window.py','its_log_capture.py','probe_http.py','its.primary.override.yml','gtfs.rollback.override.yml')
+CAPTURE_KEYS = ('session','source_sha256','pid','pid_start','container_id',
+                'directory_device','directory_inode','archive_device','archive_inode')
 
 class CaptureFailure(RuntimeError):
     def evidence(self):
         return {'type':'CaptureFailure','classification':'evidence_capture','reason':'capture_evidence_failed'}
 
 
-def start_capture(s):
-    global capture_process,capture_contract
-    if s['image']!=APPROVED_IMAGE:raise CaptureFailure('capture_image_mismatch')
-    names=('its_window.py','its_log_capture.py','probe_http.py','its.primary.override.yml','gtfs.rollback.override.yml')
+def capture_files_valid(s):
+    if s.get('image')!=APPROVED_IMAGE:raise CaptureFailure('capture_image_mismatch')
     expected=s.get('operational_sha256',{})
-    for name in names:
+    for name in CAPTURE_FILES:
         if expected.get(name)!=hashlib.sha256((ROOT/name).read_bytes()).hexdigest():
             raise CaptureFailure('operational_hash_mismatch')
+    return expected
+
+
+def process_identity(pid, birth, session):
+    """Match the live process, not just a reusable PID or a plausible health file."""
+    try:
+        proc=PROC_ROOT/str(pid)
+        fields=(proc/'stat').read_text().split()
+        if fields[21]!=str(birth) or fields[2]=='Z':return False
+        args=[part.decode() for part in (proc/'cmdline').read_bytes().split(b'\0') if part]
+        expected=['-B',str(ROOT/'its_log_capture.py'),'--directory',str(ROOT/'capture'),
+                  '--session',session,'--seconds','1000']
+        return len(args)>=2 and args[1:]==expected
+    except (OSError,UnicodeError,IndexError,ValueError):return False
+
+
+def process_birth(pid):
+    return (PROC_ROOT/str(pid)/'stat').read_text().split()[21]
+
+
+def capture_descriptors(pid):
+    """A proof reader must have no SSH stdio or inherited deploy lock."""
+    if os.name!='posix':return True
+    try:
+        if os.getsid(pid)!=pid or os.getpgid(pid)!=pid:return False
+        descriptors=PROC_ROOT/str(pid)/'fd'
+        for fd in descriptors.iterdir():
+            try:
+                if 'deploy.lock' in os.readlink(fd):return False
+            except FileNotFoundError:continue  # A transient Docker FD can close during inspection.
+        return all(os.readlink(descriptors/str(fd))=='/dev/null' for fd in (0,1,2))
+    except OSError:return False
+
+
+def capture_file_identity():
+    directory=ROOT/'capture';archive=directory/'aggregates.jsonl';health=directory/'health.json'
+    if any(p.is_symlink() for p in (ROOT,directory,archive,health)):raise CaptureFailure('capture_symlink')
+    r,d,a,h=ROOT.stat(),directory.stat(),archive.stat(),health.stat()
+    if not stat.S_ISDIR(d.st_mode) or not stat.S_ISREG(a.st_mode) or not stat.S_ISREG(h.st_mode):
+        raise CaptureFailure('capture_file_type')
+    if os.name=='posix' and (r.st_mode&0o777!=0o700 or d.st_mode&0o777!=0o700 or a.st_mode&0o777!=0o600 or h.st_mode&0o777!=0o600):
+        raise CaptureFailure('capture_permissions')
+    return {'directory_device':d.st_dev,'directory_inode':d.st_ino,
+            'archive_device':a.st_dev,'archive_inode':a.st_ino}
+
+
+def read_capture_health():
+    path=ROOT/'capture'/'health.json'
+    if path.stat().st_size>4096:raise CaptureFailure('capture_health_limit')
+    value=json.loads(path.read_text())
+    if not isinstance(value,dict):raise CaptureFailure('capture_health_schema')
+    return value
+
+
+def capture_matches(contract, health, container=None, initial_container=True):
+    if not isinstance(contract.get('pid'),int) or contract['pid']<=0 or not re.fullmatch(r'[0-9]+',str(contract.get('pid_start',''))):
+        raise CaptureFailure('capture_pid_contract')
+    if not re.fullmatch(r'[a-f0-9]{32}',str(contract.get('session',''))) or not re.fullmatch(r'[a-f0-9]{64}',str(contract.get('source_sha256',''))):
+        raise CaptureFailure('capture_session_contract')
+    if not re.fullmatch(r'[a-f0-9]{64}',str(contract.get('container_id',''))):
+        raise CaptureFailure('capture_container_contract')
+    if any(health.get(k)!=contract[k] for k in CAPTURE_KEYS if k in health and k in contract and (initial_container or k!='container_id')):
+        raise CaptureFailure('capture_identity_mismatch')
+    required=('session','source_sha256','pid','pid_start','container_id') if initial_container or container is None else ('session','source_sha256','pid','pid_start')
+    if any(health.get(k)!=contract[k] for k in required):
+        raise CaptureFailure('capture_health_identity')
+    if health.get('image')!=APPROVED_IMAGE or (container and health.get('container_id')!=container) or not re.fullmatch(r'[a-f0-9]{64}',str(health.get('container_id',''))):
+        raise CaptureFailure('capture_container')
+    age=time.time()-health['heartbeat']
+    if not math.isfinite(age) or not 0<=age<=10:raise CaptureFailure('capture_stale')
+    if health.get('state')!='running' or health.get('ready') is not True or health.get('failure') or health.get('gap_count')!=0 or health.get('truncated') is not False:
+        raise CaptureFailure('capture_unhealthy')
+    if any(type(health.get(k)) is not int for k in ('records','bytes','input_bytes')) or health['records']<2 or health['bytes']<=0 or health['input_bytes']<0:
+        raise CaptureFailure('capture_counts')
+    if not process_identity(contract['pid'],contract['pid_start'],contract['session']):
+        raise CaptureFailure('capture_process_identity')
+    if capture_file_identity()!={k:contract[k] for k in ('directory_device','directory_inode','archive_device','archive_inode')}:
+        raise CaptureFailure('capture_file_identity')
+
+
+def archive_prefix_valid(session, health):
+    """Check the live archive's session and complete durable prefix at handoff."""
+    path=ROOT/'capture'/'aggregates.jsonl'
+    if path.stat().st_size>8*1024*1024:raise CaptureFailure('capture_archive_limit')
+    # The writer may append another line concurrently. Health names the fsynced prefix.
+    size=health['bytes']
+    if not isinstance(size,int) or not 0<size<=8*1024*1024:raise CaptureFailure('capture_archive_size')
+    with path.open('rb') as file:prefix=file.read(size)
+    rows=prefix.splitlines(keepends=True)
+    if len(prefix)!=size or len(rows)!=health['records'] or len(rows)>12000 or len(rows)<2 or any(not line.endswith(b'\n') or len(line)>16384 for line in rows):
+        raise CaptureFailure('capture_archive_prefix')
+    try:events=[json.loads(line) for line in rows]
+    except (ValueError,UnicodeError):raise CaptureFailure('capture_archive_schema') from None
+    if not isinstance(events[0],dict) or events[0].get('kind')!='begin' or events[0].get('schema')!=1 or events[0].get('session')!=session:
+        raise CaptureFailure('capture_archive_session')
+    if any(not isinstance(event,dict) or event.get('kind') in ('gap','end') for event in events[1:]):
+        raise CaptureFailure('capture_archive_gap_or_closed')
+
+
+class AdoptedCapture:
+    def __init__(self, contract):self.pid=contract['pid'];self.birth=contract['pid_start'];self.session=contract['session']
+    def poll(self):return None if process_identity(self.pid,self.birth,self.session) else 1
+    def terminate(self):
+        if self.poll() is None:os.kill(self.pid,signal.SIGTERM)
+
+
+def adopt_capture(s):
+    global capture_process,capture_contract
+    expected=capture_files_valid(s)
+    contract=s.get('capture')
+    if not isinstance(contract,dict) or any(k not in contract for k in CAPTURE_KEYS):
+        raise CaptureFailure('capture_contract_incomplete')
+    if contract['source_sha256']!=expected['its_log_capture.py']:
+        raise CaptureFailure('capture_script_hash')
+    health=read_capture_health()
+    capture_matches(contract,health,inspect()[0]['Id'])
+    if not capture_descriptors(contract['pid']):raise CaptureFailure('capture_inherited_descriptors')
+    archive_prefix_valid(contract['session'],health)
+    capture_process=AdoptedCapture(contract)
+    capture_contract=dict(contract)
+
+
+def start_capture(s):
+    global capture_process,capture_contract
+    expected=capture_files_valid(s)
+    if s.get('capture') or (ROOT/'capture').exists() or capture_process is not None:
+        raise CaptureFailure('capture_already_exists')
     session=os.urandom(16).hex()
-    capture_contract={'session':session,'source_sha256':expected['its_log_capture.py']}
     # New session, no inherited lock descriptor/stdout/SSH. Never wait for this child on rollback.
-    capture_process=subprocess.Popen([sys.executable,'-B',str(ROOT/'its_log_capture.py'),
+    process=subprocess.Popen([sys.executable,'-B',str(ROOT/'its_log_capture.py'),
         '--directory',str(ROOT/'capture'),'--session',session,'--seconds','1000'],
         stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
         close_fds=True,start_new_session=True)
-    s['capture']={**capture_contract,'pid':capture_process.pid};save(s)
+    capture_process=process
+    s['capture']={'session':session,'source_sha256':expected['its_log_capture.py'],'pid':process.pid}
+    save(s)
+    try:
+        deadline=time.monotonic()+5
+        while time.monotonic()<deadline:
+            if process.poll() is not None:raise CaptureFailure('capture_exited_during_start')
+            try:
+                health=read_capture_health()
+                if health.get('ready') and health.get('session')==session:break
+            except (OSError,ValueError,CaptureFailure):pass
+            time.sleep(.1)
+        else:raise CaptureFailure('capture_start_timeout')
+        birth=health.get('pid_start');container=health.get('container_id')
+        contract={**s['capture'],'pid_start':birth,'container_id':container,**capture_file_identity()}
+        capture_matches(contract,health,inspect()[0]['Id'])
+        if not capture_descriptors(process.pid):raise CaptureFailure('capture_inherited_descriptors')
+        archive_prefix_valid(session,health)
+        capture_contract=contract
+        s['capture']=dict(contract);save(s)
+    except Exception:
+        if process.poll() is None:
+            try:process.terminate()
+            except ProcessLookupError:pass
+        raise CaptureFailure('capture_start_invalid') from None
+
+
+def ensure_capture(s):
+    if capture_process is not None:
+        if s.get('capture')!=capture_contract or not capture_health(inspect()[0]['Id'])['healthy']:
+            raise CaptureFailure('capture_controller_mismatch')
+        return
+    if s.get('capture') is not None:
+        adopt_capture(s)
+    elif (ROOT/'capture').exists():
+        raise CaptureFailure('capture_unclaimed_archive')
+    else:
+        start_capture(s)
 
 
 def capture_health(container=None):
     try:
         if capture_process is None or capture_process.poll() is not None:raise CaptureFailure()
-        path=ROOT/'capture'/'health.json'
-        if path.stat().st_size>4096:raise CaptureFailure()
-        value=json.loads(path.read_text())
-        if any(value.get(k)!=v for k,v in capture_contract.items()):raise CaptureFailure()
-        age=time.time()-value['heartbeat']
-        if not math.isfinite(age) or not 0<=age<=10:raise CaptureFailure()
-        if value.get('pid')!=capture_process.pid or value.get('image')!=APPROVED_IMAGE:raise CaptureFailure()
-        if value.get('state')!='running' or value.get('ready') is not True or value.get('failure') or value.get('gap_count')!=0 or value.get('truncated') is not False:raise CaptureFailure()
-        if container and value.get('container_id')!=container:raise CaptureFailure()
+        value=read_capture_health()
+        capture_matches(capture_contract,value,container,initial_container=False)
         return {'healthy':True,'session':value['session'],'records':value['records'],'bytes':value['bytes'],'families':value.get('families',{})}
     except (OSError,ValueError,TypeError,KeyError,CaptureFailure):
         return {'healthy':False,'reason':'capture_evidence_failed'}
@@ -63,6 +221,45 @@ def stop_capture():
     if capture_process is not None and capture_process.poll() is None:
         try:capture_process.terminate()
         except ProcessLookupError:pass
+
+
+def stop_orphan_capture(s):
+    """Watchdog cleanup after its own successful GTFS rollback."""
+    contract=s.get('capture')
+    if not isinstance(contract,dict) or any(k not in contract for k in CAPTURE_KEYS):
+        raise CaptureFailure('orphan_contract_incomplete')
+    capture_files_valid(s)
+    health=read_capture_health()
+    if any(health.get(k)!=contract[k] for k in ('session','source_sha256','pid','pid_start')):
+        raise CaptureFailure('orphan_identity_mismatch')
+    if capture_file_identity()!={k:contract[k] for k in ('directory_device','directory_inode','archive_device','archive_inode')}:
+        raise CaptureFailure('orphan_file_identity')
+    process=AdoptedCapture(contract)
+    if process.poll() is None:
+        if not capture_descriptors(process.pid):raise CaptureFailure('orphan_descriptors')
+        process.terminate()
+
+
+def finalize_capture(s):
+    """Verify once after the API is safe and the deploy lock has been released."""
+    if 'capture_verification' in s:return s['capture_verification']
+    result={'integrity_valid':False,'archive_complete':False,'evidence_complete':False}
+    if s.get('capture'):
+        deadline=time.monotonic()+8
+        while time.monotonic()<deadline:
+            try:
+                health=read_capture_health()
+                if health.get('state')=='closed' and health.get('session')==s['capture']['session']:
+                    result=json.loads(run([sys.executable,'-B',str(ROOT/'its_log_capture.py'),
+                                            '--directory',str(ROOT/'capture'),'--verify'],timeout=5))
+                    break
+            except (OSError,ValueError,KeyError,CommandFailure):break
+            time.sleep(.2)
+    # Closed schema: do not persist arbitrary output from a failed helper.
+    safe={key:result.get(key) for key in ('integrity_valid','archive_complete','evidence_complete',
+                                          'file_sha256','gap_count','truncated','reason')}
+    s['capture_verification']=safe;save(s);record('capture_archive',safe)
+    return safe
 
 
 class CommandFailure(RuntimeError):
@@ -396,7 +593,7 @@ def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None)
 def supervise(s):
     global activation_epoch
     if os.getpgrp()!=os.getpid():os.setsid()
-    lock=take_lock(); s.update(pid=os.getpid(),pid_start=pathlib.Path('/proc/self/stat').read_text().split()[21],phase='baseline',heartbeat=time.time(),deadline=time.time()+960); save(s)
+    lock=take_lock(); s.update(pid=os.getpid(),pid_start=process_birth(os.getpid()),phase='baseline',heartbeat=time.time(),deadline=time.time()+960); save(s)
     thread=threading.Thread(target=socket_worker,daemon=True); thread.start()
     def beat():
         while not stop.wait(3):
@@ -406,7 +603,7 @@ def supervise(s):
     signal.signal(signal.SIGTERM,lambda *_:stop.set()); signal.signal(signal.SIGINT,lambda *_:stop.set())
     activated=False
     try:
-        validate(s['image']); start_capture(s)
+        validate(s['image']); ensure_capture(s)
         ready_deadline=time.monotonic()+5
         while not capture_health(inspect()[0]['Id'])['healthy']:
             if stop.is_set() or time.monotonic()>=ready_deadline:raise CaptureFailure()
@@ -451,7 +648,7 @@ def supervise(s):
     finally:
         try:stop_capture()
         finally:
-            stop.set();thread.join(6);lock.close()
+            stop.set();lock.close();thread.join(6);finalize_capture(s)
 
 def tick():
     s=load()
@@ -480,11 +677,15 @@ def tick():
                 if load()['phase']=='complete':return
                 try:os.killpg(pid,signal.SIGKILL)
                 except ProcessLookupError:pass
+        safe=False
         try:
             lock=take_lock()
-            try:rollback(s,'independent_cron_watchdog')
+            try:rollback(s,'independent_cron_watchdog');safe=True
             finally:lock.close()
         except Exception as error:record('watchdog_retry_required',{'type':type(error).__name__})
+        if safe:
+            try:stop_orphan_capture(s);finalize_capture(s)
+            except Exception as error:record('capture_cleanup_failed',{'type':type(error).__name__})
 
 if __name__=='__main__':
     os.umask(0o077)
