@@ -209,11 +209,12 @@ class TraceProof(unittest.TestCase):
         self.assertEqual('proven',w.correlation_state([frame],wire))
         self.assertEqual('client_only',w.correlation_state([dict(frame,linked_complete_new=0)],wire))
         self.assertEqual('server_only',w.correlation_state([frame],{}))
-        with patch.object(w.time,'time',return_value=1090):
+        with patch.object(w.time,'time',return_value=1089.99):
             current=sample();current.update(flow=[frame],wire={**current['wire'],**wire})
             self.assertIsNone(w.decision(current,sample(),set(),0,0,None,{'activated':1000})[0])
-        with patch.object(w.time,'time',return_value=1090.001):
-            self.assertEqual('gate_898_unproven',w.decision(current,sample(),set(),0,0,None,{'activated':1000})[0])
+        for late in (1090,1090.001):
+            with patch.object(w.time,'time',return_value=late):
+                self.assertEqual('gate_898_unproven',w.decision(current,sample(),set(),0,0,None,{'activated':1000})[0])
 
     def test_empty_stale_and_aging_are_not_backend_failures(self):
         self.assertEqual('valid_empty',w.data_state({'vehicles':0}))
@@ -329,7 +330,9 @@ class CaptureSafety(unittest.TestCase):
         # Exercise real supervisor control flow with a baseline ending on its second clock check.
         order=[];lock=Mock();lock.close.side_effect=lambda:order.append('lock_release');thread=Mock();baseline=sample()
         baseline['capture']={'healthy':True};baseline['wire'].update(messages=7,lines={x:{} for x in w.LINES})
-        with patch.object(w.os,'getpgrp',create=True,return_value=123),patch.object(w.os,'getpid',return_value=123),patch.object(Path,'read_text',return_value=' '.join(['0']*22)),patch.object(w,'take_lock',return_value=lock),patch.object(w,'save'),patch.object(w,'record'),patch.object(w.threading,'Thread',return_value=thread),patch.object(w.signal,'signal'),patch.object(w,'validate'),patch.object(w,'ensure_capture'),patch.object(w,'capture_health',return_value={'healthy':True}),patch.object(w,'inspect',return_value=[{'Id':'c'*64}]),patch.object(w,'sample',return_value=baseline),patch.object(w.time,'monotonic',side_effect=[0,0,1,121]),patch.object(w.stop,'wait'),patch.object(w.stop,'is_set',return_value=False),patch.object(w,'switch',side_effect=RuntimeError('controlled_activation_failure')),patch.object(w,'rollback',side_effect=lambda *_:order.append('rollback')),patch.object(w,'stop_capture',side_effect=lambda:order.append('capture_stop')),patch.object(w,'finalize_capture',side_effect=lambda *_:order.append('verify')):
+        def fail_activation(state,*_):state['activated']=1000;raise RuntimeError('controlled_activation_failure')
+        def returned_gtfs(state,*_):state['phase']='complete';order.append('rollback')
+        with patch.object(w.os,'getpgrp',create=True,return_value=123),patch.object(w.os,'getpid',return_value=123),patch.object(Path,'read_text',return_value=' '.join(['0']*22)),patch.object(w,'take_lock',return_value=lock),patch.object(w,'save'),patch.object(w,'record'),patch.object(w.threading,'Thread',return_value=thread),patch.object(w.signal,'signal'),patch.object(w,'validate'),patch.object(w,'ensure_capture'),patch.object(w,'capture_health',return_value={'healthy':True}),patch.object(w,'inspect',return_value=[{'Id':'c'*64}]),patch.object(w,'sample',return_value=baseline),patch.object(w.time,'monotonic',side_effect=[0,0,1,121]),patch.object(w.stop,'wait'),patch.object(w.stop,'is_set',return_value=False),patch.object(w,'run_activation',side_effect=fail_activation),patch.object(w,'rollback',side_effect=returned_gtfs),patch.object(w,'stop_capture',side_effect=lambda:order.append('capture_stop')),patch.object(w,'finalize_capture',side_effect=lambda *_:order.append('verify')):
             w.supervise({'image':w.APPROVED_IMAGE})
         w.stop.clear()
         self.assertEqual(['rollback','capture_stop','lock_release','verify'],order);lock.close.assert_called_once()
@@ -549,5 +552,317 @@ class CaptureHandoff(unittest.TestCase):
         self.assertEqual('CaptureFailure',state['failure'])
         self.assertEqual('capture_evidence_failed',events[0][1]['operational_reason'])
         sample_call.assert_not_called();switch.assert_not_called();lock.close.assert_called_once()
+
+class StartupDeadline(unittest.TestCase):
+    def test_real_supervisor_startup_does_not_delay_898_rollback_past90(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        clock={'now':0.,'alarm':None};handlers={};rollback_at=[];saved=[]
+        def advance(seconds):
+            end=clock['now']+seconds
+            while clock['alarm'] is not None and clock['alarm']<=end:
+                clock['now']=clock['alarm'];clock['alarm']=None;handlers[14](14,None)
+            clock['now']=end
+        def alarm(_kind,seconds,*_):clock['alarm']=clock['now']+seconds if seconds else None
+        event=Mock();event.is_set.return_value=False;event.wait.side_effect=advance
+        baseline=sample();baseline['capture']={'healthy':True}
+        baseline['wire'].update(messages=10,lines={x:{} for x in w.LINES})
+        api={'Id':'a'*64,'Config':{'Image':w.APPROVED_IMAGE,'Env':[
+            'GpsSources__BusPrimarySource=ITS_CURRENT','GpsSources__BusSupportMode=Hybrid','GpsSources__BrtPrimarySource=GTFSRT_BRT']},
+            'State':{'Running':True,'OOMKilled':False},'RestartCount':0}
+        def rollback(state,reason):rollback_at.append((clock['now'],reason));state['phase']='complete'
+        with ExitStack() as stack:
+            patches=[(w.os,'getpgrp',Mock(return_value=123)),(w.os,'getpid',Mock(return_value=123)),
+                (w,'process_birth',Mock(return_value='birth')),(w,'take_lock',Mock()),(w,'save',lambda s:saved.append(copy.deepcopy(s))),
+                (w,'record',Mock()),(w.threading,'Thread',Mock()),(w.signal,'signal',lambda key,fn:handlers.__setitem__(key,fn)),
+                (w.signal,'getsignal',Mock(return_value=None)),(w.signal,'setitimer',alarm),(w.signal,'getitimer',Mock(return_value=(0,0))),
+                (w.signal,'SIGALRM',14),(w.signal,'ITIMER_REAL',0),(w,'validate',Mock()),(w,'ensure_capture',Mock()),
+                (w,'capture_health',Mock(return_value={'healthy':True})),(w,'inspect',Mock(return_value=[api])),
+                (w,'sample',Mock(return_value=baseline)),(w,'get',Mock(return_value=(b'',0))),
+                (w,'run',Mock(return_value='BUS hybrid: primary_status=Falha support_status=Sucesso selected_its=0 selected_gtfs=100')),
+                (w,'stop',event),(w,'activation_epoch',None),(w.time,'monotonic',lambda:clock['now']),(w.time,'time',lambda:1000+clock['now']),
+                (w.time,'sleep',advance),(w,'switch',lambda *_:advance(35)),(w,'rollback',rollback),
+                (w,'stop_capture',Mock()),(w,'finalize_capture',Mock())]
+            for obj,key,value in patches:stack.enter_context(patch.object(obj,key,value,create=True))
+            w.supervise({'image':w.APPROVED_IMAGE})
+        activation=next(x['activated']-1000 for x in saved if 'activated' in x)
+        self.assertEqual(1,len(rollback_at))
+        self.assertLessEqual(rollback_at[0][0]-activation,90)
+        self.assertEqual('gate_898_unproven',rollback_at[0][1])
+
+class SimulatedTime:
+    def __init__(self):self.now=0.;self.alarm=None;self.handlers={};self.actions=[]
+    def schedule(self,at,action):self.actions.append((at,action));self.actions.sort(key=lambda x:x[0])
+    def advance(self,seconds):
+        end=self.now+seconds
+        while True:
+            action=self.actions[0][0] if self.actions else float('inf')
+            alarm=self.alarm if self.alarm is not None else float('inf')
+            if min(action,alarm)>end:break
+            self.now=min(action,alarm)
+            if alarm<=action:
+                self.alarm=None;self.handlers[14](14,None)
+            else:self.actions.pop(0)[1]()
+        self.now=end
+    def arm(self,_kind,seconds,*_):self.alarm=self.now+seconds if seconds else None
+
+
+class ActivationLoop(unittest.TestCase):
+    def setUp(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        self.stack=ExitStack();self.addCleanup(self.stack.close)
+        self.clock=SimulatedTime();self.events=[];self.saved=[];self.observers=[]
+        self.boot=35;self.proof_at=None;self.client=True;self.client_new=1;self.healthy_at=60
+        self.state={'image':w.APPROVED_IMAGE,'phase':'baseline'};self.baseline=sample()
+        self.baseline['cycles']=[]
+        self.stopping=Mock();self.stopping.is_set.return_value=False;self.stopping.wait.side_effect=self.clock.advance
+        def start(observer):
+            self.observers.append(observer)
+            for at in range(0,601,15):
+                self.clock.schedule(at,lambda o=observer:None if o.finished.is_set() else o.observe_once())
+        self.original_switch=w.switch
+        self.switch=Mock(side_effect=lambda *_:self.clock.advance(self.boot))
+        patches=[(w.time,'monotonic',lambda:self.clock.now),(w.time,'time',lambda:1000+self.clock.now),
+            (w.signal,'SIGALRM',14),(w.signal,'ITIMER_REAL',0),(w.signal,'setitimer',self.clock.arm),
+            (w.signal,'getitimer',lambda *_:(0.,0.)),(w.signal,'getsignal',lambda *_:None),
+            (w.signal,'signal',lambda key,fn:self.clock.handlers.__setitem__(key,fn)),(w,'stop',self.stopping),(w,'activation_epoch',None),
+            (w.threading,'Thread',Mock()),(w.ActivationObserver,'start',start),(w,'sample',self.observation),
+            (w,'switch',self.switch),(w,'inspect',lambda:[{'Config':{'Image':w.APPROVED_IMAGE,'Env':[
+                'GpsSources__BusPrimarySource=ITS_CURRENT','GpsSources__BusSupportMode=Hybrid','GpsSources__BrtPrimarySource=GTFSRT_BRT']}}]),
+            (w,'save',lambda s:self.saved.append(copy.deepcopy(s))),
+            (w,'record',lambda k,v:self.events.append((k,copy.deepcopy(v))))]
+        for obj,key,value in patches:self.stack.enter_context(patch.object(obj,key,value,create=True))
+
+    def observation(self):
+        x=sample();now=self.clock.now;x['source']='ITS_CURRENT' if now>=self.boot else 'GTFSRT_BUS'
+        healthy=now>=self.healthy_at
+        x['selection']=[{'mode':'Hybrid','stamp':str(now),'primary_status':'Sucesso' if healthy else 'Falha',
+                         'support_status':'Sucesso','selected_its':'100' if healthy else '0','selected_gtfs':'200'}]
+        x['capture']={'healthy':True,'families':dict.fromkeys(('http_page','normalized_page','timing','acquisition','hybrid'),1)}
+        x['wire'].update(messages=3,connected=self.client,lines={'898':{'new_after_activation':self.client_new}} if self.client else {})
+        x['flow']=[{'line':'898','source':'GTFSRT_BUS','generation':2,'linked_complete_new':int(self.proof_at is not None and now>=self.proof_at)}]
+        return x
+
+    def run_until_abort(self,reason):
+        with self.assertRaises(w.SafetyFailure) as error:w.run_activation(self.state,self.baseline,[])
+        self.assertEqual(reason,error.exception.reason)
+        self.assertEqual(1000,self.state['activated']);self.assertEqual(1600,self.state['deadline'])
+        self.assertIsNone(self.clock.alarm)
+
+    def test_slow_start_and_its_timeout_keep_gtfs_observed_until_exact90(self):
+        self.healthy_at=999
+        self.run_until_abort('gate_898_unproven')
+        self.assertEqual(90,self.clock.now)
+        self.assertEqual(['starting','starting','starting','degraded','degraded','degraded'],[v['hybrid_state'] for _,v in self.events])
+        self.assertTrue(all(v['wire']['messages']>0 for _,v in self.events))
+        self.switch.assert_called_once()
+
+    def test_selection79_ack92_never_proves_the_gate(self):
+        self.proof_at=92
+        self.clock.schedule(79,lambda:self.observers[0].observe_once())
+        self.run_until_abort('gate_898_unproven')
+        self.assertEqual(90,self.clock.now)
+        self.assertNotIn('gate898_proven_elapsed',self.state)
+        self.proof_at=90;self.observers[0].safety.admit(self.observation())
+        self.assertFalse(self.observers[0].safety.proven)
+        self.clock.advance(2);self.observers[0].safety.admit(self.observation())
+        self.assertFalse(self.observers[0].safety.proven)
+
+    def test_complete_server_rest_and_client_proof_before90_keeps_max600(self):
+        self.proof_at=75
+        result=w.run_activation(self.state,self.baseline,[])
+        self.assertEqual('ten_minutes_completed',result);self.assertEqual(600,self.clock.now)
+        self.assertEqual(75,self.state['gate898_proven_elapsed'])
+        self.assertTrue(any(v['hybrid_state']=='healthy' for _,v in self.events))
+
+    def test_rest_and_server_without_signalr_client_do_not_pass(self):
+        self.proof_at=60;self.client=False
+        self.run_until_abort('gate_898_unproven');self.assertEqual(90,self.clock.now)
+
+    def test_blocked_source_switch_is_interrupted_without_second_writer(self):
+        self.boot=200
+        self.run_until_abort('gate_898_unproven');self.assertEqual(90,self.clock.now)
+        self.switch.assert_called_once()
+
+    def test_observer_that_never_finishes_cannot_hold_the_deadline(self):
+        with patch.object(w.ActivationObserver,'start',lambda *_:None):self.run_until_abort('gate_898_unproven')
+        self.assertEqual(90,self.clock.now);self.assertEqual([],self.events)
+
+    def test_degraded_support_with_898_proof_still_cannot_approve_hybrid_health(self):
+        self.proof_at=60;self.healthy_at=999
+        self.run_until_abort('hybrid_startup_unconfirmed')
+        self.assertEqual(95,self.clock.now)
+        self.assertTrue(all(v['hybrid_state']!='healthy' for _,v in self.events))
+
+    def test_startup_http_failure_is_observed_and_interrupts_at30(self):
+        from probe_http import ProbeError
+        with patch.object(w,'sample',side_effect=ProbeError('/',503,'http_failure')):self.run_until_abort('backend_unavailable')
+        self.assertEqual(30,self.clock.now)
+        self.assertEqual(2,len(self.events))
+        self.assertTrue(all(k=='its_observation_error' and v['http_status']==503 for k,v in self.events))
+
+    def test_recorder_failure_is_fail_closed_without_waiting_for90(self):
+        with patch.object(w,'record',side_effect=OSError('private data')):self.run_until_abort('observation_failed')
+        self.assertEqual(.25,self.clock.now)
+
+    def test_no_interruption_capability_blocks_before_activation(self):
+        with patch.object(w.signal,'getitimer',return_value=(1,0)):
+            with self.assertRaises(w.SafetyFailure) as error:w.run_activation(self.state,self.baseline,[])
+        self.assertEqual('deadline_interrupt_unavailable',error.exception.reason)
+        self.switch.assert_not_called();self.assertNotIn('activated',self.state)
+
+    def test_timer_installation_failure_restores_handlers_before_any_source_switch(self):
+        with patch.object(w.signal,'setitimer',side_effect=OSError('not available')):
+            with self.assertRaises(w.SafetyFailure) as error:w.run_activation(self.state,self.baseline,[])
+        self.assertEqual('deadline_interrupt_unavailable',error.exception.reason)
+        self.switch.assert_not_called();self.assertNotIn('activated',self.state)
+        self.assertEqual({14:None,w.signal.SIGTERM:None,w.signal.SIGINT:None},self.clock.handlers)
+
+    def test_existing_activation_or_proof_cannot_reset_the_deadline(self):
+        for extra in ({'activated':500,'deadline':1100},{'gate898_proven_elapsed':5}):
+            state={**self.state,**extra};original=copy.deepcopy(state)
+            with self.assertRaises(w.SafetyFailure) as error:w.run_activation(state,self.baseline,[])
+            self.assertEqual('activation_state_reused',error.exception.reason);self.assertEqual(original,state)
+        self.switch.assert_not_called()
+
+    def test_proof_phase_cannot_call_the_activation_path(self):
+        self.state['phase']='proof'
+        with self.assertRaises(w.SafetyFailure) as error:w.run_activation(self.state,self.baseline,[])
+        self.assertEqual('activation_phase_invalid',error.exception.reason)
+        self.switch.assert_not_called();self.assertNotIn('activated',self.state)
+
+    def test_operator_stop_interrupts_boot_and_keeps_operational_reason(self):
+        self.clock.schedule(10,lambda:self.clock.handlers[w.signal.SIGTERM](w.signal.SIGTERM,None))
+        with patch.object(w,'stop_reason',return_value='operator_rollback'):self.run_until_abort('operator_rollback')
+        self.assertEqual(10,self.clock.now)
+
+    def test_late_healthy_sample_after_stop_cannot_add_proof_or_events(self):
+        self.proof_at=0
+        def after_stop():
+            self.observers[0].stop();return self.observation()
+        with patch.object(w,'sample',side_effect=after_stop):self.run_until_abort('gate_898_unproven')
+        self.assertEqual([],self.events);self.assertNotIn('gate898_proven_elapsed',self.state)
+
+    def test_wall_clock_jump_does_not_move_monotonic_898_deadline(self):
+        with patch.object(w.time,'time',side_effect=lambda:1000+self.clock.now-(10000 if self.clock.now>=45 else 0)):
+            self.run_until_abort('gate_898_unproven')
+        self.assertEqual(90,self.clock.now)
+
+    def test_runtime_gate_abort_terminates_command_before_late_up(self):
+        calls=[]
+        def command(args,**_):calls.append(args);self.clock.advance(200)
+        with patch.object(w,'switch',side_effect=self.original_switch),patch.object(w,'run',side_effect=command):
+            self.run_until_abort('gate_898_unproven')
+        self.assertEqual(1,len(calls));self.assertIn('stop',calls[0])
+        self.assertEqual(90,self.clock.now)
+
+    def test_898_proof_is_not_server_signalr_send_without_client_observation(self):
+        self.proof_at=60;self.client=False
+        self.run_until_abort('gate_898_unproven')
+        self.assertTrue(any(x['flow'][0]['linked_complete_new']>0 for _,x in self.events))
+        self.assertTrue(all(not x['wire']['lines'] for _,x in self.events))
+
+    def test_healthy_rest_and_stale_client_positions_never_simulate_physical_renewal(self):
+        self.proof_at=60;self.client_new=0
+        self.run_until_abort('gate_898_unproven')
+        self.assertEqual(90,self.clock.now)
+        self.assertEqual(6,len(self.events))
+        self.assertTrue(all(x['wire']['lines']['898']['new_after_activation']==0 for _,x in self.events))
+
+    def test_missing_normalized_page_is_expected_only_while_its_is_unavailable(self):
+        original=self.observation
+        def without_normalization():
+            x=original();x['capture']['families'].pop('normalized_page');return x
+        self.healthy_at=60
+        with patch.object(w,'sample',side_effect=without_normalization):self.run_until_abort('capture_evidence_failed')
+        self.assertGreaterEqual(self.clock.now,60);self.assertLessEqual(self.clock.now,60.25)
+        self.assertTrue(any(x['hybrid_state']=='degraded' for _,x in self.events))
+        self.assertEqual('healthy',self.events[-1][1]['hybrid_state'])
+
+
+class StartupRecovery(unittest.TestCase):
+    def test_post_rollback_probe_failure_cannot_recreate_api_or_undo_safe_state(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from probe_http import ProbeError
+        state={'image':w.APPROVED_IMAGE};baseline=sample();baseline['capture']={'healthy':True}
+        baseline['wire'].update(messages=2,lines={x:{} for x in w.LINES})
+        def completed_window(s,*_):s.update(activated=1000,phase='its');return 'ten_minutes_completed'
+        def returned(s,*_):s['phase']='complete'
+        rollback=Mock(side_effect=returned);verify=Mock();stop_capture=Mock();event=Mock();event.is_set.return_value=False
+        with ExitStack() as stack:
+            for obj,key,value in [(w.os,'getpgrp',Mock(return_value=123)),(w.os,'getpid',Mock(return_value=123)),
+                (w,'process_birth',Mock(return_value='birth')),(w,'take_lock',Mock()),(w,'save',Mock()),(w,'record',Mock()),
+                (w.threading,'Thread',Mock()),(w.signal,'signal',Mock()),(w,'validate',Mock()),(w,'ensure_capture',Mock()),
+                (w,'capture_health',Mock(return_value={'healthy':True})),(w,'inspect',Mock(return_value=[{'Id':'c'*64}])),
+                (w,'sample',Mock(side_effect=[baseline,ProbeError('/',503,'http_failure')])),
+                (w.time,'monotonic',Mock(side_effect=[0,0,1,121])),(w,'stop',event),
+                (w,'run_activation',completed_window),(w,'rollback',rollback),(w,'stop_capture',stop_capture),(w,'finalize_capture',verify)]:
+                stack.enter_context(patch.object(obj,key,value,create=True))
+            w.supervise(state)
+        self.assertEqual('complete',state['phase']);rollback.assert_called_once()
+        stop_capture.assert_called_once();verify.assert_called_once()
+
+    def test_failed_rollback_defers_capture_cleanup_until_independent_watchdog_recovers(self):
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        state={'image':w.APPROVED_IMAGE};order=[];lock=Mock();lock.close.side_effect=lambda:order.append('unlock')
+        baseline=sample();baseline['capture']={'healthy':True};baseline['wire'].update(messages=2,lines={x:{} for x in w.LINES})
+        def fail_start(s,*_):s.update(activated=1000,phase='its');raise w.SafetyFailure('gate_898_unproven')
+        def fail_return(*_):order.append('rollback');raise RuntimeError('private provider text')
+        event=Mock();event.is_set.return_value=False;stop_capture=Mock();verify=Mock();records=[]
+        with ExitStack() as stack:
+            for obj,key,value in [(w.os,'getpgrp',Mock(return_value=123)),(w.os,'getpid',Mock(return_value=123)),
+                (w,'process_birth',Mock(return_value='birth')),(w,'take_lock',Mock(return_value=lock)),(w,'save',Mock()),
+                (w,'record',lambda k,v:records.append((k,v))),(w.threading,'Thread',Mock()),(w.signal,'signal',Mock()),
+                (w,'validate',Mock()),(w,'ensure_capture',Mock()),(w,'capture_health',Mock(return_value={'healthy':True})),
+                (w,'inspect',Mock(return_value=[{'Id':'c'*64}])),(w,'sample',Mock(return_value=baseline)),
+                (w.time,'monotonic',Mock(side_effect=[0,0,1,121])),(w,'stop',event),
+                (w,'run_activation',fail_start),(w,'rollback',fail_return),(w,'stop_capture',stop_capture),(w,'finalize_capture',verify)]:
+                stack.enter_context(patch.object(obj,key,value,create=True))
+            w.supervise(state)
+        self.assertEqual('rollback_failed',state['phase']);self.assertEqual(['rollback','unlock'],order)
+        stop_capture.assert_not_called();verify.assert_not_called()
+        failure=next(value for kind,value in records if kind=='supervisor_error')
+        self.assertEqual('safety_gate',failure['classification']);self.assertEqual('gate_898_unproven',failure['operational_reason'])
+        self.assertNotIn('private',str(records))
+        state.pop('pid');state['heartbeat']=0;order.clear()
+        def recovered(s,reason):s['phase']='complete';order.append('gtfs_confirmed')
+        with patch.object(w,'load',return_value=state),patch.object(w.time,'time',return_value=2000),\
+             patch.object(w,'take_lock',return_value=lock),patch.object(w,'rollback',side_effect=recovered),\
+             patch.object(w,'stop_orphan_capture',side_effect=lambda *_:order.append('capture_stop')),\
+             patch.object(w,'finalize_capture',side_effect=lambda *_:order.append('verify')):
+            w.tick()
+        self.assertEqual(['gtfs_confirmed','unlock','capture_stop','verify'],order)
+        self.assertEqual('complete',state['phase'])
+
+    def test_fresh_heartbeat_cannot_hide_expired_898_from_independent_cron(self):
+        from unittest.mock import Mock
+        state={'phase':'its','deadline':1600,'activated':1000,'heartbeat':1090}
+        order=[];lock=Mock();lock.close.side_effect=lambda:order.append('unlock')
+        with patch.object(w,'load',return_value=state),patch.object(w.time,'time',return_value=1090),\
+             patch.object(w,'take_lock',return_value=lock),patch.object(w,'rollback',side_effect=lambda s,r:order.append(r)),\
+             patch.object(w,'stop_orphan_capture',side_effect=lambda *_:order.append('capture_stop')),\
+             patch.object(w,'finalize_capture',side_effect=lambda *_:order.append('verify')):
+            w.tick()
+        self.assertEqual(['gate_898_unproven','unlock','capture_stop','verify'],order)
+
+    def test_only_timely_persisted_proof_prevents_gate_watchdog(self):
+        for proof,expired in ((89.9,False),(90,True),(92,True),(-1,True),(True,True)):
+            with self.subTest(proof=proof),patch.object(w,'load',return_value={'phase':'its','deadline':1600,'activated':1000,'heartbeat':1091,'gate898_proven_elapsed':proof}),\
+                 patch.object(w.time,'time',return_value=1091),patch.object(w,'take_lock'),patch.object(w,'rollback') as rollback,\
+                 patch.object(w,'stop_orphan_capture'),patch.object(w,'finalize_capture'):
+                w.tick();self.assertEqual(expired,rollback.called)
+
+    def test_deadline_exception_cancels_subprocess_instead_of_waiting_for_result(self):
+        from unittest.mock import MagicMock
+        child=MagicMock();child.communicate.side_effect=w.SafetyFailure('gate_898_unproven')
+        with patch.object(w.subprocess,'Popen') as popen:
+            popen.return_value.__enter__.return_value=child
+            with self.assertRaises(w.SafetyFailure):w.run(['docker','logs','container'])
+        child.kill.assert_called_once()
+
+unittest.main()
 
 unittest.main()

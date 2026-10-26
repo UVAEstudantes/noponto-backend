@@ -444,6 +444,72 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(1,archive.gaps['acquisition_log_mismatch'])
         self.assertFalse(c.verify(self.directory)['evidence_complete'])
 
+    def test_timeout_http_after_timing_and_summary_does_not_reopen_completed_acquisition(self):
+        archive=self.archive()
+        t=timing();t['status']='Falha'
+        s=summary();s.update(status='Falha',reason='request_timeout',pages=0,windows=0,records=0,rejected=0)
+        archive.ingest(CID,line('timing',t,10))
+        archive.ingest(CID,line('acquisition',s,11))
+        h=http();h.update(completed='False',phase='headers',http_status=None,bytes=0)
+        archive.ingest(CID,line('http_page',h,12))
+        archive.close()
+        result=c.verify(self.directory)
+        self.assertEqual(0,result['acquisitions_without_timing'])
+        self.assertTrue(result['integrity_valid']);self.assertTrue(result['archive_complete'])
+        self.assertTrue(result['evidence_complete'])
+
+    def test_success_summary_reconciles_late_pages_and_duplicate_overlap_at_close(self):
+        archive=self.archive();s=summary();s.update(pages=1,windows=1,records=3,rejected=0)
+        archive.ingest(CID,line('timing',timing(),4))
+        archive.ingest(CID,line('acquisition',s,5))
+        h=line('http_page',http(),1)
+        page=line('normalized_page',dict(acquisition=ACQ,window=0,minute_utc=BASE.isoformat(),page=1,
+                  records=3,providers={'ZIRIX':3},rejections={},normalize_ms=2),2)
+        for raw in (page,h,h,page):archive.ingest(CID,raw)
+        archive.close();result=c.verify(self.directory)
+        self.assertEqual(2,archive.duplicates)
+        self.assertEqual({},archive.gaps)
+        self.assertEqual(0,result['acquisitions_without_timing'])
+        self.assertTrue(result['evidence_complete'])
+
+    def test_timing_without_summary_is_not_complete_evidence(self):
+        archive=self.archive();archive.ingest(CID,line('timing',timing()))
+        archive.close();result=c.verify(self.directory)
+        self.assertTrue(result['integrity_valid']);self.assertTrue(result['archive_complete'])
+        self.assertFalse(result['evidence_complete'])
+        self.assertEqual(1,result['acquisitions_without_timing'])
+
+    def test_completed_timeout_plus_cancelled_acquisition_counts_only_real_incomplete(self):
+        archive=self.archive();t=timing();t['status']='Falha'
+        s=summary();s.update(status='Falha',reason='request_timeout',pages=0,windows=0,records=0)
+        archive.ingest(CID,line('timing',t,10));archive.ingest(CID,line('acquisition',s,11))
+        h=http();h.update(completed='False',phase='headers',http_status=None)
+        archive.ingest(CID,line('http_page',h,12))
+        archive.ingest(CID,line('http_page',http(acquisition='f'*32),20))
+        archive.close();result=c.verify(self.directory)
+        self.assertTrue(result['archive_complete']);self.assertFalse(result['evidence_complete'])
+        self.assertEqual(1,result['acquisitions_without_timing'])
+        self.assertEqual(1,result['missing_timing']);self.assertEqual(1,result['missing_summary'])
+        self.assertEqual(0,result['unassociated_summaries'])
+
+    def test_summary_without_timing_cannot_be_associated_by_guessing_nearby_page(self):
+        archive=self.archive();archive.ingest(CID,line('http_page',http(),1))
+        archive.ingest(CID,line('acquisition',summary(),2))
+        archive.ingest(CID,line('timing',timing(),3));archive.close()
+        result=c.verify(self.directory)
+        self.assertFalse(result['evidence_complete']);self.assertTrue(result['archive_complete'])
+        self.assertEqual(1,result['unassociated_summaries'])
+        event=next(x for x in self.records() if x.get('family')=='acquisition')
+        self.assertIsNone(event['acquisition']);self.assertEqual('unproven',event['link_basis'])
+
+    def test_conflicting_summary_is_a_gap_even_with_late_complete_pages(self):
+        archive=self.archive();s=summary();s.update(pages=0,windows=0,records=0,rejected=0)
+        archive.ingest(CID,line('timing',timing(),1));archive.ingest(CID,line('acquisition',s,2))
+        archive.ingest(CID,line('acquisition',{**s,'records':1},3));archive.close()
+        result=c.verify(self.directory)
+        self.assertEqual({'acquisition_log_mismatch':1},archive.gaps)
+        self.assertFalse(result['archive_complete']);self.assertFalse(result['evidence_complete'])
+
     def test_transport_failure_reason_is_retained_as_a_closed_enum(self):
         archive=self.archive();value=summary();value.update(status='Falha',reason='http_unavailable')
         archive.ingest(CID,line('acquisition',value));archive.close()

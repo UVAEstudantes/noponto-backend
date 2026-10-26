@@ -247,14 +247,14 @@ class Archive:
             return
         if self.truncated:
             return
-        c = self.contexts.setdefault(container, {'uncertain': bool(self.gaps), 'timing': None, 'composition': None, 'generations': {}, 'open': set(), 'stats': {}})
+        c = self.contexts.setdefault(container, {'uncertain': bool(self.gaps), 'timing': None, 'composition': None, 'generations': {}, 'stats': {}, 'unassociated': 0})
         fields, family = event['fields'], event['family']
         association = None
         if 'acquisition' in fields:
             association = fields['acquisition']
-            if family in ('http_page', 'normalized_page', 'provider_wait'):
-                c['open'].add(association)
-            stats=c['stats'].setdefault(association,{'http':0,'pending':0,'records':0,'rejected':0,'pages':set(),'windows':set()})
+            # Keep the bounded archive's acquisition counters until close: HTTP tasks can
+            # finish logging after timing/summary, especially on cancellation/timeouts.
+            stats=c['stats'].setdefault(association,{'http':0,'pending':0,'records':0,'rejected':0,'pages':set(),'windows':set(),'timing':False,'summary':None})
             if family=='http_page' and fields['completed'].lower()=='true':stats['http']+=1
             if family=='provider_wait':stats['pending']+=1
             if family=='normalized_page':
@@ -262,17 +262,16 @@ class Archive:
                 stats['pages'].add(fields['page']);stats['windows'].add(fields['window'])
             if family == 'timing':
                 c['timing'] = association
+                stats['timing'] = True
         elif family == 'acquisition':
             association = c['timing'] if not c['uncertain'] else None
-            stats=c['stats'].pop(association,None)
-            if fields['status'] in ('Sucesso','Vazio'):
-                if (stats is None or stats['http'] != fields['pages']
-                        or len(stats['pages']) + stats['pending'] != fields['pages']
-                        or stats['records'] != fields['records']
-                        or stats['rejected'] != fields['rejected']
-                        or len(stats['windows']) != fields['windows']):
-                    self.gap('acquisition_log_mismatch',container)
-            c['open'].discard(association)
+            stats=c['stats'].get(association)
+            if stats is None:
+                # No ID in this log contract: never guess an association from nearby pages.
+                c['unassociated']+=1
+            elif stats['summary'] is not None and stats['summary']!=fields:
+                self.gap('acquisition_log_mismatch',container)
+            else:stats['summary']=fields
         elif family == 'hybrid':
             association = c['timing'] if not c['uncertain'] else None
             c['composition'] = association
@@ -307,12 +306,25 @@ class Archive:
     def close(self, clean=True):
         if self.closed:
             return
-        opened = sum(len(c['open']) for c in self.contexts.values())
+        missing_timing=missing_summary=opened=unassociated=0
+        for container,c in self.contexts.items():
+            unassociated+=c['unassociated']
+            for stats in c['stats'].values():
+                summary=stats['summary']
+                missing_timing+=not stats['timing'];missing_summary+=summary is None
+                opened+=not stats['timing'] or summary is None
+                if summary is not None and summary['status'] in ('Sucesso','Vazio'):
+                    if (stats['http']!=summary['pages'] or len(stats['pages'])+stats['pending']!=summary['pages']
+                            or stats['records']!=summary['records'] or stats['rejected']!=summary['rejected']
+                            or len(stats['windows'])!=summary['windows']):
+                        self.gap('acquisition_log_mismatch',container)
+        opened+=unassociated
         footer = {'kind': 'end', 'at': self.now(), 'session': self.session,
                   'content_sha256': self.digest.hexdigest(), 'records_before_footer': self.lines,
                   'archive_complete': clean and not self.gaps and not self.truncated,
                   'evidence_complete': clean and not self.gaps and not self.truncated and opened == 0,
-                  'truncated': self.truncated, 'gap_count': sum(self.gaps.values()), 'acquisitions_without_timing': opened}
+                  'truncated': self.truncated, 'gap_count': sum(self.gaps.values()), 'acquisitions_without_timing': opened,
+                  'missing_timing':missing_timing,'missing_summary':missing_summary,'unassociated_summaries':unassociated}
         self._write(footer)
         self.file.close()
         self.closed = True

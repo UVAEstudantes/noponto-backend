@@ -11,6 +11,7 @@ CONTROL_LINES = ('35', '60', '67')
 stop = threading.Event()
 guard = threading.Lock()
 state_guard = threading.Lock()
+event_guard = threading.Lock()
 wire = {'messages':0, 'duplicates':0, 'regressions':0, 'invalid':0, 'connections':0, 'errors':0, 'last':0, 'lines':{}, 'connected':False, 'last_error_kind':None}
 last_gps = {}
 activation_epoch = None
@@ -274,7 +275,7 @@ class CommandFailure(RuntimeError):
 def failure_evidence(error):
     if isinstance(error,ProbeError):
         return {**error.evidence(),'classification':'backend_transport' if error.reason in ('transport_failure','timeout') else 'backend_http' if error.reason=='http_failure' else 'backend_contract'}
-    return error.evidence() if isinstance(error,(ProbeError,CommandFailure,CaptureFailure)) else {'type':type(error).__name__,'reason':'unclassified_failure'}
+    return error.evidence() if isinstance(error,(ProbeError,CommandFailure,CaptureFailure,SafetyFailure)) else {'type':type(error).__name__,'reason':'unclassified_failure'}
 
 def stop_reason():
     try:
@@ -306,7 +307,8 @@ def save(value):
     with state_guard:
         target=ROOT/'state.tmp'; target.write_text(json.dumps(value)); os.chmod(target,0o600); os.replace(target,ROOT/'state.json')
 def record(kind,value):
-    with open(ROOT/'events.jsonl','a') as f: f.write(json.dumps({'utc':dt.datetime.now(dt.timezone.utc).isoformat(),'kind':kind,'value':value})+'\n')
+    with event_guard:
+        with open(ROOT/'events.jsonl','a') as f: f.write(json.dumps({'utc':dt.datetime.now(dt.timezone.utc).isoformat(),'kind':kind,'value':value})+'\n')
 
 def inspect():
     names=['noponto_api','transporte_postgres','transporte_redis','auth_api','auth_postgres','auth_redis','portainer','dozzle']
@@ -538,14 +540,17 @@ def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None)
     if watch.get('capture_required'):
         captured=current.get('capture') or {}
         families=captured.get('families',{})
-        if not captured.get('healthy') or any(families.get(k,0)<1 for k in ('http_page','normalized_page','timing','acquisition','hybrid')):
+        # No normalized page is expected when ITS times out before any response.
+        required=('http_page','normalized_page','timing','acquisition','hybrid') if current.get('hybrid_state','healthy')=='healthy' else ()
+        if not captured.get('healthy') or any(families.get(k,0)<1 for k in required):
             return 'capture_evidence_failed',long_streak,poor_streak,low_since
-    if current['oom'] or current['restarts'] or not current['running']: return 'api_restart_or_oom',long_streak,poor_streak,low_since
+    if current['oom'] or current['restarts'] or (not current['running'] and not watch.get('starting')): return 'api_restart_or_oom',long_streak,poor_streak,low_since
     w=current['wire']
     if w['regressions'] or w['duplicates'] or w['invalid']: return 'signalr_gps_integrity',long_streak,poor_streak,low_since
     if baseline['lines']['898']['vehicles']>=5 and watch.get('activated') is not None:
-        if now-watch['activated']<=90 and correlation_state(current.get('flow',[]),current['wire'])=='proven':watch['898_proven']=True
-        if now-watch['activated']>=90 and not watch.get('898_proven'):return 'gate_898_unproven',long_streak,poor_streak,low_since
+        elapsed=watch.get('activation_elapsed',now-watch['activated'])
+        if elapsed<90 and correlation_state(current.get('flow',[]),current['wire'])=='proven':watch['898_proven']=True
+        if elapsed>=90 and not watch.get('898_proven'):return 'gate_898_unproven',long_streak,poor_streak,low_since
     for c in current['cycles']:
         if c['stamp'] in seen:continue
         seen.add(c['stamp']); long_streak=long_streak+1 if c['total_ms']>24000 else 0
@@ -590,6 +595,162 @@ def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None)
     if poor_streak>=3:return 'coverage_or_freshness_degradation',long_streak,poor_streak,low_since
     return None,long_streak,poor_streak,low_since
 
+
+class SafetyFailure(RuntimeError):
+    def __init__(self,reason):self.reason=reason;super().__init__(reason)
+    def evidence(self):return {'type':'SafetyFailure','classification':'safety_gate','reason':self.reason}
+
+
+class ActivationDeadline:
+    """Main-thread POSIX interrupt. Observer and heartbeat cannot postpone either gate."""
+    def __init__(self,require898):
+        if not all(hasattr(signal,key) for key in ('SIGALRM','ITIMER_REAL','setitimer','getitimer')):
+            raise SafetyFailure('deadline_interrupt_unavailable')
+        if threading.current_thread() is not threading.main_thread() or signal.getitimer(signal.ITIMER_REAL)!=(0.,0.):
+            raise SafetyFailure('deadline_interrupt_unavailable')
+        self.require898=require898;self.proven=False;self.failure=None;self.http_bad_since=None
+        self.startup_deadline=None;self.healthy_seen=False
+        self.on_proof=lambda elapsed:None
+
+    def elapsed(self):return time.monotonic()-self.started
+    def check(self):
+        elapsed=self.elapsed()
+        if elapsed>=600:raise SafetyFailure('ten_minutes_completed')
+        if self.require898 and not self.proven and elapsed>=90:raise SafetyFailure('gate_898_unproven')
+        if self.failure:raise SafetyFailure(self.failure)
+        if self.http_bad_since is not None and time.monotonic()-self.http_bad_since>=30:raise SafetyFailure('backend_unavailable')
+        if self.startup_deadline is not None and not self.healthy_seen and time.monotonic()>=self.startup_deadline:
+            raise SafetyFailure('hybrid_startup_unconfirmed')
+        if stop.is_set():raise SafetyFailure(stop_reason())
+
+    def trip(self,reason):
+        if self.failure is None:self.failure=reason
+
+    def admit(self,current):
+        # Called only after a complete REST/trace/client observation. Never accept late proof.
+        elapsed=self.elapsed()
+        if not self.proven and elapsed<90 and correlation_state(current.get('flow',[]),current['wire'])=='proven':
+            self.on_proof(elapsed)
+            # Recheck the clock before admission; a delayed callback is not timely proof.
+            if self.elapsed()<90:self.proven=True
+
+    def arm(self):
+        remaining=min(600-self.elapsed(),90-self.elapsed() if self.require898 and not self.proven else 600)
+        if self.http_bad_since is not None:remaining=min(remaining,self.http_bad_since+30-time.monotonic())
+        if self.startup_deadline is not None and not self.healthy_seen:remaining=min(remaining,self.startup_deadline-time.monotonic())
+        signal.setitimer(signal.ITIMER_REAL,max(.000001,min(.25,remaining)))
+
+    def interrupt(self,*_):
+        self.check();self.arm()
+
+    def cancel(self,*_):
+        stop.set();raise SafetyFailure(stop_reason())
+
+    def __enter__(self):
+        self.previous={key:signal.getsignal(key) for key in (signal.SIGALRM,signal.SIGTERM,signal.SIGINT)}
+        self.started=time.monotonic();self.epoch=time.time()
+        try:
+            signal.signal(signal.SIGALRM,self.interrupt)
+            signal.signal(signal.SIGTERM,self.cancel);signal.signal(signal.SIGINT,self.cancel)
+            self.arm()
+        except Exception:
+            for key,handler in self.previous.items():signal.signal(key,handler)
+            raise SafetyFailure('deadline_interrupt_unavailable') from None
+        return self
+
+    def __exit__(self,*_):
+        signal.setitimer(signal.ITIMER_REAL,0)
+        for key,handler in self.previous.items():signal.signal(key,handler)
+
+
+def hybrid_state(current):
+    if current.get('source')!='ITS_CURRENT':return 'starting'
+    selected=next((x for x in reversed(current['selection']) if x.get('mode')=='Hybrid'),None)
+    if selected is None:return 'starting'
+    if (selected.get('primary_status')=='Sucesso' and selected.get('support_status')=='Sucesso'
+            and int(selected.get('selected_its','0'))>0 and int(selected.get('selected_gtfs','0'))>0):return 'healthy'
+    if selected.get('support_status') in ('Sucesso','Vazio') or selected.get('primary_status') in ('Sucesso','Vazio'):return 'degraded'
+    return 'failure'
+
+
+class ActivationObserver:
+    """One passive bounded sampler. It never controls Docker or publishes GPS."""
+    def __init__(self,safety,baseline):
+        self.safety=safety;self.baseline=baseline;self.finished=threading.Event()
+        self.thread=threading.Thread(target=self.observe,daemon=True)
+        self.seen={c['stamp'] for c in baseline['cycles']};self.long=0;self.poor=0;self.low=None
+        self.watch={'activated':safety.epoch,'capture_required':True}
+
+    def start(self):self.thread.start()
+    def stop(self):self.finished.set()  # Never join before rollback.
+    def join(self):self.thread.join(1);return not self.thread.is_alive()
+
+    def publish(self,kind,value):
+        try:record(kind,value)
+        except Exception:self.safety.trip('observation_failed')
+
+    def observe(self):
+        while not self.finished.is_set() and not stop.is_set():
+            self.observe_once()
+            self.finished.wait(15)
+
+    def observe_once(self):
+        began=time.monotonic()
+        try:
+            current=sample()
+            if self.finished.is_set():return
+            self.safety.http_bad_since=None
+            current['hybrid_state']=hybrid_state(current)
+            current['activation_elapsed']=self.safety.elapsed()
+            if current['hybrid_state']=='healthy':self.safety.healthy_seen=True
+            self.safety.admit(current)
+            self.watch.update(activation_elapsed=self.safety.elapsed(),starting=current['hybrid_state']=='starting',
+                              **{'898_proven':self.safety.proven})
+            reason,self.long,self.poor,self.low=decision(current,self.baseline,self.seen,self.long,self.poor,self.low,self.watch)
+            if reason:self.safety.trip(reason)
+            self.publish('its_sample',current)
+        except ProbeError as error:
+            if self.safety.http_bad_since is None:self.safety.http_bad_since=began
+            if error.reason in ('invalid_json','invalid_positions_contract','body_limit'):self.safety.trip('observation_failed')
+            self.publish('its_observation_error',{'hybrid_state':'starting' if not self.safety.healthy_seen else 'failure',
+                   'activation_elapsed':self.safety.elapsed(),**failure_evidence(error)})
+        except Exception as error:
+            self.safety.trip('observation_failed')
+            self.publish('its_observation_error',{'hybrid_state':'failure',**failure_evidence(error)})
+
+
+def run_activation(s,baseline,observers):
+    if s.get('phase')!='baseline':raise SafetyFailure('activation_phase_invalid')
+    if s.get('activated') is not None or 'gate898_proven_elapsed' in s:raise SafetyFailure('activation_state_reused')
+    safety=ActivationDeadline(baseline['lines']['898']['vehicles']>=5)
+    observer=None
+    try:
+        with safety:
+            s.update(phase='its',activated=safety.epoch,deadline=safety.epoch+600,gate898_required=safety.require898);save(s)
+            global activation_epoch
+            activation_epoch=safety.epoch
+            def persist_proof(elapsed):
+                # Heartbeat persists this scalar with the state. If the controller dies
+                # first, cron sees no proof and rolls back conservatively.
+                s['gate898_proven_elapsed']=elapsed
+            safety.on_proof=persist_proof
+            observer=ActivationObserver(safety,baseline);observers.append(observer);observer.start()
+            switch(s['image'],'its.primary.override.yml')
+            api=inspect()[0];env=source(api)
+            if (api['Config']['Image']!=s['image'] or env.get('GpsSources__BusPrimarySource')!='ITS_CURRENT'
+                    or env.get('GpsSources__BusSupportMode')!='Hybrid' or env.get('GpsSources__BrtPrimarySource')!='GTFSRT_BRT'):
+                raise SafetyFailure('activation_configuration_mismatch')
+            safety.startup_deadline=time.monotonic()+60
+            while True:
+                safety.check();stop.wait(.25)
+    except SafetyFailure as error:
+        if error.reason=='ten_minutes_completed':return error.reason
+        raise
+    finally:
+        if observer is not None:
+            observer.stop()
+
+
 def supervise(s):
     global activation_epoch
     if os.getpgrp()!=os.getpid():os.setsid()
@@ -601,7 +762,7 @@ def supervise(s):
                 s['heartbeat']=time.time(); save(s)
     beating=threading.Thread(target=beat,daemon=True); beating.start()
     signal.signal(signal.SIGTERM,lambda *_:stop.set()); signal.signal(signal.SIGINT,lambda *_:stop.set())
-    activated=False
+    activated=False;observers=[];rollback_attempted=False
     try:
         validate(s['image']); ensure_capture(s)
         ready_deadline=time.monotonic()+5
@@ -619,36 +780,31 @@ def supervise(s):
         if baseline['wire']['regressions'] or baseline['wire']['duplicates'] or baseline['wire']['invalid']:raise RuntimeError('signalr_baseline_integrity')
         validate(s['image'])
         if not capture_health(inspect()[0]['Id'])['healthy']:raise CaptureFailure()
-        s.update(phase='its',activated=time.time(),deadline=time.time()+600); save(s); activated=True
-        activation_epoch=s['activated']
-        switch(s['image'],'its.primary.override.yml'); healthy(s['image'],'ITS_CURRENT')
-        seen={c['stamp'] for x in baseline_samples for c in x['cycles']}; long_streak=poor_streak=0; low_since=None; reason='ten_minutes_completed';watch={'activated':s['activated'],'capture_required':True}
-        while time.time()<s['deadline'] and not stop.is_set():
-            if baseline['lines']['898']['vehicles']>=5 and not watch.get('898_proven') and time.time()-s['activated']>=90:
-                reason='gate_898_unproven';break
-            x=sample(); record('its_sample',x)
-            reason_now,long_streak,poor_streak,low_since=decision(x,baseline,seen,long_streak,poor_streak,low_since,watch)
-            if reason_now:reason=reason_now;break
-            delay=min(15,max(0,s['deadline']-time.time()))
-            if baseline['lines']['898']['vehicles']>=5 and not watch.get('898_proven'):
-                delay=min(delay,max(0,s['activated']+90-time.time()))
-            stop.wait(delay)
-        if stop.is_set():reason=stop_reason()
-        rollback(s,reason)
+        reason=run_activation(s,baseline,observers)
+        rollback_attempted=True;rollback(s,reason)
         for _ in range(3):
             x=sample(); record('final_gtfs_sample',x); time.sleep(5)
     except Exception as error:
+        activated=s.get('activated') is not None
         cause=failure_evidence(error)
-        reason=stop_reason() if stop.is_set() else 'capture_evidence_failed' if isinstance(error,CaptureFailure) else 'exception_'+type(error).__name__
-        record('supervisor_error',{**cause,'activated':activated,'operational_reason':reason})
-        if activated:
-            try:rollback(s,reason)
+        reason=error.reason if isinstance(error,SafetyFailure) else stop_reason() if stop.is_set() else 'capture_evidence_failed' if isinstance(error,CaptureFailure) else 'exception_'+type(error).__name__
+        if activated and s.get('phase')!='complete':
+            try:
+                if rollback_attempted:raise error
+                rollback_attempted=True;rollback(s,reason)
             except Exception as failure:s.update(phase='rollback_failed',failure=type(failure).__name__,heartbeat=time.time());save(s)
-        else:s.update(phase='precondition_failed',failure=type(error).__name__,heartbeat=time.time());save(s)
+        elif not activated:s.update(phase='precondition_failed',failure=type(error).__name__,heartbeat=time.time());save(s)
+        record('supervisor_error',{**cause,'activated':activated,'operational_reason':reason})
     finally:
-        try:stop_capture()
+        safe=s.get('phase') in ('complete','precondition_failed')
+        try:
+            if safe:stop_capture()
         finally:
-            stop.set();lock.close();thread.join(6);finalize_capture(s)
+            stop.set();lock.close();thread.join(6)
+            for observer in observers:
+                closed=observer.join()
+                record('activation_observer_closed',{'closed':closed,'inflight':not closed})
+            if safe:finalize_capture(s)
 
 def tick():
     s=load()
@@ -667,7 +823,10 @@ def tick():
             s.update(phase='precondition_failed',failure='deploy_lock_busy');save(s);record('lock_busy',{})
         return
     expired=s['phase'] in ('baseline','its') and time.time()>s['deadline']+5
-    if s['phase'] in ('baseline','its','rollback','rollback_failed') and (expired or time.time()-s['heartbeat']>45):
+    proof=s.get('gate898_proven_elapsed')
+    gate_expired=(s['phase']=='its' and s.get('gate898_required',True) and s.get('activated') is not None
+                  and time.time()>=s['activated']+90 and not (type(proof) in (int,float) and 0<=proof<90))
+    if s['phase'] in ('baseline','its','rollback','rollback_failed') and (gate_expired or expired or time.time()-s['heartbeat']>45):
         pid=s.get('pid')
         if pid and pathlib.Path('/proc/'+str(pid)+'/stat').exists():
             birth=pathlib.Path('/proc/'+str(pid)+'/stat').read_text().split()[21]
@@ -680,7 +839,7 @@ def tick():
         safe=False
         try:
             lock=take_lock()
-            try:rollback(s,'independent_cron_watchdog');safe=True
+            try:rollback(s,'gate_898_unproven' if gate_expired else 'independent_cron_watchdog');safe=True
             finally:lock.close()
         except Exception as error:record('watchdog_retry_required',{'type':type(error).__name__})
         if safe:
