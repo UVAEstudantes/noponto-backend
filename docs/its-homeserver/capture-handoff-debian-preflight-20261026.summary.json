@@ -1,0 +1,98 @@
+{
+  "date_utc": "2026-10-26",
+  "result": "GO_to_request_new_authorized_window",
+  "scope": "Debian_GTFS_only_capture_handoff_proof",
+  "release": 151,
+  "image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+  "source": {
+    "GpsSources__BusPrimarySource": "GTFSRT_BUS",
+    "GpsSources__BusFallbackSource": "",
+    "GpsSources__BusSupportMode": "FullFallback",
+    "GpsPipelineTrace__Enabled": "false",
+    "GpsSources__BrtPrimarySource": "GTFSRT_BRT"
+  },
+  "preflight_ok": true,
+  "final_ok": true,
+  "same_containers_compose_image_settings": true,
+  "container_count": 8,
+  "writer_count": 1,
+  "lock_free_final": true,
+  "cron_restored": true,
+  "hashes": {
+    "its_window.py": "75bfe9a999858fbf964e79b2a6281e6b8a4fc3c3c6d228845515d5f799862286",
+    "its_log_capture.py": "9eaeaec2475fb084f9085dfecb83fc28a2a86e1c2867211d9af8f6608760859f",
+    "probe_http.py": "b774a3cde28e3b3dadec0a8372d293515f900709194ef96bdbfa0e93e3724248",
+    "its.primary.override.yml": "f2b920b24263bf4a81ed2300fc85ec788cfeb257229f2c7cf22c3288bc948ea1",
+    "gtfs.rollback.override.yml": "4490a0d521653a1b0fab0e51f5839c8c6d593b9f6d10562342f61f0e14b11900"
+  },
+  "proof_harness_sha256": "7f3f9effa4cf51aaedfb743116905f322a79af223deae6d09a564d7d76fb5619",
+  "capture_pid": 857333,
+  "capture_pid_start": "10399705",
+  "archive_inode": 3670597,
+  "cron_ancestry": [
+    "python3",
+    "sh",
+    "cron",
+    "cron",
+    "systemd"
+  ],
+  "same_pid_birth_session_inode": true,
+  "reader_count": 1,
+  "capture_seconds": 82.2,
+  "capture_input_bytes": 256016,
+  "archive_bytes": 574,
+  "archive_sha256": "35141ef9e0e6077584ce02e2cc8e59b038a06f4db910ab98b7c91879631decbb",
+  "records": 3,
+  "gaps": 0,
+  "truncated": false,
+  "duplicates": 0,
+  "verification": {
+    "integrity_valid": true,
+    "archive_complete": true,
+    "evidence_complete": true,
+    "acquisitions_without_timing": 0
+  },
+  "capture_ps": "857333  0.2  0.5 21488       01:22",
+  "capture_io_bytes": {
+    "read_bytes": 1593344,
+    "write_bytes": 339968
+  },
+  "signalr_messages_before_after": [
+    16,
+    24
+  ],
+  "signalr_integrity_before_after": [
+    {
+      "errors": 0,
+      "duplicates": 0,
+      "regressions": 0,
+      "invalid": 0
+    },
+    {
+      "errors": 0,
+      "duplicates": 0,
+      "regressions": 0,
+      "invalid": 0
+    }
+  ],
+  "root_http_seconds_before_after": [
+    0.0072,
+    0.0042
+  ],
+  "memory_available_kib_before_after": [
+    2264256,
+    2266924
+  ],
+  "swap_free_kib_before_after": [
+    4916728,
+    4916472
+  ],
+  "disk_free_bytes_before_after": [
+    19961249792,
+    19955445760
+  ],
+  "phase_exercised": "proof_only",
+  "its_activated": false,
+  "scheduled_or_baseline_exercised": false,
+  "remote_private_evidence_directory": "/home/guilherme/.noponto-deploy/capture-handoff-20261026T164300Z"
+}
