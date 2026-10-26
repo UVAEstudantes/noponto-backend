@@ -471,7 +471,8 @@ def sample():
     logs=run(['docker','logs','--timestamps','--since','100s','--tail','6000','noponto_api'],timeout=10)
     cycles,acquisitions,selection=parse_logs(logs)
     memory=dict((x.split(':')[0],int(x.split()[1])) for x in open('/proc/meminfo') if x.startswith(('MemAvailable:','SwapFree:')))
-    return {'source':source(api).get('GpsSources__BusPrimarySource'),'fallback':source(api).get('GpsSources__BusFallbackSource',''),
+    writers=len(run(['docker','ps','-q','--filter','label=com.docker.compose.project=noponto','--filter','label=com.docker.compose.service=api']).split())
+    return {'writer_count':writers,'source':source(api).get('GpsSources__BusPrimarySource'),'fallback':source(api).get('GpsSources__BusFallbackSource',''),
             'support_mode':source(api).get('GpsSources__BusSupportMode','FullFallback'),
             'running':api['State']['Running'],'oom':api['State']['OOMKilled'],'restarts':api['RestartCount'],
             'http_seconds':latency,'lines':lines,'controls':controls,'line_http':line_http,'wire':wire_summary(),'memory_kib':memory,'load':os.getloadavg(),
@@ -536,8 +537,10 @@ def rollback(s,reason):
 
 def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None):
     watch=watch if watch is not None else {}
+    beta=watch.get('beta',False)
     now=time.time()
-    if watch.get('capture_required'):
+    if current.get('writer_count',1)>1:return 'multiple_gps_writers',long_streak,poor_streak,low_since
+    if watch.get('capture_required') and not beta:
         captured=current.get('capture') or {}
         families=captured.get('families',{})
         # No normalized page is expected when ITS times out before any response.
@@ -550,15 +553,15 @@ def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None)
     if baseline['lines']['898']['vehicles']>=5 and watch.get('activated') is not None:
         elapsed=watch.get('activation_elapsed',now-watch['activated'])
         if elapsed<90 and correlation_state(current.get('flow',[]),current['wire'])=='proven':watch['898_proven']=True
-        if elapsed>=90 and not watch.get('898_proven'):return 'gate_898_unproven',long_streak,poor_streak,low_since
+        if elapsed>=90 and not watch.get('898_proven') and not beta:return 'gate_898_unproven',long_streak,poor_streak,low_since
     for c in current['cycles']:
         if c['stamp'] in seen:continue
         seen.add(c['stamp']); long_streak=long_streak+1 if c['total_ms']>24000 else 0
-        if c['total_ms']>60000 or long_streak>=3:return 'slow_polling',long_streak,poor_streak,low_since
+        if (c['total_ms']>60000 or long_streak>=3) and not beta:return 'slow_polling',long_streak,poor_streak,low_since
         if c.get('commits_infra',0)>0:return 'cas_infrastructure_failure',long_streak,poor_streak,low_since
         if c.get('snapshot_sppo_pendente',0):watch.setdefault('pending_since',now)
         else:watch.pop('pending_since',None)
-    if watch.get('pending_since') and now-watch['pending_since']>90:return 'ack_missing',long_streak,poor_streak,low_since
+    if watch.get('pending_since') and now-watch['pending_since']>90 and not beta:return 'ack_missing',long_streak,poor_streak,low_since
     for selected in current['selection']:
         key='selection:'+selected['stamp']
         if key in seen:continue
@@ -566,8 +569,9 @@ def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None)
         if selected.get('mode')=='Hybrid':
             support_bad=selected.get('support_status') not in ('Sucesso','Vazio')
             watch['support_fail']=watch.get('support_fail',0)+1 if support_bad else 0
-            if watch['support_fail']>=3:return 'hybrid_support_failed',long_streak,poor_streak,low_since
+            if watch['support_fail']>=3 and not beta:return 'hybrid_support_failed',long_streak,poor_streak,low_since
             both_bad=support_bad and selected.get('primary_status') not in ('Sucesso','Vazio')
+            if beta and selected.get('selected') is not None and int(selected.get('recent180',selected['selected']))==0:both_bad=True
             watch['hybrid_both_fail']=watch.get('hybrid_both_fail',0)+1 if both_bad else 0
             if watch['hybrid_both_fail']>=2:return 'both_sources_failed',long_streak,poor_streak,low_since
         if selected.get('active_source')=='ITS_CURRENT':watch.pop('fallback_since',None)
@@ -575,7 +579,7 @@ def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None)
             watch.setdefault('fallback_since',now)
             watch['both_fail']=watch.get('both_fail',0)+1 if selected.get('status') not in ('Sucesso','Vazio') else 0
             if watch['both_fail']>=2:return 'both_sources_failed',long_streak,poor_streak,low_since
-    if watch.get('fallback_since') and now-watch['fallback_since']>300:return 'continuous_fallback',long_streak,poor_streak,low_since
+    if watch.get('fallback_since') and now-watch['fallback_since']>300 and not beta:return 'continuous_fallback',long_streak,poor_streak,low_since
     for name,old in baseline['containers'].items():
         if name=='noponto_api':continue
         new=current['containers'].get(name,{})
@@ -592,7 +596,7 @@ def decision(current,baseline,seen,long_streak,poor_streak,low_since,watch=None)
         if b['vehicles']>=5 and c['vehicles']<b['vehicles']*.7 and c['until60']/max(1,c['vehicles'])<b['until60']/b['vehicles']-.2:poor=True
     if sum(c['older180'] for c in current['lines'].values())>sum(c['vehicles'] for c in current['lines'].values())/2:poor=True
     poor_streak=poor_streak+1 if poor else 0
-    if poor_streak>=3:return 'coverage_or_freshness_degradation',long_streak,poor_streak,low_since
+    if poor_streak>=3 and not beta:return 'coverage_or_freshness_degradation',long_streak,poor_streak,low_since
     return None,long_streak,poor_streak,low_since
 
 
@@ -601,14 +605,21 @@ class SafetyFailure(RuntimeError):
     def evidence(self):return {'type':'SafetyFailure','classification':'safety_gate','reason':self.reason}
 
 
+def beta_mode(state):
+    mode=state.get('experiment_mode','strict')
+    if mode not in ('strict','beta_diagnostic'):raise SafetyFailure('experiment_mode_invalid')
+    if mode=='beta_diagnostic' and state.get('beta_authorized') is not True:raise SafetyFailure('beta_not_authorized')
+    return mode=='beta_diagnostic'
+
+
 class ActivationDeadline:
     """Main-thread POSIX interrupt. Observer and heartbeat cannot postpone either gate."""
-    def __init__(self,require898):
+    def __init__(self,require898,beta=False):
         if not all(hasattr(signal,key) for key in ('SIGALRM','ITIMER_REAL','setitimer','getitimer')):
             raise SafetyFailure('deadline_interrupt_unavailable')
         if threading.current_thread() is not threading.main_thread() or signal.getitimer(signal.ITIMER_REAL)!=(0.,0.):
             raise SafetyFailure('deadline_interrupt_unavailable')
-        self.require898=require898;self.proven=False;self.failure=None;self.http_bad_since=None
+        self.require898=require898;self.beta=beta;self.proven=False;self.first_complete_elapsed=None;self.failure=None;self.http_bad_since=None
         self.startup_deadline=None;self.healthy_seen=False
         self.on_proof=lambda elapsed:None
 
@@ -616,10 +627,10 @@ class ActivationDeadline:
     def check(self):
         elapsed=self.elapsed()
         if elapsed>=600:raise SafetyFailure('ten_minutes_completed')
-        if self.require898 and not self.proven and elapsed>=90:raise SafetyFailure('gate_898_unproven')
+        if self.require898 and not self.proven and elapsed>=90 and not self.beta:raise SafetyFailure('gate_898_unproven')
         if self.failure:raise SafetyFailure(self.failure)
         if self.http_bad_since is not None and time.monotonic()-self.http_bad_since>=30:raise SafetyFailure('backend_unavailable')
-        if self.startup_deadline is not None and not self.healthy_seen and time.monotonic()>=self.startup_deadline:
+        if self.startup_deadline is not None and not self.healthy_seen and time.monotonic()>=self.startup_deadline and not self.beta:
             raise SafetyFailure('hybrid_startup_unconfirmed')
         if stop.is_set():raise SafetyFailure(stop_reason())
 
@@ -629,15 +640,17 @@ class ActivationDeadline:
     def admit(self,current):
         # Called only after a complete REST/trace/client observation. Never accept late proof.
         elapsed=self.elapsed()
+        if correlation_state(current.get('flow',[]),current['wire'])=='proven' and self.first_complete_elapsed is None:
+            self.first_complete_elapsed=elapsed
         if not self.proven and elapsed<90 and correlation_state(current.get('flow',[]),current['wire'])=='proven':
             self.on_proof(elapsed)
             # Recheck the clock before admission; a delayed callback is not timely proof.
             if self.elapsed()<90:self.proven=True
 
     def arm(self):
-        remaining=min(600-self.elapsed(),90-self.elapsed() if self.require898 and not self.proven else 600)
+        remaining=min(600-self.elapsed(),90-self.elapsed() if self.require898 and not self.proven and not self.beta else 600)
         if self.http_bad_since is not None:remaining=min(remaining,self.http_bad_since+30-time.monotonic())
-        if self.startup_deadline is not None and not self.healthy_seen:remaining=min(remaining,self.startup_deadline-time.monotonic())
+        if self.startup_deadline is not None and not self.healthy_seen and not self.beta:remaining=min(remaining,self.startup_deadline-time.monotonic())
         signal.setitimer(signal.ITIMER_REAL,max(.000001,min(.25,remaining)))
 
     def interrupt(self,*_):
@@ -679,7 +692,7 @@ class ActivationObserver:
         self.safety=safety;self.baseline=baseline;self.finished=threading.Event()
         self.thread=threading.Thread(target=self.observe,daemon=True)
         self.seen={c['stamp'] for c in baseline['cycles']};self.long=0;self.poor=0;self.low=None
-        self.watch={'activated':safety.epoch,'capture_required':True}
+        self.watch={'activated':safety.epoch,'capture_required':True,'beta':safety.beta}
 
     def start(self):self.thread.start()
     def stop(self):self.finished.set()  # Never join before rollback.
@@ -704,6 +717,13 @@ class ActivationObserver:
             current['activation_elapsed']=self.safety.elapsed()
             if current['hybrid_state']=='healthy':self.safety.healthy_seen=True
             self.safety.admit(current)
+            if self.safety.beta:
+                current['beta_diagnostics']={'gate898_within90':self.safety.proven,'first_complete_elapsed':self.safety.first_complete_elapsed,
+                    'correlation898':correlation_state(current.get('flow',[]),current['wire']),
+                    'capture_healthy':bool((current.get('capture') or {}).get('healthy')),
+                    'slow_cycles':sum(c['total_ms']>24000 for c in current['cycles']),
+                    'pending_snapshot':any(c.get('snapshot_sppo_pendente',0) for c in current['cycles']),
+                    'stale_publications':sum(x['older180'] for x in current['lines'].values())}
             self.watch.update(activation_elapsed=self.safety.elapsed(),starting=current['hybrid_state']=='starting',
                               **{'898_proven':self.safety.proven})
             reason,self.long,self.poor,self.low=decision(current,self.baseline,self.seen,self.long,self.poor,self.low,self.watch)
@@ -715,14 +735,16 @@ class ActivationObserver:
             self.publish('its_observation_error',{'hybrid_state':'starting' if not self.safety.healthy_seen else 'failure',
                    'activation_elapsed':self.safety.elapsed(),**failure_evidence(error)})
         except Exception as error:
-            self.safety.trip('observation_failed')
+            if self.safety.beta:
+                if self.safety.http_bad_since is None:self.safety.http_bad_since=began
+            else:self.safety.trip('observation_failed')
             self.publish('its_observation_error',{'hybrid_state':'failure',**failure_evidence(error)})
 
 
 def run_activation(s,baseline,observers):
     if s.get('phase')!='baseline':raise SafetyFailure('activation_phase_invalid')
     if s.get('activated') is not None or 'gate898_proven_elapsed' in s:raise SafetyFailure('activation_state_reused')
-    safety=ActivationDeadline(baseline['lines']['898']['vehicles']>=5)
+    safety=ActivationDeadline(baseline['lines']['898']['vehicles']>=5,beta=beta_mode(s))
     observer=None
     try:
         with safety:
@@ -824,7 +846,8 @@ def tick():
         return
     expired=s['phase'] in ('baseline','its') and time.time()>s['deadline']+5
     proof=s.get('gate898_proven_elapsed')
-    gate_expired=(s['phase']=='its' and s.get('gate898_required',True) and s.get('activated') is not None
+    explicit_beta=s.get('experiment_mode')=='beta_diagnostic' and s.get('beta_authorized') is True
+    gate_expired=(not explicit_beta and s['phase']=='its' and s.get('gate898_required',True) and s.get('activated') is not None
                   and time.time()>=s['activated']+90 and not (type(proof) in (int,float) and 0<=proof<90))
     if s['phase'] in ('baseline','its','rollback','rollback_failed') and (gate_expired or expired or time.time()-s['heartbeat']>45):
         pid=s.get('pid')

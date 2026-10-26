@@ -732,6 +732,27 @@ class ActivationLoop(unittest.TestCase):
         self.assertEqual('activation_phase_invalid',error.exception.reason)
         self.switch.assert_not_called();self.assertNotIn('activated',self.state)
 
+    def test_beta_requires_explicit_authorization_and_strict_remains_default(self):
+        self.assertFalse(w.beta_mode({}))
+        self.state['experiment_mode']='beta_diagnostic'
+        with self.assertRaises(w.SafetyFailure) as error:w.run_activation(self.state,self.baseline,[])
+        self.assertEqual('beta_not_authorized',error.exception.reason);self.switch.assert_not_called()
+
+    def test_beta_collects_degraded_its_and_late898_until600(self):
+        self.state.update(experiment_mode='beta_diagnostic',beta_authorized=True)
+        self.healthy_at=999;self.proof_at=92
+        self.assertEqual('ten_minutes_completed',w.run_activation(self.state,self.baseline,[]))
+        self.assertEqual(600,self.clock.now)
+        self.assertTrue(any(v['activation_elapsed']>90 and v['hybrid_state']=='degraded' for _,v in self.events))
+        last=self.events[-1][1]['beta_diagnostics']
+        self.assertFalse(last['gate898_within90']);self.assertEqual(105,last['first_complete_elapsed'])
+
+    def test_beta_keeps_persistent_backend_outage_critical(self):
+        from probe_http import ProbeError
+        self.state.update(experiment_mode='beta_diagnostic',beta_authorized=True)
+        with patch.object(w,'sample',side_effect=ProbeError('/',503,'http_failure')):self.run_until_abort('backend_unavailable')
+        self.assertEqual(30,self.clock.now)
+
     def test_operator_stop_interrupts_boot_and_keeps_operational_reason(self):
         self.clock.schedule(10,lambda:self.clock.handlers[w.signal.SIGTERM](w.signal.SIGTERM,None))
         with patch.object(w,'stop_reason',return_value='operator_rollback'):self.run_until_abort('operator_rollback')
@@ -782,6 +803,34 @@ class ActivationLoop(unittest.TestCase):
 
 
 class StartupRecovery(unittest.TestCase):
+    def test_beta_watchdog_ignores898_but_keeps_expiration(self):
+        from unittest.mock import Mock
+        state={'phase':'its','activated':1000,'deadline':1600,'heartbeat':1091,'experiment_mode':'beta_diagnostic','beta_authorized':True}
+        with patch.object(w,'load',return_value=state),patch.object(w.time,'time',return_value=1091),patch.object(w,'rollback') as rollback:
+            w.tick();rollback.assert_not_called()
+        state['heartbeat']=1606
+        with patch.object(w,'load',return_value=state),patch.object(w.time,'time',return_value=1606),\
+             patch.object(w,'take_lock',return_value=Mock()),patch.object(w,'rollback') as rollback,\
+             patch.object(w,'stop_orphan_capture'),patch.object(w,'finalize_capture'):
+            w.tick();rollback.assert_called_once_with(state,'independent_cron_watchdog')
+
+    def test_beta_diagnostic_gates_cannot_mask_critical_failures(self):
+        baseline=sample();x=sample();x['capture']={'healthy':False};x['cycles']=[{'stamp':'slow','total_ms':70000}]
+        watch={'beta':True,'capture_required':True,'activated':1000,'activation_elapsed':100}
+        with patch.object(w.time,'time',return_value=1100):
+            self.assertIsNone(w.decision(x,baseline,set(),0,3,None,dict(watch))[0])
+            for field,reason in (('oom','api_restart_or_oom'),('writer_count','multiple_gps_writers')):
+                bad=copy.deepcopy(x);bad[field]=True if field=='oom' else 2
+                self.assertEqual(reason,w.decision(bad,baseline,set(),0,3,None,dict(watch))[0])
+            bad=copy.deepcopy(x);bad['wire']['regressions']=1
+            self.assertEqual('signalr_gps_integrity',w.decision(bad,baseline,set(),0,0,None,dict(watch))[0])
+            bad=copy.deepcopy(x);bad['cycles'][0]['commits_infra']=1
+            self.assertEqual('cas_infrastructure_failure',w.decision(bad,baseline,set(),0,0,None,dict(watch))[0])
+            x['selection']=[{'mode':'Hybrid','stamp':str(i),'primary_status':'Vazio','support_status':'Vazio','selected':'0'} for i in range(2)]
+            self.assertEqual('both_sources_failed',w.decision(x,baseline,set(),0,0,None,dict(watch))[0])
+            x['selection']=[{'mode':'Hybrid','stamp':str(i),'primary_status':'Sucesso','support_status':'Sucesso','selected':'10','recent180':'0'} for i in range(2)]
+            self.assertEqual('both_sources_failed',w.decision(x,baseline,set(),0,0,None,dict(watch))[0])
+
     def test_post_rollback_probe_failure_cannot_recreate_api_or_undo_safe_state(self):
         from contextlib import ExitStack
         from unittest.mock import Mock
