@@ -1,5 +1,7 @@
 # Janela controlada ITS + GTFS-RT — preparação atualizada em24/10/2026
 
+Estado26/10: [terceira janela bloqueada no preflight — captura com input_queue_overflow](hybrid-window3-20261026.md). **NO-GO para nova ativação** até correção local/testes e nova provaGTFS. ITS não foi ativada; produção permanece GTFS-only/traceOFF. Este resultado posterior substitui o GO limitado da prova de24/10.
+
 Prova operacional limitada no Debian concluída, sem ITS: [cron, captura passiva, recursos e limpeza](log-capture-debian-preflight-20261024.md). GO para solicitar autorização separada; preflight e prova cron frescos continuam obrigatórios na futura janela.
 
 Atualização local após release151: [captura dedicada e preflight da terceira janela](log-capture-preflight-20261024.md). Este procedimento prevalece sobre comandos/hashes históricos abaixo: cinco arquivos operacionais, captura independente obrigatória antes do baseline, digest151 exato, gate89890s e rollback GTFS/FullFallback/trace=false. Nenhuma terceira janela autorizada/instalada/executada.

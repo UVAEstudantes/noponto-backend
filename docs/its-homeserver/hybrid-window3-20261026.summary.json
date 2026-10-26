@@ -1,0 +1,671 @@
+{
+  "date": "2026-10-26",
+  "classification": "INCONCLUSIVO",
+  "preflight": "NO-GO",
+  "reason": "capture_input_queue_overflow",
+  "checkpoint": "da52893cad8f11a2c987bbdc92fbdf1def28422e",
+  "operational_revision": "3fcbce87f63fbee3d1d87ed360757e8f6e3d9e98",
+  "release": 151,
+  "image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+  "private_directory": "/home/guilherme/.noponto-deploy/hybrid-window3-20261026T152446Z",
+  "operational_sha256": {
+    "its_window.py": "d166f170e773c60f5024c895eb32e43c8016c775060cff2fd7e9e70231ba7eed",
+    "its_log_capture.py": "d1ce61448534750fb005c1952b81149062bd9bd3217836d47b75fd61a5f1ca31",
+    "probe_http.py": "b774a3cde28e3b3dadec0a8372d293515f900709194ef96bdbfa0e93e3724248",
+    "its.primary.override.yml": "f2b920b24263bf4a81ed2300fc85ec788cfeb257229f2c7cf22c3288bc948ea1",
+    "gtfs.rollback.override.yml": "4490a0d521653a1b0fab0e51f5839c8c6d593b9f6d10562342f61f0e14b11900"
+  },
+  "window": {
+    "activated": false,
+    "hybrid_seconds": 0,
+    "rollback_required": false,
+    "rollback_seconds": null,
+    "scheduled_entered": false,
+    "baseline_120_seconds_executed": false,
+    "fleet_preliminary_sufficient": true,
+    "initial_838": 18,
+    "initial_898": 9,
+    "acquisition_its": null,
+    "contribution_its_gtfs": null,
+    "line898_linked_complete_new": null,
+    "line898_gate_started": false,
+    "cas_generation_ack_hybrid": null
+  },
+  "production": {
+    "initial_settings": {
+      "GpsSources__BusPrimarySource": "GTFSRT_BUS",
+      "GpsSources__BusFallbackSource": "",
+      "GpsSources__BusSupportMode": "FullFallback",
+      "GpsPipelineTrace__Enabled": "false",
+      "GpsSources__BrtPrimarySource": "GTFSRT_BRT"
+    },
+    "final_settings": {
+      "GpsSources__BusPrimarySource": "GTFSRT_BUS",
+      "GpsSources__BusFallbackSource": "",
+      "GpsSources__BusSupportMode": "FullFallback",
+      "GpsPipelineTrace__Enabled": "false",
+      "GpsSources__BrtPrimarySource": "GTFSRT_BRT"
+    },
+    "all_eight_containers_identical": true,
+    "writer_count_initial": 1,
+    "writer_count_final": 1,
+    "api_id": "70cdd6392397b8c3a5fe01b01568fde30a55021c211cf042463bcb296cc9980a",
+    "api_started_initial": "2026-10-25T11:52:53.222863251Z",
+    "api_started_final": "2026-10-25T11:52:53.222863251Z",
+    "initial_utc": "2026-10-26T15:25:35.717243+00:00",
+    "final_utc": "2026-10-26T15:29:51.921304+00:00",
+    "redis_final": "PONG",
+    "postgres_final": "accepting",
+    "http_seconds_initial": 0.12093209900194779,
+    "http_seconds_final": 0.004702932012150995,
+    "signalr_initial": {
+      "messages": 40,
+      "connections": 1,
+      "errors": 0,
+      "duplicates": 0,
+      "regressions": 0,
+      "invalid": 0
+    },
+    "signalr_final": {
+      "messages": 36,
+      "connections": 1,
+      "errors": 0,
+      "duplicates": 0,
+      "regressions": 0,
+      "invalid": 0
+    },
+    "host_initial": {
+      "utc": "2026-10-26T15:25:35.717243+00:00",
+      "cpus": 4,
+      "load": [
+        0.82421875,
+        0.787109375,
+        0.74072265625
+      ],
+      "memory_kib": {
+        "MemAvailable": 2352268,
+        "SwapTotal": 5192696,
+        "SwapFree": 4907768
+      },
+      "disk": {
+        "total": 116547325952,
+        "used": 90523058176,
+        "free": 20056719360
+      }
+    },
+    "host_final": {
+      "utc": "2026-10-26T15:29:51.921304+00:00",
+      "cpus": 4,
+      "load": [
+        0.8994140625,
+        0.89111328125,
+        0.79443359375
+      ],
+      "memory_kib": {
+        "MemAvailable": 2315168,
+        "SwapTotal": 5192696,
+        "SwapFree": 4908024
+      },
+      "disk": {
+        "total": 116547325952,
+        "used": 90529353728,
+        "free": 20050423808
+      }
+    },
+    "container_stats_initial": [
+      {
+        "BlockIO": "226MB / 0B",
+        "CPUPerc": "0.93%",
+        "Container": "70cdd6392397b8c3a5fe01b01568fde30a55021c211cf042463bcb296cc9980a",
+        "ID": "70cdd6392397",
+        "MemPerc": "30.82%",
+        "MemUsage": "236.7MiB / 768MiB",
+        "Name": "noponto_api",
+        "NetIO": "32.2GB / 32.7GB",
+        "PIDs": "34"
+      },
+      {
+        "BlockIO": "12.5MB / 2.42MB",
+        "CPUPerc": "0.55%",
+        "Container": "8bc8a8fa3cb3327deec1803d1f109e48a96a2c31fed1599d32f3f26de7061173",
+        "ID": "8bc8a8fa3cb3",
+        "MemPerc": "11.58%",
+        "MemUsage": "74.08MiB / 640MiB",
+        "Name": "transporte_redis",
+        "NetIO": "20.2GB / 25.7GB",
+        "PIDs": "6"
+      },
+      {
+        "BlockIO": "59.5GB / 47.4GB",
+        "CPUPerc": "0.58%",
+        "Container": "4b53a0ab7a68df2d284586b4e453b890e4bea82f2b8283d84982ebe362dd3acd",
+        "ID": "4b53a0ab7a68",
+        "MemPerc": "24.53%",
+        "MemUsage": "938.9MiB / 3.738GiB",
+        "Name": "transporte_postgres",
+        "NetIO": "12.5GB / 5.73GB",
+        "PIDs": "12"
+      },
+      {
+        "BlockIO": "205MB / 271MB",
+        "CPUPerc": "0.13%",
+        "Container": "57d334ecbae3be4eb6cd3c11003d1997ddebe0c396f89f9d5844222c866a18e1",
+        "ID": "57d334ecbae3",
+        "MemPerc": "5.55%",
+        "MemUsage": "212.6MiB / 3.738GiB",
+        "Name": "auth_api",
+        "NetIO": "1.52MB / 2.01MB",
+        "PIDs": "43"
+      },
+      {
+        "BlockIO": "49.7MB / 12MB",
+        "CPUPerc": "0.00%",
+        "Container": "e19b44d7b37bba594a2213a5fe74935429cb5fd3d3ec576dc48f8016e69a3978",
+        "ID": "e19b44d7b37b",
+        "MemPerc": "1.21%",
+        "MemUsage": "46.3MiB / 3.738GiB",
+        "Name": "auth_postgres",
+        "NetIO": "2.01MB / 1.52MB",
+        "PIDs": "16"
+      },
+      {
+        "BlockIO": "5.18MB / 1.44MB",
+        "CPUPerc": "0.52%",
+        "Container": "bbbb25a5c9aad07b9298f91f1b40d8feac67a2a98b067057ba24fd44437c2ea1",
+        "ID": "bbbb25a5c9aa",
+        "MemPerc": "0.22%",
+        "MemUsage": "8.512MiB / 3.738GiB",
+        "Name": "auth_redis",
+        "NetIO": "3.81kB / 126B",
+        "PIDs": "6"
+      },
+      {
+        "BlockIO": "75.8MB / 34.5MB",
+        "CPUPerc": "0.00%",
+        "Container": "89aa51b92a3932ecfbedde95e482875c1bfe2aa140a2d70c4fa9414b2e5b6b21",
+        "ID": "89aa51b92a39",
+        "MemPerc": "0.67%",
+        "MemUsage": "25.66MiB / 3.738GiB",
+        "Name": "portainer",
+        "NetIO": "3.86kB / 126B",
+        "PIDs": "7"
+      },
+      {
+        "BlockIO": "90.7MB / 4.54MB",
+        "CPUPerc": "0.24%",
+        "Container": "d854c11a4d92f6e0912573db599617f1d2fa4ff27b4ebc8b45d7d301ecebe7ab",
+        "ID": "d854c11a4d92",
+        "MemPerc": "0.59%",
+        "MemUsage": "22.63MiB / 3.738GiB",
+        "Name": "dozzle",
+        "NetIO": "844kB / 2.81MB",
+        "PIDs": "10"
+      }
+    ],
+    "container_stats_final": [
+      {
+        "BlockIO": "226MB / 0B",
+        "CPUPerc": "1.16%",
+        "Container": "70cdd6392397b8c3a5fe01b01568fde30a55021c211cf042463bcb296cc9980a",
+        "ID": "70cdd6392397",
+        "MemPerc": "34.85%",
+        "MemUsage": "267.7MiB / 768MiB",
+        "Name": "noponto_api",
+        "NetIO": "32.3GB / 32.8GB",
+        "PIDs": "31"
+      },
+      {
+        "BlockIO": "12.5MB / 2.42MB",
+        "CPUPerc": "0.56%",
+        "Container": "8bc8a8fa3cb3327deec1803d1f109e48a96a2c31fed1599d32f3f26de7061173",
+        "ID": "8bc8a8fa3cb3",
+        "MemPerc": "11.67%",
+        "MemUsage": "74.7MiB / 640MiB",
+        "Name": "transporte_redis",
+        "NetIO": "20.2GB / 25.8GB",
+        "PIDs": "6"
+      },
+      {
+        "BlockIO": "59.6GB / 47.6GB",
+        "CPUPerc": "0.67%",
+        "Container": "4b53a0ab7a68df2d284586b4e453b890e4bea82f2b8283d84982ebe362dd3acd",
+        "ID": "4b53a0ab7a68",
+        "MemPerc": "23.78%",
+        "MemUsage": "910.2MiB / 3.738GiB",
+        "Name": "transporte_postgres",
+        "NetIO": "12.5GB / 5.75GB",
+        "PIDs": "11"
+      },
+      {
+        "BlockIO": "206MB / 271MB",
+        "CPUPerc": "0.14%",
+        "Container": "57d334ecbae3be4eb6cd3c11003d1997ddebe0c396f89f9d5844222c866a18e1",
+        "ID": "57d334ecbae3",
+        "MemPerc": "5.52%",
+        "MemUsage": "211.2MiB / 3.738GiB",
+        "Name": "auth_api",
+        "NetIO": "1.53MB / 2.01MB",
+        "PIDs": "43"
+      },
+      {
+        "BlockIO": "49.8MB / 12.1MB",
+        "CPUPerc": "0.00%",
+        "Container": "e19b44d7b37bba594a2213a5fe74935429cb5fd3d3ec576dc48f8016e69a3978",
+        "ID": "e19b44d7b37b",
+        "MemPerc": "1.21%",
+        "MemUsage": "46.32MiB / 3.738GiB",
+        "Name": "auth_postgres",
+        "NetIO": "2.02MB / 1.52MB",
+        "PIDs": "16"
+      },
+      {
+        "BlockIO": "5.18MB / 1.44MB",
+        "CPUPerc": "0.54%",
+        "Container": "bbbb25a5c9aad07b9298f91f1b40d8feac67a2a98b067057ba24fd44437c2ea1",
+        "ID": "bbbb25a5c9aa",
+        "MemPerc": "0.22%",
+        "MemUsage": "8.469MiB / 3.738GiB",
+        "Name": "auth_redis",
+        "NetIO": "3.81kB / 126B",
+        "PIDs": "6"
+      },
+      {
+        "BlockIO": "75.8MB / 34.6MB",
+        "CPUPerc": "0.00%",
+        "Container": "89aa51b92a3932ecfbedde95e482875c1bfe2aa140a2d70c4fa9414b2e5b6b21",
+        "ID": "89aa51b92a39",
+        "MemPerc": "0.67%",
+        "MemUsage": "25.63MiB / 3.738GiB",
+        "Name": "portainer",
+        "NetIO": "3.86kB / 126B",
+        "PIDs": "7"
+      },
+      {
+        "BlockIO": "90.7MB / 4.54MB",
+        "CPUPerc": "0.26%",
+        "Container": "d854c11a4d92f6e0912573db599617f1d2fa4ff27b4ebc8b45d7d301ecebe7ab",
+        "ID": "d854c11a4d92",
+        "MemPerc": "0.59%",
+        "MemUsage": "22.53MiB / 3.738GiB",
+        "Name": "dozzle",
+        "NetIO": "899kB / 3MB",
+        "PIDs": "10"
+      }
+    ]
+  },
+  "line_samples": {
+    "838": {
+      "before_preflight_signalr": {
+        "vehicles": 18,
+        "until40": 12,
+        "until60": 17,
+        "until180": 18,
+        "older180": 0,
+        "future": 0,
+        "max_age": 134.6938660144806,
+        "median": 36.19386601448059,
+        "p90": 49.69386601448059,
+        "new_after_activation": 0
+      },
+      "after_preflight_signalr": {
+        "vehicles": 18,
+        "until40": 0,
+        "until60": 15,
+        "until180": 18,
+        "older180": 0,
+        "future": 0,
+        "max_age": 65.1006236076355,
+        "median": 50.6006236076355,
+        "p90": 65.1006236076355,
+        "new_after_activation": 0
+      },
+      "hybrid": null
+    },
+    "898": {
+      "before_preflight_signalr": {
+        "vehicles": 9,
+        "until40": 8,
+        "until60": 9,
+        "until180": 9,
+        "older180": 0,
+        "future": 0,
+        "max_age": 49.693790674209595,
+        "median": 30.693790674209595,
+        "p90": 49.693790674209595,
+        "new_after_activation": 0
+      },
+      "after_preflight_signalr": {
+        "vehicles": 9,
+        "until40": 0,
+        "until60": 8,
+        "until180": 9,
+        "older180": 0,
+        "future": 0,
+        "max_age": 66.10055565834045,
+        "median": 49.100555658340454,
+        "p90": 66.10055565834045,
+        "new_after_activation": 0
+      },
+      "hybrid": null
+    },
+    "006": {
+      "before_preflight_signalr": {
+        "vehicles": 1,
+        "until40": 1,
+        "until60": 1,
+        "until180": 1,
+        "older180": 0,
+        "future": 0,
+        "max_age": 32.693832874298096,
+        "median": 32.693832874298096,
+        "p90": 32.693832874298096,
+        "new_after_activation": 0
+      },
+      "after_preflight_signalr": {
+        "vehicles": 1,
+        "until40": 0,
+        "until60": 1,
+        "until180": 1,
+        "older180": 0,
+        "future": 0,
+        "max_age": 42.100597620010376,
+        "median": 42.100597620010376,
+        "p90": 42.100597620010376,
+        "new_after_activation": 0
+      },
+      "hybrid": null
+    },
+    "457": {
+      "before_preflight_signalr": {
+        "vehicles": 23,
+        "until40": 14,
+        "until60": 20,
+        "until180": 21,
+        "older180": 2,
+        "future": 0,
+        "max_age": 237.69411778450012,
+        "median": 38.69411778450012,
+        "p90": 78.69411778450012,
+        "new_after_activation": 0
+      },
+      "after_preflight_signalr": {
+        "vehicles": 22,
+        "until40": 0,
+        "until60": 17,
+        "until180": 22,
+        "older180": 0,
+        "future": 0,
+        "max_age": 160.10089373588562,
+        "median": 54.60089373588562,
+        "p90": 63.10089373588562,
+        "new_after_activation": 0
+      },
+      "hybrid": null
+    },
+    "483": {
+      "before_preflight_signalr": {
+        "vehicles": 23,
+        "until40": 17,
+        "until60": 21,
+        "until180": 23,
+        "older180": 0,
+        "future": 0,
+        "max_age": 164.69396948814392,
+        "median": 35.69396948814392,
+        "p90": 47.69396948814392,
+        "new_after_activation": 0
+      },
+      "after_preflight_signalr": {
+        "vehicles": 23,
+        "until40": 1,
+        "until60": 20,
+        "until180": 23,
+        "older180": 0,
+        "future": 0,
+        "max_age": 67.10072493553162,
+        "median": 49.100724935531616,
+        "p90": 63.100724935531616,
+        "new_after_activation": 0
+      },
+      "hybrid": null
+    },
+    "355": {
+      "before_preflight_signalr": {
+        "vehicles": 5,
+        "until40": 3,
+        "until60": 5,
+        "until180": 5,
+        "older180": 0,
+        "future": 0,
+        "max_age": 52.694042921066284,
+        "median": 39.694042921066284,
+        "p90": 52.694042921066284,
+        "new_after_activation": 0
+      },
+      "after_preflight_signalr": {
+        "vehicles": 5,
+        "until40": 0,
+        "until60": 4,
+        "until180": 5,
+        "older180": 0,
+        "future": 0,
+        "max_age": 68.1007981300354,
+        "median": 55.1007981300354,
+        "p90": 68.1007981300354,
+        "new_after_activation": 0
+      },
+      "hybrid": null
+    },
+    "805": {
+      "before_preflight_signalr": {
+        "vehicles": 1,
+        "until40": 0,
+        "until60": 0,
+        "until180": 0,
+        "older180": 1,
+        "future": 0,
+        "max_age": 223.6938500404358,
+        "median": 223.6938500404358,
+        "p90": 223.6938500404358,
+        "new_after_activation": 0
+      },
+      "after_preflight_signalr": {
+        "vehicles": 0,
+        "until40": 0,
+        "until60": 0,
+        "until180": 0,
+        "older180": 0,
+        "future": 0,
+        "max_age": null,
+        "median": null,
+        "p90": null,
+        "new_after_activation": 0
+      },
+      "hybrid": null
+    },
+    "35": {
+      "before_preflight_signalr": {
+        "vehicles": 10,
+        "until40": 8,
+        "until60": 8,
+        "until180": 9,
+        "older180": 1,
+        "future": 0,
+        "max_age": 183.6939287185669,
+        "median": 30.693928718566895,
+        "p90": 84.6939287185669,
+        "new_after_activation": 0
+      },
+      "after_preflight_signalr": {
+        "vehicles": 9,
+        "until40": 2,
+        "until60": 7,
+        "until180": 9,
+        "older180": 0,
+        "future": 0,
+        "max_age": 108.10068655014038,
+        "median": 46.10068655014038,
+        "p90": 108.10068655014038,
+        "new_after_activation": 0
+      },
+      "hybrid": null
+    },
+    "60": {
+      "before_preflight_signalr": {
+        "vehicles": 16,
+        "until40": 14,
+        "until60": 14,
+        "until180": 15,
+        "older180": 1,
+        "future": 0,
+        "max_age": 201.69365811347961,
+        "median": 24.693658113479614,
+        "p90": 90.69365811347961,
+        "new_after_activation": 0
+      },
+      "after_preflight_signalr": {
+        "vehicles": 14,
+        "until40": 7,
+        "until60": 13,
+        "until180": 14,
+        "older180": 0,
+        "future": 0,
+        "max_age": 145.1004283428192,
+        "median": 39.600428342819214,
+        "p90": 48.100428342819214,
+        "new_after_activation": 0
+      },
+      "hybrid": null
+    },
+    "67": {
+      "before_preflight_signalr": {
+        "vehicles": 12,
+        "until40": 11,
+        "until60": 11,
+        "until180": 12,
+        "older180": 0,
+        "future": 0,
+        "max_age": 83.69407224655151,
+        "median": 25.194072246551514,
+        "p90": 33.694072246551514,
+        "new_after_activation": 0
+      },
+      "after_preflight_signalr": {
+        "vehicles": 11,
+        "until40": 1,
+        "until60": 10,
+        "until180": 11,
+        "older180": 0,
+        "future": 0,
+        "max_age": 107.10084581375122,
+        "median": 44.10084581375122,
+        "p90": 48.10084581375122,
+        "new_after_activation": 0
+      },
+      "hybrid": null
+    }
+  },
+  "sample_caveat": "Two35second GTFS-only SignalR health samples; neither120second formal baseline nor source comparison; no individual identities persisted",
+  "capture": {
+    "first_gap_utc": "2026-10-26T15:27:17.441114+00:00",
+    "first_gap_after_seconds": 29.73350691795349,
+    "capture_seconds": 67.75827050209045,
+    "input_bytes": 1137754,
+    "output_bytes": 15988,
+    "output_lines": 100,
+    "stream_starts": 32,
+    "stream_ends": 32,
+    "gaps": {
+      "input_queue_overflow": 32,
+      "stream_budget": 1,
+      "capture_duration_or_budget": 1
+    },
+    "recognized_families": {},
+    "verification": {
+      "kind": "end",
+      "at": 1793028475.4658773,
+      "session": "b268ab73e715a9bf553572480447163a",
+      "content_sha256": "954edfca641a2d2f119ff14b8c8dde9668b1264125fd7cf31268622e753955c3",
+      "records_before_footer": 99,
+      "archive_complete": false,
+      "evidence_complete": false,
+      "truncated": false,
+      "gap_count": 34,
+      "acquisitions_without_timing": 0,
+      "integrity_valid": true,
+      "file_sha256": "7a7666b9d7a5dbdf535bde84fe3d9f4876ed59688fafc6f970152336019ea26a"
+    },
+    "final_failure": "stream_budget",
+    "initial_failure": "input_queue_overflow",
+    "metrics_full_lifetime_available": false
+  },
+  "preflight_checks": {
+    "hashes_and_posix_permissions": true,
+    "rollback_render_only": true,
+    "lock_exclusion_and_capture_no_lock_inheritance": true,
+    "new_independent_cron_proof": {
+      "time": 1793028481.7714026,
+      "ancestor_processes": [
+        "python3",
+        "sh",
+        "cron",
+        "cron",
+        "systemd"
+      ],
+      "independent_cron": true
+    },
+    "capture_sustained_healthy": false,
+    "watchdog_destructive_path_exercised": false
+  },
+  "cleanup": {
+    "phase": "precondition_failed",
+    "cron_owned_marker_removed": true,
+    "cron_absent_restored": true,
+    "active_processes": [],
+    "lock_free": true,
+    "private_evidence_preserved": true
+  },
+  "limits_unchanged": {
+    "capture_seconds": 1000,
+    "archive_bytes": 8388608,
+    "archive_lines": 12000,
+    "queue_lines_per_stream": 256,
+    "input_bytes": 67108864,
+    "stream_open_limit": 32,
+    "gate898_seconds": 90,
+    "hybrid_max_seconds": 600
+  },
+  "proven_cause": "DockerStream._read caught queue.Full from put_nowait on256entry raw-line queue; sanitization occurs downstream; overflow triggered before any ITS activation, followed by bounded reconnect exhaustion",
+  "not_proven": [
+    "Exact instantaneous Docker log burst size and message families, because raw logs are intentionally not retained",
+    "A causal relationship with ITS acquisition48.6seconds or GPS pipeline freshness",
+    "Hybrid coverage/freshness improvement or regression",
+    "Successful end-to-end898 correlation in Hybrid"
+  ],
+  "next_steps": [
+    "Separate local correction of passive capture ingestion/backpressure preserving budgets/privacy/fail-closed behavior",
+    "Deterministic burst/reconnect tests and new hashes if operational files change",
+    "New limited GTFS-only Debian capture preflight under representative workload",
+    "Only then reassess and request a new explicit hybrid-window authorization"
+  ],
+  "evidence_sha256": {
+    "initial.json": "a5b406295abd3baf9abf8ed4775813bc8b709d3e90ac3659af2b323e1553925e",
+    "setup.json": "fd43e7a562ff68b6dd75d69688648d07959d0e643e0df1de38c8dca708512153",
+    "proof-status.json": "711090be856b83dbd1d65758daf2f024011147203cc4c01e8f24d352510aa062",
+    "close.json": "927ff87fce1497023afab69c0216f97920b4e1a3d81ffccd0d5e00ee121f776d",
+    "final.json": "e00fd77a18a95ca789c8ca548c5601873839dafc4819e7539031d21c60cd2729",
+    "evidence.json": "1be936a5d63c6155800c9bd9d1fa3a1cbbbd4c64c1e9ac57555fb29e4032b2b7",
+    "capture-aggregates.jsonl": "7a7666b9d7a5dbdf535bde84fe3d9f4876ed59688fafc6f970152336019ea26a"
+  },
+  "not_executed": [
+    "ITS activation",
+    "formal120second baseline",
+    "hybrid window",
+    "source/image/container recreation",
+    "rollback configuration application",
+    "push/merge/remoteCI/deploy",
+    "migrations/Redis or PostgreSQL maintenance",
+    "functional code changes",
+    "relaxation of safety limits"
+  ]
+}
