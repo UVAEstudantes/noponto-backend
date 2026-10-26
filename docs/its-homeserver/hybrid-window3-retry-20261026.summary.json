@@ -1,0 +1,90 @@
+{
+  "date": "2026-10-26",
+  "classification_hybrid": "inconclusive",
+  "classification_preflight": "no_go",
+  "reason": "capture_evidence_failed_before_activation",
+  "base_commit": "8eed1b5b28053504ce4b941b4082b2b2a10e73e7",
+  "operational_commit": "eff3a3acf2276d558860236e951e078458534ea8",
+  "production_release": 151,
+  "production_image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+  "production_changed": false,
+  "its_activated": false,
+  "hybrid_duration_seconds": 0,
+  "rollback_executed": false,
+  "final_bus_primary": "GTFSRT_BUS",
+  "final_bus_fallback": "",
+  "final_bus_support_mode": "FullFallback",
+  "final_trace_enabled": false,
+  "final_brt_primary": "GTFSRT_BRT",
+  "baseline_120_seconds_completed": false,
+  "phase": "precondition_failed",
+  "supervisor_event": {
+    "time_utc": "2026-10-26T16:14:07.573910+00:00",
+    "type": "CaptureFailure",
+    "operational_reason": "capture_evidence_failed",
+    "activated": false
+  },
+  "root_cause_evidence": {
+    "proof_capture_already_open": true,
+    "supervisor_starts_second_capture_same_directory": true,
+    "archive_exclusive_create_reproduced_locally": "FileExistsError",
+    "child_stderr_persisted": false,
+    "input_queue_overflow_observed": false
+  },
+  "private_directory": "/home/guilherme/.noponto-deploy/hybrid-window3-retry-20261026T161200Z",
+  "operational_sha256": {
+    "its_window.py": "d166f170e773c60f5024c895eb32e43c8016c775060cff2fd7e9e70231ba7eed",
+    "its_log_capture.py": "9eaeaec2475fb084f9085dfecb83fc28a2a86e1c2867211d9af8f6608760859f",
+    "probe_http.py": "b774a3cde28e3b3dadec0a8372d293515f900709194ef96bdbfa0e93e3724248",
+    "its.primary.override.yml": "f2b920b24263bf4a81ed2300fc85ec788cfeb257229f2c7cf22c3288bc948ea1",
+    "gtfs.rollback.override.yml": "4490a0d521653a1b0fab0e51f5839c8c6d593b9f6d10562342f61f0e14b11900"
+  },
+  "cron_proof": {
+    "independent": true,
+    "utc_epoch": 1793031181.8872643,
+    "ancestor_processes": ["python3", "sh", "cron", "cron", "systemd"],
+    "job_removed": true,
+    "crontab_final_absent": true
+  },
+  "capture": {
+    "duration_seconds": 145.385,
+    "input_bytes": 495450,
+    "archive_bytes": 573,
+    "archive_lines": 3,
+    "gaps": 0,
+    "reconnections": 0,
+    "truncated": false,
+    "integrity_valid": true,
+    "archive_complete": true,
+    "evidence_complete": true,
+    "file_sha256": "2246482834376378182eab28a064f64a3b5514020b53cdeb4d4006c2d0301182",
+    "capture_cpu_seconds_delta": 0.30,
+    "capture_rss_kib": 19540
+  },
+  "before_after": {
+    "same_api_id": true,
+    "same_eight_containers": true,
+    "same_compose_files": true,
+    "single_api_writer": true,
+    "deploy_lock_free": true,
+    "temporary_processes_absent": true,
+    "redis_pong": true,
+    "postgres_accepting": true,
+    "http_healthy": true,
+    "signalr_messages": [27, 38],
+    "signalr_errors": [0, 0],
+    "signalr_duplicates": [0, 0],
+    "signalr_regressions": [0, 0],
+    "fleet_838": [19, 19],
+    "fleet_898": [12, 10]
+  },
+  "not_measured": [
+    "formal_120_second_baseline",
+    "ITS_HTTP_pages_and_timing",
+    "ITS_rejection_reasons",
+    "hybrid_contribution_and_freshness",
+    "line_898_linked_observation_90_second_gate",
+    "hybrid_CAS_ACK_REST_SignalR"
+  ],
+  "next_gate": "fix_and_test_capture_proof_to_supervisor_handoff_before_new_preflight"
+}

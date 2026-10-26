@@ -1,5 +1,7 @@
 # Janela controlada ITS + GTFS-RT — preparação atualizada em24/10/2026
 
+Estado posterior em26/10: [nova tentativa interrompida no preflight](hybrid-window3-retry-20261026.md). **NO-GO para outra ativação com o procedimento atual**: a prova iniciou uma captura passiva, e o supervisor tentou iniciar outra no mesmo diretório exclusivo; `CaptureFailure` ocorreu antes do baseline formal/ITS. Produção segue release151 em GTFSRT_BUS/FullFallback/traceOFF, BRT GTFSRT_BRT. Corrigir e testar o handoff da captura e repetir preflight/cron antes de pedir nova autorização. A [prova GTFS corrigida de364,86s](log-capture-burst-debian-preflight-20261026.md) passou, mas não cobre esse handoff.
+
 Correção local após NO-GO26/10: [captura tolerante a bursts, testes e novos hashes](log-capture-burst-fix-20261026.md). **Nova provaGTFS no Debian ainda obrigatória; não armar ITS.**
 
 Estado26/10: [terceira janela bloqueada no preflight — captura com input_queue_overflow](hybrid-window3-20261026.md). **NO-GO para nova ativação** até correção local/testes e nova provaGTFS. ITS não foi ativada; produção permanece GTFS-only/traceOFF. Este resultado posterior substitui o GO limitado da prova de24/10.
