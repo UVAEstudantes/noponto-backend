@@ -1,0 +1,293 @@
+{
+  "base_commit": "369f745147dedbd53a769161334119dba29ac29e",
+  "date": "2026-10-26",
+  "classification": "APROVADO_POSIX_PRIMITIVES",
+  "readiness": "GO_to_consider_separate_hybrid_authorization_with_fresh_window_preflight",
+  "production_changed": false,
+  "hybrid_authorized": false,
+  "release": 151,
+  "image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+  "initial_settings": {
+    "GpsSources__BusPrimarySource": "GTFSRT_BUS",
+    "GpsSources__BusFallbackSource": "",
+    "GpsSources__BusSupportMode": "FullFallback",
+    "GpsPipelineTrace__Enabled": "false",
+    "GpsSources__BrtPrimarySource": "GTFSRT_BRT"
+  },
+  "final_settings": {
+    "GpsSources__BusPrimarySource": "GTFSRT_BUS",
+    "GpsSources__BusFallbackSource": "",
+    "GpsSources__BusSupportMode": "FullFallback",
+    "GpsPipelineTrace__Enabled": "false",
+    "GpsSources__BrtPrimarySource": "GTFSRT_BRT"
+  },
+  "os": "Debian GNU/Linux 12 (bookworm)",
+  "python": "3.11.2",
+  "hashes": {
+    "its_window.py": "33255a6477418f64a05ad2dd88e9f6aa723b78587bd9ff1495cb95a0fd1e90a0",
+    "its_log_capture.py": "055fa54b065d08d44b54d697e9b7924792af34323f27bc9631dc9146919d49ac",
+    "probe_http.py": "b774a3cde28e3b3dadec0a8372d293515f900709194ef96bdbfa0e93e3724248",
+    "its.primary.override.yml": "f2b920b24263bf4a81ed2300fc85ec788cfeb257229f2c7cf22c3288bc948ea1",
+    "gtfs.rollback.override.yml": "4490a0d521653a1b0fab0e51f5839c8c6d593b9f6d10562342f61f0e14b11900"
+  },
+  "harness_sha256": "a961a02f62edf958fac446353221f291d34d2049fcb3e1f7d022e6c893196403",
+  "harness_directory": "/home/guilherme/.noponto-deploy/posix-deadline-preflight-20261026T215400Z",
+  "harness_audit": {
+    "definitions_loaded": [
+      "ActivationDeadline",
+      "CaptureFailure",
+      "CommandFailure",
+      "SafetyFailure",
+      "capture_health",
+      "run"
+    ],
+    "blocked_entries": [
+      "switch",
+      "rollback",
+      "supervise",
+      "run_activation",
+      "tick",
+      "compose",
+      "validate",
+      "start_capture",
+      "ensure_capture",
+      "take_lock",
+      "save"
+    ],
+    "blocked_entries_verified": 11,
+    "state_file_absent": true,
+    "operational_source_sha256": "33255a6477418f64a05ad2dd88e9f6aa723b78587bd9ff1495cb95a0fd1e90a0"
+  },
+  "proof_pid": 1017342,
+  "proof_birth": "12283713",
+  "native_proof": {
+    "audit": {
+      "definitions_loaded": [
+        "ActivationDeadline",
+        "CaptureFailure",
+        "CommandFailure",
+        "SafetyFailure",
+        "capture_health",
+        "run"
+      ],
+      "blocked_entries": [
+        "switch",
+        "rollback",
+        "supervise",
+        "run_activation",
+        "tick",
+        "compose",
+        "validate",
+        "start_capture",
+        "ensure_capture",
+        "take_lock",
+        "save"
+      ],
+      "blocked_entries_verified": 11,
+      "state_file_absent": true,
+      "operational_source_sha256": "33255a6477418f64a05ad2dd88e9f6aa723b78587bd9ff1495cb95a0fd1e90a0"
+    },
+    "tests": [
+      {
+        "name": "blocking_sleep",
+        "ok": true,
+        "target_seconds": 0.35,
+        "reason": "hybrid_startup_unconfirmed",
+        "elapsed_seconds": 0.35021702900121454,
+        "dispatch_lag_ms": 0.061444996390491724,
+        "unwind_ms": 0.14034500054549426,
+        "handlers_restored": true,
+        "residual_timer": [
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "subprocess_cancel",
+        "ok": true,
+        "target_seconds": 0.8,
+        "reason": "hybrid_startup_unconfirmed",
+        "elapsed_seconds": 0.8009201259992551,
+        "dispatch_lag_ms": 0.039874998037703335,
+        "unwind_ms": 0.8668719965498894,
+        "handlers_restored": true,
+        "residual_timer": [
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "operator_sigterm",
+        "ok": true,
+        "target_seconds": 0.35,
+        "reason": "operator_rollback",
+        "elapsed_seconds": 0.3507946519966936,
+        "dispatch_lag_ms": 0.250196986598894,
+        "unwind_ms": 0.250196986598894,
+        "handlers_restored": true,
+        "residual_timer": [
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "operator_sigint",
+        "ok": true,
+        "target_seconds": 0.35,
+        "reason": "operator_rollback",
+        "elapsed_seconds": 0.35069689400552306,
+        "dispatch_lag_ms": 0.25989800633396953,
+        "unwind_ms": 0.25989800633396953,
+        "handlers_restored": true,
+        "residual_timer": [
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "blocked_observer",
+        "ok": true,
+        "target_seconds": 0.35,
+        "reason": "hybrid_startup_unconfirmed",
+        "elapsed_seconds": 0.3502653489995282,
+        "dispatch_lag_ms": 0.07787298818584532,
+        "unwind_ms": 0.16185299318749458,
+        "handlers_restored": true,
+        "residual_timer": [
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "pid": 1017342,
+    "pid_start": "12283713",
+    "phase": "posix_proof",
+    "production_control_calls": 0,
+    "subprocess": {
+      "pid": 1017343,
+      "birth": "12283755",
+      "reaped": true,
+      "orphans": 0,
+      "grandchildren_spawned": false
+    },
+    "occupied_timer_rejected": true,
+    "non_main_thread_rejected": true,
+    "observer_was_blocked_at_interrupt": true,
+    "verified_disposable_group_terminated": true,
+    "ok": true,
+    "restoration": {
+      "handlers_restored": true,
+      "residual_timer": [
+        0.0,
+        0.0
+      ]
+    },
+    "threads_remaining": 1,
+    "state_file_absent": true,
+    "resources": {
+      "seconds": 2.2589712670014706,
+      "cpu_user_seconds": 0.007831999999999999,
+      "cpu_system_seconds": 2.5000000000000716e-05,
+      "max_rss_kib": 22952,
+      "cpu_user_total_seconds": 0.067078,
+      "cpu_system_total_seconds": 0.004256,
+      "children_cpu_seconds": 0.074742,
+      "children_max_rss_kib": 22952,
+      "block_in": 0,
+      "block_out": 8
+    }
+  },
+  "proof_processes_remaining": [],
+  "stderr_bytes": 0,
+  "permissions_verified": true,
+  "containers_unchanged": true,
+  "container_count": 8,
+  "compose_files_unchanged": true,
+  "writer_count_before_after": [
+    1,
+    1
+  ],
+  "lock_free_before_after": [
+    true,
+    true
+  ],
+  "cron_unchanged": true,
+  "cron_installed": false,
+  "sources_changed": false,
+  "state_file_created": false,
+  "http_seconds_before_after": [
+    0.03405951398599427,
+    0.006302875000983477
+  ],
+  "signalr_before_after": [
+    {
+      "messages": 24,
+      "errors": 0,
+      "duplicates": 0,
+      "regressions": 0,
+      "invalid": 0
+    },
+    {
+      "messages": 20,
+      "errors": 0,
+      "duplicates": 0,
+      "regressions": 0,
+      "invalid": 0
+    }
+  ],
+  "redis_before_after": [
+    "PONG",
+    "PONG"
+  ],
+  "postgres_before_after": [
+    "accepting",
+    "accepting"
+  ],
+  "host_before_after": [
+    {
+      "utc": "2026-10-26T21:57:50.957372+00:00",
+      "cpus": 4,
+      "load": [
+        0.951171875,
+        0.88623046875,
+        0.92041015625
+      ],
+      "memory_kib": {
+        "MemAvailable": 2267052,
+        "SwapTotal": 5192696,
+        "SwapFree": 4896760
+      },
+      "disk": {
+        "total": 116547325952,
+        "used": 91117060096,
+        "free": 19462717440
+      }
+    },
+    {
+      "utc": "2026-10-26T22:01:52.490708+00:00",
+      "cpus": 4,
+      "load": [
+        0.90283203125,
+        1.01611328125,
+        0.96875
+      ],
+      "memory_kib": {
+        "MemAvailable": 2328380,
+        "SwapTotal": 5192696,
+        "SwapFree": 4897528
+      },
+      "disk": {
+        "total": 116547325952,
+        "used": 91123675136,
+        "free": 19456102400
+      }
+    }
+  ],
+  "limitations": [
+    "no_mutating_docker_command_or_daemon_cancellation_tested",
+    "no_full_supervisor_or_watchdog_cron_execution",
+    "no_ITS_or_898_generation_pipeline_proof",
+    "no_new_capture_handoff_test",
+    "direct_child_cancellation_not_arbitrary_descendant_tree"
+  ]
+}
