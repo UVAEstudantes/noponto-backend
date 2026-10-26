@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-26",
+  "status": "go_to_request_separate_hybrid_authorization",
+  "base_commit": "eff3a3acf2276d558860236e951e078458534ea8",
+  "production_release": 151,
+  "production_image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+  "production_bus_primary": "GTFSRT_BUS",
+  "production_bus_fallback": "",
+  "production_bus_support_mode": "FullFallback",
+  "production_trace_enabled": false,
+  "production_brt_primary": "GTFSRT_BRT",
+  "production_changed": false,
+  "private_directory": "/home/guilherme/.noponto-deploy/capture-burst-20261026T155540Z",
+  "operational_sha256": {
+    "its_window.py": "d166f170e773c60f5024c895eb32e43c8016c775060cff2fd7e9e70231ba7eed",
+    "its_log_capture.py": "9eaeaec2475fb084f9085dfecb83fc28a2a86e1c2867211d9af8f6608760859f",
+    "probe_http.py": "b774a3cde28e3b3dadec0a8372d293515f900709194ef96bdbfa0e93e3724248",
+    "its.primary.override.yml": "f2b920b24263bf4a81ed2300fc85ec788cfeb257229f2c7cf22c3288bc948ea1",
+    "gtfs.rollback.override.yml": "4490a0d521653a1b0fab0e51f5839c8c6d593b9f6d10562342f61f0e14b11900"
+  },
+  "capture": {
+    "duration_seconds": 364.858,
+    "input_bytes": 1394206,
+    "input_budget_bytes": 67108864,
+    "archive_bytes": 574,
+    "archive_budget_bytes": 8388608,
+    "archive_lines": 3,
+    "archive_budget_lines": 12000,
+    "overflow": 0,
+    "gaps": 0,
+    "reconnections": 0,
+    "container_changes": 0,
+    "duplicates": 0,
+    "truncated": false,
+    "max_observed_heartbeat_age_seconds": 0.89,
+    "integrity_valid": true,
+    "archive_complete": true,
+    "evidence_complete": true,
+    "file_sha256": "335069fdecdf412678e16b091f6f7caa42e842419089afec641bc0b26bf0afea"
+  },
+  "resource_samples": {
+    "sample_interval_seconds": 307.6,
+    "python_cpu_seconds_delta": 0.70,
+    "python_rss_kib": 19576,
+    "python_read_bytes_delta": 3682304,
+    "python_write_bytes_delta": 1224704,
+    "docker_child_cpu_seconds_delta": 0.27,
+    "docker_child_rss_kib_approx": [30732, 31616],
+    "minimum_host_available_memory_kib": 2237076,
+    "minimum_host_swap_free_kib": 4913656
+  },
+  "before_after": {
+    "api_container_unchanged": true,
+    "all_eight_containers_unchanged": true,
+    "compose_files_unchanged": true,
+    "one_api_writer": true,
+    "deploy_lock_free": true,
+    "cron_absent": true,
+    "temporary_collector_absent": true,
+    "http_healthy": true,
+    "redis_pong": true,
+    "postgres_accepting": true,
+    "signalr_messages": [18, 27],
+    "signalr_errors": [0, 0],
+    "signalr_duplicates": [0, 0],
+    "signalr_regressions": [0, 0]
+  },
+  "local_tests": {
+    "capture_rerun": "27/27",
+    "supervisor_from_base_commit": "41/41",
+    "dotnet_offline_ci_not_run": true
+  },
+  "remaining_before_future_hybrid_activation": [
+    "new authorization",
+    "fresh image/source/health/lock/writer preflight",
+    "fresh independent cron/watchdog proof in a new private directory",
+    "representative GTFS baseline and live capture health",
+    "ITS detailed-log rate untested by GTFS-only proof",
+    "mandatory rollback to GTFS at or before 600 seconds"
+  ]
+}
