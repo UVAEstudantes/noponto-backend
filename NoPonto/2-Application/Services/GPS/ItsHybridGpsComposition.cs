@@ -1,5 +1,9 @@
 namespace NoPonto.Application.GPS;
 
+internal readonly record struct ItsHybridAcquisitionMetrics(string Status, string Health, string? FailureReason, double ItsMs, double GtfsMs,
+    bool Pending, bool Cancelled, double PendingMs, double AvoidedWaitMs, double? CacheMs, bool CacheValid, int CacheCount,
+    long CompletedSequence, long PendingSequence);
+
 // Stateless union of complete normalized snapshots. The existing collector is the
 // sole producer; temporal/spatial history, CAS and publication remain downstream.
 internal static class ItsHybridGpsComposition
@@ -7,8 +11,19 @@ internal static class ItsHybridGpsComposition
     // Accommodates GTFS float coordinate precision (about one metre), never a jump.
     private const double CoordinateTieTolerance = .00001;
 
+    internal static bool Valid(GpsObservation x, string expected, DateTimeOffset now, int maxAge = 300)
+    {
+        var id = x.VehicleId?.Trim();
+        return id is { Length: >= 1 and <= 64 } && !id.Any(char.IsControl)
+            && x.Source == expected && string.Equals(x.Modal, "ONIBUS", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(x.ServiceCode) && GpsLeituraValidator.CoordenadaValida(x.Latitude, x.Longitude)
+            && double.IsFinite(x.SpeedKmh) && x.SpeedKmh >= 0 && x.GpsTimestamp > DateTimeOffset.UnixEpoch
+            && x.GpsTimestamp <= now && x.GpsTimestamp >= now.AddSeconds(-maxAge);
+    }
+
     internal static GpsSourceReadResult Compose(GpsSourceReadResult its, GpsSourceReadResult gtfs,
-        DateTimeOffset now, TimeSpan duration, ILogger<GpsSourceResolver>? logger)
+        DateTimeOffset now, TimeSpan duration, ILogger<GpsSourceResolver>? logger, int itsMaxAgeSeconds = 300,
+        ItsHybridAcquisitionMetrics? metrics = null)
     {
         static bool Healthy(GpsSourceReadResult r) => r.Status is StatusFonteGps.Sucesso or StatusFonteGps.Vazio;
         var itsHealthy=Healthy(its); var gtfsHealthy=Healthy(gtfs);
@@ -18,22 +33,21 @@ internal static class ItsHybridGpsComposition
             if (!Healthy(read)) yield break; // Never promote a partial/failed feed.
             foreach (var x in read.Observations)
             {
-                var id=x.VehicleId.Trim().ToUpperInvariant();
-                if (id.Length is <1 or >64 || id.Any(char.IsControl) || x.Source!=expected
-                    || !string.Equals(x.Modal,"ONIBUS",StringComparison.OrdinalIgnoreCase)
-                    || string.IsNullOrWhiteSpace(x.ServiceCode) || !GpsLeituraValidator.CoordenadaValida(x.Latitude,x.Longitude)
-                    || !double.IsFinite(x.SpeedKmh) || x.SpeedKmh<0
-                    || x.GpsTimestamp<=DateTimeOffset.UnixEpoch || x.GpsTimestamp>now || x.GpsTimestamp<now.AddSeconds(-300))
+                if (!ItsHybridGpsComposition.Valid(x, expected, now, expected == GpsSourceNames.ItsCurrent ? itsMaxAgeSeconds : 300))
                 { invalid++; continue; }
-                yield return x with {VehicleId=id};
+                yield return x with {VehicleId=x.VehicleId.Trim().ToUpperInvariant()};
             }
         }
         var candidates=Valid(its,GpsSourceNames.ItsCurrent).Concat(Valid(gtfs,GpsSourceNames.GtfsRealtimeBus)).ToArray();
         var selected=new List<GpsObservation>();
-        var shared=0;var ties=0;var coordinateConflicts=0;var lineConflicts=0;var directionConflicts=0;
+        var shared=0;var itsExclusive=0;var gtfsExclusive=0;var ties=0;var coordinateConflicts=0;var lineConflicts=0;var directionConflicts=0;
         foreach (var group in candidates.GroupBy(x=>x.VehicleId,StringComparer.Ordinal))
         {
-            if (group.Select(x=>x.Source).Distinct(StringComparer.Ordinal).Count()>1) shared++;
+            var hasIts=group.Any(x=>x.Source==GpsSourceNames.ItsCurrent);
+            var hasGtfs=group.Any(x=>x.Source==GpsSourceNames.GtfsRealtimeBus);
+            if (hasIts && hasGtfs) shared++;
+            else if (hasIts) itsExclusive++;
+            else gtfsExclusive++;
             var newest=group.Max(x=>x.GpsTimestamp);
             var latest=group.Where(x=>x.GpsTimestamp==newest).ToArray();
             if (latest.Length>1) ties++;
@@ -62,15 +76,33 @@ internal static class ItsHybridGpsComposition
         var status=values.Length>0?StatusFonteGps.Sucesso:
             reason is null && candidates.Length==0 && invalid==0?StatusFonteGps.Vazio:StatusFonteGps.Falha;
         if (status==StatusFonteGps.Falha && reason is null) reason="hybrid_no_valid_observations";
+        double itsAges=0,gtfsAges=0,receiptAges=0;var itsCount=0;var gtfsCount=0;var receiptCount=0;
+        foreach (var x in values)
+        {
+            if (x.Source==GpsSourceNames.ItsCurrent) { itsCount++;itsAges+=(now-x.GpsTimestamp).TotalSeconds; }
+            else { gtfsCount++;gtfsAges+=(now-x.GpsTimestamp).TotalSeconds; }
+            if (x.ReceivedAtUtc!=default && x.ReceivedAtUtc>=x.GpsTimestamp && x.ReceivedAtUtc<=now)
+            { receiptCount++;receiptAges+=(x.ReceivedAtUtc-x.GpsTimestamp).TotalSeconds; }
+        }
         logger?.LogInformation("BUS hybrid: primary_status={primary_status}, support_status={support_status}, status={status}, reason={reason}, " +
             "its_input={its_input}, gtfs_input={gtfs_input}, selected={selected}, selected_its={selected_its}, selected_gtfs={selected_gtfs}, " +
             "shared={shared}, ties={ties}, coordinate_conflicts={coordinate_conflicts}, line_conflicts={line_conflicts}, direction_conflicts={direction_conflicts}, " +
-            "invalid={invalid}, recent40={recent40}, recent60={recent60}, recent180={recent180}, duration_ms={duration_ms}",
+            "invalid={invalid}, recent40={recent40}, recent60={recent60}, recent180={recent180}, duration_ms={duration_ms}, " +
+            "its_exclusive={its_exclusive}, gtfs_exclusive={gtfs_exclusive}, its_age_mean_seconds={its_age}, gtfs_age_mean_seconds={gtfs_age}, " +
+            "receipt_age_mean_seconds={receipt_age}, its_last_status={its_status}, its_health={its_health}, its_last_failure={its_failure}, " +
+            "its_duration_ms={its_ms}, gtfs_duration_ms={gtfs_ms}, its_pending={pending}, its_pending_cancelled={cancelled}, " +
+            "its_pending_elapsed_ms={pending_ms}, gtfs_wait_avoided_ms={avoided_ms}, its_cache_age_ms={cache_ms}, " +
+            "its_cache_valid={cache_valid}, its_cache_count={cache_count}, " +
+            "its_completed_sequence={its_sequence}, its_pending_sequence={pending_sequence}",
             its.Status,gtfs.Status,status,reason,its.Observations.Count,gtfs.Observations.Count,values.Length,
             values.Count(x=>x.Source==GpsSourceNames.ItsCurrent),values.Count(x=>x.Source==GpsSourceNames.GtfsRealtimeBus),
             shared,ties,coordinateConflicts,lineConflicts,directionConflicts,invalid,
             values.Count(x=>(now-x.GpsTimestamp).TotalSeconds<=40),values.Count(x=>(now-x.GpsTimestamp).TotalSeconds<=60),
-            values.Count(x=>(now-x.GpsTimestamp).TotalSeconds<=180),duration.TotalMilliseconds);
+            values.Count(x=>(now-x.GpsTimestamp).TotalSeconds<=180),duration.TotalMilliseconds,
+            itsExclusive,gtfsExclusive,itsCount==0?(double?)null:itsAges/itsCount,gtfsCount==0?(double?)null:gtfsAges/gtfsCount,
+            receiptCount==0?(double?)null:receiptAges/receiptCount, metrics?.Status,metrics?.Health,metrics?.FailureReason,
+            metrics?.ItsMs,metrics?.GtfsMs,metrics?.Pending,metrics?.Cancelled,metrics?.PendingMs,metrics?.AvoidedWaitMs,
+            metrics?.CacheMs,metrics?.CacheValid,metrics?.CacheCount,metrics?.CompletedSequence,metrics?.PendingSequence);
         return new(status,Array.AsReadOnly(values),duration,reason);
     }
 }

@@ -1,0 +1,2651 @@
+{
+  "merge": "15ad5ccfa850bb3a03c8f2130a57341e79381ff7",
+  "run_id": 40138978575,
+  "release": 151,
+  "digest": "sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+  "image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+  "candidate": "0fdf0d6417c13126fcecd40fe33b3921ef296f15",
+  "tree": "5e5339a855a1b6f7ec874ccb5754dfea377d9460",
+  "pr": 85,
+  "pr_ci_run": 40138761884,
+  "pr_ci_number": 150,
+  "pr_release_build_success": true,
+  "main_release_build_success": true,
+  "pr_offline": {
+    "passed": 1076,
+    "failed": 0,
+    "skipped": 0
+  },
+  "main_offline": {
+    "passed": 1076,
+    "failed": 0,
+    "skipped": 0
+  },
+  "workflow_success": true,
+  "production_environment_approved_after_digest_review": true,
+  "previous_image": "ghcr.io/guilhermedesales/noponto-api@sha256:44b006a8e7f515572b4fe457b6d56cc757cac306cfc9964d0ad05031c3725835",
+  "before": {
+    "utc": "2026-10-24T22:29:34.110087+00:00",
+    "image": "ghcr.io/guilhermedesales/noponto-api@sha256:44b006a8e7f515572b4fe457b6d56cc757cac306cfc9964d0ad05031c3725835",
+    "image_id": "sha256:44b006a8e7f515572b4fe457b6d56cc757cac306cfc9964d0ad05031c3725835",
+    "writers": 1,
+    "primary": "GTFSRT_BUS",
+    "fallback": "",
+    "mode_effective": "FullFallback",
+    "mode_configured": "FullFallback",
+    "trace_configured": null,
+    "trace_effective": false,
+    "brt": "GTFSRT_BRT",
+    "active_image_matches": true,
+    "release": "149",
+    "window_jobs": 0,
+    "containers": {
+      "noponto_api": {
+        "image": "ghcr.io/guilhermedesales/noponto-api@sha256:44b006a8e7f515572b4fe457b6d56cc757cac306cfc9964d0ad05031c3725835",
+        "started": "2026-10-24T21:22:30.629394721Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      },
+      "transporte_postgres": {
+        "image": "postgis/postgis:16-3.4",
+        "started": "2026-10-22T14:26:01.764086606Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "transporte_redis": {
+        "image": "redis:7",
+        "started": "2026-10-22T14:26:01.676775384Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "auth_api": {
+        "image": "ghcr.io/guilhermedesales/auth-api:latest",
+        "started": "2026-10-22T14:26:01.748137946Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      },
+      "auth_postgres": {
+        "image": "postgres:16",
+        "started": "2026-10-22T14:26:01.638382942Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "auth_redis": {
+        "image": "redis:7",
+        "started": "2026-10-22T14:26:01.735834335Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "portainer": {
+        "image": "portainer/portainer-ce",
+        "started": "2026-10-22T14:26:01.71478912Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      },
+      "dozzle": {
+        "image": "amir20/dozzle:latest",
+        "started": "2026-10-22T14:26:01.659325823Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      }
+    },
+    "samples": [
+      {
+        "lines": {
+          "838": {
+            "vehicles": 14,
+            "until40": 0,
+            "until60": 0,
+            "until180": 13,
+            "older180": 1,
+            "future": 0,
+            "max_age": 216.19096112251282,
+            "median": 77.69096112251282,
+            "p90": 92.19096112251282,
+            "new_after_activation": 0
+          },
+          "898": {
+            "vehicles": 11,
+            "until40": 0,
+            "until60": 0,
+            "until180": 11,
+            "older180": 0,
+            "future": 0,
+            "max_age": 96.19395065307617,
+            "median": 73.19395065307617,
+            "p90": 89.19395065307617,
+            "new_after_activation": 0
+          },
+          "006": {
+            "vehicles": 0,
+            "until40": 0,
+            "until60": 0,
+            "until180": 0,
+            "older180": 0,
+            "future": 0,
+            "max_age": null,
+            "median": null,
+            "p90": null,
+            "new_after_activation": 0
+          },
+          "457": {
+            "vehicles": 16,
+            "until40": 0,
+            "until60": 0,
+            "until180": 16,
+            "older180": 0,
+            "future": 0,
+            "max_age": 92.22315955162048,
+            "median": 74.72315955162048,
+            "p90": 86.22315955162048,
+            "new_after_activation": 0
+          },
+          "483": {
+            "vehicles": 29,
+            "until40": 0,
+            "until60": 0,
+            "until180": 29,
+            "older180": 0,
+            "future": 0,
+            "max_age": 117.22906589508057,
+            "median": 83.22906589508057,
+            "p90": 92.22906589508057,
+            "new_after_activation": 0
+          },
+          "355": {
+            "vehicles": 4,
+            "until40": 0,
+            "until60": 0,
+            "until180": 4,
+            "older180": 0,
+            "future": 0,
+            "max_age": 85.2315526008606,
+            "median": 69.7315526008606,
+            "p90": 85.2315526008606,
+            "new_after_activation": 0
+          },
+          "805": {
+            "vehicles": 2,
+            "until40": 0,
+            "until60": 0,
+            "until180": 2,
+            "older180": 0,
+            "future": 0,
+            "max_age": 84.23342251777649,
+            "median": 82.23342251777649,
+            "p90": 84.23342251777649,
+            "new_after_activation": 0
+          }
+        },
+        "controls": {
+          "35": {
+            "vehicles": 5,
+            "until40": 0,
+            "until60": 2,
+            "until180": 5,
+            "older180": 0,
+            "future": 0,
+            "max_age": 62.23549962043762,
+            "median": 60.23549962043762,
+            "p90": 62.23549962043762,
+            "new_after_activation": 0
+          },
+          "60": {
+            "vehicles": 17,
+            "until40": 0,
+            "until60": 9,
+            "until180": 17,
+            "older180": 0,
+            "future": 0,
+            "max_age": 143.23813676834106,
+            "median": 59.238136768341064,
+            "p90": 91.23813676834106,
+            "new_after_activation": 0
+          },
+          "67": {
+            "vehicles": 9,
+            "until40": 0,
+            "until60": 5,
+            "until180": 9,
+            "older180": 0,
+            "future": 0,
+            "max_age": 63.24030065536499,
+            "median": 59.24030065536499,
+            "p90": 63.24030065536499,
+            "new_after_activation": 0
+          }
+        },
+        "line_http": {
+          "838": {
+            "path": "/veiculos/linha/838",
+            "seconds": 0.0037896799913141876,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "898": {
+            "path": "/veiculos/linha/898",
+            "seconds": 0.002703003992792219,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "006": {
+            "path": "/veiculos/linha/006",
+            "seconds": 0.015560803993139416,
+            "http_status": 404,
+            "empty_line": true,
+            "data_state": "valid_empty"
+          },
+          "457": {
+            "path": "/veiculos/linha/457",
+            "seconds": 0.013325012987479568,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "483": {
+            "path": "/veiculos/linha/483",
+            "seconds": 0.005397929984610528,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "355": {
+            "path": "/veiculos/linha/355",
+            "seconds": 0.002316122001502663,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "805": {
+            "path": "/veiculos/linha/805",
+            "seconds": 0.00176573297358118,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "35": {
+            "path": "/veiculos/linha/35",
+            "seconds": 0.0019623950065579265,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "60": {
+            "path": "/veiculos/linha/60",
+            "seconds": 0.0023574169899802655,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "67": {
+            "path": "/veiculos/linha/67",
+            "seconds": 0.001953794009750709,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          }
+        },
+        "wire": {
+          "messages": 0,
+          "duplicates": 0,
+          "regressions": 0,
+          "invalid": 0,
+          "connections": 1,
+          "errors": 0,
+          "last": 0,
+          "connected": true,
+          "last_error_kind": null,
+          "connection_state": "connected",
+          "lines": {}
+        },
+        "resources": [
+          {
+            "Name": "noponto_api",
+            "CPUPerc": "84.39%",
+            "MemUsage": "232.7MiB / 768MiB",
+            "MemPerc": "30.30%",
+            "PIDs": "33"
+          },
+          {
+            "Name": "transporte_postgres",
+            "CPUPerc": "35.38%",
+            "MemUsage": "711.4MiB / 3.738GiB",
+            "MemPerc": "18.59%",
+            "PIDs": "11"
+          },
+          {
+            "Name": "transporte_redis",
+            "CPUPerc": "13.51%",
+            "MemUsage": "65.8MiB / 640MiB",
+            "MemPerc": "10.28%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "auth_api",
+            "CPUPerc": "0.11%",
+            "MemUsage": "211.5MiB / 3.738GiB",
+            "MemPerc": "5.52%",
+            "PIDs": "42"
+          },
+          {
+            "Name": "auth_postgres",
+            "CPUPerc": "0.00%",
+            "MemUsage": "43.36MiB / 3.738GiB",
+            "MemPerc": "1.13%",
+            "PIDs": "16"
+          },
+          {
+            "Name": "auth_redis",
+            "CPUPerc": "0.49%",
+            "MemUsage": "11.31MiB / 3.738GiB",
+            "MemPerc": "0.30%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "portainer",
+            "CPUPerc": "0.04%",
+            "MemUsage": "21.41MiB / 3.738GiB",
+            "MemPerc": "0.56%",
+            "PIDs": "7"
+          },
+          {
+            "Name": "dozzle",
+            "CPUPerc": "0.58%",
+            "MemUsage": "24.71MiB / 3.738GiB",
+            "MemPerc": "0.65%",
+            "PIDs": "10"
+          }
+        ],
+        "memory_kib": {
+          "MemAvailable": 2369112,
+          "SwapFree": 4849912
+        },
+        "source": "GTFSRT_BUS",
+        "fallback": "",
+        "support_mode": "FullFallback"
+      },
+      {
+        "lines": {
+          "838": {
+            "vehicles": 13,
+            "until40": 0,
+            "until60": 5,
+            "until180": 13,
+            "older180": 0,
+            "future": 0,
+            "max_age": 78.70998501777649,
+            "median": 63.70998501777649,
+            "p90": 73.70998501777649,
+            "new_after_activation": 0
+          },
+          "898": {
+            "vehicles": 11,
+            "until40": 0,
+            "until60": 8,
+            "until180": 11,
+            "older180": 0,
+            "future": 0,
+            "max_age": 82.7124433517456,
+            "median": 54.712443351745605,
+            "p90": 82.7124433517456,
+            "new_after_activation": 0
+          },
+          "006": {
+            "vehicles": 0,
+            "until40": 0,
+            "until60": 0,
+            "until180": 0,
+            "older180": 0,
+            "future": 0,
+            "max_age": null,
+            "median": null,
+            "p90": null,
+            "new_after_activation": 0
+          },
+          "457": {
+            "vehicles": 16,
+            "until40": 0,
+            "until60": 10,
+            "until180": 16,
+            "older180": 0,
+            "future": 0,
+            "max_age": 78.72749853134155,
+            "median": 57.22749853134155,
+            "p90": 71.72749853134155,
+            "new_after_activation": 0
+          },
+          "483": {
+            "vehicles": 29,
+            "until40": 0,
+            "until60": 9,
+            "until180": 29,
+            "older180": 0,
+            "future": 0,
+            "max_age": 133.7309489250183,
+            "median": 67.73094892501831,
+            "p90": 75.73094892501831,
+            "new_after_activation": 0
+          },
+          "355": {
+            "vehicles": 4,
+            "until40": 0,
+            "until60": 4,
+            "until180": 4,
+            "older180": 0,
+            "future": 0,
+            "max_age": 58.732959508895874,
+            "median": 55.232959508895874,
+            "p90": 58.732959508895874,
+            "new_after_activation": 0
+          },
+          "805": {
+            "vehicles": 2,
+            "until40": 0,
+            "until60": 0,
+            "until180": 2,
+            "older180": 0,
+            "future": 0,
+            "max_age": 70.73485112190247,
+            "median": 69.23485112190247,
+            "p90": 70.73485112190247,
+            "new_after_activation": 0
+          }
+        },
+        "controls": {
+          "35": {
+            "vehicles": 5,
+            "until40": 0,
+            "until60": 5,
+            "until180": 5,
+            "older180": 0,
+            "future": 0,
+            "max_age": 47.73676824569702,
+            "median": 45.73676824569702,
+            "p90": 47.73676824569702,
+            "new_after_activation": 0
+          },
+          "60": {
+            "vehicles": 17,
+            "until40": 1,
+            "until60": 15,
+            "until180": 17,
+            "older180": 0,
+            "future": 0,
+            "max_age": 159.7396240234375,
+            "median": 43.7396240234375,
+            "p90": 107.7396240234375,
+            "new_after_activation": 0
+          },
+          "67": {
+            "vehicles": 9,
+            "until40": 3,
+            "until60": 9,
+            "until180": 9,
+            "older180": 0,
+            "future": 0,
+            "max_age": 48.742048025131226,
+            "median": 45.742048025131226,
+            "p90": 48.742048025131226,
+            "new_after_activation": 0
+          }
+        },
+        "line_http": {
+          "838": {
+            "path": "/veiculos/linha/838",
+            "seconds": 0.0022962009825278074,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "898": {
+            "path": "/veiculos/linha/898",
+            "seconds": 0.0022305869788397104,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "006": {
+            "path": "/veiculos/linha/006",
+            "seconds": 0.012228101026266813,
+            "http_status": 404,
+            "empty_line": true,
+            "data_state": "valid_empty"
+          },
+          "457": {
+            "path": "/veiculos/linha/457",
+            "seconds": 0.00250695800059475,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "483": {
+            "path": "/veiculos/linha/483",
+            "seconds": 0.0029965820140205324,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "355": {
+            "path": "/veiculos/linha/355",
+            "seconds": 0.001847720006480813,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "805": {
+            "path": "/veiculos/linha/805",
+            "seconds": 0.0017989029875025153,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "35": {
+            "path": "/veiculos/linha/35",
+            "seconds": 0.001790353999240324,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "60": {
+            "path": "/veiculos/linha/60",
+            "seconds": 0.0025584739923942834,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "67": {
+            "path": "/veiculos/linha/67",
+            "seconds": 0.0022194129996933043,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          }
+        },
+        "wire": {
+          "messages": 18,
+          "duplicates": 0,
+          "regressions": 0,
+          "invalid": 0,
+          "connections": 1,
+          "errors": 0,
+          "last": 1792880989.5554845,
+          "connected": true,
+          "last_error_kind": null,
+          "connection_state": "connected",
+          "lines": {
+            "60": {
+              "vehicles": 17,
+              "until40": 1,
+              "until60": 15,
+              "until180": 17,
+              "older180": 0,
+              "future": 0,
+              "max_age": 160.90622878074646,
+              "median": 44.90622878074646,
+              "p90": 108.90622878074646,
+              "new_after_activation": 0
+            },
+            "898": {
+              "vehicles": 11,
+              "until40": 0,
+              "until60": 7,
+              "until180": 11,
+              "older180": 0,
+              "future": 0,
+              "max_age": 83.90628337860107,
+              "median": 55.906283378601074,
+              "p90": 83.90628337860107,
+              "new_after_activation": 0
+            },
+            "006": {
+              "vehicles": 0,
+              "until40": 0,
+              "until60": 0,
+              "until180": 0,
+              "older180": 0,
+              "future": 0,
+              "max_age": null,
+              "median": null,
+              "p90": null,
+              "new_after_activation": 0
+            },
+            "805": {
+              "vehicles": 2,
+              "until40": 0,
+              "until60": 0,
+              "until180": 2,
+              "older180": 0,
+              "future": 0,
+              "max_age": 71.90631198883057,
+              "median": 70.40631198883057,
+              "p90": 71.90631198883057,
+              "new_after_activation": 0
+            },
+            "838": {
+              "vehicles": 13,
+              "until40": 0,
+              "until60": 4,
+              "until180": 13,
+              "older180": 0,
+              "future": 0,
+              "max_age": 79.90632319450378,
+              "median": 64.90632319450378,
+              "p90": 74.90632319450378,
+              "new_after_activation": 0
+            },
+            "35": {
+              "vehicles": 5,
+              "until40": 0,
+              "until60": 5,
+              "until180": 5,
+              "older180": 0,
+              "future": 0,
+              "max_age": 48.906349420547485,
+              "median": 46.906349420547485,
+              "p90": 48.906349420547485,
+              "new_after_activation": 0
+            },
+            "483": {
+              "vehicles": 29,
+              "until40": 0,
+              "until60": 7,
+              "until180": 29,
+              "older180": 0,
+              "future": 0,
+              "max_age": 134.90636467933655,
+              "median": 68.90636467933655,
+              "p90": 76.90636467933655,
+              "new_after_activation": 0
+            },
+            "355": {
+              "vehicles": 4,
+              "until40": 0,
+              "until60": 4,
+              "until180": 4,
+              "older180": 0,
+              "future": 0,
+              "max_age": 59.90641212463379,
+              "median": 56.40641212463379,
+              "p90": 59.90641212463379,
+              "new_after_activation": 0
+            },
+            "67": {
+              "vehicles": 9,
+              "until40": 0,
+              "until60": 9,
+              "until180": 9,
+              "older180": 0,
+              "future": 0,
+              "max_age": 49.90642499923706,
+              "median": 46.90642499923706,
+              "p90": 49.90642499923706,
+              "new_after_activation": 0
+            },
+            "457": {
+              "vehicles": 16,
+              "until40": 0,
+              "until60": 9,
+              "until180": 16,
+              "older180": 0,
+              "future": 0,
+              "max_age": 79.90644478797913,
+              "median": 58.406444787979126,
+              "p90": 72.90644478797913,
+              "new_after_activation": 0
+            }
+          }
+        },
+        "resources": [
+          {
+            "Name": "noponto_api",
+            "CPUPerc": "0.70%",
+            "MemUsage": "232.8MiB / 768MiB",
+            "MemPerc": "30.32%",
+            "PIDs": "32"
+          },
+          {
+            "Name": "transporte_postgres",
+            "CPUPerc": "0.15%",
+            "MemUsage": "708.1MiB / 3.738GiB",
+            "MemPerc": "18.50%",
+            "PIDs": "11"
+          },
+          {
+            "Name": "transporte_redis",
+            "CPUPerc": "0.56%",
+            "MemUsage": "65.78MiB / 640MiB",
+            "MemPerc": "10.28%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "auth_api",
+            "CPUPerc": "0.13%",
+            "MemUsage": "211.2MiB / 3.738GiB",
+            "MemPerc": "5.52%",
+            "PIDs": "42"
+          },
+          {
+            "Name": "auth_postgres",
+            "CPUPerc": "0.00%",
+            "MemUsage": "43.32MiB / 3.738GiB",
+            "MemPerc": "1.13%",
+            "PIDs": "16"
+          },
+          {
+            "Name": "auth_redis",
+            "CPUPerc": "0.51%",
+            "MemUsage": "11.31MiB / 3.738GiB",
+            "MemPerc": "0.30%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "portainer",
+            "CPUPerc": "0.00%",
+            "MemUsage": "21.41MiB / 3.738GiB",
+            "MemPerc": "0.56%",
+            "PIDs": "7"
+          },
+          {
+            "Name": "dozzle",
+            "CPUPerc": "0.38%",
+            "MemUsage": "24.96MiB / 3.738GiB",
+            "MemPerc": "0.65%",
+            "PIDs": "10"
+          }
+        ],
+        "memory_kib": {
+          "MemAvailable": 2357624,
+          "SwapFree": 4849656
+        },
+        "source": "GTFSRT_BUS",
+        "fallback": "",
+        "support_mode": "FullFallback"
+      },
+      {
+        "lines": {
+          "838": {
+            "vehicles": 13,
+            "until40": 0,
+            "until60": 0,
+            "until180": 13,
+            "older180": 0,
+            "future": 0,
+            "max_age": 94.9365611076355,
+            "median": 79.9365611076355,
+            "p90": 89.9365611076355,
+            "new_after_activation": 0
+          },
+          "898": {
+            "vehicles": 11,
+            "until40": 0,
+            "until60": 0,
+            "until180": 11,
+            "older180": 0,
+            "future": 0,
+            "max_age": 98.93928790092468,
+            "median": 70.93928790092468,
+            "p90": 98.93928790092468,
+            "new_after_activation": 0
+          },
+          "006": {
+            "vehicles": 0,
+            "until40": 0,
+            "until60": 0,
+            "until180": 0,
+            "older180": 0,
+            "future": 0,
+            "max_age": null,
+            "median": null,
+            "p90": null,
+            "new_after_activation": 0
+          },
+          "457": {
+            "vehicles": 16,
+            "until40": 0,
+            "until60": 0,
+            "until180": 16,
+            "older180": 0,
+            "future": 0,
+            "max_age": 94.94526505470276,
+            "median": 73.44526505470276,
+            "p90": 87.94526505470276,
+            "new_after_activation": 0
+          },
+          "483": {
+            "vehicles": 29,
+            "until40": 0,
+            "until60": 0,
+            "until180": 29,
+            "older180": 0,
+            "future": 0,
+            "max_age": 149.94950532913208,
+            "median": 83.94950532913208,
+            "p90": 91.94950532913208,
+            "new_after_activation": 0
+          },
+          "355": {
+            "vehicles": 4,
+            "until40": 0,
+            "until60": 0,
+            "until180": 4,
+            "older180": 0,
+            "future": 0,
+            "max_age": 74.95215177536011,
+            "median": 71.45215177536011,
+            "p90": 74.95215177536011,
+            "new_after_activation": 0
+          },
+          "805": {
+            "vehicles": 2,
+            "until40": 0,
+            "until60": 0,
+            "until180": 2,
+            "older180": 0,
+            "future": 0,
+            "max_age": 86.95447659492493,
+            "median": 85.45447659492493,
+            "p90": 86.95447659492493,
+            "new_after_activation": 0
+          }
+        },
+        "controls": {
+          "35": {
+            "vehicles": 6,
+            "until40": 6,
+            "until60": 6,
+            "until180": 6,
+            "older180": 0,
+            "future": 0,
+            "max_age": 37.95652413368225,
+            "median": 32.95652413368225,
+            "p90": 37.95652413368225,
+            "new_after_activation": 0
+          },
+          "60": {
+            "vehicles": 17,
+            "until40": 14,
+            "until60": 15,
+            "until180": 17,
+            "older180": 0,
+            "future": 0,
+            "max_age": 175.95960593223572,
+            "median": 31.959605932235718,
+            "p90": 123.95960593223572,
+            "new_after_activation": 0
+          },
+          "67": {
+            "vehicles": 9,
+            "until40": 8,
+            "until60": 9,
+            "until180": 9,
+            "older180": 0,
+            "future": 0,
+            "max_age": 40.961946964263916,
+            "median": 32.961946964263916,
+            "p90": 40.961946964263916,
+            "new_after_activation": 0
+          }
+        },
+        "line_http": {
+          "838": {
+            "path": "/veiculos/linha/838",
+            "seconds": 0.0024549239897169173,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "898": {
+            "path": "/veiculos/linha/898",
+            "seconds": 0.0023623830056749284,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "006": {
+            "path": "/veiculos/linha/006",
+            "seconds": 0.0016800120065454394,
+            "http_status": 404,
+            "empty_line": true,
+            "data_state": "valid_empty"
+          },
+          "457": {
+            "path": "/veiculos/linha/457",
+            "seconds": 0.003673450992209837,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "483": {
+            "path": "/veiculos/linha/483",
+            "seconds": 0.0037234030023682863,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "355": {
+            "path": "/veiculos/linha/355",
+            "seconds": 0.0024042529985308647,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "805": {
+            "path": "/veiculos/linha/805",
+            "seconds": 0.0022103210212662816,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "35": {
+            "path": "/veiculos/linha/35",
+            "seconds": 0.0018998590239789337,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "60": {
+            "path": "/veiculos/linha/60",
+            "seconds": 0.0027976840210612863,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "67": {
+            "path": "/veiculos/linha/67",
+            "seconds": 0.002126998995663598,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          }
+        },
+        "wire": {
+          "messages": 27,
+          "duplicates": 0,
+          "regressions": 0,
+          "invalid": 0,
+          "connections": 1,
+          "errors": 0,
+          "last": 1792881005.6520295,
+          "connected": true,
+          "last_error_kind": null,
+          "connection_state": "connected",
+          "lines": {
+            "60": {
+              "vehicles": 17,
+              "until40": 14,
+              "until60": 15,
+              "until180": 17,
+              "older180": 0,
+              "future": 0,
+              "max_age": 177.19163060188293,
+              "median": 33.191630601882935,
+              "p90": 125.19163060188293,
+              "new_after_activation": 0
+            },
+            "898": {
+              "vehicles": 11,
+              "until40": 0,
+              "until60": 0,
+              "until180": 11,
+              "older180": 0,
+              "future": 0,
+              "max_age": 100.19168758392334,
+              "median": 72.19168758392334,
+              "p90": 100.19168758392334,
+              "new_after_activation": 0
+            },
+            "006": {
+              "vehicles": 0,
+              "until40": 0,
+              "until60": 0,
+              "until180": 0,
+              "older180": 0,
+              "future": 0,
+              "max_age": null,
+              "median": null,
+              "p90": null,
+              "new_after_activation": 0
+            },
+            "805": {
+              "vehicles": 2,
+              "until40": 0,
+              "until60": 0,
+              "until180": 2,
+              "older180": 0,
+              "future": 0,
+              "max_age": 88.19171595573425,
+              "median": 86.69171595573425,
+              "p90": 88.19171595573425,
+              "new_after_activation": 0
+            },
+            "838": {
+              "vehicles": 13,
+              "until40": 0,
+              "until60": 0,
+              "until180": 13,
+              "older180": 0,
+              "future": 0,
+              "max_age": 96.19172692298889,
+              "median": 81.19172692298889,
+              "p90": 91.19172692298889,
+              "new_after_activation": 0
+            },
+            "35": {
+              "vehicles": 6,
+              "until40": 6,
+              "until60": 6,
+              "until180": 6,
+              "older180": 0,
+              "future": 0,
+              "max_age": 39.1917519569397,
+              "median": 34.1917519569397,
+              "p90": 39.1917519569397,
+              "new_after_activation": 0
+            },
+            "483": {
+              "vehicles": 29,
+              "until40": 0,
+              "until60": 0,
+              "until180": 29,
+              "older180": 0,
+              "future": 0,
+              "max_age": 151.19176745414734,
+              "median": 85.19176745414734,
+              "p90": 93.19176745414734,
+              "new_after_activation": 0
+            },
+            "355": {
+              "vehicles": 4,
+              "until40": 0,
+              "until60": 0,
+              "until180": 4,
+              "older180": 0,
+              "future": 0,
+              "max_age": 76.191814661026,
+              "median": 72.691814661026,
+              "p90": 76.191814661026,
+              "new_after_activation": 0
+            },
+            "67": {
+              "vehicles": 9,
+              "until40": 8,
+              "until60": 9,
+              "until180": 9,
+              "older180": 0,
+              "future": 0,
+              "max_age": 42.19182753562927,
+              "median": 34.19182753562927,
+              "p90": 42.19182753562927,
+              "new_after_activation": 0
+            },
+            "457": {
+              "vehicles": 16,
+              "until40": 0,
+              "until60": 0,
+              "until180": 16,
+              "older180": 0,
+              "future": 0,
+              "max_age": 96.19184732437134,
+              "median": 74.69184732437134,
+              "p90": 89.19184732437134,
+              "new_after_activation": 0
+            }
+          }
+        },
+        "resources": [
+          {
+            "Name": "noponto_api",
+            "CPUPerc": "1.34%",
+            "MemUsage": "230.4MiB / 768MiB",
+            "MemPerc": "29.99%",
+            "PIDs": "32"
+          },
+          {
+            "Name": "transporte_postgres",
+            "CPUPerc": "102.13%",
+            "MemUsage": "705.9MiB / 3.738GiB",
+            "MemPerc": "18.44%",
+            "PIDs": "11"
+          },
+          {
+            "Name": "transporte_redis",
+            "CPUPerc": "4.23%",
+            "MemUsage": "65.57MiB / 640MiB",
+            "MemPerc": "10.25%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "auth_api",
+            "CPUPerc": "0.09%",
+            "MemUsage": "211MiB / 3.738GiB",
+            "MemPerc": "5.51%",
+            "PIDs": "42"
+          },
+          {
+            "Name": "auth_postgres",
+            "CPUPerc": "0.00%",
+            "MemUsage": "43.29MiB / 3.738GiB",
+            "MemPerc": "1.13%",
+            "PIDs": "16"
+          },
+          {
+            "Name": "auth_redis",
+            "CPUPerc": "3.49%",
+            "MemUsage": "11.31MiB / 3.738GiB",
+            "MemPerc": "0.30%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "portainer",
+            "CPUPerc": "0.00%",
+            "MemUsage": "21.41MiB / 3.738GiB",
+            "MemPerc": "0.56%",
+            "PIDs": "7"
+          },
+          {
+            "Name": "dozzle",
+            "CPUPerc": "0.45%",
+            "MemUsage": "24.71MiB / 3.738GiB",
+            "MemPerc": "0.65%",
+            "PIDs": "10"
+          }
+        ],
+        "memory_kib": {
+          "MemAvailable": 2347724,
+          "SwapFree": 4849400
+        },
+        "source": "GTFSRT_BUS",
+        "fallback": "",
+        "support_mode": "FullFallback"
+      }
+    ],
+    "cycles": {
+      "count": 3,
+      "max_ms": 8178.0,
+      "accepted": 1525.0,
+      "infra": 0.0
+    },
+    "hybrid_logs_present": false
+  },
+  "after": {
+    "utc": "2026-10-24T22:39:10.525993+00:00",
+    "image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+    "image_id": "sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+    "writers": 1,
+    "primary": "GTFSRT_BUS",
+    "fallback": "",
+    "mode_effective": "FullFallback",
+    "mode_configured": null,
+    "trace_configured": null,
+    "trace_effective": false,
+    "brt": "GTFSRT_BRT",
+    "active_image_matches": true,
+    "release": "151",
+    "window_jobs": 0,
+    "containers": {
+      "noponto_api": {
+        "image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+        "started": "2026-10-24T22:38:01.65925157Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      },
+      "transporte_postgres": {
+        "image": "postgis/postgis:16-3.4",
+        "started": "2026-10-22T14:26:01.764086606Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "transporte_redis": {
+        "image": "redis:7",
+        "started": "2026-10-22T14:26:01.676775384Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "auth_api": {
+        "image": "ghcr.io/guilhermedesales/auth-api:latest",
+        "started": "2026-10-22T14:26:01.748137946Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      },
+      "auth_postgres": {
+        "image": "postgres:16",
+        "started": "2026-10-22T14:26:01.638382942Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "auth_redis": {
+        "image": "redis:7",
+        "started": "2026-10-22T14:26:01.735834335Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": "healthy"
+      },
+      "portainer": {
+        "image": "portainer/portainer-ce",
+        "started": "2026-10-22T14:26:01.71478912Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      },
+      "dozzle": {
+        "image": "amir20/dozzle:latest",
+        "started": "2026-10-22T14:26:01.659325823Z",
+        "restarts": 0,
+        "oom": false,
+        "running": true,
+        "health": null
+      }
+    },
+    "samples": [
+      {
+        "lines": {
+          "838": {
+            "vehicles": 13,
+            "until40": 0,
+            "until60": 10,
+            "until180": 13,
+            "older180": 0,
+            "future": 0,
+            "max_age": 62.77619171142578,
+            "median": 53.77619171142578,
+            "p90": 61.77619171142578,
+            "new_after_activation": 0
+          },
+          "898": {
+            "vehicles": 11,
+            "until40": 0,
+            "until60": 9,
+            "until180": 11,
+            "older180": 0,
+            "future": 0,
+            "max_age": 77.78387975692749,
+            "median": 47.78387975692749,
+            "p90": 67.78387975692749,
+            "new_after_activation": 0
+          },
+          "006": {
+            "vehicles": 0,
+            "until40": 0,
+            "until60": 0,
+            "until180": 0,
+            "older180": 0,
+            "future": 0,
+            "max_age": null,
+            "median": null,
+            "p90": null,
+            "new_after_activation": 0
+          },
+          "457": {
+            "vehicles": 17,
+            "until40": 0,
+            "until60": 11,
+            "until180": 17,
+            "older180": 0,
+            "future": 0,
+            "max_age": 116.7911024093628,
+            "median": 52.79110240936279,
+            "p90": 86.7911024093628,
+            "new_after_activation": 0
+          },
+          "483": {
+            "vehicles": 30,
+            "until40": 1,
+            "until60": 24,
+            "until180": 29,
+            "older180": 1,
+            "future": 0,
+            "max_age": 208.7963092327118,
+            "median": 54.79630923271179,
+            "p90": 65.79630923271179,
+            "new_after_activation": 0
+          },
+          "355": {
+            "vehicles": 6,
+            "until40": 0,
+            "until60": 5,
+            "until180": 6,
+            "older180": 0,
+            "future": 0,
+            "max_age": 61.799336671829224,
+            "median": 46.799336671829224,
+            "p90": 61.799336671829224,
+            "new_after_activation": 0
+          },
+          "805": {
+            "vehicles": 2,
+            "until40": 0,
+            "until60": 1,
+            "until180": 2,
+            "older180": 0,
+            "future": 0,
+            "max_age": 60.80227565765381,
+            "median": 58.30227565765381,
+            "p90": 60.80227565765381,
+            "new_after_activation": 0
+          }
+        },
+        "controls": {
+          "35": {
+            "vehicles": 4,
+            "until40": 0,
+            "until60": 0,
+            "until180": 4,
+            "older180": 0,
+            "future": 0,
+            "max_age": 77.80489468574524,
+            "median": 71.30489468574524,
+            "p90": 77.80489468574524,
+            "new_after_activation": 0
+          },
+          "60": {
+            "vehicles": 14,
+            "until40": 0,
+            "until60": 3,
+            "until180": 14,
+            "older180": 0,
+            "future": 0,
+            "max_age": 72.80811595916748,
+            "median": 61.80811595916748,
+            "p90": 69.80811595916748,
+            "new_after_activation": 0
+          },
+          "67": {
+            "vehicles": 9,
+            "until40": 0,
+            "until60": 2,
+            "until180": 8,
+            "older180": 1,
+            "future": 0,
+            "max_age": 187.81119847297668,
+            "median": 65.81119847297668,
+            "p90": 187.81119847297668,
+            "new_after_activation": 0
+          }
+        },
+        "line_http": {
+          "838": {
+            "path": "/veiculos/linha/838",
+            "seconds": 0.1386195209925063,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "898": {
+            "path": "/veiculos/linha/898",
+            "seconds": 0.007337668997934088,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "006": {
+            "path": "/veiculos/linha/006",
+            "seconds": 0.0033439359976910055,
+            "http_status": 404,
+            "empty_line": true,
+            "data_state": "valid_empty"
+          },
+          "457": {
+            "path": "/veiculos/linha/457",
+            "seconds": 0.003532252012519166,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "483": {
+            "path": "/veiculos/linha/483",
+            "seconds": 0.004772576008690521,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "355": {
+            "path": "/veiculos/linha/355",
+            "seconds": 0.002770627004792914,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "805": {
+            "path": "/veiculos/linha/805",
+            "seconds": 0.002798708010232076,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "35": {
+            "path": "/veiculos/linha/35",
+            "seconds": 0.002425456012133509,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "60": {
+            "path": "/veiculos/linha/60",
+            "seconds": 0.002837812004145235,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "67": {
+            "path": "/veiculos/linha/67",
+            "seconds": 0.0028874980052933097,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          }
+        },
+        "wire": {
+          "messages": 9,
+          "duplicates": 0,
+          "regressions": 0,
+          "invalid": 0,
+          "connections": 1,
+          "errors": 0,
+          "last": 1792881551.4156115,
+          "connected": true,
+          "last_error_kind": null,
+          "connection_state": "connected",
+          "lines": {
+            "60": {
+              "vehicles": 14,
+              "until40": 10,
+              "until60": 14,
+              "until180": 14,
+              "older180": 0,
+              "future": 0,
+              "max_age": 44.82476210594177,
+              "median": 36.32476210594177,
+              "p90": 42.82476210594177,
+              "new_after_activation": 0
+            },
+            "898": {
+              "vehicles": 11,
+              "until40": 0,
+              "until60": 9,
+              "until180": 11,
+              "older180": 0,
+              "future": 0,
+              "max_age": 79.82485556602478,
+              "median": 49.82485556602478,
+              "p90": 69.82485556602478,
+              "new_after_activation": 0
+            },
+            "006": {
+              "vehicles": 0,
+              "until40": 0,
+              "until60": 0,
+              "until180": 0,
+              "older180": 0,
+              "future": 0,
+              "max_age": null,
+              "median": null,
+              "p90": null,
+              "new_after_activation": 0
+            },
+            "805": {
+              "vehicles": 2,
+              "until40": 0,
+              "until60": 1,
+              "until180": 2,
+              "older180": 0,
+              "future": 0,
+              "max_age": 62.82488560676575,
+              "median": 60.32488560676575,
+              "p90": 62.82488560676575,
+              "new_after_activation": 0
+            },
+            "838": {
+              "vehicles": 13,
+              "until40": 0,
+              "until60": 9,
+              "until180": 13,
+              "older180": 0,
+              "future": 0,
+              "max_age": 64.82489657402039,
+              "median": 55.824896574020386,
+              "p90": 63.824896574020386,
+              "new_after_activation": 0
+            },
+            "35": {
+              "vehicles": 4,
+              "until40": 3,
+              "until60": 4,
+              "until180": 4,
+              "older180": 0,
+              "future": 0,
+              "max_age": 43.82492208480835,
+              "median": 38.82492208480835,
+              "p90": 43.82492208480835,
+              "new_after_activation": 0
+            },
+            "483": {
+              "vehicles": 30,
+              "until40": 0,
+              "until60": 20,
+              "until180": 29,
+              "older180": 1,
+              "future": 0,
+              "max_age": 210.82493567466736,
+              "median": 56.82493567466736,
+              "p90": 67.82493567466736,
+              "new_after_activation": 0
+            },
+            "355": {
+              "vehicles": 6,
+              "until40": 0,
+              "until60": 5,
+              "until180": 6,
+              "older180": 0,
+              "future": 0,
+              "max_age": 63.82498502731323,
+              "median": 48.82498502731323,
+              "p90": 63.82498502731323,
+              "new_after_activation": 0
+            },
+            "67": {
+              "vehicles": 9,
+              "until40": 7,
+              "until60": 8,
+              "until180": 8,
+              "older180": 1,
+              "future": 0,
+              "max_age": 189.82500076293945,
+              "median": 37.82500076293945,
+              "p90": 189.82500076293945,
+              "new_after_activation": 0
+            },
+            "457": {
+              "vehicles": 17,
+              "until40": 0,
+              "until60": 9,
+              "until180": 17,
+              "older180": 0,
+              "future": 0,
+              "max_age": 118.8250195980072,
+              "median": 54.8250195980072,
+              "p90": 88.8250195980072,
+              "new_after_activation": 0
+            }
+          }
+        },
+        "resources": [
+          {
+            "Name": "noponto_api",
+            "CPUPerc": "1.71%",
+            "MemUsage": "171.1MiB / 768MiB",
+            "MemPerc": "22.28%",
+            "PIDs": "32"
+          },
+          {
+            "Name": "transporte_postgres",
+            "CPUPerc": "99.50%",
+            "MemUsage": "695.8MiB / 3.738GiB",
+            "MemPerc": "18.18%",
+            "PIDs": "11"
+          },
+          {
+            "Name": "transporte_redis",
+            "CPUPerc": "4.77%",
+            "MemUsage": "65.5MiB / 640MiB",
+            "MemPerc": "10.23%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "auth_api",
+            "CPUPerc": "0.10%",
+            "MemUsage": "209.4MiB / 3.738GiB",
+            "MemPerc": "5.47%",
+            "PIDs": "42"
+          },
+          {
+            "Name": "auth_postgres",
+            "CPUPerc": "0.00%",
+            "MemUsage": "43.16MiB / 3.738GiB",
+            "MemPerc": "1.13%",
+            "PIDs": "16"
+          },
+          {
+            "Name": "auth_redis",
+            "CPUPerc": "4.34%",
+            "MemUsage": "11.31MiB / 3.738GiB",
+            "MemPerc": "0.30%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "portainer",
+            "CPUPerc": "0.00%",
+            "MemUsage": "21.94MiB / 3.738GiB",
+            "MemPerc": "0.57%",
+            "PIDs": "7"
+          },
+          {
+            "Name": "dozzle",
+            "CPUPerc": "0.58%",
+            "MemUsage": "25.5MiB / 3.738GiB",
+            "MemPerc": "0.67%",
+            "PIDs": "10"
+          }
+        ],
+        "memory_kib": {
+          "MemAvailable": 2404520,
+          "SwapFree": 4853752
+        },
+        "source": "GTFSRT_BUS",
+        "fallback": "",
+        "support_mode": "FullFallback"
+      },
+      {
+        "lines": {
+          "838": {
+            "vehicles": 13,
+            "until40": 7,
+            "until60": 13,
+            "until180": 13,
+            "older180": 0,
+            "future": 0,
+            "max_age": 50.860695123672485,
+            "median": 39.860695123672485,
+            "p90": 49.860695123672485,
+            "new_after_activation": 0
+          },
+          "898": {
+            "vehicles": 11,
+            "until40": 5,
+            "until60": 10,
+            "until180": 11,
+            "older180": 0,
+            "future": 0,
+            "max_age": 94.86373853683472,
+            "median": 40.86373853683472,
+            "p90": 51.86373853683472,
+            "new_after_activation": 0
+          },
+          "006": {
+            "vehicles": 0,
+            "until40": 0,
+            "until60": 0,
+            "until180": 0,
+            "older180": 0,
+            "future": 0,
+            "max_age": null,
+            "median": null,
+            "p90": null,
+            "new_after_activation": 0
+          },
+          "457": {
+            "vehicles": 17,
+            "until40": 8,
+            "until60": 15,
+            "until180": 17,
+            "older180": 0,
+            "future": 0,
+            "max_age": 133.86896109580994,
+            "median": 45.86896109580994,
+            "p90": 103.86896109580994,
+            "new_after_activation": 0
+          },
+          "483": {
+            "vehicles": 29,
+            "until40": 12,
+            "until60": 27,
+            "until180": 29,
+            "older180": 0,
+            "future": 0,
+            "max_age": 166.8726933002472,
+            "median": 41.87269330024719,
+            "p90": 58.87269330024719,
+            "new_after_activation": 0
+          },
+          "355": {
+            "vehicles": 6,
+            "until40": 3,
+            "until60": 6,
+            "until180": 6,
+            "older180": 0,
+            "future": 0,
+            "max_age": 42.8754358291626,
+            "median": 37.8754358291626,
+            "p90": 42.8754358291626,
+            "new_after_activation": 0
+          },
+          "805": {
+            "vehicles": 2,
+            "until40": 0,
+            "until60": 2,
+            "until180": 2,
+            "older180": 0,
+            "future": 0,
+            "max_age": 43.87787318229675,
+            "median": 42.37787318229675,
+            "p90": 43.87787318229675,
+            "new_after_activation": 0
+          }
+        },
+        "controls": {
+          "35": {
+            "vehicles": 4,
+            "until40": 0,
+            "until60": 4,
+            "until180": 4,
+            "older180": 0,
+            "future": 0,
+            "max_age": 58.880281925201416,
+            "median": 53.880281925201416,
+            "p90": 58.880281925201416,
+            "new_after_activation": 0
+          },
+          "60": {
+            "vehicles": 14,
+            "until40": 0,
+            "until60": 14,
+            "until180": 14,
+            "older180": 0,
+            "future": 0,
+            "max_age": 59.88313317298889,
+            "median": 51.38313317298889,
+            "p90": 57.88313317298889,
+            "new_after_activation": 0
+          },
+          "67": {
+            "vehicles": 8,
+            "until40": 0,
+            "until60": 8,
+            "until180": 8,
+            "older180": 0,
+            "future": 0,
+            "max_age": 59.88569736480713,
+            "median": 52.38569736480713,
+            "p90": 59.88569736480713,
+            "new_after_activation": 0
+          }
+        },
+        "line_http": {
+          "838": {
+            "path": "/veiculos/linha/838",
+            "seconds": 0.0027028609765693545,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "898": {
+            "path": "/veiculos/linha/898",
+            "seconds": 0.002805994008667767,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "006": {
+            "path": "/veiculos/linha/006",
+            "seconds": 0.0019892840064130723,
+            "http_status": 404,
+            "empty_line": true,
+            "data_state": "valid_empty"
+          },
+          "457": {
+            "path": "/veiculos/linha/457",
+            "seconds": 0.00288531300611794,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "483": {
+            "path": "/veiculos/linha/483",
+            "seconds": 0.003309249004814774,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "355": {
+            "path": "/veiculos/linha/355",
+            "seconds": 0.0025478800234850496,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "805": {
+            "path": "/veiculos/linha/805",
+            "seconds": 0.0023430440051015466,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "35": {
+            "path": "/veiculos/linha/35",
+            "seconds": 0.0022920560149941593,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "60": {
+            "path": "/veiculos/linha/60",
+            "seconds": 0.0026235959958285093,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "67": {
+            "path": "/veiculos/linha/67",
+            "seconds": 0.0023846980184316635,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          }
+        },
+        "wire": {
+          "messages": 27,
+          "duplicates": 0,
+          "regressions": 0,
+          "invalid": 0,
+          "connections": 1,
+          "errors": 0,
+          "last": 1792881566.4410949,
+          "connected": true,
+          "last_error_kind": null,
+          "connection_state": "connected",
+          "lines": {
+            "60": {
+              "vehicles": 14,
+              "until40": 0,
+              "until60": 13,
+              "until180": 14,
+              "older180": 0,
+              "future": 0,
+              "max_age": 61.08814764022827,
+              "median": 52.58814764022827,
+              "p90": 59.08814764022827,
+              "new_after_activation": 0
+            },
+            "898": {
+              "vehicles": 11,
+              "until40": 4,
+              "until60": 10,
+              "until180": 11,
+              "older180": 0,
+              "future": 0,
+              "max_age": 96.0881998538971,
+              "median": 42.088199853897095,
+              "p90": 53.088199853897095,
+              "new_after_activation": 0
+            },
+            "006": {
+              "vehicles": 0,
+              "until40": 0,
+              "until60": 0,
+              "until180": 0,
+              "older180": 0,
+              "future": 0,
+              "max_age": null,
+              "median": null,
+              "p90": null,
+              "new_after_activation": 0
+            },
+            "805": {
+              "vehicles": 2,
+              "until40": 0,
+              "until60": 2,
+              "until180": 2,
+              "older180": 0,
+              "future": 0,
+              "max_age": 45.08822846412659,
+              "median": 43.58822846412659,
+              "p90": 45.08822846412659,
+              "new_after_activation": 0
+            },
+            "838": {
+              "vehicles": 13,
+              "until40": 6,
+              "until60": 13,
+              "until180": 13,
+              "older180": 0,
+              "future": 0,
+              "max_age": 52.08823919296265,
+              "median": 41.08823919296265,
+              "p90": 51.08823919296265,
+              "new_after_activation": 0
+            },
+            "35": {
+              "vehicles": 4,
+              "until40": 0,
+              "until60": 3,
+              "until180": 4,
+              "older180": 0,
+              "future": 0,
+              "max_age": 60.08826470375061,
+              "median": 55.08826470375061,
+              "p90": 60.08826470375061,
+              "new_after_activation": 0
+            },
+            "483": {
+              "vehicles": 29,
+              "until40": 8,
+              "until60": 26,
+              "until180": 29,
+              "older180": 0,
+              "future": 0,
+              "max_age": 168.08827805519104,
+              "median": 43.08827805519104,
+              "p90": 60.08827805519104,
+              "new_after_activation": 0
+            },
+            "355": {
+              "vehicles": 6,
+              "until40": 3,
+              "until60": 6,
+              "until180": 6,
+              "older180": 0,
+              "future": 0,
+              "max_age": 44.0883264541626,
+              "median": 39.0883264541626,
+              "p90": 44.0883264541626,
+              "new_after_activation": 0
+            },
+            "67": {
+              "vehicles": 8,
+              "until40": 0,
+              "until60": 7,
+              "until180": 8,
+              "older180": 0,
+              "future": 0,
+              "max_age": 61.08834195137024,
+              "median": 53.58834195137024,
+              "p90": 61.08834195137024,
+              "new_after_activation": 0
+            },
+            "457": {
+              "vehicles": 17,
+              "until40": 7,
+              "until60": 15,
+              "until180": 17,
+              "older180": 0,
+              "future": 0,
+              "max_age": 135.0883595943451,
+              "median": 47.08835959434509,
+              "p90": 105.08835959434509,
+              "new_after_activation": 0
+            }
+          }
+        },
+        "resources": [
+          {
+            "Name": "noponto_api",
+            "CPUPerc": "27.19%",
+            "MemUsage": "177.6MiB / 768MiB",
+            "MemPerc": "23.13%",
+            "PIDs": "32"
+          },
+          {
+            "Name": "transporte_postgres",
+            "CPUPerc": "0.24%",
+            "MemUsage": "698.7MiB / 3.738GiB",
+            "MemPerc": "18.25%",
+            "PIDs": "11"
+          },
+          {
+            "Name": "transporte_redis",
+            "CPUPerc": "0.59%",
+            "MemUsage": "65.67MiB / 640MiB",
+            "MemPerc": "10.26%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "auth_api",
+            "CPUPerc": "0.16%",
+            "MemUsage": "209.4MiB / 3.738GiB",
+            "MemPerc": "5.47%",
+            "PIDs": "42"
+          },
+          {
+            "Name": "auth_postgres",
+            "CPUPerc": "6.92%",
+            "MemUsage": "43.16MiB / 3.738GiB",
+            "MemPerc": "1.13%",
+            "PIDs": "16"
+          },
+          {
+            "Name": "auth_redis",
+            "CPUPerc": "0.52%",
+            "MemUsage": "11.31MiB / 3.738GiB",
+            "MemPerc": "0.30%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "portainer",
+            "CPUPerc": "0.00%",
+            "MemUsage": "21.94MiB / 3.738GiB",
+            "MemPerc": "0.57%",
+            "PIDs": "7"
+          },
+          {
+            "Name": "dozzle",
+            "CPUPerc": "0.44%",
+            "MemUsage": "25.5MiB / 3.738GiB",
+            "MemPerc": "0.67%",
+            "PIDs": "10"
+          }
+        ],
+        "memory_kib": {
+          "MemAvailable": 2383328,
+          "SwapFree": 4853752
+        },
+        "source": "GTFSRT_BUS",
+        "fallback": "",
+        "support_mode": "FullFallback"
+      },
+      {
+        "lines": {
+          "838": {
+            "vehicles": 13,
+            "until40": 0,
+            "until60": 9,
+            "until180": 13,
+            "older180": 0,
+            "future": 0,
+            "max_age": 67.11964344978333,
+            "median": 56.119643449783325,
+            "p90": 66.11964344978333,
+            "new_after_activation": 0
+          },
+          "898": {
+            "vehicles": 11,
+            "until40": 0,
+            "until60": 6,
+            "until180": 11,
+            "older180": 0,
+            "future": 0,
+            "max_age": 111.1229636669159,
+            "median": 57.122963666915894,
+            "p90": 68.1229636669159,
+            "new_after_activation": 0
+          },
+          "006": {
+            "vehicles": 0,
+            "until40": 0,
+            "until60": 0,
+            "until180": 0,
+            "older180": 0,
+            "future": 0,
+            "max_age": null,
+            "median": null,
+            "p90": null,
+            "new_after_activation": 0
+          },
+          "457": {
+            "vehicles": 17,
+            "until40": 0,
+            "until60": 8,
+            "until180": 17,
+            "older180": 0,
+            "future": 0,
+            "max_age": 150.12906742095947,
+            "median": 62.12906742095947,
+            "p90": 120.12906742095947,
+            "new_after_activation": 0
+          },
+          "483": {
+            "vehicles": 29,
+            "until40": 0,
+            "until60": 18,
+            "until180": 28,
+            "older180": 1,
+            "future": 0,
+            "max_age": 183.1372344493866,
+            "median": 58.1372344493866,
+            "p90": 75.1372344493866,
+            "new_after_activation": 0
+          },
+          "355": {
+            "vehicles": 6,
+            "until40": 0,
+            "until60": 6,
+            "until180": 6,
+            "older180": 0,
+            "future": 0,
+            "max_age": 59.14024782180786,
+            "median": 54.14024782180786,
+            "p90": 59.14024782180786,
+            "new_after_activation": 0
+          },
+          "805": {
+            "vehicles": 2,
+            "until40": 0,
+            "until60": 1,
+            "until180": 2,
+            "older180": 0,
+            "future": 0,
+            "max_age": 60.14279270172119,
+            "median": 58.64279270172119,
+            "p90": 60.14279270172119,
+            "new_after_activation": 0
+          }
+        },
+        "controls": {
+          "35": {
+            "vehicles": 4,
+            "until40": 0,
+            "until60": 0,
+            "until180": 4,
+            "older180": 0,
+            "future": 0,
+            "max_age": 75.1461124420166,
+            "median": 70.1461124420166,
+            "p90": 75.1461124420166,
+            "new_after_activation": 0
+          },
+          "60": {
+            "vehicles": 14,
+            "until40": 0,
+            "until60": 0,
+            "until180": 14,
+            "older180": 0,
+            "future": 0,
+            "max_age": 76.14972472190857,
+            "median": 67.64972472190857,
+            "p90": 74.14972472190857,
+            "new_after_activation": 0
+          },
+          "67": {
+            "vehicles": 8,
+            "until40": 0,
+            "until60": 0,
+            "until180": 8,
+            "older180": 0,
+            "future": 0,
+            "max_age": 76.15273070335388,
+            "median": 68.65273070335388,
+            "p90": 76.15273070335388,
+            "new_after_activation": 0
+          }
+        },
+        "line_http": {
+          "838": {
+            "path": "/veiculos/linha/838",
+            "seconds": 0.0034550900163594633,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "898": {
+            "path": "/veiculos/linha/898",
+            "seconds": 0.0031021560134831816,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "006": {
+            "path": "/veiculos/linha/006",
+            "seconds": 0.002238809014670551,
+            "http_status": 404,
+            "empty_line": true,
+            "data_state": "valid_empty"
+          },
+          "457": {
+            "path": "/veiculos/linha/457",
+            "seconds": 0.003411343990592286,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "483": {
+            "path": "/veiculos/linha/483",
+            "seconds": 0.007734762009931728,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "355": {
+            "path": "/veiculos/linha/355",
+            "seconds": 0.002811595011735335,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "805": {
+            "path": "/veiculos/linha/805",
+            "seconds": 0.00244488098542206,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_recent"
+          },
+          "35": {
+            "path": "/veiculos/linha/35",
+            "seconds": 0.003185507986927405,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "60": {
+            "path": "/veiculos/linha/60",
+            "seconds": 0.003376534004928544,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          },
+          "67": {
+            "path": "/veiculos/linha/67",
+            "seconds": 0.0028162100061308593,
+            "http_status": 200,
+            "empty_line": false,
+            "data_state": "present_aging"
+          }
+        },
+        "wire": {
+          "messages": 27,
+          "duplicates": 0,
+          "regressions": 0,
+          "invalid": 0,
+          "connections": 1,
+          "errors": 0,
+          "last": 1792881566.4410949,
+          "connected": true,
+          "last_error_kind": null,
+          "connection_state": "connected",
+          "lines": {
+            "60": {
+              "vehicles": 14,
+              "until40": 0,
+              "until60": 0,
+              "until180": 14,
+              "older180": 0,
+              "future": 0,
+              "max_age": 77.4146900177002,
+              "median": 68.9146900177002,
+              "p90": 75.4146900177002,
+              "new_after_activation": 0
+            },
+            "898": {
+              "vehicles": 11,
+              "until40": 0,
+              "until60": 6,
+              "until180": 11,
+              "older180": 0,
+              "future": 0,
+              "max_age": 112.4147686958313,
+              "median": 58.4147686958313,
+              "p90": 69.4147686958313,
+              "new_after_activation": 0
+            },
+            "006": {
+              "vehicles": 0,
+              "until40": 0,
+              "until60": 0,
+              "until180": 0,
+              "older180": 0,
+              "future": 0,
+              "max_age": null,
+              "median": null,
+              "p90": null,
+              "new_after_activation": 0
+            },
+            "805": {
+              "vehicles": 2,
+              "until40": 0,
+              "until60": 1,
+              "until180": 2,
+              "older180": 0,
+              "future": 0,
+              "max_age": 61.41482639312744,
+              "median": 59.91482639312744,
+              "p90": 61.41482639312744,
+              "new_after_activation": 0
+            },
+            "838": {
+              "vehicles": 13,
+              "until40": 0,
+              "until60": 8,
+              "until180": 13,
+              "older180": 0,
+              "future": 0,
+              "max_age": 68.41484785079956,
+              "median": 57.41484785079956,
+              "p90": 67.41484785079956,
+              "new_after_activation": 0
+            },
+            "35": {
+              "vehicles": 4,
+              "until40": 0,
+              "until60": 0,
+              "until180": 4,
+              "older180": 0,
+              "future": 0,
+              "max_age": 76.41489696502686,
+              "median": 71.41489696502686,
+              "p90": 76.41489696502686,
+              "new_after_activation": 0
+            },
+            "483": {
+              "vehicles": 29,
+              "until40": 0,
+              "until60": 16,
+              "until180": 28,
+              "older180": 1,
+              "future": 0,
+              "max_age": 184.41492080688477,
+              "median": 59.414920806884766,
+              "p90": 76.41492080688477,
+              "new_after_activation": 0
+            },
+            "355": {
+              "vehicles": 6,
+              "until40": 0,
+              "until60": 4,
+              "until180": 6,
+              "older180": 0,
+              "future": 0,
+              "max_age": 60.41500949859619,
+              "median": 55.41500949859619,
+              "p90": 60.41500949859619,
+              "new_after_activation": 0
+            },
+            "67": {
+              "vehicles": 8,
+              "until40": 0,
+              "until60": 0,
+              "until180": 8,
+              "older180": 0,
+              "future": 0,
+              "max_age": 77.41503882408142,
+              "median": 69.91503882408142,
+              "p90": 77.41503882408142,
+              "new_after_activation": 0
+            },
+            "457": {
+              "vehicles": 17,
+              "until40": 0,
+              "until60": 8,
+              "until180": 17,
+              "older180": 0,
+              "future": 0,
+              "max_age": 151.41507506370544,
+              "median": 63.415075063705444,
+              "p90": 121.41507506370544,
+              "new_after_activation": 0
+            }
+          }
+        },
+        "resources": [
+          {
+            "Name": "noponto_api",
+            "CPUPerc": "10.91%",
+            "MemUsage": "173.9MiB / 768MiB",
+            "MemPerc": "22.64%",
+            "PIDs": "31"
+          },
+          {
+            "Name": "transporte_postgres",
+            "CPUPerc": "100.37%",
+            "MemUsage": "700.1MiB / 3.738GiB",
+            "MemPerc": "18.29%",
+            "PIDs": "11"
+          },
+          {
+            "Name": "transporte_redis",
+            "CPUPerc": "0.37%",
+            "MemUsage": "65.33MiB / 640MiB",
+            "MemPerc": "10.21%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "auth_api",
+            "CPUPerc": "0.10%",
+            "MemUsage": "209.7MiB / 3.738GiB",
+            "MemPerc": "5.48%",
+            "PIDs": "42"
+          },
+          {
+            "Name": "auth_postgres",
+            "CPUPerc": "0.00%",
+            "MemUsage": "43.16MiB / 3.738GiB",
+            "MemPerc": "1.13%",
+            "PIDs": "16"
+          },
+          {
+            "Name": "auth_redis",
+            "CPUPerc": "0.35%",
+            "MemUsage": "11.31MiB / 3.738GiB",
+            "MemPerc": "0.30%",
+            "PIDs": "6"
+          },
+          {
+            "Name": "portainer",
+            "CPUPerc": "0.00%",
+            "MemUsage": "21.94MiB / 3.738GiB",
+            "MemPerc": "0.57%",
+            "PIDs": "7"
+          },
+          {
+            "Name": "dozzle",
+            "CPUPerc": "0.40%",
+            "MemUsage": "25.25MiB / 3.738GiB",
+            "MemPerc": "0.66%",
+            "PIDs": "10"
+          }
+        ],
+        "memory_kib": {
+          "MemAvailable": 2388820,
+          "SwapFree": 4853752
+        },
+        "source": "GTFSRT_BUS",
+        "fallback": "",
+        "support_mode": "FullFallback"
+      }
+    ],
+    "cycles": {
+      "count": 2,
+      "max_ms": 7361.0,
+      "accepted": 1261.0,
+      "infra": 0.0
+    },
+    "hybrid_logs_present": false
+  },
+  "post_checks": {
+    "utc": "2026-10-24T22:40:01.550630+00:00",
+    "startup": "2026-10-24T22:38:01.65925157Z",
+    "error_level_entries": 0,
+    "hybrid_entries": 0,
+    "flow_entries": 0,
+    "its_page_entries": 0,
+    "migration_execution_markers": 0,
+    "gtfs_bus_mentions": 20,
+    "trace_effective": false,
+    "settings_checked": [
+      "appsettings.json"
+    ],
+    "dotenv_absent": true,
+    "limits_preserved": true,
+    "cron_exists": false,
+    "window_jobs": 0,
+    "compose_files": [
+      "/opt/stacks/noponto/docker-compose.yml",
+      "/home/guilherme/noponto-release-artifacts/docker-compose.gtfsrt-production.proposed.yml",
+      "/home/guilherme/.noponto-deploy/physical-eta.override.yml",
+      "/home/guilherme/.noponto-deploy/historical-eta-shadow.override.yml"
+    ]
+  },
+  "followup": {
+    "utc": "2026-10-24T22:41:08.247721+00:00",
+    "lines": {
+      "838": {
+        "vehicles": 14,
+        "until40": 0,
+        "until60": 12,
+        "until180": 14,
+        "older180": 0,
+        "future": 0,
+        "max_age": 61.218998193740845,
+        "median": 51.218998193740845,
+        "p90": 60.218998193740845,
+        "new_after_activation": 0
+      },
+      "898": {
+        "vehicles": 12,
+        "until40": 0,
+        "until60": 9,
+        "until180": 11,
+        "older180": 1,
+        "future": 0,
+        "max_age": 195.22208333015442,
+        "median": 51.72208333015442,
+        "p90": 134.22208333015442,
+        "new_after_activation": 0
+      },
+      "006": {
+        "vehicles": 0,
+        "until40": 0,
+        "until60": 0,
+        "until180": 0,
+        "older180": 0,
+        "future": 0,
+        "max_age": null,
+        "median": null,
+        "p90": null,
+        "new_after_activation": 0
+      },
+      "457": {
+        "vehicles": 16,
+        "until40": 0,
+        "until60": 12,
+        "until180": 15,
+        "older180": 1,
+        "future": 0,
+        "max_age": 204.22827291488647,
+        "median": 49.228272914886475,
+        "p90": 66.22827291488647,
+        "new_after_activation": 0
+      },
+      "483": {
+        "vehicles": 28,
+        "until40": 2,
+        "until60": 24,
+        "until180": 28,
+        "older180": 0,
+        "future": 0,
+        "max_age": 176.2329285144806,
+        "median": 51.73292851448059,
+        "p90": 66.23292851448059,
+        "new_after_activation": 0
+      },
+      "355": {
+        "vehicles": 6,
+        "until40": 0,
+        "until60": 4,
+        "until180": 6,
+        "older180": 0,
+        "future": 0,
+        "max_age": 119.23547983169556,
+        "median": 46.23547983169556,
+        "p90": 119.23547983169556,
+        "new_after_activation": 0
+      },
+      "805": {
+        "vehicles": 2,
+        "until40": 0,
+        "until60": 2,
+        "until180": 2,
+        "older180": 0,
+        "future": 0,
+        "max_age": 58.23782539367676,
+        "median": 56.73782539367676,
+        "p90": 58.23782539367676,
+        "new_after_activation": 0
+      },
+      "35": {
+        "vehicles": 5,
+        "until40": 0,
+        "until60": 0,
+        "until180": 5,
+        "older180": 0,
+        "future": 0,
+        "max_age": 74.24002814292908,
+        "median": 68.24002814292908,
+        "p90": 74.24002814292908,
+        "new_after_activation": 0
+      },
+      "60": {
+        "vehicles": 14,
+        "until40": 0,
+        "until60": 6,
+        "until180": 14,
+        "older180": 0,
+        "future": 0,
+        "max_age": 70.24331784248352,
+        "median": 60.74331784248352,
+        "p90": 67.24331784248352,
+        "new_after_activation": 0
+      },
+      "67": {
+        "vehicles": 8,
+        "until40": 0,
+        "until60": 1,
+        "until180": 8,
+        "older180": 0,
+        "future": 0,
+        "max_age": 123.24766635894775,
+        "median": 63.747666358947754,
+        "p90": 123.24766635894775,
+        "new_after_activation": 0
+      }
+    }
+  },
+  "redis_ping": "PONG",
+  "postgres_ready": true,
+  "http_status": 200,
+  "dependent_containers_unchanged": true,
+  "rollback_needed": false,
+  "its_activated": false,
+  "supervisor_installed_or_armed": false,
+  "cron_installed": false,
+  "third_window_readiness": {
+    "binary_instrumentation_deployed": true,
+    "trace_active": false,
+    "authorized": false,
+    "page_log_retention_proven": false,
+    "pending": [
+      "specific_window_authorization",
+      "bounded_readonly_capture_of_HTTP_and_normalized_page_logs_surviving_API_recreation",
+      "fresh_state_lock_single_writer_and_cron_proof",
+      "120s_baseline_7bus_3brt",
+      "trace_enabled_and_same_observation_898_proof_within_90s",
+      "mandatory_gtfs_fullfallback_trace_off_rollback_within_window"
+    ]
+  },
+  "hashes": {
+    "preflight-initial.json": "5b93ecc0fe43cd2159be5cab5d57b70b1b02a09af2126f3464433bd68f607057",
+    "preflight.json": "b8f44e0bf104280a9bb6204a1425ca0f47c10be64e6ba5e6caa9490516b40b1f",
+    "before.json": "4f46b8088c03d50c729a8e61d693f2d2007f2cfc08f1e81c470faa29ef258dea",
+    "after.json": "08abc6f13bd815c8e54c90fc0f89e84d74ca7f14d37bfbd5a1c02e9e33b523d0",
+    "post-logcheck.json": "7235addca4d1488cde037ed72cc36696408363de817c58d4e6b4bd9f9e8afbbc",
+    "followup.json": "52338e86de6a0a4b580e4e9c6df34dc945d7d01fb260036cf6faf504d0579765",
+    "pr-ci.log": "0002d2e449c08d200698e4cca3a9136a9937345b844f3f85b0d1bea0d6661def",
+    "main-result.log": "659bc46fb4d0b5b36beab397f90f553e15e929c6e9ff00110e069bc59ad1c372"
+  }
+}

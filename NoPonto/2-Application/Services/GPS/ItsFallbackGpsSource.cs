@@ -2,8 +2,9 @@ namespace NoPonto.Application.GPS;
 
 // A single snapshot producer for the existing collector. Hybrid is explicit and
 // consumes only complete source reads. Legacy full fallback retains its behavior.
-internal sealed class ItsFallbackGpsSource(ISnapshotGpsSource primary, IGpsSource fallback,
-    GpsSourcesOptions options, TimeProvider clock, ILogger<GpsSourceResolver>? logger) : ISnapshotGpsSource
+internal sealed partial class ItsFallbackGpsSource(ISnapshotGpsSource primary, IGpsSource fallback,
+    GpsSourcesOptions options, TimeProvider clock, ILogger<GpsSourceResolver>? logger,
+    CancellationToken stoppingToken = default, ItsCurrentOptions? itsOptions = null) : ISnapshotGpsSource, IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _usingFallback;
@@ -17,6 +18,7 @@ internal sealed class ItsFallbackGpsSource(ISnapshotGpsSource primary, IGpsSourc
 
     public async Task<GpsSourceReadResult> GetResultAsync(CancellationToken ct)
     {
+        if (options.BusSupportMode == GpsBusSupportMode.Hybrid) return await ReadHybridAsync(ct);
         await _gate.WaitAsync(ct);
         var started = clock.GetTimestamp();
         try
@@ -36,11 +38,6 @@ internal sealed class ItsFallbackGpsSource(ISnapshotGpsSource primary, IGpsSourc
                         if (_usingFallback) logger?.LogInformation("BUS fallback recovered: active_source={source}, healthy_probes={probes}", primary.Name, _healthyProbes);
                         _usingFallback = false;
                         _healthyProbes = 0;
-                        if (options.BusSupportMode == GpsBusSupportMode.Hybrid)
-                        {
-                            var support = await ReadFallbackAsync(ct);
-                            return ItsHybridGpsComposition.Compose(read, support, clock.GetUtcNow(), clock.GetElapsedTime(started), logger);
-                        }
                         return read with { Duration = clock.GetElapsedTime(started), SourceWatermark = null };
                     }
                 }
@@ -56,9 +53,6 @@ internal sealed class ItsFallbackGpsSource(ISnapshotGpsSource primary, IGpsSourc
             var result = await ReadFallbackAsync(ct);
             logger?.LogInformation("BUS fallback acquisition: active_source={source}, status={status}, count={count}, healthy_probes={probes}",
                 fallback.Name, result.Status, result.Observations.Count, _healthyProbes);
-            if (options.BusSupportMode == GpsBusSupportMode.Hybrid)
-                return ItsHybridGpsComposition.Compose(new(StatusFonteGps.Falha, [], TimeSpan.Zero, "primary_in_recovery"),
-                    result, clock.GetUtcNow(), clock.GetElapsedTime(started), logger);
             return result with { Duration = clock.GetElapsedTime(started), SourceWatermark = null };
         }
         finally { _gate.Release(); }

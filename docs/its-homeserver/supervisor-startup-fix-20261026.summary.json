@@ -1,0 +1,80 @@
+{
+  "base_commit": "51a5a93584a420891140ee1591d13994d6f7682b",
+  "scope": "local_only",
+  "hashes": {
+    "its_window.py": "33255a6477418f64a05ad2dd88e9f6aa723b78587bd9ff1495cb95a0fd1e90a0",
+    "its_log_capture.py": "055fa54b065d08d44b54d697e9b7924792af34323f27bc9631dc9146919d49ac",
+    "probe_http.py": "b774a3cde28e3b3dadec0a8372d293515f900709194ef96bdbfa0e93e3724248",
+    "its.primary.override.yml": "f2b920b24263bf4a81ed2300fc85ec788cfeb257229f2c7cf22c3288bc948ea1",
+    "gtfs.rollback.override.yml": "4490a0d521653a1b0fab0e51f5839c8c6d593b9f6d10562342f61f0e14b11900"
+  },
+  "tests": {
+    "supervisor": 84,
+    "capture": 33,
+    "total": 117,
+    "new_tests": {
+      "test_its_window.py": [
+        "test_898_proof_is_not_server_signalr_send_without_client_observation",
+        "test_blocked_source_switch_is_interrupted_without_second_writer",
+        "test_complete_server_rest_and_client_proof_before90_keeps_max600",
+        "test_deadline_exception_cancels_subprocess_instead_of_waiting_for_result",
+        "test_degraded_support_with_898_proof_still_cannot_approve_hybrid_health",
+        "test_existing_activation_or_proof_cannot_reset_the_deadline",
+        "test_failed_rollback_defers_capture_cleanup_until_independent_watchdog_recovers",
+        "test_fresh_heartbeat_cannot_hide_expired_898_from_independent_cron",
+        "test_healthy_rest_and_stale_client_positions_never_simulate_physical_renewal",
+        "test_late_healthy_sample_after_stop_cannot_add_proof_or_events",
+        "test_missing_normalized_page_is_expected_only_while_its_is_unavailable",
+        "test_no_interruption_capability_blocks_before_activation",
+        "test_observer_that_never_finishes_cannot_hold_the_deadline",
+        "test_only_timely_persisted_proof_prevents_gate_watchdog",
+        "test_operator_stop_interrupts_boot_and_keeps_operational_reason",
+        "test_post_rollback_probe_failure_cannot_recreate_api_or_undo_safe_state",
+        "test_proof_phase_cannot_call_the_activation_path",
+        "test_real_supervisor_startup_does_not_delay_898_rollback_past90",
+        "test_recorder_failure_is_fail_closed_without_waiting_for90",
+        "test_rest_and_server_without_signalr_client_do_not_pass",
+        "test_runtime_gate_abort_terminates_command_before_late_up",
+        "test_selection79_ack92_never_proves_the_gate",
+        "test_slow_start_and_its_timeout_keep_gtfs_observed_until_exact90",
+        "test_startup_http_failure_is_observed_and_interrupts_at30",
+        "test_timer_installation_failure_restores_handlers_before_any_source_switch",
+        "test_wall_clock_jump_does_not_move_monotonic_898_deadline"
+      ],
+      "test_its_log_capture.py": [
+        "test_completed_timeout_plus_cancelled_acquisition_counts_only_real_incomplete",
+        "test_conflicting_summary_is_a_gap_even_with_late_complete_pages",
+        "test_success_summary_reconciles_late_pages_and_duplicate_overlap_at_close",
+        "test_summary_without_timing_cannot_be_associated_by_guessing_nearby_page",
+        "test_timeout_http_after_timing_and_summary_does_not_reopen_completed_acquisition",
+        "test_timing_without_summary_is_not_complete_evidence"
+      ]
+    },
+    "initial_red": {
+      "startup_rollback_seconds": 95,
+      "capture_regressions_failed": 3
+    }
+  },
+  "replay": {
+    "integrity_valid": true,
+    "archive_complete": true,
+    "evidence_complete": false,
+    "acquisitions_without_timing": 1,
+    "missing_timing": 1,
+    "missing_summary": 1,
+    "unassociated_summaries": 0,
+    "original_sha256": "9d282358219807acdbc64f6f3ee55e988067188b5156a38a07bf25b25ffd4df8",
+    "aggregates_replayed": 31
+  },
+  "limits_unchanged": {
+    "gate898_seconds": 90,
+    "maximum_seconds": 600,
+    "capture_seconds": 1000,
+    "capture_input_mib": 64,
+    "capture_output_mib": 8,
+    "capture_lines": 12000
+  },
+  "native_posix_interrupt_verified": false,
+  "production_accessed": false,
+  "readiness": "local_review_only_new_Debian_preflight_required"
+}

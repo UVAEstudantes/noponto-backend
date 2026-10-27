@@ -96,17 +96,20 @@ public interface IGpsSourceResolver
     IReadOnlyList<IGpsSource> GetShadows(string modal);
 }
 
-public sealed class GpsSourceResolver : IGpsSourceResolver
+public sealed class GpsSourceResolver : IGpsSourceResolver, IDisposable
 {
     private readonly IReadOnlyDictionary<string, IGpsSource> _sources;
     private readonly GpsSourcesOptions _options;
     private readonly IGpsSource? _busWithFallback;
 
     public GpsSourceResolver(IEnumerable<IGpsSource> sources, IOptions<GpsSourcesOptions> options,
-        TimeProvider? clock = null, ILogger<GpsSourceResolver>? logger = null)
+        TimeProvider? clock = null, ILogger<GpsSourceResolver>? logger = null,
+        Microsoft.Extensions.Hosting.IHostApplicationLifetime? lifetime = null, IOptions<ItsCurrentOptions>? itsOptions = null)
     {
         _sources = sources.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
         _options = options.Value;
+        if (_options.BusSupportMode == GpsBusSupportMode.Hybrid && itsOptions is not null && !itsOptions.Value.IsValid())
+            throw new InvalidOperationException("Invalid ITS acquisition limits.");
         if (!Enum.IsDefined(_options.BusSupportMode)
             || (_options.BusSupportMode == GpsBusSupportMode.Hybrid
                 && (!string.Equals(_options.BusPrimarySource, GpsSourceNames.ItsCurrent, StringComparison.OrdinalIgnoreCase)
@@ -127,9 +130,14 @@ public sealed class GpsSourceResolver : IGpsSourceResolver
             // Validate opt-in, speed unit and crosswalk before starting ITS. A configured
             // but unusable backup must fail selection, not remain hidden until an outage.
             if (fallback is GtfsRealtimeGpsSource gtfs) gtfs.RequireOperational(GpsModalNames.Bus);
-            _busWithFallback = new ItsFallbackGpsSource(primary, fallback, _options, clock ?? TimeProvider.System, logger);
+            _busWithFallback = new ItsFallbackGpsSource(primary, fallback, _options, clock ?? TimeProvider.System, logger,
+                lifetime?.ApplicationStopping ?? default, itsOptions?.Value);
         }
     }
+
+    // The wrapper is constructed here, not registered separately in DI. Its lifetime
+    // must end with the resolver; registered primary/support sources remain DI-owned.
+    public void Dispose() => (_busWithFallback as IDisposable)?.Dispose();
 
     public IGpsSource GetPrimary(string modal)
     {

@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-24",
+  "base_commit": "4067c02",
+  "release": 151,
+  "image": "ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8",
+  "decision": "GO_to_request_separate_window_authorization",
+  "production_accessed": false,
+  "production_changed": false,
+  "operational_sha256": {
+    "its_window.py": "d166f170e773c60f5024c895eb32e43c8016c775060cff2fd7e9e70231ba7eed",
+    "its_log_capture.py": "d1ce61448534750fb005c1952b81149062bd9bd3217836d47b75fd61a5f1ca31",
+    "probe_http.py": "b774a3cde28e3b3dadec0a8372d293515f900709194ef96bdbfa0e93e3724248",
+    "its.primary.override.yml": "f2b920b24263bf4a81ed2300fc85ec788cfeb257229f2c7cf22c3288bc948ea1",
+    "gtfs.rollback.override.yml": "4490a0d521653a1b0fab0e51f5839c8c6d593b9f6d10562342f61f0e14b11900"
+  },
+  "hash_bytes": "canonical UTF-8 LF; preserve exact bytes when copying approved artifacts",
+  "tests": {
+    "capture": 19,
+    "supervisor": 41,
+    "passed": 60,
+    "failed": 0,
+    "commands": [
+      "python -B tools/gps/test_its_log_capture.py",
+      "python -B tools/gps/test_its_window.py"
+    ]
+  },
+  "not_run": [
+    "Linux POSIX permissions proof",
+    "Docker lifecycle on Linux",
+    "cron proof",
+    "SSH",
+    "CI",
+    ".NET offline suite",
+    "provider calls",
+    "production window"
+  ],
+  "limits": {
+    "archive_bytes": 8388608,
+    "archive_lines": 12000,
+    "input_bytes": 67108864,
+    "line_bytes": 16384,
+    "queue_lines_per_stream": 256,
+    "streams": 2,
+    "containers": 4,
+    "opens": 32,
+    "seconds": 1000,
+    "heartbeat_stale_seconds": 10
+  },
+  "gates": {
+    "baseline_seconds": 120,
+    "hybrid_seconds": 600,
+    "line_898_seconds": 90,
+    "bus": [
+      "838",
+      "898",
+      "006",
+      "457",
+      "483",
+      "355",
+      "805"
+    ],
+    "brt_controls": [
+      "35",
+      "60",
+      "67"
+    ],
+    "mandatory_final": {
+      "bus": "GTFSRT_BUS",
+      "fallback": "",
+      "support_mode": "FullFallback",
+      "trace": false,
+      "brt": "GTFSRT_BRT"
+    }
+  },
+  "remaining": [
+    "separate explicit window authorization",
+    "immediate host/digest/service/lock/single-writer checks",
+    "fresh private operational directory and exact five hashes",
+    "real independent cron proof and rollback readiness",
+    "healthy passive capture before baseline and activation",
+    "supervised baseline/window with mandatory rollback and archive verification"
+  ],
+  "limitations": [
+    "summary/composition-to-acquisition association inferred from container-local order, labelled explicitly",
+    "silent logging-driver loss before observation cannot be recovered",
+    "interrupted acquisition is retained as partial and cannot be declared complete",
+    "runtime CPU and I/O cost not measured on production"
+  ]
+}

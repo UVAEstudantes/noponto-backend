@@ -1,12 +1,20 @@
 # Ônibus híbridos ITS + GTFS-RT —24/10/2026
 
+Atualização local de 27/10, base16e72b9: [Hybrid desacoplado implementado e testado](its-hybrid-decoupled.md). GTFS deixa de aguardar ITS; uma tarefa ITS e um cache completo em memória alimentam o mesmo compositor/coletor. O primeiro completo válido já contribui durante recuperação. FullFallback/GTFS-only preservados, sem deploy ou nova janela. A [janela beta anterior](its-homeserver/beta-diagnostic-20261027.md) comprovou cobertura adicional e perda de frescor, motivando esta mudança. Os relatos de preflight de26/10 abaixo são históricos e não substituem o estado atual.
+
+Estado26/10: [terceira janela bloqueada no preflight — captura com input_queue_overflow](its-homeserver/hybrid-window3-20261026.md). **NO-GO para nova ativação** até correção local/testes e nova provaGTFS. ITS não foi ativada; produção permanece GTFS-only/traceOFF. Este resultado posterior substitui o GO limitado da prova de24/10.
+
+Atualização local após release151: [captura dedicada e preflight da terceira janela](its-homeserver/log-capture-preflight-20261024.md). Este procedimento prevalece sobre comandos/hashes históricos abaixo: cinco arquivos operacionais, captura independente obrigatória antes do baseline, digest151 exato, gate89890s e rollback GTFS/FullFallback/trace=false. Nenhuma terceira janela autorizada/instalada/executada.
+
+Revisão instrumentada implantada na release151, com operação exclusivamente GTFS e trace desligado: [resultado e pré-condições da terceira janela](its-homeserver/instrumented-release-deploy-20261024.md). Nenhuma terceira janela executada.
+
 Investigação da segunda janela, medições e rastreabilidade opt-in preparadas localmente: [hybrid-window2-investigation-20261024.md](its-homeserver/hybrid-window2-investigation-20261024.md). Sequência de aquisição, filtros, TTLs e fallback operacional preservados; nenhuma terceira janela executada.
 
 ## Arquitetura e configuração
 
 Auditoria dirigida dos contratos: ITS_CURRENT e GTFSRT_BUS já entregam `ISnapshotGpsSource`, GPS físico e observações normalizadas. GTFS passa pelo parser limitado e crosswalk validado, com unidade km/h explicitamente configurada, HTTP/cache/304/Retry-After próprios. `GpsSourceResolver` já cria `ItsFallbackGpsSource`; coletor/store/ACK e polling/CAS/Redis/SignalR são comuns. O problema era retornar imediatamente quando ITS estava saudável. Não há necessidade de outro coletor, HTTP por linha ou outro escritor.
 
-O resolver agora aceita `BusSupportMode=Hybrid` exclusivamente para ITS_CURRENT + GTFSRT_BUS. O mesmo wrapper serializa a aquisição ITS e a leitura GTFS, compõe um único lote e entrega ao coletor existente. O nome operacional continua ITS_CURRENT, preservando o wakeup do snapshot. Cada observação conserva sua fonte/provedor reais e os metadados da observação escolhida; não é reetiquetada como ITS quando veio do GTFS.
+O resolver agora aceita `BusSupportMode=Hybrid` exclusivamente para ITS_CURRENT + GTFSRT_BUS. O wrapper serializa os retornos ao coletor e a leitura GTFS, acompanha uma aquisição ITS independente e compõe com o último snapshot ITS completo e fisicamente válido. Não aguarda a ITS pendente para disponibilizar o suporte GTFS. O nome operacional continua ITS_CURRENT, preservando o wakeup do snapshot. Cada observação conserva sua fonte/provedor reais e os metadados da observação escolhida; não é reetiquetada como ITS quando veio do GTFS.
 
 Proposta de configuração, **ainda não aplicada**:
 
