@@ -19,7 +19,7 @@ import time
 import uuid
 from dataclasses import dataclass
 
-IMAGE = 'ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8'
+IMAGE = 'ghcr.io/guilhermedesales/noponto-api@sha256:5bea032825319c0cd8e243806f8a49afd26741fc643882aa04d958b5663e463b'
 STAMP = r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,9})?Z'
 GUID = re.compile(r'[a-f0-9]{32}\Z')
 CONTAINER = re.compile(r'[a-f0-9]{64}\Z')
