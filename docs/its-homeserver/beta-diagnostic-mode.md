@@ -1,5 +1,7 @@
 # Modo beta diagnóstico do supervisor
 
+Atualização de 27/10: a revisão `6f0d17a`, com rechecagem HTTP a cada dois segundos em falha beta, foi [executada em uma única janela autorizada](beta-diagnostic-20261027.md), mantendo a imagem 151. O prazo de 600 segundos encerrou o experimento e GTFS foi restaurado. O relato de correção somente local abaixo descreve o estado anterior à nova execução. Sete testes beta direcionados passaram nesta continuação; não houve nova alteração de código nem segunda tentativa automática.
+
 Primeira tentativa e limitações: [relatório de26/10](beta-diagnostic-20261026.md). Após o retornoGTFS, corrigiu-se **somente localmente** a observação de recuperação: no beta, rechecagem2s enquanto há falha, raiz HTTP verificada antes da amostra longa, erros de metadados separados de indisponibilidade HTTP. Limite de30s não aumentado;15s normal e cadências do GPS permanecem. Essa revisão não foi instalada nem gerou outra janela.
 
 Padrão preservado: `experiment_mode=strict` (ou chave ausente). Uma execução experimental exige simultaneamente `experiment_mode=beta_diagnostic` e `beta_authorized=true` no estado privado, além de autorização explícita do operador para aquela única janela. Não reutilizar estado/PID/diretório. Não altera backend, GPS físico, CAS, matching, TTL, Redis/PostgreSQL, BRT ou imagem.
