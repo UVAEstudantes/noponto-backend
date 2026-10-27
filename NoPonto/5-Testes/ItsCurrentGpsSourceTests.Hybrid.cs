@@ -123,7 +123,7 @@ public sealed partial class ItsCurrentGpsSourceTests
     }
 
     [Fact]
-    public async Task Hybrid_RecoveryStillRequiresTwoSpacedHealthyProbes()
+    public async Task Hybrid_RecoveryAdmitsFirstCompleteProbeWhileHealthRemainsSpaced()
     {
         var clock=new Clock();var primary=new PrimaryStub();
         var support=new SnapshotSupportStub {Read=_=>Task.FromResult(Success(HybridPoint(GpsSourceNames.GtfsRealtimeBus,"GTFS")))};
@@ -131,7 +131,8 @@ public sealed partial class ItsCurrentGpsSourceTests
         Assert.Single((await source.GetResultAsync(default)).Observations);
         primary.Read=_=>Task.FromResult(Success(HybridPoint(GpsSourceNames.ItsCurrent,"ITS")));
         clock.Advance(TimeSpan.FromSeconds(59));Assert.Single((await source.GetResultAsync(default)).Observations);Assert.Equal(1,primary.Calls);
-        clock.Advance(TimeSpan.FromSeconds(1));Assert.Single((await source.GetResultAsync(default)).Observations);Assert.Equal(2,primary.Calls);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(new[]{"GTFS","ITS"},(await source.GetResultAsync(default)).Observations.Select(x=>x.VehicleId));Assert.Equal(2,primary.Calls);
         clock.Advance(TimeSpan.FromSeconds(60));
         Assert.Equal(new[]{"GTFS","ITS"},(await source.GetResultAsync(default)).Observations.Select(x=>x.VehicleId));
         Assert.Equal(3,primary.Calls);
@@ -160,7 +161,7 @@ public sealed partial class ItsCurrentGpsSourceTests
         var source=(IStatusGpsSource)HybridResolver(primary,support,clock).GetPrimary("BUS");
         using var cancel=new CancellationTokenSource();var task=source.GetResultAsync(cancel.Token);
         Assert.False(task.IsCompleted);
-        if(cancelCaller) { cancel.Cancel();await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>task); }
+        if(cancelCaller) { cancel.Cancel();await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>task);clock.Advance(TimeSpan.FromSeconds(1)); }
         else
         {
             clock.Advance(TimeSpan.FromSeconds(10));
