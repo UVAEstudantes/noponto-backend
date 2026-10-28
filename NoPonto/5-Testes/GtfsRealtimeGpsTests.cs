@@ -72,6 +72,66 @@ public sealed class GtfsRealtimeGpsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task CacheAndRevalidation_DoNotRenewPhysicalGps_EvenWhenHttp200ArrivesAgain()
+    {
+        var clock = new Clock { Now = DateTimeOffset.FromUnixTimeSeconds(Now.ToUnixTimeSeconds()) };
+        var origin = clock.Now;
+        var calls = 0;
+        var handler = new Handler((_, _) =>
+        {
+            calls++;
+            if (calls == 2)
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotModified)
+                { Headers = { ETag = new("\"physical\"") } });
+            var feed = Feed();
+            if (calls == 4) feed.Entity[0].Vehicle.Timestamp = (ulong)origin.AddSeconds(170).ToUnixTimeSeconds();
+            var response = Response(feed);
+            response.Headers.ETag = new("\"physical\"");
+            response.Headers.CacheControl = new() { MaxAge = TimeSpan.FromSeconds(60) };
+            return Task.FromResult(response);
+        });
+        var client = new GtfsRealtimeGpsClient(new HttpClient(handler),
+            new Uri("https://fixture.invalid/positions"), Options, clock);
+        var downloaded = await client.ReadAsync(default);
+        var physical = Assert.Single(downloaded.Snapshot!.Readings).TimestampGps;
+        Assert.Equal(origin.AddSeconds(-10), physical);
+        Assert.Equal((1, (double?)10, (double?)10, 1), GtfsRealtimeGpsSource.PhysicalFreshness(downloaded, clock.Now));
+        clock.Now = origin.AddSeconds(31);
+        var cached = await client.ReadAsync(default);
+        Assert.Equal(GtfsHttpAcquisition.LocalCache, cached.Acquisition);
+        Assert.Equal(downloaded.ReceivedAtUtc, cached.ReceivedAtUtc);
+        clock.Now = origin.AddSeconds(61);
+        var validated = await client.ReadAsync(default);
+        Assert.Equal(GtfsHttpAcquisition.NotModified, validated.Acquisition);
+        Assert.Same(downloaded.Snapshot, validated.Snapshot);
+        Assert.Equal(71, (clock.Now - Assert.Single(validated.Snapshot!.Readings).TimestampGps).TotalSeconds);
+        Assert.Equal((1, (double?)10, (double?)71, 0), GtfsRealtimeGpsSource.PhysicalFreshness(validated, clock.Now));
+        clock.Now = origin.AddSeconds(122);
+        var repeatedBody = await client.ReadAsync(default);
+        Assert.Equal(GtfsHttpAcquisition.Downloaded, repeatedBody.Acquisition);
+        Assert.Equal(clock.Now, repeatedBody.ReceivedAtUtc);
+        Assert.Equal(physical, Assert.Single(repeatedBody.Snapshot!.Readings).TimestampGps);
+        Assert.Equal(132, (clock.Now - physical).TotalSeconds);
+        Assert.Equal((1, (double?)132, (double?)132, 0), GtfsRealtimeGpsSource.PhysicalFreshness(repeatedBody, clock.Now));
+        clock.Now = origin.AddSeconds(183);
+        var newPhysical = await client.ReadAsync(default);
+        Assert.Equal(13, (clock.Now - Assert.Single(newPhysical.Snapshot!.Readings).TimestampGps).TotalSeconds);
+        Assert.Equal(4, handler.Calls);
+    }
+
+    [Fact]
+    public void FreshnessDiagnostic_DistinguishesMissingBodyAndFutureGpsWithoutChangingIt()
+    {
+        Assert.Equal((0, (double?)null, (double?)null, 0), GtfsRealtimeGpsSource.PhysicalFreshness(
+            new(false, null, "timeout", TimeSpan.Zero, false), Now));
+        var parsed = Parse(Feed());
+        var future = parsed with { Readings = [parsed.Readings[0] with { TimestampGps = Now.AddSeconds(1) }] };
+        var result = new GtfsHttpSnapshot(true, future, null, TimeSpan.Zero, false);
+        Assert.Equal((1, (double?)null, (double?)-1, 0), GtfsRealtimeGpsSource.PhysicalFreshness(result, Now));
+        Assert.Equal(Now.AddSeconds(1), Assert.Single(result.Snapshot!.Readings).TimestampGps);
+    }
+
+    [Fact]
     public async Task NoStoreDoesNotRetainBodyOrBypassRateLimit()
     {
         var handler = new Handler((_, _) =>

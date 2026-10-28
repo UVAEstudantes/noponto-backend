@@ -1,0 +1,148 @@
+{
+  "base_commit": "6babc1036d7467af399899a0d1596144a708e43d",
+  "scope": "local-only; no homeserver, provider HTTP, production data, deploy or source/polling changes",
+  "production_evidence": {
+    "release": 153,
+    "paired_generation_medians_s": {
+      "selection_to_polling": 0.1918400526,
+      "selection_to_matched": 11.5174235106,
+      "selection_to_cas_marker": 14.8209768534,
+      "selection_to_signalr": 15.1231269836,
+      "selection_to_rest_observed": 24.5306019783
+    },
+    "caveats": [
+      "matched marker follows diagnostics and ETA; not pure matching",
+      "CAS marker follows GPS CAS and observed-trip/history processing for the whole batch",
+      "REST includes client sampling delay; differences of independent medians are not stage durations",
+      "No retained GTFS acquisition/HTTP freshness series to prove external feed cadence"
+    ]
+  },
+  "local_database": {
+    "postgres": "16.4",
+    "postgis": "3.4.3",
+    "container": "noponto-pipeline-latency-20261028",
+    "port": "127.0.0.1:55436",
+    "memory_limit_mib": 768,
+    "cpu_limit": 2,
+    "data": "synthetic only; disposable tmpfs",
+    "removed_after_identity_check": true
+  },
+  "sql_paired_100_distinct_inputs_4001_vertices": {
+    "before": {
+      "runs": 5,
+      "median_ms": 1108.816,
+      "min_ms": 1092.547,
+      "max_ms": 1226.793
+    },
+    "candidate": {
+      "runs": 5,
+      "median_ms": 625.792,
+      "min_ms": 602.972,
+      "max_ms": 706.198
+    }
+  },
+  "sql_validation_replay": {
+    "before": {
+      "runs": 5,
+      "median_ms": 1129.806,
+      "min_ms": 1106.733,
+      "max_ms": 1199.015
+    },
+    "candidate": {
+      "runs": 5,
+      "median_ms": 602.2,
+      "min_ms": 598.71,
+      "max_ms": 660.265
+    }
+  },
+  "exact_rows_equal": 200,
+  "native_repository_300_distinct_inputs_3_chunks": {
+    "before": {
+      "runs": 3,
+      "wall_median_ms": 1839.3958,
+      "phases_median_ms": {
+        "prepare_ms": 1.1023,
+        "connection_ms": 0.0867,
+        "execute_reader_ms": 1825.3781,
+        "read_ms": 10.1476,
+        "materialize_ms": 1.7769,
+        "wall_ms": 1839.3115
+      }
+    },
+    "after": {
+      "runs": 3,
+      "wall_median_ms": 1206.3634,
+      "phases_median_ms": {
+        "prepare_ms": 2.1402,
+        "connection_ms": 0.0765,
+        "execute_reader_ms": 1195.2283,
+        "read_ms": 5.7255,
+        "materialize_ms": 6.7304,
+        "wall_ms": 1206.2237
+      }
+    },
+    "command_count": 3,
+    "fallback_count": 0,
+    "rows": 600,
+    "warmup_runs_excluded": 1
+  },
+  "regression_counter": {
+    "inputs": 100,
+    "branches": 200,
+    "before_st_length_calls": 402,
+    "after_st_length_calls": 203,
+    "timing_assertion": false
+  },
+  "gtfs_cache_test": {
+    "physical_age_at_first_body_s": 10,
+    "after_local_and_http304_s": 71,
+    "after_repeated_http200_s": 132,
+    "after_new_physical_observation_s": 13,
+    "gps_timestamp_not_refreshed_by_http": true
+  },
+  "sql_change": "Cache geographic distance from route origin to chosen next stop, once per version/occurrence within the same SQL statement; unchanged vehicle-specific projection, ranking, thresholds and stop ordering",
+  "unmodified": [
+    "ITS acquisition and GTFS HTTP cadence/cache policy",
+    "matching individual and Legacy engine",
+    "CAS/history/Redis/SignalR/ACK",
+    "TTLs, spatial/physical thresholds, BRT source"
+  ],
+  "limitations": [
+    "Synthetic dense routes and shared stop do not establish production percentage",
+    "Benefits depend on selected stops shared per chunk and engine SetBased enabled",
+    "No local Redis Lua or full structural import E2E in this task",
+    "CPU C# vs networking not distinguishable by ExecuteReader alone; independent server EXPLAIN confirms SQL cost in this corpus",
+    "Current production capture schema does not retain Matching batch phases or GTFS freshness diagnostics; bounded capture update needed before next instrumented comparison"
+  ],
+  "tests": {
+    "postgis-validated.trx": {
+      "total": 115,
+      "passed": 115,
+      "executed": 115,
+      "sha256": "3a41da275f175d2772e8b7e0bb966c41c28cfcbb11503dbf949466f96db08bc5"
+    },
+    "regressions-validated.trx": {
+      "total": 403,
+      "passed": 402,
+      "executed": 402,
+      "sha256": "746121fa9f47627b5e1acdc1b2a22f34f75c4f30fabdf54e41b1c9859f4469d4"
+    },
+    "cas-signalr.trx": {
+      "total": 151,
+      "passed": 151,
+      "executed": 151,
+      "sha256": "0676e418bd699ad59e900d6be33a1a0511ca64236d39b2edc9bafe2819df3b3f"
+    }
+  },
+  "tests_passed": 668,
+  "tests_skipped": 1,
+  "tests_skipped_method": "GtfsRealtimeIntegratedTests.OfficialImportCrosswalkPollingAndRestartRemainIsolated",
+  "tools_guard_negative": "noponto_api rejected before Docker access",
+  "new_telemetry": "raw-feed aggregate original-body physical age, read-time physical age, retained-body age, raw count/recent60; existing acquisition log only; no identity/coordinate/payload",
+  "final_build": {
+    "configuration": "Release",
+    "incremental": false,
+    "errors": 0,
+    "preexisting_warnings": 5
+  }
+}
