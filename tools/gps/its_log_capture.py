@@ -19,7 +19,7 @@ import time
 import uuid
 from dataclasses import dataclass
 
-IMAGE = 'ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8'
+IMAGE = 'ghcr.io/guilhermedesales/noponto-api@sha256:5bea032825319c0cd8e243806f8a49afd26741fc643882aa04d958b5663e463b'
 STAMP = r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,9})?Z'
 GUID = re.compile(r'[a-f0-9]{32}\Z')
 CONTAINER = re.compile(r'[a-f0-9]{64}\Z')
@@ -32,7 +32,8 @@ FAILURES = {'no_valid_records', 'previous_io_pending', 'retry_after', 'acquisiti
             'hybrid_support_unavailable', 'hybrid_no_valid_observations', 'primary_in_recovery'}
 PREFIXES = {'ITS HTTP page ': 'http_page', 'ITS normalized page ': 'normalized_page',
             'ITS timing ': 'timing', 'ITS provider wait ': 'provider_wait',
-            'ITS acquisition ': 'acquisition', 'BUS hybrid: ': 'hybrid', 'GPS flow: ': 'flow'}
+            'ITS acquisition ': 'acquisition', 'BUS hybrid: ': 'hybrid', 'GPS flow: ': 'flow',
+            'GTFSRT ': 'gtfs_freshness', 'Matching batch phases: ': 'matching_phases'}
 LOG_ENVELOPE = re.compile(('^(' + STAMP + r')\s+').encode())
 AGGREGATE_PREFIXES = tuple(prefix.encode() for prefix in PREFIXES)
 TERMINAL_STREAM_FAILURES = {'input_queue_overflow', 'input_line_limit',
@@ -61,6 +62,23 @@ def integer(value):
 
 def optional_number(value):
     return None if value in (None, '(null)') else number(value)
+
+
+def nonnegative(value):
+    result = number(value)
+    if result < 0:
+        raise InvalidRecord('duration_schema')
+    return result
+
+
+def gtfs_failure(value):
+    if value in (None, '(null)'):
+        return None
+    if value not in {'timeout', 'invalid_or_unavailable_feed', 'cache_requires_validation',
+                     'cache_not_reusable', 'acquisition_cancelled', 'http_304_validator_mismatch'} \
+            and not re.fullmatch(r'http_[1-5]\d\d', value):
+        raise InvalidRecord('reason_schema')
+    return value
 
 
 def enum(*allowed):
@@ -107,6 +125,19 @@ def counts(keys):
 
 STATUS = enum('Sucesso', 'Vazio', 'Parcial', 'Falha')
 SCHEMAS = {
+    'gtfs_freshness': dict(source=enum('GTFSRT_BUS', 'GTFSRT_BRT'),
+        acquisition=enum('Downloaded', 'LocalCache', 'NotModified', 'Failed'),
+        success=enum('True', 'False', 'true', 'false'), failure=gtfs_failure,
+        acquisition_duration_ms=nonnegative, reused=enum('True', 'False', 'true', 'false'),
+        raw_feed_count=integer, body_physical_age_mean_seconds=optional_number,
+        read_physical_age_mean_seconds=optional_number, body_retained_seconds=optional_number,
+        raw_feed_recent60=integer),
+    'matching_phases': dict(operation=enum('Global', 'Combined', 'Directed', 'Stage'),
+        engine=enum('NaoAplicavel', 'Legacy', 'SetBased'),
+        outcome=enum('Completed', 'Degraded', 'Cancelled', 'Failed'),
+        **{key: integer for key in ('inputs', 'commands', 'fallback_commands', 'rows', 'chunk_failures')},
+        **{key: nonnegative for key in ('prepare_ms', 'connection_ms', 'execute_reader_ms',
+            'read_ms', 'materialize_ms', 'fallback_ms', 'other_ms', 'wall_ms')}),
     'http_page': dict(acquisition=guid, minute_utc=utc, cursor_present=enum('True', 'False', 'true', 'false'),
                      http_status=optional_number, completed=enum('True', 'False', 'true', 'false'),
                      phase=enum('headers', 'body', 'parse'), headers_ms=number, body_ms=number, parse_ms=number, bytes=integer),
@@ -146,6 +177,14 @@ def sanitize_line(raw):
                 continue
             utc(stamp)  # Validate the Docker timestamp, retaining its original nanoseconds.
             body = message[len(prefix):]
+            if family == 'gtfs_freshness':
+                # Other GTFS messages and older acquisition logs are not this family.
+                # A new but incomplete aggregate still fails closed below.
+                if not re.match(r'source=\S+ acquisition=', body) or not any(key+'=' in body for key in (
+                        'raw_feed_count', 'body_physical_age_mean_seconds', 'read_physical_age_mean_seconds',
+                        'body_retained_seconds', 'raw_feed_recent60')):
+                    return None
+                body = body.split(';', 1)[0]
             if family == 'flow':
                 values = json.loads(body)
                 if not isinstance(values, dict):
@@ -250,7 +289,7 @@ class Archive:
         c = self.contexts.setdefault(container, {'uncertain': bool(self.gaps), 'timing': None, 'composition': None, 'generations': {}, 'stats': {}, 'unassociated': 0})
         fields, family = event['fields'], event['family']
         association = None
-        if 'acquisition' in fields:
+        if family in ('http_page', 'normalized_page', 'provider_wait', 'timing'):
             association = fields['acquisition']
             # Keep the bounded archive's acquisition counters until close: HTTP tasks can
             # finish logging after timing/summary, especially on cancellation/timeouts.
@@ -283,7 +322,7 @@ class Archive:
                     del c['generations'][next(iter(c['generations']))]
                 c['generations'][g] = c['composition'] if not c['uncertain'] else None
             association = c['generations'].get(g)
-        explicit = 'acquisition' in fields
+        explicit = family in ('http_page', 'normalized_page', 'provider_wait', 'timing')
         record = {'kind': 'aggregate', 'container': container, **event, 'acquisition': association,
                   'link_basis': 'backend_explicit' if explicit else 'same_container_serial_order' if association else 'unproven'}
         if self.write(record):

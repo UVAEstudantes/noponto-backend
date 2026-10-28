@@ -15,7 +15,7 @@ event_guard = threading.Lock()
 wire = {'messages':0, 'duplicates':0, 'regressions':0, 'invalid':0, 'connections':0, 'errors':0, 'last':0, 'lines':{}, 'connected':False, 'last_error_kind':None}
 last_gps = {}
 activation_epoch = None
-APPROVED_IMAGE = 'ghcr.io/guilhermedesales/noponto-api@sha256:66cfa6491074ed639c2bcfe29948c7e93c3d03775f3ad3f2eea95e144cce94f8'
+APPROVED_IMAGE = 'ghcr.io/guilhermedesales/noponto-api@sha256:5bea032825319c0cd8e243806f8a49afd26741fc643882aa04d958b5663e463b'
 capture_process = None
 capture_contract = None
 PROC_ROOT = pathlib.Path('/proc')
@@ -457,14 +457,56 @@ def hybrid_proof(logs):
     return any(x.get('mode')=='Hybrid' and x.get('primary_status')=='Sucesso' and x.get('support_status')=='Sucesso'
                and int(x.get('selected_its','0'))>0 and int(x.get('selected_gtfs','0'))>0 for x in parse_logs(logs)[2])
 
+# Private in-memory cohorts only. Output contains counts and bounded interval summaries.
+cohort_guard = threading.Lock()
+cohort_baseline = {}
+cohort_seen = {}
+cohort_intervals = {}
+
+def cohort_stats(line, positions, phase, channel='rest'):
+    import collections
+    phase = phase if phase in ('baseline','its') else 'after'
+    with cohort_guard:
+        baseline = cohort_baseline.setdefault(line, set())
+        if phase == 'baseline' and channel == 'rest':
+            baseline.update(p['ordem'].strip().upper() for p in positions)
+        if len(baseline) > 4096:raise RuntimeError('cohort_budget')
+        groups = {'baseline':[], 'added':[]}
+        for p in positions:
+            identity = p['ordem'].strip().upper()
+            group = 'baseline' if identity in baseline else 'added'
+            groups[group].append(p)
+            key = (channel,line,identity)
+            gps = dt.datetime.fromisoformat(p['timestampGps'].replace('Z','+00:00')).timestamp()
+            now = time.monotonic()
+            previous = cohort_seen.get(key)
+            if previous and previous[2] == phase and gps > previous[0]:
+                history = cohort_intervals.setdefault((channel,line,phase,group),
+                    {'physical':collections.deque(maxlen=512),'arrival':collections.deque(maxlen=512),'updates':0})
+                history['physical'].append(gps-previous[0]);history['arrival'].append(now-previous[1]);history['updates']+=1
+            if previous is None or gps > previous[0] or previous[2] != phase:
+                if previous is None and len(cohort_seen)>=16384:raise RuntimeError('cohort_budget')
+                cohort_seen[key]=(gps,now,phase)
+        def summary(values):
+            values=sorted(values)
+            return {'count':len(values),'median':statistics.median(values) if values else None,
+                    'p90':values[max(0,math.ceil(len(values)*.9)-1)] if values else None}
+        result={}
+        for group, rows in groups.items():
+            history=cohort_intervals.get((channel,line,phase,group),{'physical':[],'arrival':[],'updates':0})
+            result[group]={'fresh':fresh(rows),'renewals':history['updates'],
+                'physical_intervals':summary(history['physical']),'arrival_intervals':summary(history['arrival'])}
+        return result
+
 def sample():
     state=inspect(); api=state[0]
     http,latency=get('/')
-    lines={}; controls={}; line_http={}
+    lines={}; controls={}; line_http={}; cohorts={}; phase=load()['phase']
     for line in LINES+CONTROL_LINES:
         path='/veiculos/linha/'+line
         body,seconds=get(path); payload=json.loads(body)
         (lines if line in LINES else controls)[line]=fresh(payload['posicoes'])
+        cohorts[line]=cohort_stats(line,payload['posicoes'],phase)
         line_http[line]={'path':path,'seconds':seconds,**payload.get('probe',{'http_status':200,'empty_line':False})}
         line_http[line]['data_state']=data_state((lines if line in LINES else controls)[line])
     stat=[json.loads(x) for x in run(['docker','stats','--no-stream','--format','{{json .}}',*[x['Name'].lstrip('/') for x in state]],timeout=12).splitlines()]
@@ -472,7 +514,7 @@ def sample():
     cycles,acquisitions,selection=parse_logs(logs)
     memory=dict((x.split(':')[0],int(x.split()[1])) for x in open('/proc/meminfo') if x.startswith(('MemAvailable:','SwapFree:')))
     writers=len(run(['docker','ps','-q','--filter','label=com.docker.compose.project=noponto','--filter','label=com.docker.compose.service=api']).split())
-    return {'writer_count':writers,'source':source(api).get('GpsSources__BusPrimarySource'),'fallback':source(api).get('GpsSources__BusFallbackSource',''),
+    return {'cohorts':cohorts,'writer_count':writers,'source':source(api).get('GpsSources__BusPrimarySource'),'fallback':source(api).get('GpsSources__BusFallbackSource',''),
             'support_mode':source(api).get('GpsSources__BusSupportMode','FullFallback'),
             'running':api['State']['Running'],'oom':api['State']['OOMKilled'],'restarts':api['RestartCount'],
             'http_seconds':latency,'lines':lines,'controls':controls,'line_http':line_http,'wire':wire_summary(),'memory_kib':memory,'load':os.getloadavg(),

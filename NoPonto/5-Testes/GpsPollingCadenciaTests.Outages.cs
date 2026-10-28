@@ -278,7 +278,14 @@ public sealed partial class GpsPollingCadenciaTests
         Assert.Equal(entries[2]["failure"], entries[3]["failure"]);
         Assert.NotNull(entries[3]["failure"]);
         Assert.Equal(2, f.Log.Entries.Count(x => x.ContainsKey("received")));
-        Assert.All(entries, x => Assert.Equal(new[] { "{OriginalFormat}", "acquisition", "duration", "failure", "reused", "source", "success" }.Order(), x.Keys.Order()));
+        Assert.All(entries, x => Assert.Equal(new[] { "{OriginalFormat}", "acquisition", "duration",
+            "failure", "reused", "source", "success", "count", "bodyAge", "readAge", "retained", "recent60" }
+            .Order(), x.Keys.Order()));
+        Assert.Equal(entries[0]["count"], entries[1]["count"]);
+        Assert.Equal(entries[0]["bodyAge"], entries[1]["bodyAge"]);
+        Assert.Equal(0, Assert.IsType<int>(entries[2]["count"]));
+        Assert.Null(entries[2]["bodyAge"]);
+        Assert.Null(entries[3]["readAge"]);
     }
 
     [Fact]

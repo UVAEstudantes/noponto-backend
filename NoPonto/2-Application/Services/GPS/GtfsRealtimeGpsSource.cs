@@ -72,9 +72,16 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
     private async Task<GpsSourceReadResult> ReadCoreAsync(CancellationToken ct)
     {
         var result = await _client.ReadAsync(ct);
-        _logger.LogInformation("GTFSRT source={source} acquisition={acquisition} success={success} failure={failure} acquisition_duration_ms={duration:F0} reused={reused}; acquisition is distinct from accepted GPS and SignalR publication.",
-            Name, result.Acquisition, result.Success, result.Failure, result.Duration.TotalMilliseconds, result.Reused);
         var now = DateTimeOffset.UtcNow;
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            var freshness = PhysicalFreshness(result, now);
+            _logger.LogInformation("GTFSRT source={source} acquisition={acquisition} success={success} failure={failure} acquisition_duration_ms={duration:F0} reused={reused} raw_feed_count={count} body_physical_age_mean_seconds={bodyAge} read_physical_age_mean_seconds={readAge} body_retained_seconds={retained} raw_feed_recent60={recent60}; acquisition is distinct from modal acceptance and SignalR publication.",
+                Name, result.Acquisition, result.Success, result.Failure, result.Duration.TotalMilliseconds,
+                result.Reused, freshness.Count, freshness.BodyAge, freshness.ReadAge,
+                result.ReceivedAtUtc is { } received ? (now-received).TotalSeconds : (double?)null,
+                freshness.Recent60);
+        }
         if (!result.Success)
         {
             _logger.LogWarning("GTFSRT source={source} failure={reason} last_http_snapshot={last} until={until}; possible historical gap, no catch-up or fallback.",
@@ -137,6 +144,25 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
             result.Snapshot.DuplicateVehicles, result.Reused);
         return new(unique.Length == 0 ? StatusFonteGps.Vazio : StatusFonteGps.Sucesso,
             unique, result.Duration);
+    }
+
+    // Raw feed aggregates only (before modal/crosswalk filtering). No sorting, IDs or GPS renewal.
+    internal static (int Count, double? BodyAge, double? ReadAge, int Recent60) PhysicalFreshness(
+        GtfsHttpSnapshot result, DateTimeOffset now)
+    {
+        if (result.Snapshot is not { Readings.Count: > 0 } snapshot) return (0, null, null, 0);
+        double body = 0, current = 0;
+        var recent = 0;
+        foreach (var row in snapshot.Readings)
+        {
+            var age = (now-row.TimestampGps).TotalSeconds;
+            current += age;
+            if (age is >= 0 and <= 60) recent++;
+            if (result.ReceivedAtUtc is { } received) body += (received-row.TimestampGps).TotalSeconds;
+        }
+        return (snapshot.Readings.Count,
+            result.ReceivedAtUtc.HasValue ? body/snapshot.Readings.Count : null,
+            current/snapshot.Readings.Count, recent);
     }
 
     internal static double? SpeedKmh(double? raw, GtfsSpeedUnit unit)

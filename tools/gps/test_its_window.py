@@ -99,7 +99,7 @@ class HttpSafety(unittest.TestCase):
 
     def test_wrong_line_empty_message_is_failure(self):
         from probe_http import ProbeError
-        with patch.object(w.urllib.request,'urlopen',side_effect=self.http('/veiculos/linha/898',404,{'mensagem':'Nenhum veículo ativo para a linha 838.'})):
+        with patch.object(w.urllib.request,'urlopen',side_effect=self.http('/veiculos/linha/898',404,{'mensagem':'Nenhum veÃ­culo ativo para a linha 838.'})):
             with self.assertRaises(ProbeError):w.get('/veiculos/linha/898')
 
     def test_timeout_is_failure_with_path(self):
@@ -943,6 +943,31 @@ class StartupRecovery(unittest.TestCase):
             popen.return_value.__enter__.return_value=child
             with self.assertRaises(w.SafetyFailure):w.run(['docker','logs','container'])
         child.kill.assert_called_once()
+
+class CohortObservation(unittest.TestCase):
+    def setUp(self):
+        w.cohort_baseline.clear();w.cohort_seen.clear();w.cohort_intervals.clear()
+    def point(self,identity,seconds):
+        return {'ordem':identity,'timestampGps':w.dt.datetime.fromtimestamp(1793136000+seconds,w.dt.timezone.utc).isoformat()}
+    def test_baseline_cohort_separates_additions_without_exporting_identity(self):
+        w.cohort_stats('838',[self.point('PRIVATE-A',0)],'baseline')
+        result=w.cohort_stats('838',[self.point('PRIVATE-A',1),self.point('PRIVATE-B',1)],'its')
+        self.assertEqual(1,result['baseline']['fresh']['vehicles']);self.assertEqual(1,result['added']['fresh']['vehicles'])
+        self.assertNotIn('PRIVATE',w.json.dumps(result))
+    def test_repeated_gps_does_not_count_as_renewal(self):
+        w.cohort_stats('898',[self.point('A',0)],'baseline')
+        w.cohort_stats('898',[self.point('A',1)],'its')
+        w.cohort_stats('898',[self.point('A',1)],'its')
+        result=w.cohort_stats('898',[self.point('A',31)],'its')
+        self.assertEqual(1,result['baseline']['renewals']);self.assertEqual(30,result['baseline']['physical_intervals']['median'])
+    def test_phase_transition_does_not_mix_baseline_intervals(self):
+        w.cohort_stats('898',[self.point('A',0)],'baseline')
+        result=w.cohort_stats('898',[self.point('A',60)],'its')
+        self.assertEqual(0,result['baseline']['renewals'])
+    def test_interval_history_is_bounded(self):
+        w.cohort_stats('838',[self.point('A',0)],'baseline')
+        for second in range(600):result=w.cohort_stats('838',[self.point('A',second)],'its')
+        self.assertEqual(599,result['baseline']['renewals']);self.assertEqual(512,result['baseline']['physical_intervals']['count'])
 
 unittest.main()
 

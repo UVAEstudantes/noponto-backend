@@ -4,6 +4,8 @@ namespace NoPonto.Data.Repositories;
 
 public sealed partial class GpsPadraoRepository
 {
+    // Cache only structural distance-to-stop inside this statement. Vehicle projection,
+    // ranking, next-stop choice and physical/temporal decisions remain per input.
     private const string SqlMatchingCombinadoLoteSetBased = """
         WITH entradas AS MATERIALIZED (
           SELECT * FROM jsonb_to_recordset(@inputs::jsonb) AS x(
@@ -129,43 +131,54 @@ public sealed partial class GpsPadraoRepository
             ST_LineSubstring(o."Geometria",o.fracao_min,o.fracao_max)::geography,
             o.ponto_geography,o.dist_max)
         ),
-        global_resultado AS (
-          SELECT g.*,gc.comprimento_metros,pp.* FROM global_vencedor g
-          JOIN global_comprimentos gc ON gc."Id"=g."Id"
-          LEFT JOIN LATERAL (
-            SELECT p."Nome" parada_nome,op."Id" ocorrencia_id,op."ParadaId" parada_id,
-              op."Ordem" parada_ordem,op."DistanciaAcumuladaMetros" parada_distancia_acumulada,
-              op."DistanciaDaLinhaMetros" parada_distancia_linha,
-              ST_Distance(g.ponto_geography,p."Localizacao"::geography) distancia_parada_metros,
-              GREATEST(0.0,CASE WHEN op."PosicaoTracado">g.posicao_na_rota THEN
-                ST_Length(ST_LineSubstring(g."Geometria",0,op."PosicaoTracado")::geography)
-                -ST_Length(ST_LineSubstring(g."Geometria",0,g.posicao_na_rota)::geography)
-              ELSE gc.comprimento_metros-ST_Length(ST_LineSubstring(g."Geometria",0,g.posicao_na_rota)::geography)
-                +ST_Length(ST_LineSubstring(g."Geometria",0,op."PosicaoTracado")::geography) END)
-                distancia_restante_rota_metros
+        proximas_paradas AS MATERIALIZED (
+          SELECT v.input_id,v.ramo,v.versao_id,pp.* FROM (
+            SELECT input_id,'GLOBAL' ramo,"Id" versao_id,topologia,posicao_na_rota FROM global_vencedor
+            UNION ALL
+            SELECT input_id,'ANTERIOR',"Id",topologia,posicao_na_rota FROM anterior_vencedor
+          ) v LEFT JOIN LATERAL (
+            SELECT p."Nome" parada_nome,p."Localizacao" parada_localizacao,
+              op."Id" ocorrencia_id,op."ParadaId" parada_id,op."Ordem" parada_ordem,
+              op."DistanciaAcumuladaMetros" parada_distancia_acumulada,
+              op."DistanciaDaLinhaMetros" parada_distancia_linha,op."PosicaoTracado" parada_posicao
             FROM "OcorrenciasParadasPadroes" op JOIN "Paradas" p ON p."Id"=op."ParadaId"
-            WHERE op."PadraoVersaoId"=g."Id" AND
-              (op."PosicaoTracado">g.posicao_na_rota OR g.topologia='CIRCULAR')
-            ORDER BY CASE WHEN op."PosicaoTracado">g.posicao_na_rota THEN 0 ELSE 1 END,
+            WHERE op."PadraoVersaoId"=v.versao_id AND
+              (op."PosicaoTracado">v.posicao_na_rota OR v.topologia='CIRCULAR')
+            ORDER BY CASE WHEN op."PosicaoTracado">v.posicao_na_rota THEN 0 ELSE 1 END,
               op."PosicaoTracado",op."Ordem" LIMIT 1) pp ON true
         ),
+        comprimentos_paradas AS MATERIALIZED (
+          SELECT r.versao_id,r.ocorrencia_id,
+            ST_Length(ST_LineSubstring(pv."Geometria",0,r.parada_posicao)::geography) comprimento_ate_parada
+          FROM (SELECT DISTINCT versao_id,ocorrencia_id,parada_posicao FROM proximas_paradas
+            WHERE ocorrencia_id IS NOT NULL) r
+          JOIN "PadroesVersoes" pv ON pv."Id"=r.versao_id
+        ),
+        global_resultado AS (
+          SELECT g.*,gc.comprimento_metros,pp.parada_nome,pp.ocorrencia_id,pp.parada_id,pp.parada_ordem,
+            pp.parada_distancia_acumulada,pp.parada_distancia_linha,
+            ST_Distance(g.ponto_geography,pp.parada_localizacao::geography) distancia_parada_metros,
+            CASE WHEN pp.ocorrencia_id IS NULL THEN NULL ELSE
+              GREATEST(0.0,CASE WHEN pp.parada_posicao>g.posicao_na_rota THEN
+                cp.comprimento_ate_parada-ST_Length(ST_LineSubstring(g."Geometria",0,g.posicao_na_rota)::geography)
+              ELSE gc.comprimento_metros-ST_Length(ST_LineSubstring(g."Geometria",0,g.posicao_na_rota)::geography)
+                +cp.comprimento_ate_parada END) END distancia_restante_rota_metros
+          FROM global_vencedor g JOIN global_comprimentos gc ON gc."Id"=g."Id"
+          LEFT JOIN proximas_paradas pp ON pp.input_id=g.input_id AND pp.ramo='GLOBAL'
+          LEFT JOIN comprimentos_paradas cp ON cp.versao_id=pp.versao_id AND cp.ocorrencia_id=pp.ocorrencia_id
+        ),
         anterior_resultado AS (
-          SELECT a.*,pp.* FROM anterior_vencedor a LEFT JOIN LATERAL (
-            SELECT p."Nome" parada_nome,op."Id" ocorrencia_id,op."ParadaId" parada_id,
-              op."Ordem" parada_ordem,op."DistanciaAcumuladaMetros" parada_distancia_acumulada,
-              op."DistanciaDaLinhaMetros" parada_distancia_linha,
-              ST_Distance(a.ponto_geography,p."Localizacao"::geography) distancia_parada_metros,
-              GREATEST(0.0,CASE WHEN op."PosicaoTracado">a.posicao_na_rota THEN
-                ST_Length(ST_LineSubstring(a."Geometria",0,op."PosicaoTracado")::geography)
-                -ST_Length(ST_LineSubstring(a."Geometria",0,a.posicao_na_rota)::geography)
+          SELECT a.*,pp.parada_nome,pp.ocorrencia_id,pp.parada_id,pp.parada_ordem,
+            pp.parada_distancia_acumulada,pp.parada_distancia_linha,
+            ST_Distance(a.ponto_geography,pp.parada_localizacao::geography) distancia_parada_metros,
+            CASE WHEN pp.ocorrencia_id IS NULL THEN NULL ELSE
+              GREATEST(0.0,CASE WHEN pp.parada_posicao>a.posicao_na_rota THEN
+                cp.comprimento_ate_parada-ST_Length(ST_LineSubstring(a."Geometria",0,a.posicao_na_rota)::geography)
               ELSE a.comprimento_metros-ST_Length(ST_LineSubstring(a."Geometria",0,a.posicao_na_rota)::geography)
-                +ST_Length(ST_LineSubstring(a."Geometria",0,op."PosicaoTracado")::geography) END)
-                distancia_restante_rota_metros
-            FROM "OcorrenciasParadasPadroes" op JOIN "Paradas" p ON p."Id"=op."ParadaId"
-            WHERE op."PadraoVersaoId"=a."Id" AND
-              (op."PosicaoTracado">a.posicao_na_rota OR a.topologia='CIRCULAR')
-            ORDER BY CASE WHEN op."PosicaoTracado">a.posicao_na_rota THEN 0 ELSE 1 END,
-              op."PosicaoTracado",op."Ordem" LIMIT 1) pp ON true
+                +cp.comprimento_ate_parada END) END distancia_restante_rota_metros
+          FROM anterior_vencedor a
+          LEFT JOIN proximas_paradas pp ON pp.input_id=a.input_id AND pp.ramo='ANTERIOR'
+          LEFT JOIN comprimentos_paradas cp ON cp.versao_id=pp.versao_id AND cp.ocorrencia_id=pp.ocorrencia_id
         )
         SELECT input_id,'GLOBAL' ramo,"Id" padrao_versao_id,padrao_operacional_id,
           sentido_id,linha_id,topologia,posicao_na_rota,comprimento_metros,distancia_rota_metros,

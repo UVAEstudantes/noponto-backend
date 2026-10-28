@@ -62,6 +62,20 @@ def flow(stage, generation=9):
     return values
 
 
+def gtfs():
+    return dict(source='GTFSRT_BUS', acquisition='NotModified', success='True', failure=None,
+        acquisition_duration_ms=12.5, reused='True', raw_feed_count=3300,
+        body_physical_age_mean_seconds=10, read_physical_age_mean_seconds=71,
+        body_retained_seconds=61, raw_feed_recent60=0)
+
+
+def matching():
+    return dict(operation='Combined', engine='SetBased', inputs=300, outcome='Completed',
+        commands=3, fallback_commands=0, rows=600, chunk_failures=0,
+        prepare_ms=1.1, connection_ms=.08, execute_reader_ms=1195.2,
+        read_ms=5.7, materialize_ms=6.7, fallback_ms=0, other_ms=.2, wall_ms=1209)
+
+
 class Clock:
     def __init__(self): self.value = BASE.timestamp()
     def __call__(self): return self.value
@@ -101,6 +115,69 @@ class CaptureTests(unittest.TestCase):
         return value
     def records(self):
         return [json.loads(x) for x in (self.directory / 'aggregates.jsonl').read_text(encoding='utf-8').splitlines()]
+
+    def test_gtfs_real_console_trailer_preserves_physical_age_without_private_fields(self):
+        raw = line('gtfs_freshness', {**gtfs(), 'token': 'SECRET', 'vehicle': 'PRIVATE'})
+        raw = raw.rstrip() + b'; acquisition is distinct from modal acceptance and SignalR publication.\n'
+        event = c.sanitize_line(raw)
+        self.assertEqual('NotModified', event['fields']['acquisition'])
+        self.assertEqual(71, event['fields']['read_physical_age_mean_seconds'])
+        self.assertEqual(10, event['fields']['body_physical_age_mean_seconds'])
+        self.assertNotIn('SECRET', json.dumps(event));self.assertNotIn('PRIVATE', json.dumps(event))
+        self.assertEqual(set(c.SCHEMAS['gtfs_freshness']), set(event['fields']))
+
+    def test_new_families_archive_dedup_and_do_not_create_fake_its_acquisitions(self):
+        archive=self.archive()
+        archive.ingest(CID,line('timing',timing()))
+        for family,fields in [('gtfs_freshness',gtfs()),('matching_phases',matching())]:
+            raw=line(family,fields,1);archive.ingest(CID,raw);archive.ingest(CID,raw)
+        archive.ingest(CID,line('acquisition',{**summary(),'pages':0,'windows':0,'records':0,'rejected':0},2))
+        archive.close()
+        events=[x for x in self.records() if x['kind']=='aggregate']
+        self.assertEqual(2,archive.duplicates)
+        self.assertEqual(ACQ,events[-1]['acquisition'])
+        for event in events[1:3]:
+            self.assertIsNone(event['acquisition']);self.assertEqual('unproven',event['link_basis'])
+        self.assertEqual(1,archive.families['gtfs_freshness']);self.assertEqual(1,archive.families['matching_phases'])
+        self.assertEqual(1195.2,events[2]['fields']['execute_reader_ms'])
+        self.assertTrue(c.verify(self.directory)['evidence_complete'])
+
+    def test_gtfs_legacy_and_non_acquisition_messages_are_ignored(self):
+        for body in ('GTFSRT source=GTFSRT_BUS failure=timeout last_http_snapshot=(null)',
+                     'GTFSRT source=GTFSRT_BUS acquisition=Downloaded success=True failure=(null) acquisition_duration_ms=10 reused=False'):
+            self.assertIsNone(c.sanitize_line(line('gtfs_freshness',{}).split(b'GTFSRT ')[0]+body.encode()+b'\n'))
+
+    def test_new_schemas_reject_unknown_enums_missing_metrics_nan_and_negative_duration(self):
+        for family,value,key,bad in [('gtfs_freshness',gtfs(),'source','PRIVATE'),
+            ('gtfs_freshness',gtfs(),'failure','https://secret.invalid/token'),
+            ('gtfs_freshness',gtfs(),'read_physical_age_mean_seconds','NaN'),
+            ('matching_phases',matching(),'engine','PRIVATE'),
+            ('matching_phases',matching(),'execute_reader_ms',-1)]:
+            with self.subTest(family=family,key=key):
+                with self.assertRaises(c.InvalidRecord):c.sanitize_line(line(family,{**value,key:bad}))
+        for key in c.SCHEMAS['gtfs_freshness']:
+            if key in ('source','acquisition'):continue  # These identify the log family.
+            missing=gtfs();del missing[key]
+            with self.subTest(missing=key):
+                with self.assertRaises(c.InvalidRecord):c.sanitize_line(line('gtfs_freshness',missing))
+
+    def test_gtfs_empty_failure_brt_and_signed_ages_remain_diagnostic(self):
+        values={**gtfs(),'source':'GTFSRT_BRT','acquisition':'Failed','success':'False',
+            'failure':'http_503','raw_feed_count':0,'raw_feed_recent60':0,
+            'body_physical_age_mean_seconds':None,'read_physical_age_mean_seconds':None,
+            'body_retained_seconds':None}
+        event=c.sanitize_line(line('gtfs_freshness',values))
+        self.assertEqual('http_503',event['fields']['failure']);self.assertIsNone(event['fields']['body_retained_seconds'])
+        values.update(failure=None,body_physical_age_mean_seconds=-1)
+        self.assertEqual(-1,c.sanitize_line(line('gtfs_freshness',values))['fields']['body_physical_age_mean_seconds'])
+
+    def test_new_families_obey_existing_output_budget(self):
+        archive=self.archive(c.Limits(max_bytes=4096))
+        for i in range(20):archive.ingest(CID,line('matching_phases',matching(),i))
+        archive.close()
+        result=c.verify(self.directory)
+        self.assertTrue(archive.truncated);self.assertFalse(result['archive_complete'])
+        self.assertLessEqual((self.directory/'aggregates.jsonl').stat().st_size,4096)
 
     def test_pages_windows_48_seconds_preserve_phase_metrics_and_generation(self):
         archive = self.archive()
