@@ -10,7 +10,8 @@ namespace NoPonto.Application.Services.EventosParada;
 public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaRuntimeReader roadRuntime,
     IExpectedRunService expectedRuns, IRailPublishedSnapshotProvider railSnapshot,
     IOptions<PhysicalEtaOptions>? physicalEtaOptions = null,
-    IRoadEtaDistances? roadEtaDistances = null)
+    IRoadEtaDistances? roadEtaDistances = null,
+    EtaCausalTestDiagnostics? testDiagnostics = null, AdaptiveEtaShadow? adaptiveShadow = null)
     : IEventosParadaService
 {
     public async Task<IReadOnlyList<EventoParadaDto>?> ListarAsync(Guid paradaId,
@@ -46,16 +47,18 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
         if (road.Length == 0) return [];
         var lineCodes = road.Select(x => x.CodigoLinha.ToUpperInvariant()).Distinct().ToArray();
         var positions = (await roadRuntime.ListarAsync(lineCodes, ct)).Posicoes;
-        return await ProjectRoadEventsAsync(road, positions, now, physicalEtaOptions?.Value, roadEtaDistances, ct);
+        return await ProjectRoadEventsAsync(road, positions, now, physicalEtaOptions?.Value, roadEtaDistances, ct, testDiagnostics, adaptiveShadow);
     }
 
     internal static async Task<IReadOnlyList<EventoParadaDto>> ProjectRoadEventsAsync(
         StopContext[] road, IEnumerable<PosicaoVeiculoDto> positions, DateTimeOffset now,
-        PhysicalEtaOptions? options, IRoadEtaDistances? resolver, CancellationToken ct)
+        PhysicalEtaOptions? options, IRoadEtaDistances? resolver, CancellationToken ct,
+        EtaCausalTestDiagnostics? testDiagnostics = null, AdaptiveEtaShadow? adaptiveShadow = null)
     {
         if (options?.Enabled != true) return ProjectRoadEvents(road, positions, now, options);
         var snapshot = positions.ToArray();
         var distances = new Dictionary<(string, Guid), double>();
+        var outcomes = testDiagnostics is null ? null : new Dictionary<(string, Guid), EtaGeometryOutcome>();
         var requests = snapshot.Where(p => PhysicalEta.CapturedSpeed(p, now, options).HasValue)
             .Select(p => (Position:p, Stop:SelectRoadTarget(road, p)))
             .Where(x => x.Stop is not null && Compatible(x.Position, x.Stop))
@@ -65,14 +68,69 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
             {
                 try {
                     var values = await resolver.ResolveAsync(chunk, ct);
-                    if (values.Count != chunk.Length) continue;
+                    if (values.Count != chunk.Length)
+                    {
+                        if (outcomes is not null) foreach (var request in chunk)
+                            outcomes[(request.Position.Ordem, request.TargetId)] = EtaGeometryOutcome.count_mismatch;
+                        continue;
+                    }
                     for (var i=0; i<chunk.Length; i++)
+                    {
                         if (values[i] is { } metres && double.IsFinite(metres) && metres > 0)
                             distances[(chunk[i].Position.Ordem,chunk[i].TargetId)] = metres;
+                        if (outcomes is not null) outcomes[(chunk[i].Position.Ordem,chunk[i].TargetId)] =
+                            distances.ContainsKey((chunk[i].Position.Ordem,chunk[i].TargetId))
+                                ? EtaGeometryOutcome.success : EtaGeometryOutcome.absent;
+                    }
                 }
-                catch (Exception) when (!ct.IsCancellationRequested) { /* Capture unavailable, no fabricated fallback. */ }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    if (outcomes is not null) foreach (var request in chunk)
+                        outcomes[(request.Position.Ordem, request.TargetId)] =
+                            ex is TimeoutException or OperationCanceledException
+                            || ex is Npgsql.NpgsqlException { InnerException: TimeoutException }
+                            || ex is Npgsql.PostgresException { SqlState: "57014" or "55P03" }
+                                ? EtaGeometryOutcome.timeout : EtaGeometryOutcome.error;
+                }
             }
-        return ProjectRoadEvents(road, snapshot, now, options, distances);
+        var events = ProjectRoadEvents(road, snapshot, now, options, distances).ToList();
+        if ((options.AdaptiveShadowEnabled || options.HybridShadowEnabled || options.HybridPublicEnabled) && adaptiveShadow is not null)
+            foreach (var p in snapshot)
+            {
+                var target = SelectRoadTarget(road,p);
+                var evt = target is null ? null : events.FirstOrDefault(x => x.EventId == $"road:{p.Ordem}:{target.Id:D}");
+                var comparison = adaptiveShadow.Compare(p, target is not null && distances.TryGetValue((p.Ordem,target.Id),out var metres) ? metres : null,
+                    evt?.EstimatedAt is { } at ? (at-now).TotalSeconds : null, now,options,target?.Id);
+                if (options.HybridPublicEnabled && evt is not null)
+                {
+                    var candidate = comparison.Hybrid;
+                    // Only replace an already eligible physical event. All capture/target/trip gates remain upstream.
+                    if (evt.EstimatedAt.HasValue && candidate is { Seconds: { } seconds, EstimatedAt: { } estimated })
+                    {
+                        events[events.IndexOf(evt)] = evt with { EstimatedAt = estimated,
+                            SecondsUntilEvent = (long)Math.Round(seconds),
+                            Source = candidate.Source == "fixed20" ? "HybridFixed20" : "HybridRecentEma", Quality = candidate.Quality };
+                        HybridEtaPublication.Record(true, false, "available");
+                    }
+                    else HybridEtaPublication.Record(false, evt.EstimatedAt.HasValue, candidate?.Reason ?? "history_absent");
+                }
+            }
+        if (testDiagnostics is not null)
+            foreach (var position in snapshot)
+            {
+                var stop = SelectRoadTarget(road, position);
+                var outcome = stop is null ? EtaGeometryOutcome.target_absent
+                    : !Compatible(position, stop) ? EtaGeometryOutcome.incompatible
+                    : !PhysicalEta.CapturedSpeed(position, now, options).HasValue ? EtaGeometryOutcome.ineligible
+                    : resolver is null ? EtaGeometryOutcome.resolver_absent
+                    : outcomes!.GetValueOrDefault((position.Ordem, stop.Id), EtaGeometryOutcome.limit);
+                var evt = stop is null ? null : events.FirstOrDefault(x =>
+                    x.EventId == $"road:{position.Ordem}:{stop.Id:D}");
+                testDiagnostics.Record(position, stop?.Id, stop?.DistanciaAcumuladaMetros,
+                    stop is not null && distances.TryGetValue((position.Ordem, stop.Id), out var distance) ? distance : null,
+                    now, options, outcome, evt?.EstimatedAt is { } at ? (at - now).TotalSeconds : null);
+            }
+        return events;
     }
 
     private static bool Compatible(PosicaoVeiculoDto p, StopContext s) =>

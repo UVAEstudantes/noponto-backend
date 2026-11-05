@@ -578,6 +578,9 @@ builder.Services.AddHostedService<TelemetriaMlRetentionService>();
 
 builder.Services.AddSignalR();
 
+builder.Services.AddSingleton<AdaptiveEtaShadow>();
+builder.Services.AddSingleton<AdaptiveEtaShadowWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<AdaptiveEtaShadowWorker>());
 builder.Services.AddSingleton<GpsSppoSnapshotStore>();
 builder.Services.AddOptions<GpsPipelineTraceOptions>().Bind(builder.Configuration.GetSection("GpsPipelineTrace"));
 builder.Services.AddSingleton<GpsPipelineTrace>();
