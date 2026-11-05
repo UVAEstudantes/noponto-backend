@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Finite, read-only observation of production API/dependencies; no GPS acquisition."""
-import argparse, collections, datetime, hashlib, json, pathlib, subprocess, time, urllib.request
+import argparse, collections, datetime, hashlib, json, pathlib, re, subprocess, time, urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent
 NAMES = ['noponto_api', 'transporte_postgres', 'transporte_redis']
@@ -24,7 +24,9 @@ def get(path):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--seconds',type=int,default=900);parser.add_argument('--name',default='monitor')
+    parser.add_argument('--lines',default='838,855,884')
     args=parser.parse_args();assert 30<=args.seconds<=900
+    codes=args.lines.split(',');assert 1<=len(codes)<=3 and all(re.fullmatch(r'[A-Z0-9]{1,12}',code) for code in codes)
     # Current published geometry: one directed route per requested line, three future stop bands.
     query='''WITH selected AS (SELECT DISTINCT ON (l."Codigo") l."Codigo" code,v."Id" version
       FROM "Linhas" l JOIN "Sentidos" s ON s."LinhaId"=l."Id"
@@ -33,6 +35,7 @@ def main():
       stops AS (SELECT x.code,o."ParadaId" id, o."Ordem",row_number() OVER (PARTITION BY x.code ORDER BY o."Ordem") n,
       count(*) OVER(PARTITION BY x.code) total FROM selected x JOIN "OcorrenciasParadasPadroes" o ON o."PadraoVersaoId"=x.version)
       SELECT code||'|'||id::text FROM stops WHERE n IN (greatest(2,total/4),greatest(3,total/2),greatest(4,total*3/4))'''
+    query=query.replace("'838','855','884'",','.join("'"+code+"'" for code in codes))
     targets=[line.split('|') for line in sql(query).splitlines() if '|' in line]
     assert len(targets)>=3, 'No production stop sample'
     start=time.monotonic(); wall=time.time(); iteration=0; failures=0; previous={}

@@ -5,7 +5,7 @@ Run on the server from a private release directory containing NoPonto.dll/pdb.
 No rendered Compose/env/credentials are printed. Rollback toggles the flag on the
 same image; failed activation restores the frozen pre-release configuration.
 """
-import argparse, copy, hashlib, json, os, pathlib, subprocess, time
+import argparse, copy, hashlib, json, os, pathlib, shutil, subprocess, time
 
 ROOT = pathlib.Path(__file__).resolve().parent
 STATE = pathlib.Path('/home/guilherme/.noponto-deploy')
@@ -56,6 +56,7 @@ def main():
             assert all(env.get(k) == str(v) for k, v in api.get('environment', {}).items()), 'Production environment drift'
             assert not before['State']['OOMKilled'] and before['State']['Running']
             save('original.json', base)
+            if (STATE/'active.manual.json').exists(): shutil.copy2(STATE/'active.manual.json',ROOT/'original-active.manual.json')
             tag = 'noponto-api:eta-hybrid-2i-' + args.commit[:12]
             (ROOT / 'Dockerfile').write_text('FROM ' + api['image'] + '\nCOPY NoPonto.dll NoPonto.pdb /app/\nLABEL org.opencontainers.image.revision="' + args.commit + '" org.opencontainers.image.version="eta-hybrid-v1-2i"\n')
             run(['docker', 'build', '--network=none', '--pull=false', '-t', tag, str(ROOT)], 180)
@@ -81,10 +82,15 @@ def main():
             up(ROOT / 'original.json'); healthy(original_id)
             print('Activation failed: pre-release API restored; no dependency service changed.')
             raise
-        metadata = {'mode': args.mode, 'commit': args.commit, 'image': image_id,
+        published_commit=args.commit or inspect()['Config'].get('Labels',{}).get('org.opencontainers.image.revision')
+        metadata = {'mode': args.mode, 'commit': published_commit, 'image': image_id,
                     'configuration': str(path), 'at': time.time(), 'dllSha256': hashlib.sha256((ROOT / 'NoPonto.dll').read_bytes()).hexdigest()}
         save('activated.json', metadata)
         save('result.json', metadata)
+        metadata['hybridPublicEnabled']=str(json.loads(path.read_text())['services']['api'].get('environment',{}).get('PhysicalEta__HybridPublicEnabled','false')).lower()=='true'
+        temporary=STATE/'active.manual.eta-2i.tmp'
+        temporary.write_text(json.dumps(metadata));temporary.chmod(0o600)
+        temporary.replace(STATE/'active.manual.json')
         print(json.dumps(metadata))
 
 if __name__ == '__main__':
