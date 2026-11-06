@@ -13,6 +13,16 @@ public sealed class RadarOptions
     public int MaxContextos { get; set; } = 40;
     public int MaxRegistrosPorDia { get; set; } = 500;
     public int MaxSessoesAtivas { get; set; } = 2000;
+    public bool WorkerEnabled { get; set; }
+    public int IntervalSeconds { get; set; } = 30;
+    public int MaxParadasPorCiclo { get; set; } = 20;
+    public int MaxSessoesPorCiclo { get; set; } = 500;
+    public int MaxSessoesPorParada { get; set; } = 200;
+    public int MaxContextosPorParada { get; set; } = 80;
+    public int MaxEventosPorParada { get; set; } = 500;
+    public int MaxConcorrencia { get; set; } = 2;
+    public int QueryTimeoutSeconds { get; set; } = 5;
+    public int CandidateTtlSeconds { get; set; } = 45;
 }
 
 public sealed class RadarException(int status, string codigo) : Exception(codigo)

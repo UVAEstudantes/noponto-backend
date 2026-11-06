@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NoPonto.Application.Radar;
 using NoPonto.API.Middlewares;
 using NoPonto.Data.Repositories;
+using NoPonto.Application.Services.BackgroundServices;
 
 namespace NoPonto.API.Extensions;
 
@@ -15,10 +16,23 @@ public static class RadarRegistration
                 && x.MaxSessoesAtivas is >= 1 and <= 10000,
                 "Limites do Radar inválidos").ValidateOnStart();
         services.TryAddSingleton(TimeProvider.System);
+        services.AddOptions<RadarOptions>().Validate(x => x.IntervalSeconds is >= 10 and <= 300
+            && x.MaxParadasPorCiclo is >= 1 and <= 100 && x.MaxSessoesPorCiclo is >= 1 and <= 2000
+            && x.MaxSessoesPorParada is >= 1 and <= 1000 && x.MaxContextosPorParada is >= 1 and <= 200
+            && x.MaxEventosPorParada is >= 1 and <= 2000 && x.MaxConcorrencia is >= 1 and <= 4
+            && x.QueryTimeoutSeconds is >= 1 and <= 30 && x.CandidateTtlSeconds is >= 1 and <= 120,
+            "Limites do worker Radar inválidos");
         services.AddSingleton<RadarRateGate>();
         services.AddScoped<RadarHttpFilter>();
         services.AddScoped<IRadarService, RadarService>();
         services.AddSingleton<IRadarStore, RadarRedisStore>();
+        services.AddSingleton<RadarMonitorRedisStore>();
+        services.AddSingleton<IRadarMonitorStore>(sp => sp.GetRequiredService<RadarMonitorRedisStore>());
+        services.AddSingleton<IRadarCandidateStore>(sp => sp.GetRequiredService<RadarMonitorRedisStore>());
+        services.AddSingleton<RadarSelector>();
+        services.AddScoped<IRadarStopProcessor, RadarStopProcessor>();
+        services.AddSingleton<IRadarEngine, RadarEngine>();
+        services.AddHostedService<RadarWorker>();
         return services;
     }
 }
