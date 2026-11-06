@@ -8,7 +8,8 @@ using NoPonto.Data.Repositories;
 
 namespace NoPonto.Application.GTFS;
 
-public sealed record StructuralImportArguments(string GtfsPath, string? CrosswalkPath, bool DryRun);
+public sealed record StructuralImportArguments(string GtfsPath, string? CrosswalkPath, bool DryRun,
+    string[]? MetadataRoutes = null, string? MetadataReport = null, string? MetadataSha256 = null);
 
 public static class StructuralImportCommand
 {
@@ -32,7 +33,7 @@ public static class StructuralImportCommand
 
         string? gtfs = null;
         string? crosswalk = null;
-        var dryRun = false;
+        var dryRun = false; string[]? metadataRoutes = null; string? metadataReport = null; string? metadataSha = null;
         for (var index = 1; index < args.Count; index++)
         {
             switch (args[index])
@@ -45,6 +46,15 @@ public static class StructuralImportCommand
                     if (crosswalk is not null) { error = "--crosswalk foi informado mais de uma vez."; return false; }
                     crosswalk = args[++index];
                     break;
+                case "--route-metadata" when index + 1 < args.Count:
+                    if (metadataRoutes is not null) { error = "Duplicate metadata scope."; return false; }
+                    metadataRoutes = args[++index].Split(',', StringSplitOptions.TrimEntries); break;
+                case "--metadata-report" when index + 1 < args.Count:
+                    if (metadataReport is not null) { error = "Duplicate metadata report."; return false; }
+                    metadataReport = args[++index]; break;
+                case "--metadata-sha256" when index + 1 < args.Count:
+                    if (metadataSha is not null) { error = "Duplicate metadata SHA."; return false; }
+                    metadataSha = args[++index]; break;
                 case "--dry-run":
                     if (dryRun) { error = "--dry-run foi informado mais de uma vez."; return false; }
                     dryRun = true;
@@ -61,7 +71,14 @@ public static class StructuralImportCommand
             return false;
         }
 
-        result = new(gtfs, string.IsNullOrWhiteSpace(crosswalk) ? null : crosswalk, dryRun);
+        if (metadataRoutes is not null && (metadataRoutes.Length is < 1 or > 10 || crosswalk is not null
+            || metadataRoutes.Distinct(StringComparer.Ordinal).Count() != metadataRoutes.Length
+            || metadataRoutes.Any(r => string.IsNullOrWhiteSpace(r) || r.Length > 100 || r.Any(char.IsControl))
+            || metadataSha is null || !System.Text.RegularExpressions.Regex.IsMatch(metadataSha, "^[a-f0-9]{64}$")
+            || !dryRun && string.IsNullOrWhiteSpace(metadataReport))
+            || metadataRoutes is null && (metadataReport is not null || metadataSha is not null))
+        { error = "Invalid bounded route metadata arguments; apply requires a new report path and pinned SHA256."; return false; }
+        result = new(gtfs, string.IsNullOrWhiteSpace(crosswalk) ? null : crosswalk, dryRun, metadataRoutes, metadataReport, metadataSha);
         return true;
     }
 
@@ -91,6 +108,9 @@ public static class StructuralImportCommand
             await errorOutput.WriteLineAsync("Arquivo de crosswalk não encontrado.");
             return 2;
         }
+
+        if (command.MetadataRoutes is not null)
+            return await ExecuteRouteMetadataAsync(command, environment, output, errorOutput, cancellationToken);
 
         GtfsDatarioImportPlan plan;
         try
@@ -171,6 +191,41 @@ public static class StructuralImportCommand
             await errorOutput.WriteLineAsync($"Structural import falhou em {stage}: {ex.GetType().Name}.");
             return 5;
         }
+    }
+
+    private static async Task<int> ExecuteRouteMetadataAsync(StructuralImportArguments command,
+        Func<string, string?> environment, TextWriter output, TextWriter error, CancellationToken ct)
+    {
+        try
+        {
+            // Reserve the journal before any database mutation; never overwrite a previous undo record.
+            await using var report = command.MetadataReport is null ? null : new FileStream(command.MetadataReport, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            await using var input = File.OpenRead(command.GtfsPath);
+            if (input.Length > 64L * 1024 * 1024) throw new InvalidDataException("GTFS archive limit.");
+            var sha = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(input, ct)).ToLowerInvariant();
+            if (sha != command.MetadataSha256) throw new InvalidDataException("GTFS fingerprint changed.");
+            input.Position = 0;
+            var routes = new GtfsFeedParser().ReadRouteMetadata(input, command.MetadataRoutes!);
+            var services = new ServiceCollection(); services.AdicionarPostgresCompartilhado(BuildConnectionString(environment));
+            await using var provider = services.BuildServiceProvider(); await using var scope = provider.CreateAsyncScope();
+            var dataSource = scope.ServiceProvider.GetRequiredService<NpgsqlDataSource>();
+            await using var connection = await dataSource.OpenConnectionAsync(ct);
+            if (!await TryAcquireLockAsync(connection, ct)) throw new InvalidOperationException("Import already running.");
+            try
+            {
+                var db = scope.ServiceProvider.GetRequiredService<TransporteDbContext>();
+                var journal = await new GtfsDatarioPlanPersister(db).ReconcileRouteEvidenceAsync(routes, sha, !command.DryRun, ct,
+                    report is null ? null : async (prepared, token) => {
+                        await report.WriteAsync(System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(prepared)), token);
+                        await report.FlushAsync(token); report.Flush(flushToDisk: true);
+                    });
+                var json = System.Text.Json.JsonSerializer.Serialize(journal);
+                await output.WriteLineAsync(json); return 0;
+            }
+            finally { await ReleaseLockAsync(connection); }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { return 130; }
+        catch (Exception ex) { await error.WriteLineAsync($"Route metadata synchronization failed: {ex.GetType().Name}."); return 5; }
     }
 
     private static string BuildConnectionString(Func<string, string?> environment)

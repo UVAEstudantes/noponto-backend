@@ -1,3 +1,4 @@
+using NoPonto.Application.PhysicalPresence;
 using System.Net;
 using System.Diagnostics;
 using Google.Protobuf;
@@ -47,7 +48,7 @@ public sealed record GtfsParsedSnapshot(DateTimeOffset? GeneratedAt,
 public static class GtfsRealtimeGpsParser
 {
     public static GtfsParsedSnapshot Parse(byte[] bytes, GtfsRealtimeGpsOptions options,
-        DateTimeOffset now)
+        DateTimeOffset now, PhysicalDiagnostics? diagnostics = null)
     {
         if (!options.LimitsValid() || bytes.Length > options.MaxResponseBytes)
             throw new InvalidDataException("GTFS-RT response limit.");
@@ -70,6 +71,20 @@ public static class GtfsRealtimeGpsParser
             throw new InvalidDataException("Unsupported GTFS-RT header/incrementality.");
         if (feed.Entity.Count > options.MaxEntities)
             throw new InvalidDataException("GTFS-RT entity limit.");
+        if (diagnostics is { Active: true })
+        {
+            var present = feed.Entity.Where(e => e.Vehicle?.Vehicle?.HasId == true)
+                .Select(e => e.Vehicle.Vehicle.Id.Trim().ToUpperInvariant()).ToHashSet(StringComparer.Ordinal);
+            diagnostics.RawSnapshot(present);
+            foreach (var e in feed.Entity.Where(e => diagnostics.Watches(e.Vehicle?.Vehicle?.Id)))
+            {
+                var raw = e.Vehicle;
+                DateTimeOffset? gps = raw.HasTimestamp && raw.Timestamp > 0 && raw.Timestamp <= 253402300799UL
+                    ? DateTimeOffset.FromUnixTimeSeconds((long)raw.Timestamp) : null;
+                diagnostics.Record(raw.Vehicle.Id, "gtfs_raw", gps, "GTFSRT_BUS", "before_parser_gates",
+                    new { route = raw.Trip?.RouteId, latitude = raw.Position?.Latitude, longitude = raw.Position?.Longitude, deleted = e.IsDeleted });
+            }
+        }
         var values = new Dictionary<string, GtfsVehicleReading>(StringComparer.OrdinalIgnoreCase);
         var conflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var entityIds = new HashSet<string>(StringComparer.Ordinal);
@@ -111,6 +126,13 @@ public static class GtfsRealtimeGpsParser
             values[reading.VehicleId] = reading;
         }
         foreach (var conflict in conflicts) values.Remove(conflict);
+        if (diagnostics is { Active: true })
+            foreach (var entity in feed.Entity.Where(e => diagnostics.Watches(e.Vehicle?.Vehicle?.Id)))
+            {
+                var id = entity.Vehicle.Vehicle.Id.Trim();
+                diagnostics.Record(id, "gtfs_parser", values.GetValueOrDefault(id)?.TimestampGps, "GTFSRT_BUS",
+                    values.ContainsKey(id) ? "parser_valid" : conflicts.Contains(id) ? "duplicate_identity_conflict" : "parser_rejected");
+            }
         return new(feed.Header.HasTimestamp && feed.Header.Timestamp <= 253402300799UL
                 ? DateTimeOffset.FromUnixTimeSeconds((long)feed.Header.Timestamp) : null,
             Array.AsReadOnly(values.Values.OrderBy(x => x.VehicleId, StringComparer.Ordinal).ToArray()),
@@ -129,7 +151,7 @@ internal enum GtfsHttpAcquisition { Failed, LocalCache, Downloaded, NotModified 
 
 // One client instance per modal. Bounded body, serialized acquisition, HTTP cache and no retries.
 public sealed class GtfsRealtimeGpsClient(HttpClient http, Uri endpoint,
-    GtfsRealtimeGpsOptions options, TimeProvider? clock = null)
+    GtfsRealtimeGpsOptions options, TimeProvider? clock = null, PhysicalDiagnostics? diagnostics = null)
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -212,7 +234,7 @@ public sealed class GtfsRealtimeGpsClient(HttpClient http, Uri endpoint,
                     throw new InvalidDataException("GTFS-RT response limit.");
                 buffer.Write(chunk, 0, read);
             }
-            var parsed = GtfsRealtimeGpsParser.Parse(buffer.ToArray(), options, _clock.GetUtcNow());
+            var parsed = GtfsRealtimeGpsParser.Parse(buffer.ToArray(), options, _clock.GetUtcNow(), diagnostics);
             _etag = response.Headers.ETag?.ToString();
             _lastModified = response.Content.Headers.LastModified;
             if (response.Headers.CacheControl?.NoStore == true)

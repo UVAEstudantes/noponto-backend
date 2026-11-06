@@ -13,6 +13,27 @@ namespace NoPonto.Tests;
 
 public sealed class GtfsRealtimeGpsTests(ITestOutputHelper output)
 {
+    [Fact]
+    public async Task PhysicalShadowReceivesGtfsWithoutChangingOperationalSnapshotOrHttpCount()
+    {
+        var feed = Feed(); feed.Entity[0].Vehicle.Vehicle.Id = "A12345";
+        var options = new GtfsRealtimeGpsOptions { BusEnabled = true, CrosswalkValidated = true, BusSpeedUnit = GtfsSpeedUnit.KilometresPerHour };
+        var line = Guid.NewGuid();
+        var lookup = new Lookup([new("external-route", line, "838", false)]);
+        var clock = new Clock();
+        var physicalOptions = new NoPonto.Application.PhysicalPresence.PhysicalPresenceMvpOptions {
+            Lines = [new() { Modal = NoPonto.Application.PhysicalPresence.PhysicalModal.Sppo, ServiceCode = "838", LineId = line.ToString() }] };
+        var shadow = new NoPonto.Application.PhysicalPresence.PhysicalLocationShadow(new NoPonto.Application.PhysicalPresence.ConfiguredPhysicalLineResolver(physicalOptions), clock);
+        var handler = new Handler((_, _) => Task.FromResult(Response(feed)));
+        var source = new GtfsRealtimeGpsSource(GpsModalNames.Bus, Client(handler, options), lookup, options, NullLogger<GtfsRealtimeGpsSource>.Instance, shadow);
+        var result = await source.ReadAsync(default);
+        var observation = Assert.Single(result.Observations);
+        var selected = shadow.Read(new(NoPonto.Application.PhysicalPresence.PhysicalModal.Sppo, NoPonto.Application.PhysicalPresence.PhysicalSource.GtfsRealtime, "GTFSRT_BUS", "A12345"));
+        Assert.NotNull(selected.Position); Assert.Equal(observation.GpsTimestamp, selected.Position.PhysicalAt);
+        Assert.Equal(observation.Latitude, selected.Position.Latitude); Assert.Equal(observation.TripId, selected.Position.TripId);
+        Assert.Equal(1, handler.Calls); Assert.Equal(StatusFonteGps.Sucesso, result.Status);
+        Assert.Equal(observation, Assert.Single((await source.ReadAsync(default)).Observations)); Assert.Equal(1, handler.Calls);
+    }
     [Theory]
     [InlineData("20000281130", "28", "20001", "700", "BRT")]
     [InlineData("20000671130", "67", "20001", "700", "BRT")]

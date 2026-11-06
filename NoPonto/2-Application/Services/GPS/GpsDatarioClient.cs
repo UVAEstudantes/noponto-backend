@@ -102,6 +102,7 @@ public sealed partial class GpsDatarioClient(HttpClient http, ILogger<GpsDatario
 
 public sealed class GpsDatarioPage
 {
+    internal long ResponseBytes { get; set; }
     [JsonPropertyName("minuto_utc")] public string? MinutoUtc { get; init; }
     [JsonPropertyName("data")] public List<GpsDatarioVehicleDto>? Data { get; init; }
     [JsonPropertyName("next_cursor")] public string? NextCursor { get; init; }

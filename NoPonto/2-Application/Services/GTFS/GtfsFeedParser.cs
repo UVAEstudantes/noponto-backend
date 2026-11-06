@@ -11,8 +11,7 @@ public sealed class GtfsFeedParser
     public GtfsFeed Parse(Stream zipStream)
     {
         using var zip = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: true);
-        var routes = Read(zip, "routes.txt").Select(x => new GtfsRoute(Required(x,"route_id"), Required(x,"route_short_name"))
-        { AgencyId = Value(x,"agency_id"), RouteLongName = Value(x,"route_long_name"), RouteType = Value(x,"route_type") }).ToArray();
+        var routes = ReadRoutes(zip);
         var trips = Read(zip, "trips.txt").Select(x => new GtfsTrip(Required(x,"route_id"), Value(x,"service_id"), Required(x,"trip_id"), Required(x,"direction_id"), Required(x,"shape_id"))
         { TripHeadsign = Value(x,"trip_headsign") }).ToArray();
         var stopTimes = Read(zip, "stop_times.txt").Select(x => new GtfsStopTime(Required(x,"trip_id"), Required(x,"stop_id"), Int(Required(x,"stop_sequence")), Double(x.GetValueOrDefault("shape_dist_traveled")))).ToArray();
@@ -48,6 +47,27 @@ public sealed class GtfsFeedParser
                 throw new InvalidDataException($"shape_dist_traveled regressiva no trip {group.Key}.");
         }
         return new(routes, trips, stopTimes, shapes, stops, BuildPatterns(routes, trips, stopTimes, shapes));
+    }
+
+    private static GtfsRoute[] ReadRoutes(ZipArchive zip) => Read(zip, "routes.txt")
+        .Select(x => new GtfsRoute(Required(x,"route_id"), Required(x,"route_short_name"))
+        { AgencyId = Value(x,"agency_id"), RouteLongName = Value(x,"route_long_name"), RouteType = Value(x,"route_type") }).ToArray();
+
+    public IReadOnlyList<GtfsRoute> ReadRouteMetadata(Stream input, IReadOnlyList<string> requested)
+    {
+        if (requested.Count is < 1 or > 10 || requested.Distinct(StringComparer.Ordinal).Count() != requested.Count
+            || requested.Any(r => string.IsNullOrWhiteSpace(r) || r.Length > 100 || r.Any(char.IsControl)))
+            throw new InvalidDataException("Invalid explicit route metadata scope.");
+        using var zip = new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: true);
+        foreach (var name in new[] { "routes.txt", "agency.txt" })
+            if (zip.Entries.Count(e => e.Name == name) != 1 || zip.Entries.Single(e => e.Name == name).Length > 2 * 1024 * 1024)
+                throw new InvalidDataException("Missing, duplicate or oversized route metadata entry.");
+        var routes = ReadRoutes(zip).Where(r => requested.Contains(r.RouteId, StringComparer.Ordinal)).ToArray();
+        var agencies = Read(zip, "agency.txt");
+        if (routes.Length != requested.Count || requested.Any(id => routes.Count(r => r.RouteId == id) != 1)
+            || routes.Any(r => string.IsNullOrWhiteSpace(r.AgencyId) || agencies.Count(a => Value(a,"agency_id") == r.AgencyId && !string.IsNullOrWhiteSpace(Value(a,"agency_name"))) != 1))
+            throw new InvalidDataException("Route/agency evidence absent or ambiguous in GTFS.");
+        return routes;
     }
 
     private static IReadOnlyList<GtfsPadrao> BuildPatterns(IReadOnlyList<GtfsRoute> routes, IReadOnlyList<GtfsTrip> trips, IReadOnlyList<GtfsStopTime> stopTimes, IReadOnlyList<GtfsShapePoint> shapes)

@@ -8,6 +8,7 @@ using NoPonto.API.Configuration;
 using NoPonto.API.Hubs;
 using NoPonto.API.Middlewares;
 using NoPonto.Application.GPS;
+using NoPonto.Application.PhysicalPresence;
 using NoPonto.Application.DTOs.EstruturaV2;
 using NoPonto.Application.Interfaces;
 using NoPonto.Application.Services;
@@ -33,6 +34,15 @@ using NoPonto.Application.TremRealtime.RailRuntime;
 using NoPonto.Application.TremSchedule;
 
 Env.NoClobber().Load();
+
+if (args is ["--canonical-redis-self-test"])
+{
+    var host = Environment.GetEnvironmentVariable("REDIS_HOST") ?? throw new InvalidOperationException("Redis host required.");
+    var port = int.Parse(Environment.GetEnvironmentVariable("REDIS_PORT") ?? throw new InvalidOperationException("Redis port required."));
+    using var connection = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions { EndPoints = { { host, port } } });
+    await CanonicalRedisProbe.RunAsync(connection);
+    return;
+}
 
 if (NoPonto.Application.Tarifas.TarifasImportCommand.IsRequested(args))
 {
@@ -321,10 +331,13 @@ foreach (var modal in new[] { GpsModalNames.Bus, GpsModalNames.Brt })
         var path = modal == GpsModalNames.Bus ? "onibus" : "brt";
         var client = new GtfsRealtimeGpsClient(
             sp.GetRequiredService<IHttpClientFactory>().CreateClient("GpsGtfsRealtime"),
-            new Uri($"https://dados.mobilidade.rio/gtfs/realtime/{path}/vehicle-positions"), options);
+            new Uri($"https://dados.mobilidade.rio/gtfs/realtime/{path}/vehicle-positions"), options,
+            diagnostics: modal == GpsModalNames.Bus ? sp.GetRequiredService<PhysicalDiagnostics>() : null);
         return new GtfsRealtimeGpsSource(modal, client,
             sp.GetRequiredService<IGtfsRealtimeRouteLookup>(), options,
-            sp.GetRequiredService<ILogger<GtfsRealtimeGpsSource>>());
+            sp.GetRequiredService<ILogger<GtfsRealtimeGpsSource>>(),
+            sp.GetRequiredService<PhysicalLocationShadow>(), sp.GetRequiredService<UnifiedLocation>(),
+            sp.GetRequiredService<PhysicalDiagnostics>(), sp.GetRequiredService<PhysicalNetworkEvaluation>());
     });
 }
 
@@ -577,6 +590,29 @@ builder.Services.AddSingleton<TelemetriaMlRetentionMetrics>();
 builder.Services.AddHostedService<TelemetriaMlRetentionService>();
 
 builder.Services.AddSignalR();
+
+// Physical acquisition and publication are independently gated. Disabled by default.
+var physicalOptions = builder.Configuration.GetSection("PhysicalPresence")
+    .Get<PhysicalPresenceMvpOptions>() ?? new PhysicalPresenceMvpOptions();
+if (physicalOptions.Enabled && !physicalOptions.IsValid())
+    throw new InvalidOperationException("PhysicalPresence requires bounded acquisition and reviewed facility anchors.");
+builder.Services.AddSingleton(physicalOptions);
+builder.Services.AddSingleton<PhysicalDiagnostics>();
+builder.Services.AddSingleton<PhysicalNetworkEvaluation>();
+if ((physicalOptions.ShadowSelectionEnabled || physicalOptions.UnifiedLocationEnabled) && (!physicalOptions.AllowOfficialSppoIds || physicalOptions.ServiceCode != "838"))
+    throw new InvalidOperationException("Physical shadow requires the approved SPPO 838 pilot namespace.");
+builder.Services.AddSingleton<IPhysicalLineResolver, ConfiguredPhysicalLineResolver>();
+builder.Services.AddSingleton<IUnifiedLocationStore, RedisUnifiedLocationStore>();
+builder.Services.AddSingleton<MulticohortPhysicalShadow>();
+builder.Services.AddSingleton<ICanonicalPhysicalStore, RedisCanonicalPhysicalStore>();
+builder.Services.AddSingleton<CanonicalPhysicalLocation>();
+builder.Services.AddSingleton<UnifiedLocation>();
+builder.Services.AddSingleton(sp => new PhysicalLocationShadow(
+    sp.GetRequiredService<IPhysicalLineResolver>(), sp.GetRequiredService<TimeProvider>(),
+    physicalOptions.ShadowSelectionEnabled));
+builder.Services.AddSingleton<PhysicalPresenceStore>();
+builder.Services.AddSingleton<PhysicalPresenceMvp>();
+if (physicalOptions.Enabled) builder.Services.AddHostedService<PhysicalPresenceWorker>();
 
 builder.Services.AddSingleton<AdaptiveEtaShadow>();
 builder.Services.AddSingleton<AdaptiveEtaShadowWorker>();

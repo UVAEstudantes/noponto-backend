@@ -1,3 +1,4 @@
+using NoPonto.Application.PhysicalPresence;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -15,6 +16,8 @@ internal interface ISnapshotGpsSource : IStatusGpsSource { }
 
 public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
 {
+    private readonly PhysicalDiagnostics? _diagnostics;
+    private readonly PhysicalNetworkEvaluation? _evaluation;
     private readonly string _modal;
     private readonly GtfsRealtimeGpsClient _client;
     private readonly IGtfsRealtimeRouteLookup _lookup;
@@ -25,6 +28,8 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
     private IReadOnlyList<GpsObservation>? _mappedObservations;
     private DateTimeOffset _mappingExpires;
     private DateTimeOffset? _lastHttpSnapshot;
+    private readonly NoPonto.Application.PhysicalPresence.PhysicalLocationShadow? _physicalShadow;
+    private readonly NoPonto.Application.PhysicalPresence.UnifiedLocation? _unified;
     public string Name => _modal == GpsModalNames.Bus ? "GTFSRT_BUS" : "GTFSRT_BRT";
     internal void RequireOperational(string modal)
     {
@@ -34,8 +39,10 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
 
     public GtfsRealtimeGpsSource(string modal, GtfsRealtimeGpsClient client,
         IGtfsRealtimeRouteLookup lookup, GtfsRealtimeGpsOptions options,
-        ILogger<GtfsRealtimeGpsSource> logger)
-    { _modal = modal; _client = client; _lookup = lookup; _options = options; _logger = logger; }
+        ILogger<GtfsRealtimeGpsSource> logger,
+        NoPonto.Application.PhysicalPresence.PhysicalLocationShadow? physicalShadow = null,
+        NoPonto.Application.PhysicalPresence.UnifiedLocation? unified = null, PhysicalDiagnostics? diagnostics = null, PhysicalNetworkEvaluation? evaluation = null)
+    { _diagnostics = diagnostics; _evaluation = evaluation; _modal = modal; _client = client; _lookup = lookup; _options = options; _logger = logger; _physicalShadow = physicalShadow; _unified = unified; }
 
     public async Task<IReadOnlyList<GpsObservation>> GetPositionsAsync(CancellationToken cancellationToken)
         => (await ReadAsync(cancellationToken)).Observations;
@@ -84,6 +91,7 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
         }
         if (!result.Success)
         {
+            if (_modal == GpsModalNames.Bus) _diagnostics?.All("gtfs_acquisition", result.Failure ?? "failed");
             _logger.LogWarning("GTFSRT source={source} failure={reason} last_http_snapshot={last} until={until}; possible historical gap, no catch-up or fallback.",
                 Name, result.Failure, _lastHttpSnapshot, now);
             return new(StatusFonteGps.Falha, [], result.Duration, result.Failure);
@@ -107,6 +115,9 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
         var routes = mappings.GroupBy(x => x.RouteId, StringComparer.Ordinal)
             .Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.Single(), StringComparer.Ordinal);
         var observations = new List<GpsObservation>();
+        if (_modal == GpsModalNames.Bus && _diagnostics is not null)
+            foreach (var r in result.Snapshot.Readings.Where(x => _diagnostics.Watches(x.VehicleId)))
+                _diagnostics.Record(r.VehicleId, "gtfs_parser_valid", r.TimestampGps, Name, "awaiting_route_direction_speed");
         var unresolved = 0;
         var invalidSpeed = 0;
         var invalidDirection = 0;
@@ -136,6 +147,48 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
         // Canonical aliases can collide after BRT prefixing. Reject those identities instead of choosing arbitrarily.
         var unique = observations.GroupBy(x => x.VehicleId, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() == 1).Select(g => g.Single()).ToArray();
+        if (_modal == GpsModalNames.Bus)
+        {
+            _evaluation?.ObserveGtfs(unique);
+            if (_diagnostics is not null) foreach (var r in result.Snapshot.Readings.Where(x => _diagnostics.Watches(x.VehicleId)))
+            {
+                var reason = r.TimestampGps < now.AddSeconds(-_options.MaxAgeSeconds) ? "expired" :
+                    !routes.TryGetValue(r.RouteId, out var line) || line.LinhaId == Guid.Empty || !line.ModalValidated || line.Brt || string.IsNullOrWhiteSpace(line.Codigo) || line.Codigo == "0" ? "route_rejected" :
+                    r.DirectionId is not null && line.Directions is not null && !line.Directions.Contains(r.DirectionId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)) ? "direction_rejected" :
+                    SpeedKmh(r.SpeedRaw, _options.BusSpeedUnit) is null ? "speed_rejected" :
+                    unique.Any(x => x.VehicleId == r.VehicleId.Trim().ToUpperInvariant()) ? "normalized" : "identity_collision";
+                _diagnostics.Record(r.VehicleId, "gtfs_gate", r.TimestampGps, Name, reason);
+            }
+        }
+        if (_unified is { Enabled: true } && _modal == GpsModalNames.Bus)
+            await _unified.ObserveGtfsAsync(unique, ct);
+        if (_physicalShadow is { Enabled: true } && _modal == GpsModalNames.Bus)
+            foreach (var o in unique.Where(x => x.ServiceCode == "838"))
+            {
+                var decision = _physicalShadow.Observe(new(new(NoPonto.Application.PhysicalPresence.PhysicalModal.Sppo,
+                    NoPonto.Application.PhysicalPresence.PhysicalSource.GtfsRealtime, Name, o.VehicleId),
+                    o.GpsTimestamp, o.Latitude, o.Longitude, o.SpeedKmh, o.ServiceCode, o.RouteId,
+                    o.TripId, o.SourceRecordId, o.ReceivedAtUtc));
+                _logger.LogInformation("Physical selection shadow source=GTFSRT_BUS reason={reason} selected_source={selected_source} uncertain={uncertain}",
+                    decision.Reason, decision.Position?.Identity.Source.ToString() ?? "none", decision.Uncertain);
+            }
+        if (_unified is { Enabled: true } && _unified.IsCohort("843") && _modal == GpsModalNames.Bus)
+        {
+            foreach (var code in _unified.Cohorts)
+            {
+                var expected = _unified.RoutesFor(code).ToHashSet(StringComparer.Ordinal);
+                var cohortRaw = result.Snapshot.Readings.Where(x => expected.Contains(x.RouteId)).ToArray();
+                var cohortFresh = raw.Where(x => expected.Contains(x.RouteId)).ToArray();
+                var mapped = cohortFresh.Where(x => routes.TryGetValue(x.RouteId, out var m) && m.Codigo == code
+                    && m.LinhaId != Guid.Empty && m.ModalValidated && !m.Brt).ToArray();
+                var directed = mapped.Where(x => x.DirectionId is null || routes[x.RouteId].Directions is not { } allowed
+                    || allowed.Contains(x.DirectionId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray();
+                _logger.LogInformation("Unified GTFS cohort={cohort} parsed={parsed} within_max_age={age} route_validated={mapped} direction_accepted={direction} speed_accepted={speed} normalized={normalized} normalized_ids={ids} max_age_s={maxAge}",
+                    code, cohortRaw.Length, cohortFresh.Length, mapped.Length, directed.Length,
+                    directed.Count(x => SpeedKmh(x.SpeedRaw, _options.BusSpeedUnit) is not null),
+                    unique.Count(x => x.ServiceCode == code), string.Join(",", unique.Where(x => x.ServiceCode == code).Select(x => x.VehicleId).Take(100)), _options.MaxAgeSeconds);
+            }
+        }
         _mappedSnapshot = result.Snapshot;
         _mappedObservations = Array.AsReadOnly(unique);
         _mappingExpires = now.AddSeconds(30);
