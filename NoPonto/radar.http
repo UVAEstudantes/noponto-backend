@@ -1,0 +1,70 @@
+@baseUrl = http://localhost:5166
+# Preencher apenas localmente. Nunca versionar uma credencial real.
+@credencial = SUBSTITUIR_LOCALMENTE
+@sessaoId = bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+
+### Registrar instalação: guardar credencial com segurança
+POST {{baseUrl}}/radar/instalacoes
+
+### Metadados autenticados
+GET {{baseUrl}}/radar/instalacao
+Authorization: Bearer {{credencial}}
+
+### Renovar credencial ainda válida
+POST {{baseUrl}}/radar/instalacao/renovar
+Authorization: Bearer {{credencial}}
+
+### Ativar (trocar IDs pelos vínculos atuais do catálogo)
+POST {{baseUrl}}/radar/sessao
+Authorization: Bearer {{credencial}}
+Content-Type: application/json
+
+{
+  "paradaId": "20000000-0000-0000-0000-000000000001",
+  "contextos": [{
+    "linhaId": "10000000-0000-0000-0000-000000000001",
+    "sentidoId": "30000000-0000-0000-0000-000000000001",
+    "padraoOperacionalId": "40000000-0000-0000-0000-000000000001",
+    "padraoVersaoId": "50000000-0000-0000-0000-000000000001"
+  }],
+  "linhasSelecionadas": ["10000000-0000-0000-0000-000000000001"],
+  "linhasPrioritarias": [],
+  "antecedenciaMinutos": 10,
+  "revisaoEsperada": 0
+}
+
+### Consultar sessão (não renova prazo)
+GET {{baseUrl}}/radar/sessao
+Authorization: Bearer {{credencial}}
+
+### Reconfigurar com revisão atual
+PUT {{baseUrl}}/radar/sessao
+Authorization: Bearer {{credencial}}
+Content-Type: application/json
+
+{
+  "sessaoId": "{{sessaoId}}",
+  "revisaoEsperada": 1,
+  "paradaId": "20000000-0000-0000-0000-000000000001",
+  "contextos": [{
+    "linhaId": "10000000-0000-0000-0000-000000000001",
+    "sentidoId": "30000000-0000-0000-0000-000000000001",
+    "padraoOperacionalId": "40000000-0000-0000-0000-000000000001",
+    "padraoVersaoId": "50000000-0000-0000-0000-000000000001"
+  }],
+  "linhasSelecionadas": ["10000000-0000-0000-0000-000000000001"],
+  "linhasPrioritarias": ["10000000-0000-0000-0000-000000000001"],
+  "antecedenciaMinutos": 2
+}
+
+### Encerrar: repetir retorna 204
+DELETE {{baseUrl}}/radar/sessao/{{sessaoId}}
+Authorization: Bearer {{credencial}}
+
+### Revogar instalação
+DELETE {{baseUrl}}/radar/instalacao
+Authorization: Bearer {{credencial}}
+
+### Erro: ID conhecido sem credencial retorna 401
+GET {{baseUrl}}/radar/sessao
+Authorization: Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

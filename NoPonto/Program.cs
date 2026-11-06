@@ -97,6 +97,7 @@ if (!gpsHubRoute.StartsWith('/'))
     gpsHubRoute = $"/{gpsHubRoute}";
 
 builder.Services.AddControllers();
+NoPonto.API.Extensions.RadarRegistration.AddRadar(builder.Services, builder.Configuration);
 builder.Services.AddScoped<NoPonto.Data.Tarifas.TarifasStore>();
 builder.Services.AddScoped<NoPonto.Application.Tarifas.TarifaService>();
 
