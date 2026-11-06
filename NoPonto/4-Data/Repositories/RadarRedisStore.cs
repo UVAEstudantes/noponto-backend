@@ -34,6 +34,20 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
         local credentialLifetime = 15552000000 -- 180 dias
         local retention = 86400000 -- metadados encerrados/expirados: até 24h extras
         local function stopKey(stop) return prefix .. 'stop:' .. stop end
+        local ownerN = string.gsub(owner,'-','')
+        local tokenKey = prefix .. 'push:token:' .. ownerN
+        local function dropPush()
+            local fingerprint = redis.call('HGET',tokenKey,'fingerprint')
+            if fingerprint and redis.call('GET',prefix .. 'push:owner:' .. fingerprint) == owner then
+                redis.call('DEL',prefix .. 'push:owner:' .. fingerprint)
+            end
+            local pending = prefix .. 'push:pending-owner:' .. ownerN
+            for _,id in ipairs(redis.call('SMEMBERS',pending)) do
+                redis.call('DEL',prefix .. 'push:receipt:' .. id)
+                redis.call('ZREM',prefix .. 'push:pending',id)
+            end
+            redis.call('DEL',tokenKey,pending,prefix .. 'push:state:' .. ownerN)
+        end
         local function encode(s)
             local json = cjson.encode(s)
             -- Redis Lua 5.1 perde a distinção entre tabela vazia e array JSON vazio.
@@ -79,6 +93,37 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
         end
         if redis.call('HINCRBY', KEYS[1], 'requests', 1) > 120 then return {429, 'limite_de_operacoes'} end
         if op == 'installation' then return {200, tostring(expiry)} end
+        if op == 'push-delete' then
+            dropPush()
+            redis.call('HINCRBY',KEYS[1],'pushRevision',1)
+            return {204,''}
+        end
+        if op == 'push-put' then
+            local p = cjson.decode(ARGV[4])
+            local reverse = prefix .. 'push:owner:' .. p.fingerprint
+            local other = redis.call('GET',reverse)
+            if other and other ~= owner then
+                local otherN = string.gsub(other,'-','')
+                if redis.call('HGET',prefix .. 'push:token:' .. otherN,'fingerprint') == p.fingerprint
+                    and tonumber(redis.call('HGET',prefix .. 'installation:' .. otherN,'expires') or '0') > now then
+                    return {409,'push_token_ja_associado'}
+                end
+            end
+            local ttl = math.min(86400000,expiry-now)
+            if redis.call('HGET',tokenKey,'fingerprint') == p.fingerprint then
+                -- Refresh idempotente: não invalidar claims, deduplicação ou receipts do mesmo destinatário.
+                redis.call('HSET',tokenKey,'encrypted',p.encrypted)
+                redis.call('PEXPIRE',tokenKey,ttl)
+                redis.call('SET',reverse,owner,'PX',ttl)
+                return {200,redis.call('HGET',tokenKey,'revision')}
+            end
+            dropPush()
+            local revision = redis.call('HINCRBY',KEYS[1],'pushRevision',1)
+            redis.call('HSET',tokenKey,'fingerprint',p.fingerprint,'encrypted',p.encrypted,'revision',revision)
+            redis.call('PEXPIRE',tokenKey,ttl)
+            redis.call('SET',reverse,owner,'PX',ttl)
+            return {200,tostring(revision)}
+        end
         if op == 'renew' then
             redis.call('HSET', KEYS[1], 'expires', now+credentialLifetime)
             redis.call('PEXPIRE', KEYS[1], credentialLifetime)
@@ -94,6 +139,7 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
             redis.call('SET', KEYS[2], encode(s), 'PX', math.max(1, s.expiraEmMs+retention-now))
         end
         if op == 'revoke' then
+            dropPush()
             if s then removeIndex(s) end
             redis.call('DEL', KEYS[1], KEYS[2])
             return {204, ''}

@@ -1,0 +1,24 @@
+# Somente harness local Testing: não há capacidade de teste publicada por endpoint.
+# Não versionar credenciais, capabilities ou tokens reais.
+@baseUrl = http://localhost:5166
+@credencial = PREENCHER_SOMENTE_NO_HARNESS
+@capacidade = CAPACIDADE_EM_MEMORIA_DO_HARNESS
+
+### Associar/substituir (não confirma posse e não habilita envio)
+PUT {{baseUrl}}/radar/instalacao/push-token
+Authorization: Bearer {{credencial}}
+X-NoPonto-Push-Test: {{capacidade}}
+Content-Type: application/json
+
+{"expoPushToken":"ExpoPushToken[SYNTHETIC_NOT_FOR_DELIVERY]","platform":"android"}
+
+### Remover token da própria instalação, idempotentemente
+DELETE {{baseUrl}}/radar/instalacao/push-token
+Authorization: Bearer {{credencial}}
+X-NoPonto-Push-Test: {{capacidade}}
+
+### Fora do harness sempre 404, mesmo conhecendo installationId
+PUT {{baseUrl}}/radar/instalacao/push-token
+Content-Type: application/json
+
+{"expoPushToken":"ExpoPushToken[SYNTHETIC_NOT_FOR_DELIVERY]","platform":"android"}

@@ -3,6 +3,7 @@ using NoPonto.Application.Radar;
 using NoPonto.API.Middlewares;
 using NoPonto.Data.Repositories;
 using NoPonto.Application.Services.BackgroundServices;
+using NoPonto.API.Controllers;
 
 namespace NoPonto.API.Extensions;
 
@@ -33,6 +34,28 @@ public static class RadarRegistration
         services.AddScoped<IRadarStopProcessor, RadarStopProcessor>();
         services.AddSingleton<IRadarEngine, RadarEngine>();
         services.AddHostedService<RadarWorker>();
+        services.AddOptions<RadarPushOptions>().Bind(configuration.GetSection("Radar:Push"))
+            .Validate(x => x.MaxRequestsPerMinute is >= 1 and <= 600 && x.MaxPendingReceipts is >= 1 and <= 1024
+                && x.MaxAttempts is >= 1 and <= 3 && x.MaxConcurrency is >= 1 and <= 2 && x.MinIntervalSeconds is >= 1 and <= 300,
+                "Limites push inválidos").ValidateOnStart();
+        services.AddSingleton<RadarPushPolicy>();
+        services.AddSingleton<RadarPushTestAccess>();
+        services.AddSingleton<RadarTokenProtector>();
+        services.AddScoped<IRadarPushTokens, RadarPushTokens>();
+        services.AddScoped<RadarPushSandboxFilter>();
+        services.AddSingleton<IRadarPushStore, RadarPushRedisStore>();
+        services.AddSingleton<IExpoAccessTokenProvider, ExpoNoAccessToken>();
+        services.AddSingleton<IRadarPushDelay, RadarPushDelay>();
+        services.AddSingleton<RadarPushMetrics>();
+        services.AddTransient<ExpoExternalTransportBlocked>();
+        services.AddHttpClient(ExpoPushGateway.ClientName, client =>
+        {
+            client.BaseAddress = new Uri("https://exp.host/--/api/v2/push/");
+            client.Timeout = TimeSpan.FromSeconds(5);
+        }).ConfigurePrimaryHttpMessageHandler<ExpoExternalTransportBlocked>().RemoveAllLoggers();
+        services.AddSingleton<IExpoPushGateway, ExpoPushGateway>();
+        services.AddScoped<IRadarPushContexts, RadarPushContexts>();
+        services.AddScoped<RadarPushCoordinator>();
         return services;
     }
 }

@@ -14,6 +14,7 @@ public sealed class RadarOptions
     public int MaxRegistrosPorDia { get; set; } = 500;
     public int MaxSessoesAtivas { get; set; } = 2000;
     public bool WorkerEnabled { get; set; }
+    public bool PushEnabled { get; set; }
     public int IntervalSeconds { get; set; } = 30;
     public int MaxParadasPorCiclo { get; set; } = 20;
     public int MaxSessoesPorCiclo { get; set; } = 500;

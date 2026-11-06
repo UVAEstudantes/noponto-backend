@@ -1,0 +1,82 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.Options;
+
+namespace NoPonto.Application.Radar;
+
+/// <summary>Chave só em RAM, sem keyring/arquivos. Reinício exige novo cadastro em sandbox.</summary>
+public sealed class RadarTokenProtector : IDisposable
+{
+    private readonly byte[] key = RandomNumberGenerator.GetBytes(32);
+    public string Protect(string value)
+    {
+        var nonce = RandomNumberGenerator.GetBytes(12);
+        var plain = Encoding.UTF8.GetBytes(value);
+        var encrypted = new byte[plain.Length];
+        var tag = new byte[16];
+        using var aes = new AesGcm(key, 16);
+        aes.Encrypt(nonce, plain, encrypted, tag);
+        CryptographicOperations.ZeroMemory(plain);
+        return Convert.ToBase64String(nonce.Concat(tag).Concat(encrypted).ToArray());
+    }
+    public string Unprotect(string value)
+    {
+        try
+        {
+            var bytes = Convert.FromBase64String(value);
+            if (bytes.Length < 29) throw new CryptographicException();
+            var plain = new byte[bytes.Length - 28];
+            using var aes = new AesGcm(key, 16);
+            aes.Decrypt(bytes.AsSpan(0, 12), bytes.AsSpan(28), bytes.AsSpan(12, 16), plain);
+            var result = Encoding.UTF8.GetString(plain);
+            CryptographicOperations.ZeroMemory(plain);
+            return result;
+        }
+        catch (Exception e) when (e is CryptographicException or FormatException)
+        { throw new RadarException(409, "push_token_exige_novo_cadastro"); }
+    }
+    public static string Fingerprint(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    public void Dispose() => CryptographicOperations.ZeroMemory(key);
+}
+
+/// <summary>Bloqueio de exposição pública até existir confirmação de posse no Android.</summary>
+public sealed class RadarPushPolicy(IHostEnvironment environment, IOptions<RadarPushOptions> options)
+{
+    public bool Sandbox => environment.IsEnvironment("Testing") && options.Value.ControlledTestsEnabled;
+    public void RequireSandbox() { if (!Sandbox) throw new RadarException(404, "push_publico_bloqueado"); }
+}
+
+/// <summary>Capacidade efêmera acessível somente ao harness em processo, nunca publicada por endpoint/log.</summary>
+public sealed class RadarPushTestAccess
+{
+    internal string Value { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+    public bool Accepts(string value) => value.Length == Value.Length
+        && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(value), Encoding.ASCII.GetBytes(Value));
+}
+
+public sealed partial class RadarPushTokens(IRadarStore store, RadarTokenProtector protector,
+    RadarPushPolicy policy) : IRadarPushTokens
+{
+    [GeneratedRegex(@"\A(ExpoPushToken|ExponentPushToken)\[[A-Za-z0-9_-]{1,160}\]\z", RegexOptions.CultureInvariant)]
+    private static partial Regex Format();
+
+    public async Task<RadarPushTokenResponse> AssociarAsync(string authorization, RadarPushTokenRequest request, CancellationToken ct)
+    {
+        policy.RequireSandbox();
+        var auth = RadarService.Parse(authorization);
+        if (request.Platform != "android" || string.IsNullOrWhiteSpace(request.ExpoPushToken) || request.ExpoPushToken.Length > 200 || !Format().IsMatch(request.ExpoPushToken))
+            throw new RadarException(400, "push_token_invalido");
+        var result = await store.ExecutarAsync(auth with { Operacao = "push-put", Payload = JsonSerializer.Serialize(new
+        { encrypted = protector.Protect(request.ExpoPushToken), fingerprint = RadarTokenProtector.Fingerprint(request.ExpoPushToken) }) }, ct);
+        if (result.Status >= 400) throw new RadarException(result.Status, result.Payload);
+        return new(true, long.Parse(result.Payload));
+    }
+    public async Task RemoverAsync(string authorization, CancellationToken ct)
+    {
+        policy.RequireSandbox();
+        var result = await store.ExecutarAsync(RadarService.Parse(authorization) with { Operacao = "push-delete" }, ct);
+        if (result.Status >= 400) throw new RadarException(result.Status, result.Payload);
+    }
+}
