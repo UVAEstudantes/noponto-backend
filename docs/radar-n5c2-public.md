@@ -2,6 +2,8 @@
 
 Base backend `c514cf7`, branch `feat/radar-notificacoes`. Nenhum deploy, build, Docker, SSH ou envio real executado nesta etapa. A imagem `radar-c1` é anterior a esta implementação: precisa ser recompilada e validada pelo operador. Pendências de apresentação Android não foram corrigidas.
 
+Complemento N5-C3: os15testes C# foram aprovados pelo operador; a base network-27+ETA foi conferida contra o manifesto local, sem correções funcionais necessárias. Usar os checkpoints e comandos completos de [radar-n5c3-deploy.md](radar-n5c3-deploy.md) para preservar também o rollback da imagem original após ativar público.
+
 ## Autorização e configuração
 
 Nova opção `Radar:Push:PublicEnabled=false` por padrão (`Radar__Push__PublicEnabled` no ambiente). Somente Production pode habilitá-la. Os modos público e experimental são exclusivos; DI rejeita conflito, ambiente incorreto, projeto/chave ausentes e limites inválidos. A política também falha fechada se configurada diretamente sem DI.
