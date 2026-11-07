@@ -13,4 +13,13 @@
 **/.DS_Store
 .env
 .env.*
+# Radar: configurações e segredos são fornecidos somente em runtime, fora do Git.
+**/.env
+**/.env.*
+**/dev-host.json
+**/*.key
+**/*.pem
+**/expo-access-token*
+**/google-services*.json
+**/*service-account*.json
 NoPonto.csproj.lscache

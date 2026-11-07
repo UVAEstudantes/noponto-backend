@@ -1,0 +1,32 @@
+{
+  "services": {
+    "api": {
+      "environment": {
+        "Radar__Enabled": "false",
+        "Radar__WorkerEnabled": "false",
+        "Radar__PushEnabled": "false",
+        "Radar__Push__ControlledTestsEnabled": "false",
+        "Radar__Push__ExperimentalEnabled": "false",
+        "Radar__Push__ExternalTransportEnabled": "false",
+        "Radar__MaxLinhas": "20",
+        "Radar__MaxContextos": "40",
+        "Radar__MaxRegistrosPorDia": "20",
+        "Radar__MaxSessoesAtivas": "20",
+        "Radar__IntervalSeconds": "30",
+        "Radar__MaxParadasPorCiclo": "2",
+        "Radar__MaxSessoesPorCiclo": "10",
+        "Radar__MaxSessoesPorParada": "10",
+        "Radar__MaxContextosPorParada": "40",
+        "Radar__MaxEventosPorParada": "500",
+        "Radar__MaxConcorrencia": "1",
+        "Radar__QueryTimeoutSeconds": "5",
+        "Radar__CandidateTtlSeconds": "45",
+        "Radar__Push__MaxRequestsPerMinute": "10",
+        "Radar__Push__MaxPendingReceipts": "32",
+        "Radar__Push__MaxAttempts": "3",
+        "Radar__Push__MaxConcurrency": "1",
+        "Radar__Push__MinIntervalSeconds": "30"
+      }
+    }
+  }
+}
