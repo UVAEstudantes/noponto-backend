@@ -13,7 +13,7 @@ public sealed class RadarDispatchQueue(IOptions<RadarOptions> options, RadarPush
     {
         ct.ThrowIfCancellationRequested();
         var p = options.Value;
-        if (p.Enabled && p.WorkerEnabled && p.PushEnabled && policy.Experimental && policy.Allows(candidate.InstalacaoId))
+        if (p.Enabled && p.WorkerEnabled && p.PushEnabled && policy.NetworkEnabled && policy.Allows(candidate.InstalacaoId))
             channel.Writer.TryWrite(candidate);
         return Task.CompletedTask;
     }
@@ -26,7 +26,7 @@ public sealed class RadarPushDispatchWorker(RadarDispatchQueue queue, IServiceSc
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        if (!radar.Value.Enabled || !radar.Value.WorkerEnabled || !radar.Value.PushEnabled || !policy.Experimental) return;
+        if (!radar.Value.Enabled || !radar.Value.WorkerEnabled || !radar.Value.PushEnabled || !policy.NetworkEnabled) return;
         await Task.WhenAll(Enumerable.Range(0, options.Value.MaxConcurrency).Select(_ => Consume(ct)));
     }
     private async Task Consume(CancellationToken ct)

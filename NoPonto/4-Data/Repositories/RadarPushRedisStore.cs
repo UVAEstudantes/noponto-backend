@@ -41,7 +41,7 @@ public sealed class RadarPushRedisStore(IConnectionMultiplexer redis, IOptions<R
     {
         ct.ThrowIfCancellationRequested();
         var p = options.Value;
-        RedisValue[] values = [p.ExperimentalEnabled ? op + "-confirmed" : op, Prefix, owner.ToString("D"), p.MaxRequestsPerMinute, p.MaxPendingReceipts, p.MinIntervalSeconds, p.MaxAttempts, .. args];
+        RedisValue[] values = [p.ExperimentalEnabled || p.PublicEnabled ? op + "-confirmed" : op, Prefix, owner.ToString("D"), p.MaxRequestsPerMinute, p.MaxPendingReceipts, p.MinIntervalSeconds, p.MaxAttempts, .. args];
         try { return await redis.GetDatabase().ScriptEvaluateAsync(Script,
             [Prefix + "installation:" + owner.ToString("N"), Prefix + "session:" + owner.ToString("N"),
              Prefix + "candidate:" + owner.ToString("N"), Prefix + "push:token:" + owner.ToString("N"),

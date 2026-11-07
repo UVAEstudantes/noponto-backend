@@ -35,10 +35,13 @@ public static class RadarRegistration
         services.AddSingleton<IRadarEngine, RadarEngine>();
         services.AddHostedService<RadarWorker>();
         services.AddOptions<RadarPushOptions>().Bind(configuration.GetSection("Radar:Push"))
-            .Validate(x => !x.ExperimentalEnabled || x.ProjectId != Guid.Empty
+            .Validate(x => !(x.ExperimentalEnabled && x.PublicEnabled), "Modos público e experimental são exclusivos")
+            .Validate<IHostEnvironment>((x, environment) => !x.PublicEnabled || environment.IsProduction(),
+                "Push público requer ambiente Production")
+            .Validate(x => !x.ExperimentalEnabled && !x.PublicEnabled || x.ProjectId != Guid.Empty
                 && Path.IsPathFullyQualified(x.EncryptionKeyFile) && File.Exists(x.EncryptionKeyFile)
                 && x.AllowedInstallationIds.Length <= 100 && x.AllowedInstallationIds.All(id => id != Guid.Empty),
-                "Push experimental requer projeto e arquivo de chave protegido; no máximo 100 instalações autorizadas")
+                "Push requer projeto e arquivo de chave protegido; no máximo 100 instalações experimentais autorizadas")
             .Validate(x => x.MaxRequestsPerMinute is >= 1 and <= 600 && x.MaxPendingReceipts is >= 1 and <= 1024
                 && x.MaxAttempts is >= 1 and <= 3 && x.MaxConcurrency is >= 1 and <= 2 && x.MinIntervalSeconds is >= 1 and <= 300,
                 "Limites push inválidos").ValidateOnStart();
@@ -61,7 +64,7 @@ public static class RadarRegistration
         {
             client.BaseAddress = new Uri("https://exp.host/--/api/v2/push/");
             client.Timeout = TimeSpan.FromSeconds(5);
-        }).ConfigurePrimaryHttpMessageHandler(sp => sp.GetRequiredService<RadarPushPolicy>().Experimental
+        }).ConfigurePrimaryHttpMessageHandler(sp => sp.GetRequiredService<RadarPushPolicy>().NetworkEnabled
             ? new SocketsHttpHandler { AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(5),
                 MaxConnectionsPerServer = 2, PooledConnectionLifetime = TimeSpan.FromMinutes(5) }
             : (HttpMessageHandler)sp.GetRequiredService<ExpoExternalTransportBlocked>()).RemoveAllLoggers();

@@ -18,6 +18,7 @@ public sealed class RadarPushOptions
 {
     public bool ControlledTestsEnabled { get; set; }
     public bool ExperimentalEnabled { get; set; }
+    public bool PublicEnabled { get; set; }
     public bool ExternalTransportEnabled { get; set; }
     public string EncryptionKeyFile { get; set; } = "";
     public string ExpoAccessTokenFile { get; set; } = "";

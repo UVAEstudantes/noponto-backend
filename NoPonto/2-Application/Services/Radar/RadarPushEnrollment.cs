@@ -31,7 +31,7 @@ public sealed class RadarPushEnrollment(IRadarStore store, RadarTokenProtector p
         if (!radarOptions.Value.Enabled || !radarOptions.Value.PushEnabled) throw new RadarException(404, "push_experimental_desabilitado");
         var auth = RadarService.Parse(authorization);
         policy.RequireInstallation(auth.InstalacaoId);
-        if (!policy.Experimental) throw new RadarException(404, "push_experimental_desabilitado");
+        if (!policy.NetworkEnabled) throw new RadarException(404, "push_experimental_desabilitado");
         var result = await store.ExecutarAsync(auth with { Operacao = operation,
             Payload = data is null ? "" : JsonSerializer.Serialize(data) }, ct);
         if (result.Status >= 400) throw new RadarException(result.Status, result.Payload);
@@ -46,7 +46,7 @@ public sealed class RadarPushEnrollment(IRadarStore store, RadarTokenProtector p
             verifier = RadarTokenProtector.Fingerprint(proof), encrypted = protector.Protect(request.ExpoPushToken),
             fingerprint = RadarTokenProtector.Fingerprint(request.ExpoPushToken), maxPending = options.Value.MaxPendingReceipts }, ct);
         var until = clock.GetUtcNow().AddSeconds(120);
-        var message = new ExpoRadarMessage(request.ExpoPushToken, "NoPonto Dev", "Confirmando este aparelho para o Radar.",
+        var message = new ExpoRadarMessage(request.ExpoPushToken, policy.Public ? "NoPonto" : "NoPonto Dev", "Confirmando este aparelho para o Radar.",
             120, until.ToUnixTimeSeconds(), new { mode = "radar-enrollment", enrollmentId = request.EnrollmentId,
                 proof, projectId = request.ProjectId, validUntil = until });
         var result = await gateway.EnviarAsync(message, async token =>
@@ -64,7 +64,7 @@ public sealed class RadarPushEnrollment(IRadarStore store, RadarTokenProtector p
             throw new RadarException(400, "push_confirmacao_invalida");
         var result = await Run(authorization, "push-confirm", new { enrollmentId = request.EnrollmentId.ToString("D"),
             verifier = RadarTokenProtector.Fingerprint(request.Proof) }, ct);
-        return new(true, long.Parse(result.Payload), "experimental", true);
+        return new(true, long.Parse(result.Payload), policy.Public ? "public" : "experimental", true);
     }
     public async Task<RadarPushStatus> ConsultarAsync(string authorization, CancellationToken ct)
     {

@@ -1,5 +1,10 @@
 # Deploy API MVP
 
+Radar N5-C2: o caminho manual com composição congelada foi estendido em
+`eta-hybrid-release.py` com modos `radar-*`, preflight e snapshot/rollback completos.
+Contrato e procedimento: [radar-n5c2-public.md](../docs/radar-n5c2-public.md).
+O executor CI abaixo não carrega automaticamente o overlay Radar; não usá-lo para essa ativação.
+
 Implementação baseada na auditoria 3A entregue na conversa: tres Compose obrigatorios, imagem por digest, API única, nenhuma recriação de dependências. Não chama `/home/guilherme/deploy.sh` nem envia Compose do Git ao servidor.
 
 ## Ativação pelo operador

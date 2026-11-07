@@ -6,16 +6,17 @@ using Microsoft.Extensions.Options;
 
 namespace NoPonto.Application.Radar;
 
-/// <summary>Chave só em RAM, sem keyring/arquivos. Reinício exige novo cadastro em sandbox.</summary>
+/// <summary>Chave persistente externa nos modos de rede; chave efêmera somente no sandbox.</summary>
 public sealed class RadarTokenProtector : IDisposable
 {
     private readonly byte[] key;
     public RadarTokenProtector(IOptions<RadarPushOptions>? options = null)
     {
-        if (options?.Value.ExperimentalEnabled != true) { key = RandomNumberGenerator.GetBytes(32); return; }
+        if (options?.Value is not { } settings || !settings.ExperimentalEnabled && !settings.PublicEnabled)
+        { key = RandomNumberGenerator.GetBytes(32); return; }
         try
         {
-            key = Convert.FromBase64String(File.ReadAllText(options.Value.EncryptionKeyFile).Trim());
+            key = Convert.FromBase64String(File.ReadAllText(settings.EncryptionKeyFile).Trim());
             if (key.Length != 32) throw new CryptographicException();
         }
         catch { throw new InvalidOperationException("Chave protegida do Radar indisponível ou inválida."); }
@@ -51,15 +52,21 @@ public sealed class RadarTokenProtector : IDisposable
     public void Dispose() => CryptographicOperations.ZeroMemory(key);
 }
 
-/// <summary>Bloqueio de exposição pública até existir confirmação de posse no Android.</summary>
+/// <summary>Rede pública opt-in em Production; experimento restrito por instalação. Enrollment continua obrigatório.</summary>
 public sealed class RadarPushPolicy(IHostEnvironment environment, IOptions<RadarPushOptions> options)
 {
     public bool Sandbox => environment.IsEnvironment("Testing") && options.Value.ControlledTestsEnabled;
-    public bool Experimental => options.Value.ExperimentalEnabled && options.Value.ExternalTransportEnabled
+    private bool TransportConfigured => options.Value.ExternalTransportEnabled
+        && options.Value.ProjectId != Guid.Empty && !string.IsNullOrWhiteSpace(options.Value.EncryptionKeyFile);
+    public bool Public => environment.IsProduction() && options.Value.PublicEnabled
+        && !options.Value.ExperimentalEnabled && TransportConfigured;
+    public bool Experimental => !options.Value.PublicEnabled && options.Value.ExperimentalEnabled && options.Value.ExternalTransportEnabled
         && options.Value.ProjectId != Guid.Empty && options.Value.AllowedInstallationIds.Length is > 0 and <= 100
         && !string.IsNullOrWhiteSpace(options.Value.EncryptionKeyFile);
-    public bool Enabled => Sandbox || Experimental;
-    public bool Allows(Guid owner) => Sandbox || Experimental && options.Value.AllowedInstallationIds.Contains(owner);
+    public bool NetworkEnabled => Public || Experimental;
+    public bool Enabled => Sandbox || NetworkEnabled;
+    public bool Allows(Guid owner) => owner != Guid.Empty && (Sandbox || Public
+        || Experimental && options.Value.AllowedInstallationIds.Contains(owner));
     public void RequireInstallation(Guid owner) { if (!Allows(owner)) throw new RadarException(403, "instalacao_nao_autorizada_para_push"); }
     public void RequireSandbox() { if (!Sandbox) throw new RadarException(404, "push_publico_bloqueado"); }
 }

@@ -20,7 +20,7 @@ public sealed class RadarReceiptsWorker(IServiceScopeFactory scopes, IOptions<Ra
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!options.Value.Enabled || !options.Value.WorkerEnabled || !options.Value.PushEnabled || !policy.Experimental) return;
+        if (!options.Value.Enabled || !options.Value.WorkerEnabled || !options.Value.PushEnabled || !policy.NetworkEnabled) return;
         await Task.Yield();
         try
         {
