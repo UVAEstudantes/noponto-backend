@@ -36,7 +36,9 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
         local function stopKey(stop) return prefix .. 'stop:' .. stop end
         local ownerN = string.gsub(owner,'-','')
         local tokenKey = prefix .. 'push:token:' .. ownerN
+        local challengeKey = prefix .. 'push:challenge:' .. ownerN
         local function dropPush()
+            redis.call('DEL',challengeKey)
             local fingerprint = redis.call('HGET',tokenKey,'fingerprint')
             if fingerprint and redis.call('GET',prefix .. 'push:owner:' .. fingerprint) == owner then
                 redis.call('DEL',prefix .. 'push:owner:' .. fingerprint)
@@ -93,6 +95,81 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
         end
         if redis.call('HINCRBY', KEYS[1], 'requests', 1) > 120 then return {429, 'limite_de_operacoes'} end
         if op == 'installation' then return {200, tostring(expiry)} end
+        if op == 'push-status' then
+            return {200,cjson.encode({registered=redis.call('EXISTS',tokenKey)==1,
+                possessionConfirmed=redis.call('HGET',tokenKey,'confirmed')=='1',
+                revision=tonumber(redis.call('HGET',tokenKey,'revision') or '0')})}
+        end
+        if op == 'push-challenge' then
+            local p = cjson.decode(ARGV[4])
+            local pending = prefix .. 'push:pending'
+            local owned = prefix .. 'push:pending-owner:' .. ownerN
+            for _,id in ipairs(redis.call('SMEMBERS',owned)) do
+                if redis.call('EXISTS',prefix .. 'push:receipt:' .. id)==0 then
+                    redis.call('SREM',owned,id); redis.call('ZREM',pending,id)
+                end
+            end
+            if redis.call('ZCARD',pending)>=tonumber(p.maxPending) or redis.call('SCARD',owned)>=32 then return {429,'push_pendencias_saturadas'} end
+            local nextChallenge = tonumber(redis.call('HGET',KEYS[1],'nextChallenge') or '0')
+            if nextChallenge > now then return {429,'push_confirmacao_aguarde'} end
+            redis.call('HSET',KEYS[1],'nextChallenge',now+60000)
+            redis.call('HSET',challengeKey,'enrollmentId',p.enrollmentId,'verifier',p.verifier,
+                'encrypted',p.encrypted,'fingerprint',p.fingerprint,'attempts',0)
+            redis.call('EXPIRE',challengeKey,120)
+            local reservation = 'c:' .. p.enrollmentId
+            redis.call('HSET',prefix .. 'push:receipt:' .. reservation,'owner',owner)
+            redis.call('EXPIRE',prefix .. 'push:receipt:' .. reservation,120)
+            redis.call('ZADD',pending,now+120000,reservation)
+            redis.call('SADD',owned,reservation); redis.call('EXPIRE',owned,86400)
+            return {202,''}
+        end
+        if op == 'push-challenge-authorize' or op == 'push-challenge-result' or op == 'push-confirm' then
+            local p = cjson.decode(ARGV[4])
+            if redis.call('HGET',challengeKey,'enrollmentId') ~= p.enrollmentId then
+                if op=='push-challenge-result' then return {200,''} end
+                return {409,'push_confirmacao_expirada'}
+            end
+            if op == 'push-challenge-authorize' then
+                if redis.call('EXISTS',prefix .. 'push:halt')==1 then return {429,'push_pausado'} end
+                local rateKey = prefix .. 'push:rate'
+                if redis.call('HGET',rateKey,'minute')~=tostring(minute) then redis.call('HSET',rateKey,'minute',minute,'count',0) end
+                if tonumber(redis.call('HGET',rateKey,'count') or '0')>=tonumber(p.limit) then return {429,'push_limite_confirmacoes'} end
+                redis.call('HINCRBY',rateKey,'count',1); redis.call('EXPIRE',rateKey,120)
+                return {200,''}
+            end
+            if op == 'push-challenge-result' then
+                if p.status=='credentials' then redis.call('SET',prefix .. 'push:halt','credentials','EX',3600) end
+                local pending = prefix .. 'push:pending'
+                local owned = prefix .. 'push:pending-owner:' .. ownerN
+                local reservation = 'c:' .. p.enrollmentId
+                redis.call('DEL',prefix .. 'push:receipt:' .. reservation)
+                redis.call('ZREM',pending,reservation); redis.call('SREM',owned,reservation)
+                if p.status=='ticket' then
+                    local id='r:' .. p.ticket
+                    redis.call('HSET',prefix .. 'push:receipt:' .. id,'owner',owner,
+                        'fingerprint',redis.call('HGET',challengeKey,'fingerprint'),'revision',-1)
+                    redis.call('EXPIRE',prefix .. 'push:receipt:' .. id,86400)
+                    redis.call('ZADD',pending,now+900000,id)
+                    redis.call('SADD',owned,id); redis.call('EXPIRE',owned,86400)
+                end
+                -- O challenge não associa token nem prova entrega através do ticket.
+                return {200,''}
+            end
+            local expected = redis.call('HGET',challengeKey,'verifier') or ''
+            local diff = string.len(expected)==string.len(p.verifier) and 0 or 1
+            for i=1,string.len(expected) do
+                if string.byte(expected,i)~=string.byte(p.verifier,i) then diff=diff+1 end
+            end
+            if diff~=0 then
+                if redis.call('HINCRBY',challengeKey,'attempts',1)>=5 then redis.call('DEL',challengeKey) end
+                return {409,'push_confirmacao_invalida'}
+            end
+            local confirmed = {encrypted=redis.call('HGET',challengeKey,'encrypted'),
+                fingerprint=redis.call('HGET',challengeKey,'fingerprint'),confirmed=true}
+            redis.call('DEL',challengeKey) -- consumo único, inclusive em conflito de propriedade
+            ARGV[4]=cjson.encode(confirmed)
+            op='push-put'
+        end
         if op == 'push-delete' then
             dropPush()
             redis.call('HINCRBY',KEYS[1],'pushRevision',1)
@@ -113,6 +190,7 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
             if redis.call('HGET',tokenKey,'fingerprint') == p.fingerprint then
                 -- Refresh idempotente: não invalidar claims, deduplicação ou receipts do mesmo destinatário.
                 redis.call('HSET',tokenKey,'encrypted',p.encrypted)
+                if p.confirmed then redis.call('HSET',tokenKey,'confirmed','1') end
                 redis.call('PEXPIRE',tokenKey,ttl)
                 redis.call('SET',reverse,owner,'PX',ttl)
                 return {200,redis.call('HGET',tokenKey,'revision')}
@@ -120,6 +198,7 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
             dropPush()
             local revision = redis.call('HINCRBY',KEYS[1],'pushRevision',1)
             redis.call('HSET',tokenKey,'fingerprint',p.fingerprint,'encrypted',p.encrypted,'revision',revision)
+            if p.confirmed then redis.call('HSET',tokenKey,'confirmed','1') end
             redis.call('PEXPIRE',tokenKey,ttl)
             redis.call('SET',reverse,owner,'PX',ttl)
             return {200,tostring(revision)}

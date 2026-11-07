@@ -1912,3 +1912,11 @@ Docs/radar-n5a.md e NoPonto/radar-push.http registram contratos, fontes, arquite
 
 ### Rastreabilidade documental N5-A
 Implementação8165b8b9c1a353f2a0af8241ad2fa3772dec2c93 registrada em docs/radar-n5a.md. Documento reúne contratos, arquitetura, fontes oficiais,181/181emulados/offline148+33ignorados, limites Android/Expo e intervenções manuais N5-B. Complemento somente documental; código/testes finais permanecem os já validados, sem repetição. Redis7real, prova de posse, chave compartilhada e renderer nativo seguem bloqueios de produção; nenhum envio, segredo real, deploy ou push Git.
+
+## 2026-11-06 — Radar N5-C0: checkpoint local da implementação N5-B
+
+Consolidado o WIP N5-B sobre dec65e1 em feat/radar-notificacoes: enrollment autenticado com challenge de uso único, allowlist experimental, tokens confirmados cifrados com chave persistente externa, transporte Expo opt-in, fila limitada de candidatos e workers de envio/receipts. Incluídos testes existentes de enrollment e fontes dos auxiliares DevHost somente leitura, ponte loopback e gerador de chave protegida; nenhuma configuração privada ou chave incluída. Código funcional preservado sem correções adicionais neste checkpoint.
+
+Evidência anterior: Redis7 real descartável 7.4.8, TRX final com197executados/197aprovados/0falhas; não repetido. Operador confirmou enrollment, sessão de uma hora e Push real em segundo plano no Redmi Note11, com previsões838/884. Isso valida o laboratório, não a API Docker produtiva. Acúmulo de notificações, comportamento ao tocar/abrir, repetição e ausência de chegadas seguida de ETA permanecem pendentes; sem causa exata do acúmulo nem métricas de latência consolidadas. Demais cenários físicos e recursos em4GB não declarados homologados. Evidências e limites atualizados em docs/radar-n5b.md.
+
+Revisados diffs/arquivos novos e conteúdo a incluir no Git. Artefatos n4a/n4b/n5a/n5b, caches Python, bin/obj e arquivos privados preservados fora do commit. Não executados builds, testes, Docker, Expo, ADB, SSH ou operações de servidor; nenhum serviço interrompido, infraestrutura alterada, push Git, merge ou deploy. Próxima preparação proposta: compatibilidade com a base produtiva e configuração Docker com Radar desativado, sem executá-la neste checkpoint.

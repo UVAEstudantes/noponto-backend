@@ -9,7 +9,17 @@ namespace NoPonto.Application.Radar;
 /// <summary>Chave só em RAM, sem keyring/arquivos. Reinício exige novo cadastro em sandbox.</summary>
 public sealed class RadarTokenProtector : IDisposable
 {
-    private readonly byte[] key = RandomNumberGenerator.GetBytes(32);
+    private readonly byte[] key;
+    public RadarTokenProtector(IOptions<RadarPushOptions>? options = null)
+    {
+        if (options?.Value.ExperimentalEnabled != true) { key = RandomNumberGenerator.GetBytes(32); return; }
+        try
+        {
+            key = Convert.FromBase64String(File.ReadAllText(options.Value.EncryptionKeyFile).Trim());
+            if (key.Length != 32) throw new CryptographicException();
+        }
+        catch { throw new InvalidOperationException("Chave protegida do Radar indisponível ou inválida."); }
+    }
     public string Protect(string value)
     {
         var nonce = RandomNumberGenerator.GetBytes(12);
@@ -45,6 +55,12 @@ public sealed class RadarTokenProtector : IDisposable
 public sealed class RadarPushPolicy(IHostEnvironment environment, IOptions<RadarPushOptions> options)
 {
     public bool Sandbox => environment.IsEnvironment("Testing") && options.Value.ControlledTestsEnabled;
+    public bool Experimental => options.Value.ExperimentalEnabled && options.Value.ExternalTransportEnabled
+        && options.Value.ProjectId != Guid.Empty && options.Value.AllowedInstallationIds.Length is > 0 and <= 100
+        && !string.IsNullOrWhiteSpace(options.Value.EncryptionKeyFile);
+    public bool Enabled => Sandbox || Experimental;
+    public bool Allows(Guid owner) => Sandbox || Experimental && options.Value.AllowedInstallationIds.Contains(owner);
+    public void RequireInstallation(Guid owner) { if (!Allows(owner)) throw new RadarException(403, "instalacao_nao_autorizada_para_push"); }
     public void RequireSandbox() { if (!Sandbox) throw new RadarException(404, "push_publico_bloqueado"); }
 }
 
@@ -61,6 +77,7 @@ public sealed partial class RadarPushTokens(IRadarStore store, RadarTokenProtect
 {
     [GeneratedRegex(@"\A(ExpoPushToken|ExponentPushToken)\[[A-Za-z0-9_-]{1,160}\]\z", RegexOptions.CultureInvariant)]
     private static partial Regex Format();
+    public static bool TokenValido(string? token) => token is { Length: > 0 and <= 200 } && Format().IsMatch(token);
 
     public async Task<RadarPushTokenResponse> AssociarAsync(string authorization, RadarPushTokenRequest request, CancellationToken ct)
     {

@@ -84,7 +84,7 @@ public sealed class RadarPushCoordinator(IRadarPushStore store, IExpoPushGateway
 {
     public async Task<string> ProcessarAsync(RadarConteudoCandidato expected, CancellationToken ct)
     {
-        if (!options.Value.PushEnabled || !options.Value.Enabled || !policy.Sandbox) return "disabled";
+        if (!options.Value.PushEnabled || !options.Value.Enabled || !policy.Enabled || !policy.Allows(expected.InstalacaoId)) return "disabled";
         var snapshot = await store.CarregarAsync(expected.InstalacaoId, ct);
         if (snapshot is null || snapshot.Candidate.SessaoId != expected.SessaoId || snapshot.Candidate.Revisao != expected.Revisao
             || snapshot.Candidate.ParadaId != expected.ParadaId || snapshot.Candidate.ConsultadoEm != expected.ConsultadoEm) return "stale";
@@ -112,7 +112,7 @@ public sealed class RadarPushCoordinator(IRadarPushStore store, IExpoPushGateway
 
     public async Task<int> ConsultarReceiptsAsync(CancellationToken ct)
     {
-        if (!options.Value.PushEnabled || !options.Value.Enabled || !policy.Sandbox) return 0;
+        if (!options.Value.PushEnabled || !options.Value.Enabled || !policy.Enabled) return 0;
         var pending = await store.ReceiptsAsync(Guid.NewGuid().ToString("N"), ct);
         if (pending.Count == 0) return 0;
         var responses = await gateway.ReceiptsAsync(pending.Select(p => p.Id).ToArray(), ct);

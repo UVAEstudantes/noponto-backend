@@ -9,6 +9,11 @@ namespace NoPonto.Application.Radar;
 
 public interface IExpoAccessTokenProvider { string? GetAccessToken(); }
 public sealed class ExpoNoAccessToken : IExpoAccessTokenProvider { public string? GetAccessToken() => null; }
+public sealed class ExpoProtectedAccessToken(IOptions<RadarPushOptions> options) : IExpoAccessTokenProvider
+{
+    public string? GetAccessToken() => string.IsNullOrWhiteSpace(options.Value.ExpoAccessTokenFile)
+        ? null : File.ReadAllText(options.Value.ExpoAccessTokenFile).Trim();
+}
 public interface IRadarPushDelay { Task AguardarAsync(TimeSpan duration, CancellationToken ct); }
 public sealed class RadarPushDelay(TimeProvider clock) : IRadarPushDelay
 { public Task AguardarAsync(TimeSpan duration, CancellationToken ct) => Task.Delay(duration, clock, ct); }
@@ -45,7 +50,7 @@ public sealed partial class ExpoPushGateway(IHttpClientFactory clients, IOptions
 
     public async Task<ExpoResult> EnviarAsync(ExpoRadarMessage message, Func<CancellationToken, Task<bool>> authorize, CancellationToken ct)
     {
-        if (!policy.Sandbox) return new("blocked");
+        if (!policy.Enabled) return new("blocked");
         if (!await concurrency.WaitAsync(0, ct)) return new("busy");
         try
         {
@@ -99,7 +104,7 @@ public sealed partial class ExpoPushGateway(IHttpClientFactory clients, IOptions
 
     public async Task<IReadOnlyList<ExpoReceiptResult>> ReceiptsAsync(IReadOnlyList<string> ids, CancellationToken ct)
     {
-        if (!policy.Sandbox || ids.Count is < 1 or > 50 || ids.Any(id => !ReceiptId().IsMatch(id))) return [];
+        if (!policy.Enabled || ids.Count is < 1 or > 50 || ids.Any(id => !ReceiptId().IsMatch(id))) return [];
         if (!await concurrency.WaitAsync(0, ct)) return [];
         try
         {

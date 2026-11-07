@@ -7,7 +7,8 @@ namespace NoPonto.Application.Radar;
 /// <summary>Um escopo/DbContext por parada. Não paralelizar operações deste escopo.</summary>
 public sealed class RadarStopProcessor(IRadarMonitorStore store, IRadarCandidateStore candidates,
     IEventosParadaService events, IEstruturaLeituraV2Repository catalog,
-    RadarSelector selector, IOptions<RadarOptions> options, TimeProvider clock) : IRadarStopProcessor
+    RadarSelector selector, IOptions<RadarOptions> options, TimeProvider clock,
+    IRadarCandidateDispatcher? dispatcher = null) : IRadarStopProcessor
 {
     public async Task<RadarStopResult> ProcessarAsync(Guid parada, int limiteSessoes, CancellationToken ct)
     {
@@ -55,7 +56,11 @@ public sealed class RadarStopProcessor(IRadarMonitorStore store, IRadarCandidate
             if (s.Contextos.Any(c => !valid.Contains(c)) || !s.Contextos.Select(c => c.LinhaId).ToHashSet().SetEquals(s.LinhasSelecionadas)) continue;
             var content = selector.Selecionar(s, stop.Nome, snapshot, queriedAt, clock.GetUtcNow(), limits.CandidateTtlSeconds);
             // O script revalida proprietário, instalação, estado, identidade, prazo e revisão.
-            if (await candidates.TentarGravarAsync(content, ct)) produced++;
+            if (await candidates.TentarGravarAsync(content, ct))
+            {
+                produced++;
+                if (dispatcher is not null) await dispatcher.DespacharAsync(content, ct);
+            }
         }
         return new(sessions.Count, 1, versions.Count + 1, produced, sessions.Count - produced);
     }

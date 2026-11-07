@@ -17,6 +17,12 @@ public sealed record RadarPushTokenResponse(bool Registered, long Revision,
 public sealed class RadarPushOptions
 {
     public bool ControlledTestsEnabled { get; set; }
+    public bool ExperimentalEnabled { get; set; }
+    public bool ExternalTransportEnabled { get; set; }
+    public string EncryptionKeyFile { get; set; } = "";
+    public string ExpoAccessTokenFile { get; set; } = "";
+    public Guid ProjectId { get; set; }
+    public Guid[] AllowedInstallationIds { get; set; } = [];
     public int MaxRequestsPerMinute { get; set; } = 60;
     public int MaxPendingReceipts { get; set; } = 256;
     public int MaxAttempts { get; set; } = 3;

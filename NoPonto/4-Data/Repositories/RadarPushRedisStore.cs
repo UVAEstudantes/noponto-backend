@@ -41,7 +41,7 @@ public sealed class RadarPushRedisStore(IConnectionMultiplexer redis, IOptions<R
     {
         ct.ThrowIfCancellationRequested();
         var p = options.Value;
-        RedisValue[] values = [op, Prefix, owner.ToString("D"), p.MaxRequestsPerMinute, p.MaxPendingReceipts, p.MinIntervalSeconds, p.MaxAttempts, .. args];
+        RedisValue[] values = [p.ExperimentalEnabled ? op + "-confirmed" : op, Prefix, owner.ToString("D"), p.MaxRequestsPerMinute, p.MaxPendingReceipts, p.MinIntervalSeconds, p.MaxAttempts, .. args];
         try { return await redis.GetDatabase().ScriptEvaluateAsync(Script,
             [Prefix + "installation:" + owner.ToString("N"), Prefix + "session:" + owner.ToString("N"),
              Prefix + "candidate:" + owner.ToString("N"), Prefix + "push:token:" + owner.ToString("N"),
@@ -53,6 +53,8 @@ public sealed class RadarPushRedisStore(IConnectionMultiplexer redis, IOptions<R
         local time = redis.call('TIME')
         local now = tonumber(time[1])*1000+math.floor(tonumber(time[2])/1000)
         local op,prefix,owner = ARGV[1],ARGV[2],ARGV[3]
+        local confirmedOnly = string.sub(op,-10)=='-confirmed'
+        if confirmedOnly then op=string.sub(op,1,-11) end
         local ownerN = string.gsub(owner,'-','')
         local pending = prefix .. 'push:pending'
         local owned = prefix .. 'push:pending-owner:' .. ownerN
@@ -117,6 +119,9 @@ public sealed class RadarPushRedisStore(IConnectionMultiplexer redis, IOptions<R
         local expiry = tonumber(redis.call('HGET',KEYS[1],'expires') or '0')
         if expiry <= now then dropToken(); if op == 'load' then return '' else return 0 end end
         local token = redis.call('HGET',KEYS[4],'encrypted')
+        if confirmedOnly and redis.call('HGET',KEYS[4],'confirmed')~='1' then
+            if op=='load' then return '' else return 0 end
+        end
         local fp = redis.call('HGET',KEYS[4],'fingerprint')
         local revision = tonumber(redis.call('HGET',KEYS[4],'revision') or '0')
         if not token then if op == 'load' then return '' else return 0 end end
