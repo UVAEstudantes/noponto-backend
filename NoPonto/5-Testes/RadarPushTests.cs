@@ -61,7 +61,15 @@ public sealed class RadarPushTests
         Assert.True(first.Expiration <= f.Store.Snapshot.Candidate.ValidoAte.ToUnixTimeSeconds());
         Assert.True(JsonSerializer.SerializeToUtf8Bytes(first).Length < 3500);
         Assert.DoesNotContain(PushFixture.Token, first.ToString());
-        Assert.Contains("UTC", first.Body);
+        Assert.Equal("Radar · Bom Repouso sintético", first.Title);
+        Assert.Equal("884 chega em 10 min", first.Body);
+        Assert.DoesNotContain("UTC", first.Body);
+        Assert.DoesNotContain(f.Store.Snapshot.Candidate.Itens[0].EventoId, first.Body);
+        var data = json.RootElement.GetProperty("data");
+        Assert.True(data.TryGetProperty("contextKey", out _));
+        Assert.True(data.TryGetProperty("validUntil", out _));
+        Assert.Equal(f.Store.Snapshot.Candidate.Revisao, data.GetProperty("revision").GetInt64());
+        Assert.Equal(f.Store.Snapshot.Candidate.ParadaId.ToString(), data.GetProperty("paradaId").GetString());
     }
 
     [Theory]

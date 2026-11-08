@@ -135,6 +135,26 @@ public sealed class RadarSelectorTests
     }
 
     [Fact]
+    public void LinhasAdicionaisNaoContamVeiculoExtraDeLinhaJaSelecionada()
+    {
+        var s = RadarSamples.Session(RadarSamples.Stop, RadarSamples.Lines[..2]);
+        var output = Select(s, [Event(0, 120), Event(1, 130), Event(0, 140) with { EventId = "b", VehicleId = "bus-b" },
+            Event(0, 150) with { EventId = "c", VehicleId = "bus-c" }]);
+        Assert.Equal(3, output.Itens.Length);
+        Assert.Equal(1, output.Adicionais);
+        Assert.Equal(0, output.LinhasAdicionais);
+    }
+
+    [Fact]
+    public void LinhasAdicionaisContamLinhaForaDaSelecao()
+    {
+        var s = RadarSamples.Session(RadarSamples.Stop, RadarSamples.Lines);
+        var output = Select(s, [Event(0, 120), Event(1, 180), Event(2, 240), Event(3, 300)]);
+        Assert.Equal(1, output.Adicionais);
+        Assert.Equal(1, output.LinhasAdicionais);
+    }
+
+    [Fact]
     public void DiversidadeDesempataTemposIguaisSemDeduplicarLinha()
     {
         var s = RadarSamples.Session(RadarSamples.Stop, RadarSamples.Lines[..2]);

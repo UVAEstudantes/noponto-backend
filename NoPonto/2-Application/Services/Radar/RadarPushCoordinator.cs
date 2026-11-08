@@ -67,15 +67,12 @@ public static class RadarPushContent
         if (ttl < 1) return null;
         var context = string.Join("|", snapshot.Session.Contextos.OrderBy(x => x.PadraoVersaoId)
             .Select(x => $"{x.LinhaId:N}:{x.SentidoId:N}:{x.PadraoOperacionalId:N}:{x.PadraoVersaoId:N}"));
-        var lines = c.Itens.Length == 0 ? "Sem chegadas na janela. Consulte o aplicativo." : string.Join("; ", c.Itens.Select(i =>
-            $"{Safe(i.CodigoLinha, 12)} {(i.TipoEvento == "DEPARTURE" ? "saída prevista" : "chegada prevista")} em {(int)Math.Ceiling((i.PrevistoEm - now).TotalMinutes)} min{(i.Prioritaria ? " (prioritária)" : "")}"));
-        var result = new ExpoRadarMessage(token, "Radar · " + Safe(c.ParadaNome, 64),
-            $"{lines}. Atualizado {now:HH:mm:ss} UTC; previsão válida até {until:HH:mm:ss} UTC.", ttl, until.ToUnixTimeSeconds(),
+        var (title, body) = RadarPushText.Format(c, snapshot.Session, now);
+        var result = new ExpoRadarMessage(token, title, body, ttl, until.ToUnixTimeSeconds(),
             new { mode = "remote-radar", sessionId = c.SessaoId, revision = c.Revisao, paradaId = c.ParadaId,
                 contextKey = RadarTokenProtector.Fingerprint(context), validUntil = until });
         return JsonSerializer.SerializeToUtf8Bytes(result).Length <= 3500 ? result : null;
     }
-    private static string Safe(string value, int max) => new(value.Where(c => !char.IsControl(c)).Take(max).ToArray());
 }
 
 /// <summary>Sem worker/autodispatch: somente chamado explicitamente em testes controlados nesta etapa.</summary>

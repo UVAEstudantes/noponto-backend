@@ -3,7 +3,7 @@ namespace NoPonto.Application.Radar;
 /// <summary>Previsão candidata, nunca confirmação de chegada ou presença física.</summary>
 public sealed record RadarItemCandidato(string EventoId, Guid LinhaId, string CodigoLinha,
     string? VeiculoId, string TipoEvento, DateTimeOffset PrevistoEm, long EtaSegundos,
-    bool Prioritaria, string Source, string Quality, DateTimeOffset? EvidenciaEm)
+    bool Prioritaria, string Source, string Quality, DateTimeOffset? EvidenciaEm, Guid SentidoId = default)
 {
     public string Confirmacao => "previsao";
 }
@@ -11,7 +11,7 @@ public sealed record RadarItemCandidato(string EventoId, Guid LinhaId, string Co
 /// <summary>Último conteúdo interno de uma sessão/revisão. Não representa envio de notificação.</summary>
 public sealed record RadarConteudoCandidato(Guid SessaoId, Guid InstalacaoId, long Revisao,
     Guid ParadaId, string ParadaNome, DateTimeOffset ConsultadoEm, DateTimeOffset GeradoEm, DateTimeOffset ValidoAte,
-    RadarItemCandidato[] Itens, int Adicionais, bool PresencaTerminalDisponivel = false);
+    RadarItemCandidato[] Itens, int Adicionais, bool PresencaTerminalDisponivel = false, int LinhasAdicionais = 0);
 
 public interface IRadarMonitorStore
 {

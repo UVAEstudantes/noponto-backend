@@ -43,7 +43,7 @@ public sealed class RadarSelector(IOptions<PhysicalEtaOptions> physical)
             var vehicle = e.VehicleId ?? e.RailVehicleId?.ToString("D") ?? e.ExpectedRunId?.ToString("D") ?? e.CodigoVeiculo;
             var item = new RadarItemCandidato(e.EventId, e.LinhaId, e.CodigoLinha, vehicle, e.EventType, at.Value,
                 (long)Math.Ceiling((at.Value - now).TotalSeconds), session.LinhasPrioritarias.Contains(e.LinhaId),
-                e.Source, e.Quality, e.LastRealtimeEvidenceUtc);
+                e.Source, e.Quality, e.LastRealtimeEvidenceUtc, e.SentidoId);
             eligible.Add(item);
             validity[item] = freshUntil;
         }
@@ -71,8 +71,12 @@ public sealed class RadarSelector(IOptions<PhysicalEtaOptions> physical)
         }
         var until = Min(session.ExpiraEm, now.AddSeconds(ttlSeconds));
         foreach (var item in selected) until = Min(until, Min(item.PrevistoEm, validity[item]));
+        var selectedLines = selected.Select(i => i.LinhaId).ToHashSet();
+        var linhasAdicionais = unique.Where(i => !selected.Contains(i)).Select(i => i.LinhaId)
+            .Where(id => !selectedLines.Contains(id)).Distinct().Count();
         return new(session.SessaoId, session.InstalacaoId, session.Revisao, session.ParadaId, nome, consultadoEm, now, until,
-            selected.OrderBy(i => i.PrevistoEm).ThenBy(i => i.EventoId, StringComparer.Ordinal).ToArray(), unique.Count - selected.Count);
+            selected.OrderBy(i => i.PrevistoEm).ThenBy(i => i.EventoId, StringComparer.Ordinal).ToArray(),
+            unique.Count - selected.Count, LinhasAdicionais: linhasAdicionais);
     }
 
     private static DateTimeOffset Min(DateTimeOffset a, DateTimeOffset b) => a < b ? a : b;

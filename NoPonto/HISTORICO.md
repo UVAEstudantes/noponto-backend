@@ -1946,3 +1946,25 @@ Baseebea27e em feat/radar-notificacoes. Operador confirmou15testes C# N5-C2 apro
 Nenhuma correção de código necessária. Executor N5-C2 revisado e preservado. Documentados comandos manuais de build Linuxamd64, transferência/carregamento de imagem, composição privada congelada, preflight/publicação OFF e ativação pública em diretório separado, preservando os checkpoints OFF e imagem original. Procedimento em docs/radar-n5c3-deploy.md, referenciado pelo relatório N5-C2. Sem identidade binária ou confirmação ao vivo da produção declarada; configuração efetiva é conferida pelo preflight futuro, sem substituir pela composição genérica do checkout.
 
 Somente documentação/histórico alterados; conferências estáticas locais e git diff --check. Sem builds, testes demorados, Docker, SSH, migrations, deploy, interrupção de serviços, alteração de frontend/segredos, main ou push Git. Caches/artefatos preexistentes preservados. Preparação encerrada antes de qualquer implantação.
+
+
+## 2026-11-08 - Radar V1: textos das notificações remotas
+
+Trabalho exclusivo no worktree noponto-backend-radar-textos-v1, branch feat/radar-push-textos-v1. Nenhum outro worktree, Program.cs, infraestrutura, SignalR, coletores, Docker, banco, migration, commit, push ou deploy foi alterado.
+
+O candidato interno passou a carregar SentidoId no item e LinhasAdicionais no conteúdo, permitindo separar sentidos e distinguir linhas de veículos sem mudar a seleção, a validade, a deduplicação ou os identificadores de atualização. O seletor continua limitado a três itens e mantém os filtros de elegibilidade, prioridade e evidência existentes.
+
+Novo formatador puro RadarPushText monta título e corpo: Radar · {parada}; uma linha/um veículo mostra chegada ou saída prevista; uma linha com vários veículos mostra próximo e demais; várias linhas mostram as principais e resumem o restante com +N linhas acompanhadas; veículos simultâneos mostram contagem e códigos. Sem itens, usa a janela real da sessão: Sem chegadas nos próximos N min. O corpo não inclui UTC, IDs técnicos, destino ausente ou texto genérico de atualização. O payload data mantém sessionId, revision, paradaId, contextKey e validUntil, e tag/collapse/canal/prioridade/TTL permanecem inalterados.
+
+Limitações mantidas e documentadas: veículo sem ETA não chega ao candidato e não recebe texto inventado; presença no terminal e saída confirmada não existem no contrato atual, então a saída continua como prevista, nunca aguardando/saindo/saiu; indisponibilidade de dados e sessão expirada não geram novo disparo sem alterar o fluxo de envio, portanto não foi implementado texto Radar encerrado nem renovação automática; o candidato tem no máximo três itens, então veículos excedentes não são somados ao mesmo horário.
+
+Build Release sem incremental: zero erros, seis avisos preexistentes. Testes direcionados RadarPushText/RadarPush/RadarSelector: 84 aprovados, zero falhas. Rodada ampliada RadarPush/RadarSelector/RadarPublic/RadarEnrollment: 103 aprovados, 20 ignorados, zero falhas; os ignorados são testes Redis/enrollment que exigem infraestrutura não executada. Nenhum teste real de entrega Android, Redis, Docker ou produção. Nenhum segredo registrado.
+
+
+## 2026-11-08 - Radar V1: revisão de agrupamento e textos
+
+Revisão pontual no mesmo worktree e branch, sem alterar seleção, ETA, GPS, SignalR, disparo, deduplicação, contratos externos, outros worktrees, commit, push ou deploy.
+
+Agrupamento passou a considerar LinhaId, SentidoId e TipoEvento, separando chegadas e saídas da mesma linha e sentido. Texto sem itens passou a Nenhuma chegada prevista nos próximos N min, com a janela real da sessão. Grupos com múltiplas saídas usam Saída prevista e Outras saídas, sem Próximo em N min. Veículos simultâneos diferenciam chegadas de saídas: todas chegadas mantêm N ônibus previstos; todas saídas usam N saídas previstas; mistos usam contagem de chegadas e saídas e códigos rotulados, sem apresentar saída como chegada.
+
+Testes direcionados RadarPushText: 16 aprovados. RadarPushText/RadarPush/RadarSelector: 88 aprovados, zero falhas. Build Release sem incremental: zero erros, seis avisos preexistentes. Sem teste em Android, Redis, Docker ou produção. Nenhum segredo registrado.
