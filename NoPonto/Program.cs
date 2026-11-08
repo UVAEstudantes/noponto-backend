@@ -574,23 +574,10 @@ builder.Services.AddHostedService<EtaV2MaintenanceWorker>();
 builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();
 builder.Services.AddHostedService<ViagemOutboxWorker>();
 
-builder.Services.AddSingleton<TelemetriaMlMetrics>();
-builder.Services.Configure<TelemetriaMlSamplingOptions>(
-    builder.Configuration.GetSection(TelemetriaMlSamplingOptions.Secao));
-builder.Services.AddSingleton<ITelemetriaMlSamplingPolicy, TelemetriaMlSamplingPolicy>();
-builder.Services.AddSingleton<TelemetriaMlBackpressureState>();
-builder.Services.AddHostedService<TelemetriaMlMetricsReporter>();
-builder.Services.AddSingleton<TelemetriaMlStreamPublisher>();
-builder.Services.AddSingleton<ITelemetriaMlIngress>(sp =>
-    sp.GetRequiredService<TelemetriaMlStreamPublisher>());
-builder.Services.AddHostedService(sp =>
-    sp.GetRequiredService<TelemetriaMlStreamPublisher>());
-builder.Services.AddSingleton<ITelemetriaMlRepository, TelemetriaMlRepository>();
-builder.Services.AddHostedService<TelemetriaMlWorker>();
-builder.Services.AddSingleton<TelemetriaMlRetentionMetrics>();
-builder.Services.AddHostedService<TelemetriaMlRetentionService>();
+builder.Services.AddTelemetriaMlCollection(builder.Configuration);
 
 builder.Services.AddSignalR();
+builder.Services.AddGpsSignalRTraffic(builder.Configuration);
 
 // Physical acquisition and publication are independently gated. Disabled by default.
 var physicalOptions = builder.Configuration.GetSection("PhysicalPresence")
