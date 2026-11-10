@@ -11,6 +11,7 @@ public sealed record RadarPushEnrollmentRequest
     public Guid EnrollmentId { get; init; }
     public Guid ProjectId { get; init; }
     [Required, MaxLength(200)] public string ExpoPushToken { get; init; } = "";
+    public string[] Capabilities { get; init; } = [];
     public override string ToString() => "RadarPushEnrollmentRequest(redacted)";
 }
 /// <summary>Prova recebida exclusivamente no push; nunca disponível por consulta HTTP.</summary>
@@ -40,11 +41,14 @@ public sealed class RadarPushEnrollment(IRadarStore store, RadarTokenProtector p
     public async Task IniciarAsync(string authorization, RadarPushEnrollmentRequest request, CancellationToken ct)
     {
         if (request.EnrollmentId == Guid.Empty || request.ProjectId != options.Value.ProjectId
-            || !RadarPushTokens.TokenValido(request.ExpoPushToken)) throw new RadarException(400, "push_enrollment_invalido");
+            || !RadarPushTokens.TokenValido(request.ExpoPushToken) || request.Capabilities is null
+            || request.Capabilities.Length > 1 || request.Capabilities.Any(c => c != "native-v1"))
+            throw new RadarException(400, "push_enrollment_invalido");
         var proof = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         await Run(authorization, "push-challenge", new { enrollmentId = request.EnrollmentId.ToString("D"),
             verifier = RadarTokenProtector.Fingerprint(proof), encrypted = protector.Protect(request.ExpoPushToken),
-            fingerprint = RadarTokenProtector.Fingerprint(request.ExpoPushToken), maxPending = options.Value.MaxPendingReceipts }, ct);
+            fingerprint = RadarTokenProtector.Fingerprint(request.ExpoPushToken), maxPending = options.Value.MaxPendingReceipts,
+            nativeV1 = request.Capabilities.Contains("native-v1") }, ct);
         var until = clock.GetUtcNow().AddSeconds(120);
         var message = new ExpoRadarMessage(request.ExpoPushToken, policy.Public ? "NoPonto" : "NoPonto Dev", "Confirmando este aparelho para o Radar.",
             120, until.ToUnixTimeSeconds(), new { mode = "radar-enrollment", enrollmentId = request.EnrollmentId,

@@ -34,7 +34,8 @@ public sealed class RadarPushOptions
 // Internos ao backend; nunca devolver snapshots ou resultados do provedor em endpoints.
 public sealed record RadarPushSnapshot(RadarConteudoCandidato Candidate, RadarSessaoResponse Session,
     string RawCandidate, string EncryptedToken, string Fingerprint, long TokenRevision,
-    RadarConteudoCandidato? Previous, long PreviousTokenRevision, string RawPrevious = "")
+    RadarConteudoCandidato? Previous, long PreviousTokenRevision, string RawPrevious = "", bool NativeV1 = false,
+    long PredictionVersion = 0)
 {
     public override string ToString() => "RadarPushSnapshot(redacted)";
 }
@@ -45,16 +46,20 @@ public sealed record ExpoReceiptResult(string Id, string Status);
 /// <summary>Mensagem Expo compacta. O destinatário é sensível e não deve aparecer em logs.</summary>
 public sealed record ExpoRadarMessage(
     [property: JsonPropertyName("to")] string To,
-    [property: JsonPropertyName("title")] string Title,
-    [property: JsonPropertyName("body")] string Body,
+    [property: JsonPropertyName("title"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title,
+    [property: JsonPropertyName("body"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Body,
     [property: JsonPropertyName("ttl")] int Ttl,
     [property: JsonPropertyName("expiration")] long Expiration,
-    [property: JsonPropertyName("data")] object Data)
+    [property: JsonPropertyName("data")] object Data,
+    [property: JsonIgnore] bool NativeV1 = false)
 {
-    [JsonPropertyName("priority")] public string Priority => "normal";
-    [JsonPropertyName("channelId")] public string ChannelId => "radar-espera-updates-v1";
-    [JsonPropertyName("tag")] public string Tag => "noponto-radar-espera";
-    [JsonPropertyName("collapseId")] public string CollapseId => "noponto-radar-espera";
+    [JsonPropertyName("priority")] public string Priority => NativeV1 ? "high" : "normal";
+    [JsonPropertyName("channelId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ChannelId => NativeV1 ? null : "radar-espera-updates-v1";
+    [JsonPropertyName("tag"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Tag => NativeV1 ? null : "noponto-radar-espera";
+    [JsonPropertyName("collapseId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CollapseId => NativeV1 ? null : "noponto-radar-espera";
     public override string ToString() => "ExpoRadarMessage(redacted)";
 }
 

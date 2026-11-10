@@ -39,7 +39,8 @@ public sealed class RadarMonitorRedisStore(IConnectionMultiplexer redis) : IRada
     }
 
     private static RedisKey[] Keys(Guid owner) => [Prefix + "installation:" + owner.ToString("N"),
-        Prefix + "session:" + owner.ToString("N"), Prefix + "candidate:" + owner.ToString("N")];
+        Prefix + "session:" + owner.ToString("N"), Prefix + "candidate:" + owner.ToString("N"),
+        Prefix + "candidate-version:" + owner.ToString("N")];
 
     private async Task<RedisResult> Run(string script, RedisKey[] keys, RedisValue[] args, CancellationToken ct)
     {
@@ -128,7 +129,14 @@ public sealed class RadarMonitorRedisStore(IConnectionMultiplexer redis) : IRada
         if ttl <= 0 then return 0 end
         local previous = tonumber(redis.call('HGET',KEYS[3],'observed') or '0')
         if previous > tonumber(ARGV[4]) then return 0 end
-        redis.call('HSET', KEYS[3], 'content', ARGV[2], 'expires', now+ttl, 'observed', ARGV[4])
+        local version = 1
+        if redis.call('HGET',KEYS[4],'session') == c.sessaoId then
+            version = redis.call('HINCRBY',KEYS[4],'version',1)
+        else
+            redis.call('HSET',KEYS[4],'session',c.sessaoId,'version',1)
+        end
+        redis.call('PEXPIRE',KEYS[4],s.expiraEmMs-now)
+        redis.call('HSET', KEYS[3], 'content', ARGV[2], 'expires', now+ttl, 'observed', ARGV[4], 'predictionVersion', version)
         redis.call('PEXPIRE', KEYS[3], ttl)
         return 1
         """;

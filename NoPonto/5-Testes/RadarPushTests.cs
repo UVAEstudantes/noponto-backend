@@ -49,12 +49,15 @@ public sealed class RadarPushTests
         var second = RadarPushContent.Criar(changed, PushFixture.Token, f.Clock.Now)!;
         Assert.Equal(first.Tag, second.Tag);
         Assert.Equal(first.CollapseId, second.CollapseId);
+        Assert.Equal("noponto-radar-espera", first.CollapseId);
         Assert.Equal("radar-espera-updates-v1", first.ChannelId);
         Assert.Equal("normal", first.Priority);
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(first));
         Assert.False(json.RootElement.TryGetProperty("sound", out _));
         Assert.Equal(PushFixture.Token, json.RootElement.GetProperty("to").GetString());
         Assert.DoesNotContain(PushFixture.Token, json.RootElement.GetProperty("data").GetRawText());
+        Assert.Equal("radar-espera-updates-v1", json.RootElement.GetProperty("channelId").GetString());
+        Assert.Equal("noponto-radar-espera", json.RootElement.GetProperty("tag").GetString());
         Assert.DoesNotContain("credencial", json.RootElement.GetProperty("data").GetRawText());
         Assert.Equal(f.Store.Snapshot.Candidate.SessaoId.ToString(), json.RootElement.GetProperty("data").GetProperty("sessionId").GetString());
         Assert.InRange(first.Ttl, 1, 30);
@@ -70,6 +73,60 @@ public sealed class RadarPushTests
         Assert.True(data.TryGetProperty("validUntil", out _));
         Assert.Equal(f.Store.Snapshot.Candidate.Revisao, data.GetProperty("revision").GetInt64());
         Assert.Equal(f.Store.Snapshot.Candidate.ParadaId.ToString(), data.GetProperty("paradaId").GetString());
+    }
+
+    [Fact]
+    public async Task NativeV1EnviaSomenteDataEstruturadoOrdenavelEValido()
+    {
+        using var f = new PushFixture();
+        var candidate = f.Store.Snapshot.Candidate;
+        var first = candidate.Itens[0] with { Prioritaria = true, TipoEvento = "ARRIVAL" };
+        var second = first with { EventoId = "synthetic-event-2", CodigoLinha = "42", Prioritaria = false,
+            TipoEvento = "DEPARTURE", PrevistoEm = first.PrevistoEm.AddMinutes(2), EtaSegundos = first.EtaSegundos + 120,
+            VeiculoId = "synthetic-vehicle-2" };
+        var snapshot = f.Store.Snapshot with { NativeV1 = true, PredictionVersion = 17,
+            Candidate = candidate with { Itens = [first, second], Adicionais = 3, LinhasAdicionais = 1 } };
+        var message = RadarPushContent.Criar(snapshot, PushFixture.Token, f.Clock.Now)!;
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(message));
+        var root = json.RootElement;
+        Assert.False(root.TryGetProperty("title", out _));
+        Assert.False(root.TryGetProperty("body", out _));
+        Assert.Equal("high", root.GetProperty("priority").GetString());
+        Assert.False(root.TryGetProperty("channelId", out _));
+        Assert.False(root.TryGetProperty("tag", out _));
+        Assert.False(root.TryGetProperty("collapseId", out _));
+        var data = root.GetProperty("data");
+        Assert.Equal("remote-radar-native-v1", data.GetProperty("mode").GetString());
+        Assert.Equal(candidate.Revisao, data.GetProperty("revision").GetInt64());
+        Assert.Equal(17, data.GetProperty("predictionVersion").GetInt64());
+        var items = data.GetProperty("items");
+        Assert.Equal(2, items.GetArrayLength());
+        Assert.Equal("ARRIVAL", items[0].GetProperty("type").GetString());
+        Assert.True(items[0].GetProperty("priority").GetBoolean());
+        Assert.Equal("DEPARTURE", items[1].GetProperty("type").GetString());
+        Assert.Equal(2 * 60, items[1].GetProperty("etaSeconds").GetInt64() - items[0].GetProperty("etaSeconds").GetInt64());
+        Assert.Equal(1, data.GetProperty("additionalLines").GetInt32());
+        Assert.True(DateTimeOffset.Parse(data.GetProperty("validUntil").GetString()!) <= candidate.ValidoAte);
+        Assert.InRange(message.Ttl, 1, 30);
+        Assert.True(JsonSerializer.SerializeToUtf8Bytes(message).Length <= 3500);
+        Assert.DoesNotContain(PushFixture.Token, data.GetRawText());
+        Assert.DoesNotContain("credential", data.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("ticket", (await f.Gateway.EnviarAsync(message, _ => Task.FromResult(true), default)).Status);
+        using var sent = JsonDocument.Parse(f.Handler.Bodies.Single());
+        Assert.False(sent.RootElement.TryGetProperty("title", out _));
+        Assert.False(sent.RootElement.TryGetProperty("body", out _));
+        Assert.False(sent.RootElement.TryGetProperty("channelId", out _));
+        Assert.False(sent.RootElement.TryGetProperty("tag", out _));
+        Assert.False(sent.RootElement.TryGetProperty("collapseId", out _));
+    }
+
+    [Fact]
+    public void PayloadNativoAcimaDoLimiteSeguroERejeitado()
+    {
+        using var f = new PushFixture();
+        var snapshot = f.Store.Snapshot with { NativeV1 = true,
+            Candidate = f.Store.Snapshot.Candidate with { ParadaNome = new string('x', 4000) } };
+        Assert.Null(RadarPushContent.Criar(snapshot, PushFixture.Token, f.Clock.Now));
     }
 
     [Theory]

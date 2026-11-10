@@ -63,9 +63,16 @@ public sealed class RadarEnrollmentTests : IAsyncLifetime
         return owner;
     }
     private static RadarPushEnrollmentRequest Request() => new() { EnrollmentId = Guid.NewGuid(), ExpoPushToken = "ExpoPushToken[synthetic-" + Guid.NewGuid().ToString("N") + "]" };
-    private async Task<(RadarPushEnrollmentRequest Request, RadarPushConfirmationRequest Proof)> Begin(RadarRegistroResponse owner)
+    [Fact]
+    public async Task EnrollmentRejeitaCapacidadeDesconhecidaAntesDoArmazenamento()
     {
-        var request = Request() with { ProjectId = options.ProjectId };
+        var request = Request() with { ProjectId = options.ProjectId, Capabilities = ["native-v2"] };
+        Assert.Equal(400, (await Assert.ThrowsAsync<RadarException>(() => Enrollment.IniciarAsync(RadarTests.Auth, request, default))).Status);
+        Assert.Empty(handler.Bodies);
+    }
+    private async Task<(RadarPushEnrollmentRequest Request, RadarPushConfirmationRequest Proof)> Begin(RadarRegistroResponse owner, bool nativeV1 = false)
+    {
+        var request = Request() with { ProjectId = options.ProjectId, Capabilities = nativeV1 ? ["native-v1"] : [] };
         await Enrollment.IniciarAsync(Auth(owner), request, default);
         using var json = JsonDocument.Parse(handler.Bodies.Last());
         var proof = json.RootElement.GetProperty("data").GetProperty("proof").GetString()!;
@@ -84,6 +91,17 @@ public sealed class RadarEnrollmentTests : IAsyncLifetime
         Assert.True((await Enrollment.ConsultarAsync(Auth(owner), default)).PossessionConfirmed);
         Assert.Equal(409, (await Assert.ThrowsAsync<RadarException>(() => Enrollment.ConfirmarAsync(Auth(owner), proof, default))).Status);
         Assert.False(await Db.KeyExistsAsync(Key("push:challenge", owner.InstalacaoId)));
+    }
+    [RadarRedisFact]
+    public async Task CapabilityNativeV1SoFicaAssociadaAposConfirmacao()
+    {
+        var owner = await Register(); var (request, proof) = await Begin(owner, nativeV1: true);
+        Assert.Equal("1", (string?)await Db.HashGetAsync(Key("push:challenge", owner.InstalacaoId), "nativeV1"));
+        Assert.False(await Db.KeyExistsAsync(Key("push:token", owner.InstalacaoId)));
+        Assert.True((await Enrollment.ConfirmarAsync(Auth(owner), proof, default)).PossessionConfirmed);
+        Assert.Equal("1", (string?)await Db.HashGetAsync(Key("push:token", owner.InstalacaoId), "nativeV1"));
+        Assert.DoesNotContain(request.ExpoPushToken, (await Db.HashGetAllAsync(Key("push:token", owner.InstalacaoId)))
+            .Select(x => x.Value.ToString()));
     }
     [RadarRedisFact]
     public async Task ChallengeOutraInstalacaoCredencialForjadaEIdIsoladoNaoConfirmam()

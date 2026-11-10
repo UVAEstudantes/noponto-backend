@@ -114,7 +114,7 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
             if nextChallenge > now then return {429,'push_confirmacao_aguarde'} end
             redis.call('HSET',KEYS[1],'nextChallenge',now+60000)
             redis.call('HSET',challengeKey,'enrollmentId',p.enrollmentId,'verifier',p.verifier,
-                'encrypted',p.encrypted,'fingerprint',p.fingerprint,'attempts',0)
+                'encrypted',p.encrypted,'fingerprint',p.fingerprint,'nativeV1',p.nativeV1 and '1' or '0','attempts',0)
             redis.call('EXPIRE',challengeKey,120)
             local reservation = 'c:' .. p.enrollmentId
             redis.call('HSET',prefix .. 'push:receipt:' .. reservation,'owner',owner)
@@ -165,7 +165,8 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
                 return {409,'push_confirmacao_invalida'}
             end
             local confirmed = {encrypted=redis.call('HGET',challengeKey,'encrypted'),
-                fingerprint=redis.call('HGET',challengeKey,'fingerprint'),confirmed=true}
+                fingerprint=redis.call('HGET',challengeKey,'fingerprint'),confirmed=true,
+                nativeV1=redis.call('HGET',challengeKey,'nativeV1')=='1'}
             redis.call('DEL',challengeKey) -- consumo único, inclusive em conflito de propriedade
             ARGV[4]=cjson.encode(confirmed)
             op='push-put'
@@ -189,7 +190,7 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
             local ttl = math.min(86400000,expiry-now)
             if redis.call('HGET',tokenKey,'fingerprint') == p.fingerprint then
                 -- Refresh idempotente: não invalidar claims, deduplicação ou receipts do mesmo destinatário.
-                redis.call('HSET',tokenKey,'encrypted',p.encrypted)
+                redis.call('HSET',tokenKey,'encrypted',p.encrypted,'nativeV1',p.nativeV1 and '1' or '0')
                 if p.confirmed then redis.call('HSET',tokenKey,'confirmed','1') end
                 redis.call('PEXPIRE',tokenKey,ttl)
                 redis.call('SET',reverse,owner,'PX',ttl)
@@ -197,7 +198,8 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
             end
             dropPush()
             local revision = redis.call('HINCRBY',KEYS[1],'pushRevision',1)
-            redis.call('HSET',tokenKey,'fingerprint',p.fingerprint,'encrypted',p.encrypted,'revision',revision)
+            redis.call('HSET',tokenKey,'fingerprint',p.fingerprint,'encrypted',p.encrypted,'revision',revision,
+                'nativeV1',p.nativeV1 and '1' or '0')
             if p.confirmed then redis.call('HSET',tokenKey,'confirmed','1') end
             redis.call('PEXPIRE',tokenKey,ttl)
             redis.call('SET',reverse,owner,'PX',ttl)

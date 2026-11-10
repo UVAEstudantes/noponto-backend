@@ -1968,3 +1968,23 @@ Revisão pontual no mesmo worktree e branch, sem alterar seleção, ETA, GPS, Si
 Agrupamento passou a considerar LinhaId, SentidoId e TipoEvento, separando chegadas e saídas da mesma linha e sentido. Texto sem itens passou a Nenhuma chegada prevista nos próximos N min, com a janela real da sessão. Grupos com múltiplas saídas usam Saída prevista e Outras saídas, sem Próximo em N min. Veículos simultâneos diferenciam chegadas de saídas: todas chegadas mantêm N ônibus previstos; todas saídas usam N saídas previstas; mistos usam contagem de chegadas e saídas e códigos rotulados, sem apresentar saída como chegada.
 
 Testes direcionados RadarPushText: 16 aprovados. RadarPushText/RadarPush/RadarSelector: 88 aprovados, zero falhas. Build Release sem incremental: zero erros, seis avisos preexistentes. Sem teste em Android, Redis, Docker ou produção. Nenhum segredo registrado.
+
+## 2026-11-09 — Radar V6.1: payload nativo Android native-v1
+
+Base `8c78647518b1defa2275a09b2e8b72633b2acca2`, branch publicada `feat/radar-push-prod-integrada-v1`, worktree original preservado e limpo. Alteração isolada na nova branch `feat/radar-push-native-v1`; sem commit ou push.
+
+Enrollment aceita `capabilities: ["native-v1"]` como opção. A capacidade fica no challenge e só é gravada no hash do token após prova confirmada; enrollment antigo sem capacidades grava `nativeV1=0`. Capacidade desconhecida ou repetida é rejeitada. `RadarPushRedisStore` transporta a capacidade confirmada ao snapshot sem expor credenciais.
+
+O envio mantém os mesmos candidatos, textos, decisões, autenticação, claims, deduplicação, TTL, expiration, tag, collapseId, canal e prioridade. Snapshot sem native-v1 conserva title/body e os cinco campos de data existentes. Snapshot native-v1 omite title/body e envia mode, sessionId, revision, predictionVersion, paradaId, paradaNome, contextKey, validUntil, itens com eventId/codigoLinha/type/etaSeconds/predictedAt/priority/vehicleId e contagens adicionais. O serializador continua recusando payloads acima de 3.500 bytes. A versão da previsão é um contador Redis separado da revisão da sessão; incrementa por candidato aceito na mesma sessão, persiste até a expiração da sessão e reinicia quando muda o sessionId. Nenhum ETA é recalculado.
+
+Arquivos alterados: `NoPonto/2-Application/DTOs/Radar/RadarPushContratos.cs`, `NoPonto/2-Application/Services/Radar/RadarPushCoordinator.cs`, `NoPonto/2-Application/Services/Radar/RadarPushEnrollment.cs`, `NoPonto/4-Data/Repositories/RadarMonitorRedisStore.cs`, `NoPonto/4-Data/Repositories/RadarPushRedisStore.cs`, `NoPonto/4-Data/Repositories/RadarRedisStore.cs`, `NoPonto/5-Testes/RadarEnrollmentTests.cs`, `NoPonto/5-Testes/RadarMonitorRedisTests.cs`, `NoPonto/5-Testes/RadarPushRedisTests.cs`, `NoPonto/5-Testes/RadarPushTests.cs` e `NoPonto/radar-enrollment.http`.
+
+Testes adicionados cobrem serialização legada e data-only, chegadas/saídas, prioridade, dois veículos, revisão versus versão, validade/TTL, tamanho/ausência de segredos, validação de capacidades, persistência após confirmação e leitura pelo snapshot. `git diff --check` aprovado. Tentativa de teste direcionado com `dotnet test NoPonto/NoPonto.csproj --no-restore` não executou testes: este worktree não contém `NoPonto/obj/project.assets.json`, o projeto não foi reconhecido como projeto de testes sem os imports restaurados, e `--list-tests` não listou casos. Sem restore, build completo, serviços, Docker, Android ou produção.
+
+Kotlin deve ordenar atualizações pela combinação de `sessionId` e `predictionVersion`; `revision` identifica a configuração da sessão, não a previsão. Deve descartar mensagem expirada por `validUntil`, conferir `contextKey`, renderizar cada `items[]` usando `type`, `codigoLinha`, `etaSeconds`, `priority` e `vehicleId`, e usar as contagens adicionais. Expo documenta limite total de 4.096 bytes; o limite atual de 3.500 bytes é mantido com margem. Integração Android/RemoteViews, validação com Redis local, build/testes com dependências disponíveis e publicação permanecem pendentes. Nenhum segredo foi registrado.
+
+## 2026-11-09 — Omitir collapseId nos pushes native-v1
+
+`ExpoRadarMessage` passa a serializar `collapseId` apenas no fluxo legado. Para `native-v1`, a propriedade é nula e marcada para omissão JSON; o teste nativo verifica a ausência do campo no JSON serializado e no corpo HTTP, enquanto o teste legado confirma o valor estável existente. Nenhum payload, prioridade, TTL, tag, canal, worker ou regra de envio foi alterado.
+
+Testes focados de serialização nativa e legada: 1 aprovado cada. Sem build completo, deploy, commit ou push.

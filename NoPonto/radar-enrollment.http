@@ -7,7 +7,9 @@ POST {{baseUrl}}/radar/instalacao/push/confirmacoes
 Authorization: Bearer {{credential}}
 Content-Type: application/json
 
-{"enrollmentId":"{{enrollmentId}}","projectId":"ab3db7e8-2478-49d6-a339-e639dcce1a34","expoPushToken":"ExpoPushToken[SYNTHETIC_NOT_FOR_DELIVERY]"}
+{"enrollmentId":"{{enrollmentId}}","projectId":"ab3db7e8-2478-49d6-a339-e639dcce1a34","expoPushToken":"ExpoPushToken[SYNTHETIC_NOT_FOR_DELIVERY]","capabilities":["native-v1"]}
+
+# O campo capabilities é opcional; sem native-v1, o push usa title/body legado.
 
 ### A prova vem exclusivamente pelo push ao aparelho. Nunca obtê-la por GET ou logs.
 POST {{baseUrl}}/radar/instalacao/push/confirmar

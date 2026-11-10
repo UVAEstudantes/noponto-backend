@@ -53,7 +53,8 @@ public sealed class RadarPushRedisTests : IAsyncLifetime
             try { await installations.RevogarAsync(Auth(owner), default); }
             catch (RadarException e) when (e.Status is 401 or 429) { }
             await Db.KeyDeleteAsync([Key("installation", owner.InstalacaoId), Key("session", owner.InstalacaoId),
-                Key("candidate", owner.InstalacaoId), Key("push:token", owner.InstalacaoId), Key("push:state", owner.InstalacaoId)]);
+                Key("candidate", owner.InstalacaoId), Key("candidate-version", owner.InstalacaoId),
+                Key("push:token", owner.InstalacaoId), Key("push:state", owner.InstalacaoId)]);
             await Db.SortedSetRemoveAsync(Prefix + "active", owner.InstalacaoId.ToString("D"));
             foreach (var stop in stops) await Db.SortedSetRemoveAsync(Prefix + "stop:" + stop.ToString("D"), owner.InstalacaoId.ToString("D"));
         }
@@ -85,6 +86,20 @@ public sealed class RadarPushRedisTests : IAsyncLifetime
             new ExpoNoAccessToken(), TimeProvider.System, new RadarPushDelay(TimeProvider.System), new RadarPushMetrics());
         return new(storage, gateway, protector, contexts ?? new PushContextsFake(),
             Options.Create(new RadarOptions { Enabled = true, PushEnabled = true }), policy, TimeProvider.System);
+    }
+
+    [RadarRedisFact]
+    public async Task SnapshotUsaCapacidadeAssociadaEVersaoDePrevisaoSeparadaDaRevisao()
+    {
+        var (owner, session, candidate) = await Create();
+        await Db.HashSetAsync(Key("push:token", owner.InstalacaoId), "nativeV1", "1");
+        var next = candidate with { ConsultadoEm = DateTimeOffset.UtcNow.AddSeconds(1) };
+        Assert.True(await new RadarMonitorRedisStore(redis).TentarGravarAsync(next, default));
+        var snapshot = (await store.CarregarAsync(owner.InstalacaoId, default))!;
+        Assert.True(snapshot.NativeV1);
+        Assert.Equal(2, snapshot.PredictionVersion);
+        Assert.Equal(session.Revisao, snapshot.Candidate.Revisao);
+        Assert.NotEqual(snapshot.Candidate.Revisao, snapshot.PredictionVersion);
     }
 
     [RadarRedisFact]

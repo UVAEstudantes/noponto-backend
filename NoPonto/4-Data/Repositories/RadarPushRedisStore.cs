@@ -9,7 +9,7 @@ public sealed class RadarPushRedisStore(IConnectionMultiplexer redis, IOptions<R
 {
     private const string Prefix = RadarRedisStore.Prefix;
     private sealed record Envelope(string Candidate, string Session, string Encrypted, string Fingerprint,
-        long Revision, string Previous, long PreviousTokenRevision);
+        long Revision, string Previous, long PreviousTokenRevision, bool NativeV1, long PredictionVersion);
 
     public async Task<RadarPushSnapshot?> CarregarAsync(Guid owner, CancellationToken ct)
     {
@@ -18,7 +18,8 @@ public sealed class RadarPushRedisStore(IConnectionMultiplexer redis, IOptions<R
         var e = JsonSerializer.Deserialize<Envelope>(raw, RadarService.Json)!;
         return new(JsonSerializer.Deserialize<RadarConteudoCandidato>(e.Candidate, RadarService.Json)!,
             JsonSerializer.Deserialize<RadarStoredSession>(e.Session, RadarService.Json)!.Response(), e.Candidate,
-            e.Encrypted, e.Fingerprint, e.Revision, e.Previous.Length == 0 ? null : JsonSerializer.Deserialize<RadarConteudoCandidato>(e.Previous, RadarService.Json), e.PreviousTokenRevision, e.Previous);
+            e.Encrypted, e.Fingerprint, e.Revision, e.Previous.Length == 0 ? null : JsonSerializer.Deserialize<RadarConteudoCandidato>(e.Previous, RadarService.Json),
+            e.PreviousTokenRevision, e.Previous, e.NativeV1, e.PredictionVersion);
     }
     public async Task<bool> ClaimAsync(RadarPushSnapshot s, string claim, CancellationToken ct)
         => (int)await Run("claim", s.Candidate.InstalacaoId, SnapshotArgs(s, claim), ct) == 1;
@@ -156,7 +157,9 @@ public sealed class RadarPushRedisStore(IConnectionMultiplexer redis, IOptions<R
         local previous = redis.call('HGET',KEYS[5],'last') or ''
         if op == 'load' then
             return cjson.encode({candidate=candidate,session=raw,encrypted=token,fingerprint=fp,revision=revision,
-                previous=previous,previousTokenRevision=tonumber(redis.call('HGET',KEYS[5],'tokenRevision') or '0')})
+                previous=previous,previousTokenRevision=tonumber(redis.call('HGET',KEYS[5],'tokenRevision') or '0'),
+                nativeV1=redis.call('HGET',KEYS[4],'nativeV1')=='1',
+                predictionVersion=tonumber(redis.call('HGET',KEYS[3],'predictionVersion') or '0')})
         end
         if candidate ~= ARGV[8] or fp ~= ARGV[9] or revision ~= tonumber(ARGV[10])
             or redis.call('EXISTS',prefix .. 'push:halt') == 1 then return 0 end

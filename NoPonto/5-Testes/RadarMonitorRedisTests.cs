@@ -50,7 +50,7 @@ public sealed class RadarMonitorRedisTests : IAsyncLifetime
             try { await service.RevogarAsync(Auth(installation), default); }
             catch (RadarException e) when (e.Status is 401 or 429) { /* Já revogada/expirada ou cota do teste consumida. */ }
             await Db.KeyDeleteAsync([OwnerKey("installation", installation.InstalacaoId), OwnerKey("session", installation.InstalacaoId),
-                OwnerKey("candidate", installation.InstalacaoId)]);
+                OwnerKey("candidate", installation.InstalacaoId), OwnerKey("candidate-version", installation.InstalacaoId)]);
             await Db.SortedSetRemoveAsync(Prefix + "active", installation.InstalacaoId.ToString("D"));
             foreach (var stop in stops) await Db.SortedSetRemoveAsync(StopKey(stop), installation.InstalacaoId.ToString("D"));
         }
@@ -115,11 +115,16 @@ public sealed class RadarMonitorRedisTests : IAsyncLifetime
         var result = await monitor.LerAtualAsync(s.InstalacaoId, default);
         Assert.NotNull(result);
         Assert.Equal(s.SessaoId, result.SessaoId);
+        Assert.Equal("1", (string?)await Db.HashGetAsync(OwnerKey("candidate", s.InstalacaoId), "predictionVersion"));
+        var next = Content(s) with { ConsultadoEm = DateTimeOffset.UtcNow.AddSeconds(1), ParadaNome = "Nova previsão" };
+        Assert.True(await monitor.TentarGravarAsync(next, default));
+        Assert.Equal("2", (string?)await Db.HashGetAsync(OwnerKey("candidate", s.InstalacaoId), "predictionVersion"));
+        Assert.Equal(s.Revisao, (await service.ConsultarAsync(Auth(installations.Single()), default))!.Revisao);
         Assert.Equal(s.ExpiraEm, (await service.ConsultarAsync(Auth(installations.Single()), default))!.ExpiraEm);
         Assert.InRange((await Db.KeyTimeToLiveAsync(OwnerKey("candidate", s.InstalacaoId)))!.Value.TotalSeconds, 40, 45);
         var older = Content(s) with { ConsultadoEm = DateTimeOffset.UtcNow.AddMinutes(-1), ParadaNome = "obsolete" };
         Assert.False(await monitor.TentarGravarAsync(older, default));
-        Assert.Equal("Bom Repouso sintético", (await monitor.LerAtualAsync(s.InstalacaoId, default))!.ParadaNome);
+        Assert.Equal("Nova previsão", (await monitor.LerAtualAsync(s.InstalacaoId, default))!.ParadaNome);
         await Db.HashSetAsync(OwnerKey("candidate", s.InstalacaoId), "expires", DateTimeOffset.UtcNow.AddSeconds(-1).ToUnixTimeMilliseconds());
         Assert.Null(await monitor.LerAtualAsync(s.InstalacaoId, default));
         Assert.False(await Db.KeyExistsAsync(OwnerKey("candidate", s.InstalacaoId)));

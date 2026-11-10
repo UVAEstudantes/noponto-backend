@@ -67,10 +67,23 @@ public static class RadarPushContent
         if (ttl < 1) return null;
         var context = string.Join("|", snapshot.Session.Contextos.OrderBy(x => x.PadraoVersaoId)
             .Select(x => $"{x.LinhaId:N}:{x.SentidoId:N}:{x.PadraoOperacionalId:N}:{x.PadraoVersaoId:N}"));
-        var (title, body) = RadarPushText.Format(c, snapshot.Session, now);
-        var result = new ExpoRadarMessage(token, title, body, ttl, until.ToUnixTimeSeconds(),
-            new { mode = "remote-radar", sessionId = c.SessaoId, revision = c.Revisao, paradaId = c.ParadaId,
-                contextKey = RadarTokenProtector.Fingerprint(context), validUntil = until });
+        var contextKey = RadarTokenProtector.Fingerprint(context);
+        string? title = null, body = null;
+        object data;
+        if (snapshot.NativeV1)
+            data = new { mode = "remote-radar-native-v1", sessionId = c.SessaoId, revision = c.Revisao,
+                predictionVersion = snapshot.PredictionVersion, paradaId = c.ParadaId, paradaNome = c.ParadaNome,
+                contextKey, validUntil = until, items = c.Itens.Select(i => new { eventId = i.EventoId,
+                    codigoLinha = i.CodigoLinha, type = i.TipoEvento, etaSeconds = i.EtaSegundos,
+                    predictedAt = i.PrevistoEm, priority = i.Prioritaria, vehicleId = i.VeiculoId }),
+                additionalVehicles = c.Adicionais, additionalLines = c.LinhasAdicionais };
+        else
+        {
+            (title, body) = RadarPushText.Format(c, snapshot.Session, now);
+            data = new { mode = "remote-radar", sessionId = c.SessaoId, revision = c.Revisao,
+                paradaId = c.ParadaId, contextKey, validUntil = until };
+        }
+        var result = new ExpoRadarMessage(token, title, body, ttl, until.ToUnixTimeSeconds(), data, snapshot.NativeV1);
         return JsonSerializer.SerializeToUtf8Bytes(result).Length <= 3500 ? result : null;
     }
 }
