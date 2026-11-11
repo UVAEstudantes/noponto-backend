@@ -29,12 +29,17 @@ public sealed class RadarSelector(IOptions<PhysicalEtaOptions> physical)
                 or "StalePrediction" or "HistoricalFallback") continue;
             if (isPhysical && e.Quality is not ("estimativa_fisica" or "estimativa_recente" or "hipotese_nominal")) continue;
             var freshUntil = consultadoEm.AddSeconds(MaxEvidenceAgeSeconds);
+            var isRail = IsRail(e.Modal);
+            var estimatedRailRemainsPublished = isRail && e.OperationalStatus == "Estimated"
+                && e.ExpectedRunId is not null && e.ScheduledStopId is not null
+                && !string.IsNullOrWhiteSpace(e.TrainCode);
             if (e.LastRealtimeEvidenceUtc is { } evidence)
             {
-                if (evidence > now || now - evidence > TimeSpan.FromSeconds(maxAge)) continue;
-                freshUntil = Min(freshUntil, evidence.AddSeconds(maxAge));
+                if (evidence > now || (!estimatedRailRemainsPublished && now - evidence > TimeSpan.FromSeconds(maxAge))) continue;
+                if (!estimatedRailRemainsPublished) freshUntil = Min(freshUntil, evidence.AddSeconds(maxAge));
             }
             else if (isPhysical || e.ScheduledAt is null || e.Quality is not ("ScheduleOnly" or "ScheduleAnchored")) continue;
+            if (IsRail(e.Modal) && e.OperationalStatus == "Live" && e.LastRealtimeEvidenceUtc is null) continue;
             // Não estimar velocidade, distância ou saída. Somente instantes/duração do contrato existente.
             DateTimeOffset? at = e.EstimatedAt ?? e.ScheduledAt;
             if (at is null && e.SecondsUntilEvent is >= 0 and <= 900)
@@ -43,7 +48,9 @@ public sealed class RadarSelector(IOptions<PhysicalEtaOptions> physical)
             var vehicle = e.VehicleId ?? e.RailVehicleId?.ToString("D") ?? e.ExpectedRunId?.ToString("D") ?? e.CodigoVeiculo;
             var item = new RadarItemCandidato(e.EventId, e.LinhaId, e.CodigoLinha, vehicle, e.EventType, at.Value,
                 (long)Math.Ceiling((at.Value - now).TotalSeconds), session.LinhasPrioritarias.Contains(e.LinhaId),
-                e.Source, e.Quality, e.LastRealtimeEvidenceUtc, e.SentidoId);
+                e.Source, e.Quality, e.LastRealtimeEvidenceUtc, e.SentidoId, e.Modal, e.TipoRota,
+                e.OperationalStatus, e.TrainCode, e.RailVehicleId, e.ExpectedRunId, e.ScheduledStopId,
+                e.DestinationName, e.LineName);
             eligible.Add(item);
             validity[item] = freshUntil;
         }
@@ -80,4 +87,6 @@ public sealed class RadarSelector(IOptions<PhysicalEtaOptions> physical)
     }
 
     private static DateTimeOffset Min(DateTimeOffset a, DateTimeOffset b) => a < b ? a : b;
+    private static bool IsRail(string? modal) => modal?.Contains("trem", StringComparison.OrdinalIgnoreCase) == true
+        || modal?.Contains("ferro", StringComparison.OrdinalIgnoreCase) == true;
 }

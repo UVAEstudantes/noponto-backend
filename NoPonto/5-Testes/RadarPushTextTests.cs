@@ -18,6 +18,17 @@ public sealed class RadarPushTextTests
         Assert.Equal("838 chega em 4 min", body);
     }
 
+    [Theory]
+    [InlineData("Scheduled", "Linha 10: horário programado em 4 min")]
+    [InlineData("Estimated", "Linha 10: chegada estimada em 4 min")]
+    [InlineData("Live", "Linha 10: chegada prevista ao vivo em 4 min")]
+    public void TextoLegadoDoTremExplicitaEstadoSemTratarGradeComoTempoReal(string status, string expected)
+    {
+        var item = Item("10", 4) with { Modal = "trem", OperationalStatus = status };
+
+        Assert.Equal(expected, Body(item));
+    }
+
     [Fact]
     public void UmaLinhaComTresVeiculosResumeOsOutros()
     {

@@ -1988,3 +1988,11 @@ Kotlin deve ordenar atualizações pela combinação de `sessionId` e `predictio
 `ExpoRadarMessage` passa a serializar `collapseId` apenas no fluxo legado. Para `native-v1`, a propriedade é nula e marcada para omissão JSON; o teste nativo verifica a ausência do campo no JSON serializado e no corpo HTTP, enquanto o teste legado confirma o valor estável existente. Nenhum payload, prioridade, TTL, tag, canal, worker ou regra de envio foi alterado.
 
 Testes focados de serialização nativa e legada: 1 aprovado cada. Sem build completo, deploy, commit ou push.
+
+## 2026-11-10 — Propagação do estado ferroviário no Radar
+
+Na branch de trabalho `feat/radar-trensrj`, `EventoParadaDto` e `RadarItemCandidato` receberam campos opcionais aditivos para modalidade, estado operacional, identidade ExpectedRun/ScheduledStop, TrainCode, ramal e destino quando disponíveis. `EventosParadaService` usa `RailOperationalStatus` do snapshot público; sem snapshot válido da grade, o evento permanece Scheduled. Live exige evidência não futura, dentro dos 300s já aceitos pelo Radar, e `FreshUntilUtc` posterior ao instante atual. Evidência vencida rebaixa Live para Estimated; regras existentes do seletor continuam descartando evidência fora da janela, eventos vencidos, contexto incompatível e ETA fora da antecedência.
+
+O native-v1 mantém os campos atuais e acrescenta somente metadados presentes; mudança de estado/metadados ferroviários torna a atualização relevante. O texto legado ferroviário diferencia horário programado, chegada estimada e previsão ao vivo, sem mudar texto de ônibus/BRT. Grade, identidade do evento, vínculos estruturais e exclusão do destino final foram mantidos; não houve consulta externa, novo worker, mudança de push/Firebase ou alteração de frontend/Android.
+
+Verificações: `dotnet test NoPonto/NoPonto.csproj --no-restore --filter "FullyQualifiedName~EventosParadaProjectionTests|FullyQualifiedName~RadarSelectorTests|FullyQualifiedName~RadarPushTests|FullyQualifiedName~RadarPushTextTests|FullyQualifiedName~RailScheduleDatasetTests.Timezone_CrossMidnightPreservaDiaDeServico"` — 114 aprovados, 0 falhas, 0 ignorados. `git diff --check` aprovado. Sem Docker, integrações Redis/PostgreSQL, build de produção, deploy, commit ou push.

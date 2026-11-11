@@ -124,6 +124,94 @@ public sealed class RadarSelectorTests
     }
 
     [Fact]
+    public void FerroviaPropagaIdentidadeEstruturalEEstadoSemDuplicarTransicoes()
+    {
+        var expectedRun = Guid.NewGuid();
+        var scheduledStop = Guid.NewGuid();
+        var railVehicle = Guid.NewGuid();
+        var scheduled = Event(0, 120) with
+        {
+            EventId = $"rail:{expectedRun:D}:{scheduledStop:D}", Modal = "trem", TipoRota = "trem",
+            VehicleId = null, RailVehicleId = railVehicle, ExpectedRunId = expectedRun, ScheduledStopId = scheduledStop,
+            OperationalStatus = "Scheduled", Source = "ScheduledEstimated", Quality = "ScheduleOnly",
+            LastRealtimeEvidenceUtc = null, EstimatedAt = null, ScheduledAt = RadarSamples.Now.AddMinutes(2),
+            TrainCode = "T-12", DestinationName = "Terminal informado", LineName = "Ramal informado"
+        };
+        var transition = scheduled with
+        {
+            OperationalStatus = "Live", Source = "RealtimeEstimated", Quality = "RealtimeAnchored",
+            LastRealtimeEvidenceUtc = RadarSamples.Now.AddSeconds(-10), EstimatedAt = RadarSamples.Now.AddMinutes(2)
+        };
+
+        var before = Assert.Single(Select(RadarSamples.Session(), [scheduled]).Itens);
+        var after = Assert.Single(Select(RadarSamples.Session(), [transition]).Itens);
+        Assert.Equal(before.EventoId, after.EventoId);
+        Assert.Equal(expectedRun, after.ExpectedRunId);
+        Assert.Equal(scheduledStop, after.ScheduledStopId);
+        Assert.Equal(railVehicle, after.RailVehicleId);
+        Assert.Equal("T-12", after.TrainCode);
+        Assert.Equal("Terminal informado", after.DestinationName);
+        Assert.Equal("Ramal informado", after.LineName);
+        Assert.Equal("Live", after.OperationalStatus);
+    }
+
+    [Fact]
+    public void EstadoLiveSemEvidenciaOuComEvidenciaVencidaNaoEhElegivel()
+    {
+        var rail = Event(0, 120) with
+        {
+            Modal = "trem", OperationalStatus = "Live", Source = "RealtimeEstimated",
+            Quality = "RealtimeAnchored", LastRealtimeEvidenceUtc = null
+        };
+
+        Assert.Empty(Select(RadarSamples.Session(), [rail]).Itens);
+        Assert.Empty(Select(RadarSamples.Session(), [rail with
+        {
+            LastRealtimeEvidenceUtc = RadarSamples.Now.AddSeconds(-301)
+        }]).Itens);
+    }
+
+    [Theory]
+    [InlineData("ScheduleEstimated", "ScheduleAnchored")]
+    [InlineData("RealtimeEstimated", "RealtimeAnchored")]
+    [InlineData("RealtimeEstimated", "MultiSatelliteAnchored")]
+    public void EstimadoConfirmadoPermaneceElegivelComEvidenciaAntiga(string source, string quality)
+    {
+        var expectedRun = Guid.NewGuid(); var scheduledStop = Guid.NewGuid();
+        var rail = Event(0, 120) with { EventId = $"rail:{expectedRun}:{scheduledStop}", Modal = "trem",
+            TipoRota = "trem", OperationalStatus = "Estimated", TrainCode = "T-12",
+            ExpectedRunId = expectedRun, ScheduledStopId = scheduledStop,
+            Source = source, Quality = quality, LastRealtimeEvidenceUtc = RadarSamples.Now.AddSeconds(-301) };
+        Assert.Equal("Estimated", Assert.Single(Select(RadarSamples.Session(), [rail]).Itens).OperationalStatus);
+        Assert.Empty(Select(RadarSamples.Session(), [rail with { EstimatedAt = RadarSamples.Now.AddSeconds(-1) }]).Itens);
+    }
+
+    [Fact]
+    public void EstimadoSemIdentidadPublicadaONoFerroviarioNoUsaExcecaoDeFrescor()
+    {
+        var rail = Event(0, 120) with { Modal = "trem", OperationalStatus = "Estimated",
+            Source = "RealtimeEstimated", Quality = "RealtimeAnchored",
+            LastRealtimeEvidenceUtc = RadarSamples.Now.AddSeconds(-301) };
+        Assert.Empty(Select(RadarSamples.Session(), [rail]).Itens);
+        var bus = Event(0, 120) with { LastRealtimeEvidenceUtc = RadarSamples.Now.AddSeconds(-301) };
+        Assert.Empty(Select(RadarSamples.Session(), [bus]).Itens);
+    }
+
+    [Fact]
+    public void EventosFerroviariosDuplicadosComMesmoEventIdGeramUmCandidato()
+    {
+        var rail = Event(0, 120) with
+        {
+            Modal = "trem", EventId = "rail:run:scheduled-stop", ExpectedRunId = Guid.NewGuid(),
+            ScheduledStopId = Guid.NewGuid(), Source = "ScheduledEstimated", Quality = "ScheduleOnly",
+            LastRealtimeEvidenceUtc = null, EstimatedAt = null, ScheduledAt = RadarSamples.Now.AddMinutes(2)
+        };
+
+        var item = Assert.Single(Select(RadarSamples.Session(), [rail, rail]).Itens);
+        Assert.Equal(rail.EventId, item.EventoId);
+    }
+
+    [Fact]
     public void DuracaoExistenteUsaInstanteDaConsultaEValidadeNaoUltrapassaEvidencia()
     {
         var e = Event(0, 120) with { EstimatedAt = null, LastRealtimeEvidenceUtc = RadarSamples.Now.AddSeconds(-70) };

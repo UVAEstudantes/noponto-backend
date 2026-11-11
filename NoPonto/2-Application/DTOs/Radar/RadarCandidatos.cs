@@ -3,7 +3,10 @@ namespace NoPonto.Application.Radar;
 /// <summary>Previsão candidata, nunca confirmação de chegada ou presença física.</summary>
 public sealed record RadarItemCandidato(string EventoId, Guid LinhaId, string CodigoLinha,
     string? VeiculoId, string TipoEvento, DateTimeOffset PrevistoEm, long EtaSegundos,
-    bool Prioritaria, string Source, string Quality, DateTimeOffset? EvidenciaEm, Guid SentidoId = default)
+    bool Prioritaria, string Source, string Quality, DateTimeOffset? EvidenciaEm, Guid SentidoId = default,
+    string? Modal = null, string? TipoRota = null, string? OperationalStatus = null, string? TrainCode = null,
+    Guid? RailVehicleId = null, Guid? ExpectedRunId = null, Guid? ScheduledStopId = null,
+    string? DestinationName = null, string? LineName = null)
 {
     public string Confirmacao => "previsao";
 }

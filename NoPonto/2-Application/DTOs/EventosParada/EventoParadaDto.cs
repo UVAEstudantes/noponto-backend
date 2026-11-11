@@ -45,7 +45,11 @@ public sealed record EventoParadaDto(
     bool IsEstimated,
     double? DistanciaRestanteMetros = null,
     string StationRole = PapeisEstacaoEvento.Intermediate,
-    string NextVehiclesMode = ModosProximosVeiculos.Arrivals);
+    string NextVehiclesMode = ModosProximosVeiculos.Arrivals,
+    string? OperationalStatus = null,
+    Guid? ScheduledStopId = null,
+    string? DestinationName = null,
+    string? LineName = null);
 
 public interface IEventosParadaService
 {

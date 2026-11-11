@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using NoPonto.Application.EventosParada;
 using NoPonto.Application.GPS;
+using NoPonto.Application.Radar;
 using NoPonto.Application.TremRealtime.RailRuntime;
 using NoPonto.Application.TremSchedule;
 
@@ -259,7 +260,9 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                     scheduledStop.ExpectedAt, estimated, (long)Math.Round((estimated - now).TotalSeconds),
                     source, quality, evidence, true, null, stationRole,
                     stationRole == PapeisEstacaoEvento.Origin
-                        ? ModosProximosVeiculos.Departures : ModosProximosVeiculos.Arrivals));
+                        ? ModosProximosVeiculos.Departures : ModosProximosVeiculos.Arrivals,
+                    ResolveRailOperationalStatus(snapshot, now).ToString(), scheduledStop.ScheduledStopId,
+                    NonBlank(snapshot?.DestinationName), NonBlank(snapshot?.LineName)));
             }
         }
         return events;
@@ -293,6 +296,25 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
 
     internal static bool ShouldExposeRailEvent(string stationRole) =>
         stationRole != PapeisEstacaoEvento.Destination;
+
+    internal static RailOperationalStatus ResolveRailOperationalStatus(RailVehiclePublicSnapshot? snapshot,
+        DateTimeOffset now)
+    {
+        if (snapshot is null || snapshot.OperationalStatus == RailOperationalStatus.Scheduled)
+            return RailOperationalStatus.Scheduled;
+        if (snapshot.OperationalStatus == RailOperationalStatus.Estimated)
+            return RailOperationalStatus.Estimated;
+
+        var evidence = snapshot.LastRealtimeEvidenceUtc;
+        if (evidence != DateTimeOffset.MinValue && evidence <= now
+            && now - evidence <= TimeSpan.FromSeconds(RadarSelector.MaxEvidenceAgeSeconds)
+            && snapshot.FreshUntilUtc > now)
+            return RailOperationalStatus.Live;
+        return evidence != DateTimeOffset.MinValue && evidence <= now
+            ? RailOperationalStatus.Estimated : RailOperationalStatus.Scheduled;
+    }
+
+    private static string? NonBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static bool IsRail(string modal) => modal.Contains("trem", StringComparison.OrdinalIgnoreCase)
         || modal.Contains("ferro", StringComparison.OrdinalIgnoreCase);

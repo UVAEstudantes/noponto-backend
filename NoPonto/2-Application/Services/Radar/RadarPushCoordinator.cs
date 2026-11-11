@@ -50,7 +50,12 @@ public static class RadarPushContent
         {
             var old = previous.Itens.FirstOrDefault(i => i.EventoId == item.EventoId);
             if (old is null || old.VeiculoId != item.VeiculoId || old.TipoEvento != item.TipoEvento || old.Prioritaria != item.Prioritaria
-                || old.Source != item.Source || old.Quality != item.Quality || Math.Abs((old.PrevistoEm - item.PrevistoEm).TotalSeconds) >= 60) return true;
+                || old.Source != item.Source || old.Quality != item.Quality || old.OperationalStatus != item.OperationalStatus
+                || old.Modal != item.Modal || old.TipoRota != item.TipoRota || old.TrainCode != item.TrainCode
+                || old.RailVehicleId != item.RailVehicleId || old.ExpectedRunId != item.ExpectedRunId
+                || old.ScheduledStopId != item.ScheduledStopId || old.DestinationName != item.DestinationName
+                || old.LineName != item.LineName
+                || Math.Abs((old.PrevistoEm - item.PrevistoEm).TotalSeconds) >= 60) return true;
             foreach (var threshold in new[] { 300, 120, 60 })
                 if ((old.PrevistoEm - previous.GeradoEm).TotalSeconds > threshold && (item.PrevistoEm - now).TotalSeconds <= threshold) return true;
         }
@@ -73,9 +78,7 @@ public static class RadarPushContent
         if (snapshot.NativeV1)
             data = new { mode = "remote-radar-native-v1", sessionId = c.SessaoId, revision = c.Revisao,
                 predictionVersion = snapshot.PredictionVersion, paradaId = c.ParadaId, paradaNome = c.ParadaNome,
-                contextKey, validUntil = until, items = c.Itens.Select(i => new { eventId = i.EventoId,
-                    codigoLinha = i.CodigoLinha, type = i.TipoEvento, etaSeconds = i.EtaSegundos,
-                    predictedAt = i.PrevistoEm, priority = i.Prioritaria, vehicleId = i.VeiculoId }),
+                contextKey, validUntil = until, items = c.Itens.Select(NativeItem),
                 additionalVehicles = c.Adicionais, additionalLines = c.LinhasAdicionais };
         else
         {
@@ -85,6 +88,27 @@ public static class RadarPushContent
         }
         var result = new ExpoRadarMessage(token, title, body, ttl, until.ToUnixTimeSeconds(), data, snapshot.NativeV1);
         return JsonSerializer.SerializeToUtf8Bytes(result).Length <= 3500 ? result : null;
+    }
+
+    private static Dictionary<string, object?> NativeItem(RadarItemCandidato item)
+    {
+        var value = new Dictionary<string, object?>
+        {
+            ["eventId"] = item.EventoId, ["codigoLinha"] = item.CodigoLinha, ["type"] = item.TipoEvento,
+            ["etaSeconds"] = item.EtaSegundos, ["predictedAt"] = item.PrevistoEm,
+            ["priority"] = item.Prioritaria, ["vehicleId"] = item.VeiculoId
+        };
+        Add("modal", item.Modal); Add("tipoRota", item.TipoRota); Add("operationalStatus", item.OperationalStatus);
+        Add("trainCode", item.TrainCode); Add("railVehicleId", item.RailVehicleId);
+        Add("expectedRunId", item.ExpectedRunId); Add("scheduledStopId", item.ScheduledStopId);
+        Add("destinationName", item.DestinationName); Add("lineName", item.LineName);
+        return value;
+
+        void Add(string key, object? field)
+        {
+            if (field is string text && !string.IsNullOrWhiteSpace(text)) value[key] = text;
+            else if (field is Guid id) value[key] = id;
+        }
     }
 }
 

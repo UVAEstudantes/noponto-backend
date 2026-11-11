@@ -118,6 +118,66 @@ public sealed class RadarPushTests
         Assert.False(sent.RootElement.TryGetProperty("channelId", out _));
         Assert.False(sent.RootElement.TryGetProperty("tag", out _));
         Assert.False(sent.RootElement.TryGetProperty("collapseId", out _));
+        Assert.False(items[0].TryGetProperty("operationalStatus", out _));
+        Assert.False(items[0].TryGetProperty("scheduledStopId", out _));
+    }
+
+    [Fact]
+    public void NativeV1PropagaMetadadosFerroviariosEPreservaCamposDeOnibusBrt()
+    {
+        using var f = new PushFixture();
+        var original = f.Store.Snapshot.Candidate.Itens[0];
+        var expectedRun = Guid.NewGuid();
+        var scheduledStop = Guid.NewGuid();
+        var railVehicle = Guid.NewGuid();
+        var rail = original with
+        {
+            Modal = "trem", TipoRota = "trem", OperationalStatus = "Scheduled", TrainCode = "T-12",
+            RailVehicleId = railVehicle, ExpectedRunId = expectedRun, ScheduledStopId = scheduledStop,
+            DestinationName = "Terminal informado", LineName = "Ramal informado"
+        };
+        var brt = original with { Modal = "onibus", TipoRota = "brt" };
+        var snapshot = f.Store.Snapshot with
+        {
+            NativeV1 = true,
+            Candidate = f.Store.Snapshot.Candidate with { Itens = [rail, brt] }
+        };
+
+        var message = RadarPushContent.Criar(snapshot, PushFixture.Token, f.Clock.Now)!;
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(message));
+        var items = json.RootElement.GetProperty("data").GetProperty("items");
+
+        Assert.Equal("T-12", items[0].GetProperty("trainCode").GetString());
+        Assert.Equal("Scheduled", items[0].GetProperty("operationalStatus").GetString());
+        Assert.Equal(railVehicle.ToString(), items[0].GetProperty("railVehicleId").GetString());
+        Assert.Equal(expectedRun.ToString(), items[0].GetProperty("expectedRunId").GetString());
+        Assert.Equal(scheduledStop.ToString(), items[0].GetProperty("scheduledStopId").GetString());
+        Assert.Equal("Terminal informado", items[0].GetProperty("destinationName").GetString());
+        Assert.Equal("Ramal informado", items[0].GetProperty("lineName").GetString());
+        Assert.Equal("onibus", items[1].GetProperty("modal").GetString());
+        Assert.Equal("brt", items[1].GetProperty("tipoRota").GetString());
+        Assert.False(items[1].TryGetProperty("operationalStatus", out _));
+        Assert.True(items[0].TryGetProperty("eventId", out _));
+        Assert.True(items[0].TryGetProperty("etaSeconds", out _));
+    }
+
+    [Fact]
+    public void MudancaDeEstadoFerroviarioComIdentidadeEstavelGeraAtualizacaoRelevante()
+    {
+        using var f = new PushFixture();
+        var before = f.Store.Snapshot.Candidate with
+        {
+            Itens = [f.Store.Snapshot.Candidate.Itens[0] with
+            {
+                EventoId = "rail:run:stop", Modal = "trem", OperationalStatus = "Scheduled"
+            }]
+        };
+        var current = before with
+        {
+            Itens = [before.Itens[0] with { OperationalStatus = "Estimated" }]
+        };
+
+        Assert.True(RadarPushContent.Relevante(current, before, f.Clock.Now));
     }
 
     [Fact]

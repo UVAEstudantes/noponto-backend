@@ -13,6 +13,15 @@ internal static class RadarPushText
             return (title, $"Nenhuma chegada prevista nos próximos {session.AntecedenciaMinutos} min");
 
         var entries = candidate.Itens.Select(i => new Entry(i, Minutes(i.PrevistoEm - now))).ToArray();
+        if (entries.Any(e => IsRail(e.Item)))
+        {
+            var railSegments = entries.Select(e => IsRail(e.Item) ? RailSegment(e) : LineSegment(e)).ToList();
+            if (candidate.LinhasAdicionais > 0)
+                railSegments.Add($"+{candidate.LinhasAdicionais} {(candidate.LinhasAdicionais == 1 ? "linha acompanhada" : "linhas acompanhadas")}");
+            else if (candidate.Adicionais > 0)
+                railSegments.Add($"+{candidate.Adicionais} {(candidate.Adicionais == 1 ? "veículo" : "veículos")}");
+            return (title, string.Join(" · ", railSegments));
+        }
         var groups = entries.GroupBy(e => (e.Item.LinhaId, e.Item.SentidoId, e.Item.TipoEvento))
             .Select(g => new LineGroup(g.ToArray())).ToArray();
         if (groups.Length == 1) return (title, SingleLine(groups[0], candidate.Adicionais));
@@ -37,6 +46,7 @@ internal static class RadarPushText
     private static string SingleLine(LineGroup group, int adicionais)
     {
         var first = group.Entries[0];
+        if (IsRail(first.Item)) return string.Join("\n", group.Entries.Select(RailSegment));
         if (group.Entries.Length == 1)
             return $"{Code(first.Item)} {(Departure(first.Item) ? "saída prevista" : "chega")} em {first.Minutes} min";
 
@@ -71,11 +81,25 @@ internal static class RadarPushText
         return $"{summary}\n{labeled}{more}";
     }
 
-    private static string LineSegment(Entry entry) => Departure(entry.Item)
+    private static string LineSegment(Entry entry) => IsRail(entry.Item) ? RailSegment(entry) : Departure(entry.Item)
         ? $"{Code(entry.Item)} saída prevista em {entry.Minutes} min"
         : $"{Code(entry.Item)} em {entry.Minutes} min";
 
+    private static string RailSegment(Entry entry)
+    {
+        var label = entry.Item.OperationalStatus switch
+        {
+            "Scheduled" => Departure(entry.Item) ? "saída programada" : "horário programado",
+            "Estimated" => Departure(entry.Item) ? "saída estimada" : "chegada estimada",
+            "Live" => Departure(entry.Item) ? "saída prevista ao vivo" : "chegada prevista ao vivo",
+            _ => Departure(entry.Item) ? "saída prevista" : "chegada prevista"
+        };
+        return $"Linha {Code(entry.Item)}: {label} em {entry.Minutes} min";
+    }
+
     private static bool Departure(RadarItemCandidato item) => item.TipoEvento == TiposEventoParada.Departure;
+    private static bool IsRail(RadarItemCandidato item) => item.Modal?.Contains("trem", StringComparison.OrdinalIgnoreCase) == true
+        || item.Modal?.Contains("ferro", StringComparison.OrdinalIgnoreCase) == true;
     private static string Code(RadarItemCandidato item) => Safe(item.CodigoLinha, 12);
     private static int Minutes(TimeSpan remaining) => (int)Math.Ceiling(remaining.TotalMinutes);
     private static string Safe(string value, int max) => new(value.Where(c => !char.IsControl(c)).Take(max).ToArray());
