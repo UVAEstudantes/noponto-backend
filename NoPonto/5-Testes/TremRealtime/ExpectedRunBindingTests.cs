@@ -162,6 +162,36 @@ public sealed class ExpectedRunBindingTests
             x => x.Name.Contains("ExpectedRun", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ManualPublishedPair_UsesScheduleMatchingWithoutArbitraryBindingOrDuplication(bool ambiguous)
+    {
+        var run = Run();
+        var h = ambiguous ? Harness(run, Run(id: Guid.NewGuid())) : Harness(run);
+        var pattern = new NoPonto.Application.TremRealtime.Topology.TremPatternTopology(
+            Guid.NewGuid(), run.MappedPadraoVersaoId!.Value, LineId, DirectionId,
+            [new(Guid.NewGuid(), 1, StopA) { ExternalStationId = "a" },
+             new(Guid.NewGuid(), 2, StopB) { ExternalStationId = "b" },
+             new(Guid.NewGuid(), 3, StopC) { ExternalStationId = "c" }]);
+        var query = NoPonto.Application.TremRealtime.TrensRjManualRefreshService.ResolveQuery([pattern], StopA, DirectionId).Query!;
+        var acceptance = Acceptance("T123", T0, 0);
+        var first = Assert.Single(await h.Service.ObserveBatchAsync("TRENS_RJ", query, [acceptance]));
+        Assert.Equal(ambiguous ? ExpectedRunBindingStatus.Ambiguous : ExpectedRunBindingStatus.Provisional, first.Status);
+        await h.Service.ObserveBatchAsync("TRENS_RJ", query, [acceptance]);
+        if (ambiguous)
+        {
+            Assert.Empty(h.State.CaptureSnapshot().Bindings);
+            return;
+        }
+        Assert.Single(h.State.CaptureSnapshot().Bindings);
+        var next = NoPonto.Application.TremRealtime.TrensRjManualRefreshService.ResolveQuery([pattern], StopB, DirectionId).Query!;
+        var confirmed = Assert.Single(await h.Service.ObserveBatchAsync("TRENS_RJ", next, [Acceptance("T123", T0.AddMinutes(20), 0)]));
+        Assert.Equal(ExpectedRunBindingStatus.Confirmed, confirmed.Status);
+        Assert.Equal(run.ExpectedRunId, confirmed.Binding!.ExpectedRunId);
+        Assert.Single(h.State.CaptureSnapshot().Bindings);
+    }
+
     private static readonly Guid LineId = Guid.Parse("10000000-0000-0000-0000-000000000001");
     private static readonly Guid DirectionId = Guid.Parse("20000000-0000-0000-0000-000000000001");
     private static readonly Guid RunId = Guid.Parse("30000000-0000-0000-0000-000000000001");

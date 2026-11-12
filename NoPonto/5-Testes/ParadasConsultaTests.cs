@@ -82,6 +82,59 @@ public sealed class ParadasConsultaTests
         Assert.Empty(db.ChangeTracker.Entries());
     }
 
+    [Fact]
+    public void RelacoesCompactasPreservamOcorrenciasSentidosEOrdemSemGrafos()
+    {
+        var f = Fixture();
+        var linha = f.Ocorrencias.First(x => x.PadraoVersao.PadraoOperacional.Sentido.Linha.Codigo == "838")
+            .PadraoVersao.PadraoOperacional.Sentido.LinhaId;
+        var stops = ProjetarParadasDaLinha(f.Ocorrencias, linha, null).ToArray();
+        Assert.Equal(4, stops.Length);
+        Assert.Equal(2, stops.Select(x => x.SentidoId).Distinct().Count());
+        var repeated = ProjetarParadasDaLinha(f.Ocorrencias, linha, f.Ida).ToArray();
+        Assert.Equal(new[] { 1, 2, 3 }, repeated.Select(x => x.Ordem));
+        Assert.All(repeated, x => Assert.Equal(f.A, x.Id));
+        Assert.Equal(3, repeated.Select(x => x.OcorrenciaId).Distinct().Count());
+        Assert.DoesNotContain(stops, x => x.Id == f.Antiga);
+        var lines = ProjetarLinhasDaParada(f.Ocorrencias, f.A, null).ToArray();
+        Assert.Equal(3, lines.Length);
+        Assert.Single(ProjetarLinhasDaParada(f.Ocorrencias, f.A, f.Ida));
+        Assert.Empty(ProjetarLinhasDaParada(f.Ocorrencias, Guid.NewGuid(), null));
+        Assert.Empty(ProjetarParadasDaLinha(f.Ocorrencias, Guid.NewGuid(), null));
+        var json = System.Text.Json.JsonSerializer.Serialize(stops);
+        Assert.DoesNotContain("Linhas", json);
+        Assert.DoesNotContain("Paradas", System.Text.Json.JsonSerializer.Serialize(lines));
+    }
+
+    [Fact]
+    public void RelacoesCompactasTraduzemSqlSemConexaoENaoRastreiamEntidades()
+    {
+        using var db = new TransporteDbContext(new DbContextOptionsBuilder<TransporteDbContext>()
+            .UseNpgsql("Host=localhost;Database=not-opened", x => x.UseNetTopologySuite()).Options);
+        var stops = ProjetarParadasDaLinha(db.OcorrenciasParadasPadroes.AsNoTracking(), Guid.NewGuid(), Guid.NewGuid()).ToQueryString();
+        var lines = ProjetarLinhasDaParada(db.OcorrenciasParadasPadroes.AsNoTracking(), Guid.NewGuid(), null).ToQueryString();
+        Assert.Contains("ORDER BY", stops);
+        Assert.Contains("VersaoAtualId", stops);
+        Assert.Contains("SELECT DISTINCT", lines);
+        Assert.Contains("VersaoAtualId", lines);
+        Assert.Empty(db.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public void PayloadCompactoReduzRepeticaoEmLinhaComMuitasParadas()
+    {
+        var f = Fixture();
+        var original = CompletarParada(ProjetarParadas(f.Paradas.Where(x => x.Id == f.A)).Single(),
+            ProjetarVinculos(OcorrenciasAtuais(f.Ocorrencias).Where(x => x.ParadaId == f.A)));
+        var baseline = Enumerable.Repeat(original, 100).ToArray();
+        var compact = Enumerable.Range(1, 100).Select(order => new NoPonto.Application.DTOs.EstruturaV2.ParadaLinhaCompactaDto(
+            Guid.NewGuid(), Guid.NewGuid(), f.Ida, order, null, f.A, original.Codigo, original.Nome, original.Latitude, original.Longitude)).ToArray();
+        var before = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(baseline).Length;
+        var after = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(compact).Length;
+        Assert.True(after < before, $"compact={after}, baseline={before}");
+        Console.WriteLine($"Compact payload fixture (100 occurrences): before={before} after={after} bytes");
+    }
+
     private static IQueryable<Parada> Filtrar(Dados f, string? nome = null, Guid? modal = null,
         string? codigo = null, Guid? sentido = null) =>
         FiltrarParadas(f.Paradas, OcorrenciasAtuais(f.Ocorrencias), nome, modal, codigo, sentido);

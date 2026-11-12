@@ -9,10 +9,17 @@ namespace NoPonto.API.Controllers;
 [Route("paradas")]
 public sealed class EstruturaParadasController(IEstruturaLeituraV2Repository repository) : ControllerBase
 {
-    /// <summary>Busca paradas diretamente por nome, modal, código exato da linha e sentido.</summary>
-    /// <remarks>Filtros combináveis; vínculos apenas da versão operacional atual. Nome é parcial e ignora caixa.
-    /// Linha, sentido e modal combinados devem corresponder ao mesmo vínculo. Sem linha/sentido, aceita também o modal declarado na parada.
-    /// page começa em 1; pageSize entre 1 e 100 (padrão 50). Exemplo: /paradas?codigoLinha=838.</remarks>
+    /// <summary>Consulta compacta das linhas que atendem à parada, sem grafos de navegação.</summary>
+    /// <remarks>Retorna os vínculos da versão operacional atual, opcionalmente filtrados por sentido. Linhas e sentidos distintos são preservados.</remarks>
+    [HttpGet("{paradaId:guid}/linhas")]
+    [ProducesResponseType(typeof(IReadOnlyList<LinhaParadaCompactaDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Relacoes(Guid paradaId, [FromQuery] Guid? sentidoId, CancellationToken ct)
+    {
+        var rows = await repository.ListarLinhasDaParadaAsync(paradaId, sentidoId, ct);
+        return rows is null ? NotFound() : Ok(rows);
+    }
+
     [HttpGet]
     [ProducesResponseType(typeof(PaginacaoRespostaDTO<ParadaConsultaV2Dto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

@@ -246,6 +246,11 @@ public sealed class RadarTests
 
 internal sealed class RadarCatalog : IEstruturaLeituraV2Repository
 {
+        public Task<IReadOnlyList<ParadaLinhaCompactaDto>?> ListarParadasDaLinhaAsync(Guid linhaId, Guid? sentidoId, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<ParadaLinhaCompactaDto>?>(null);
+        public Task<IReadOnlyList<LinhaParadaCompactaDto>?> ListarLinhasDaParadaAsync(Guid paradaId, Guid? sentidoId, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<LinhaParadaCompactaDto>?>(null);
+
     public static readonly Guid Line = Guid.Parse("10000000-0000-0000-0000-000000000001");
     public static readonly Guid Stop = Guid.Parse("20000000-0000-0000-0000-000000000001");
     public static readonly Guid Direction = Guid.NewGuid(), Pattern = Guid.NewGuid(), Version = Guid.NewGuid();

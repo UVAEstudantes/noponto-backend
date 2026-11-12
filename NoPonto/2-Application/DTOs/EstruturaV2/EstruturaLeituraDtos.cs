@@ -48,8 +48,15 @@ public sealed record ItinerarioPadraoVersaoDto(
     DateTimeOffset? PublicadoEmUtc, bool EhVersaoAtual,
     GeometriaLinhaDto Geometria, IReadOnlyList<OcorrenciaItinerarioDto> Ocorrencias);
 
+public sealed record ParadaLinhaCompactaDto(Guid OcorrenciaId, Guid PadraoVersaoId, Guid SentidoId,
+    int Ordem, int? Volta, Guid Id, string Codigo, string Nome, double Latitude, double Longitude);
+public sealed record LinhaParadaCompactaDto(Guid LinhaId, string Codigo, string Nome,
+    Guid ModalId, Guid SentidoId, string Sentido);
+
 public interface IEstruturaLeituraV2Repository
 {
+    Task<IReadOnlyList<ParadaLinhaCompactaDto>?> ListarParadasDaLinhaAsync(Guid linhaId, Guid? sentidoId, CancellationToken ct);
+    Task<IReadOnlyList<LinhaParadaCompactaDto>?> ListarLinhasDaParadaAsync(Guid paradaId, Guid? sentidoId, CancellationToken ct);
     Task<PaginacaoRespostaDTO<ParadaConsultaV2Dto>> ListarParadasAsync(string? nome, Guid? modalId,
         string? codigoLinha, Guid? sentidoId, int pagina, int tamanhoPagina, CancellationToken ct);
     Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(

@@ -375,6 +375,11 @@ public sealed class RadarEngineTests(ITestOutputHelper output)
 
     internal sealed class CatalogFake : IEstruturaLeituraV2Repository
     {
+        public Task<IReadOnlyList<ParadaLinhaCompactaDto>?> ListarParadasDaLinhaAsync(Guid linhaId, Guid? sentidoId, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<ParadaLinhaCompactaDto>?>(null);
+        public Task<IReadOnlyList<LinhaParadaCompactaDto>?> ListarLinhasDaParadaAsync(Guid paradaId, Guid? sentidoId, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<LinhaParadaCompactaDto>?>(null);
+
         public int StopCalls, VersionCalls;
         public string Invalid = "";
         public Task<ParadaEstruturalDto?> BuscarParadaAsync(Guid stop, CancellationToken ct)

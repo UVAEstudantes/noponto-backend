@@ -10,6 +10,42 @@ namespace NoPonto.Data.Repositories;
 public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
     : IEstruturaLeituraV2Repository
 {
+    public async Task<IReadOnlyList<ParadaLinhaCompactaDto>?> ListarParadasDaLinhaAsync(
+        Guid linhaId, Guid? sentidoId, CancellationToken ct)
+    {
+        if (!await db.Linhas.AsNoTracking().AnyAsync(x => x.Id == linhaId, ct)) return null;
+        return await ProjetarParadasDaLinha(db.OcorrenciasParadasPadroes.AsNoTracking(), linhaId, sentidoId).ToListAsync(ct);
+    }
+
+    internal static IQueryable<ParadaLinhaCompactaDto> ProjetarParadasDaLinha(
+        IQueryable<OcorrenciaParadaPadrao> query, Guid linhaId, Guid? sentidoId) =>
+        OcorrenciasAtuais(query).Where(x => x.PadraoVersao.PadraoOperacional.Sentido.LinhaId == linhaId
+            && (!sentidoId.HasValue || x.PadraoVersao.PadraoOperacional.SentidoId == sentidoId))
+        .OrderBy(x => x.PadraoVersao.PadraoOperacional.SentidoId).ThenBy(x => x.PadraoVersaoId)
+        .ThenBy(x => x.Ordem).ThenBy(x => x.Id)
+        .Select(x => new ParadaLinhaCompactaDto(x.Id, x.PadraoVersaoId,
+            x.PadraoVersao.PadraoOperacional.SentidoId, x.Ordem, null, x.ParadaId,
+            x.Parada.Codigo, x.Parada.Nome, x.Parada.Localizacao.Y, x.Parada.Localizacao.X));
+
+    public async Task<IReadOnlyList<LinhaParadaCompactaDto>?> ListarLinhasDaParadaAsync(
+        Guid paradaId, Guid? sentidoId, CancellationToken ct)
+    {
+        if (!await db.Paradas.AsNoTracking().AnyAsync(x => x.Id == paradaId, ct)) return null;
+        return await ProjetarLinhasDaParada(db.OcorrenciasParadasPadroes.AsNoTracking(), paradaId, sentidoId).ToListAsync(ct);
+    }
+
+    internal static IQueryable<LinhaParadaCompactaDto> ProjetarLinhasDaParada(
+        IQueryable<OcorrenciaParadaPadrao> query, Guid paradaId, Guid? sentidoId) =>
+        OcorrenciasAtuais(query).Where(x => x.ParadaId == paradaId
+            && (!sentidoId.HasValue || x.PadraoVersao.PadraoOperacional.SentidoId == sentidoId))
+        .Select(x => new { LinhaId = x.PadraoVersao.PadraoOperacional.Sentido.LinhaId,
+            x.PadraoVersao.PadraoOperacional.Sentido.Linha.Codigo,
+            x.PadraoVersao.PadraoOperacional.Sentido.Linha.Nome,
+            x.PadraoVersao.PadraoOperacional.Sentido.Linha.ModalId,
+            x.PadraoVersao.PadraoOperacional.SentidoId, Sentido = x.PadraoVersao.PadraoOperacional.Sentido.Nome })
+        .Distinct().OrderBy(x => x.Codigo).ThenBy(x => x.LinhaId).ThenBy(x => x.SentidoId)
+        .Select(x => new LinhaParadaCompactaDto(x.LinhaId, x.Codigo, x.Nome, x.ModalId, x.SentidoId, x.Sentido));
+
     public async Task<PaginacaoRespostaDTO<ParadaConsultaV2Dto>> ListarParadasAsync(
         string? nome, Guid? modalId, string? codigoLinha, Guid? sentidoId,
         int pagina, int tamanhoPagina, CancellationToken ct)

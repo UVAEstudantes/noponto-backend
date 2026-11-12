@@ -67,6 +67,18 @@ public sealed class EstruturaLeituraV2ControllerTests
             Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
             using var tooLarge = await http.GetAsync("/paradas?pageSize=101");
             Assert.Equal(HttpStatusCode.BadRequest, tooLarge.StatusCode);
+            var compactStops = await http.GetFromJsonAsync<ParadaLinhaCompactaDto[]>($"/linhas/{repo.LinhaId}/paradas?sentidoId={repo.SentidoId}");
+            Assert.Equal(repo.ParadaId, Assert.Single(compactStops!).Id);
+            Assert.Equal(repo.SentidoId, compactStops![0].SentidoId);
+            var compactLines = await http.GetFromJsonAsync<LinhaParadaCompactaDto[]>($"/paradas/{repo.ParadaId}/linhas?sentidoId={repo.SentidoId}");
+            Assert.Equal(repo.LinhaId, Assert.Single(compactLines!).LinhaId);
+            Assert.Equal(repo.SentidoId, compactLines![0].SentidoId);
+            using var missingLine = await http.GetAsync($"/linhas/{Guid.NewGuid()}/paradas");
+            using var missingStop = await http.GetAsync($"/paradas/{Guid.NewGuid()}/linhas");
+            Assert.Equal(HttpStatusCode.NotFound, missingLine.StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, missingStop.StatusCode);
+            using var invalidDirection = await http.GetAsync($"/linhas/{repo.LinhaId}/paradas?sentidoId=invalid");
+            Assert.Equal(HttpStatusCode.BadRequest, invalidDirection.StatusCode);
             Assert.Equal(0, repo.MutationCount);
         }
         finally { await app.StopAsync(); }
@@ -175,6 +187,13 @@ public sealed class EstruturaLeituraV2ControllerTests
 
     private sealed class FakeRepository : IEstruturaLeituraV2Repository
     {
+        public Task<IReadOnlyList<ParadaLinhaCompactaDto>?> ListarParadasDaLinhaAsync(Guid linhaId, Guid? sentidoId, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<ParadaLinhaCompactaDto>?>(linhaId == LinhaId
+                ? [new(Guid.NewGuid(), VersaoId, sentidoId ?? SentidoId, 1, null, ParadaId, "P001", "Terminal", -22.9, -43.2)] : null);
+        public Task<IReadOnlyList<LinhaParadaCompactaDto>?> ListarLinhasDaParadaAsync(Guid paradaId, Guid? sentidoId, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<LinhaParadaCompactaDto>?>(paradaId == ParadaId
+                ? [new(LinhaId, "006", "Linha", Guid.NewGuid(), sentidoId ?? SentidoId, "IDA")] : null);
+
         public Guid LinhaId { get; } = Guid.NewGuid();
         public Guid SentidoId { get; } = Guid.NewGuid();
         public Guid PadraoId { get; } = Guid.NewGuid();

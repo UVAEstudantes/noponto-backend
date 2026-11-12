@@ -34,20 +34,10 @@ public sealed class TrensRjManualRefreshService(ITremSentinelCatalog catalog,
                 return new(TrensRjManualRefreshStatus.InvalidContext, "rail_context_not_found");
 
             var queries = await catalog.GetAsync(ct);
-            var compatible = topology with { Patterns = patterns };
-            var candidates = queries.Where(q => q.OriginParadaId == paradaId
-                && q.StructurallyCoveredSentidoIds.Contains(sentidoId)
-                && q.StructurallyCoveredLinhaIds.Count > 0
-                && q.PairKey.OriginExternalStationId == q.OriginExternalStationId
-                && q.PairKey.DestinationExternalStationId == q.DestinationExternalStationId
-                && !string.IsNullOrWhiteSpace(q.OriginExternalStationId)
-                && !string.IsNullOrWhiteSpace(q.DestinationExternalStationId)
-                && HasCoverage(compatible, q)).Take(2).ToArray();
-            if (candidates.Length != 1)
-                return new(TrensRjManualRefreshStatus.Unavailable,
-                    candidates.Length == 0 ? "no_supported_pair" : "ambiguous_pairs");
-
-            var query = candidates[0];
+            var resolution = ResolveQuery(patterns, paradaId, sentidoId);
+            if (resolution.Query is null)
+                return new(TrensRjManualRefreshStatus.Unavailable, resolution.Diagnostic);
+            var query = resolution.Query;
             int CountReusable(IEnumerable<TremRealtimeObservation> evidence) => evidence.Count(x =>
                 TrensRjEvidence.IsUseful(x, clock.GetUtcNow()) && x.SentidoId == sentidoId
                 && x.OriginExternalStationId == query.OriginExternalStationId
@@ -89,6 +79,9 @@ public sealed class TrensRjManualRefreshService(ITremSentinelCatalog catalog,
                     ? TrensRjManualRefreshStatus.Updated : result.Status == TrensRjClientStatus.RateLimited && caller is not null
                         ? TrensRjManualRefreshStatus.RateLimited : TrensRjManualRefreshStatus.Unavailable,
                     result.Status == TrensRjClientStatus.Success ? observations.Count > 0 ? "processed" : "empty"
+                        : result.HttpStatus is 400 or 422 ? "provider_pair_rejected"
+                        : result.Status == TrensRjClientStatus.NoService ? "provider_no_service"
+                        : result.Status == TrensRjClientStatus.Timeout ? "provider_timeout"
                         : "provider_unavailable", result.Status, observations.Count);
             }
             finally
@@ -106,17 +99,32 @@ public sealed class TrensRjManualRefreshService(ITremSentinelCatalog catalog,
         finally { TremRealtimeCanaryCycle.AcquisitionGate.Release(); }
     }
 
-    private static bool HasCoverage(TremPublishedTopologySnapshot topology, TremSentinelQuery query)
+    internal static (TremSentinelQuery? Query, string Diagnostic) ResolveQuery(
+        ImmutableArray<TremPatternTopology> patterns, Guid paradaId, Guid sentidoId)
     {
-        var covered = topology with { Patterns = topology.Patterns
-            .Where(p => query.StructurallyCoveredLinhaIds.Contains(p.LinhaId)).ToImmutableArray() };
-        return TremSentinelTopologyResolver.Resolve(covered, query).CompatiblePatternAnchors.Any(a =>
+        var contexts = patterns.Where(p => p.SentidoId == sentidoId).Select(p => new
         {
-            var pattern = covered.Patterns.Single(p => p.PadraoVersaoId == a.PadraoVersaoId);
-            return pattern.Occurrences.Single(o => o.OccurrenceId == a.OriginOccurrenceId).ExternalStationId
-                    == query.OriginExternalStationId
-                && pattern.Occurrences.Single(o => o.OccurrenceId == a.DestinationOccurrenceId).ExternalStationId
-                    == query.DestinationExternalStationId;
-        });
+            Pattern = p,
+            Origins = p.Occurrences.Where(o => o.ParadaId == paradaId).ToArray(),
+            Destination = p.Occurrences.OrderBy(o => o.Order).LastOrDefault()
+        }).ToArray();
+        if (contexts.Length == 0 || contexts.Any(x => x.Origins.Length != 1 || x.Destination is null))
+            return (null, "ambiguous_origin_occurrence");
+        if (contexts.Any(x => string.IsNullOrWhiteSpace(x.Origins[0].ExternalStationId)
+            || string.IsNullOrWhiteSpace(x.Destination!.ExternalStationId)))
+            return (null, "external_station_unresolved");
+        if (contexts.Any(x => x.Destination!.Order <= x.Origins[0].Order
+            || x.Destination.ExternalStationId == x.Origins[0].ExternalStationId))
+            return (null, "no_downstream_destination");
+        var pairs = contexts.Select(x => (Origin: x.Origins[0].ExternalStationId!,
+            Destination: x.Destination!.ExternalStationId!, DestinationParadaId: x.Destination.ParadaId)).Distinct().ToArray();
+        if (pairs.Length != 1) return (null, "ambiguous_operational_destination");
+        var pair = pairs[0];
+        return (new TremSentinelQuery($"MANUAL:{paradaId:N}:{sentidoId:N}", new(pair.Origin, pair.Destination),
+            pair.Origin, pair.Destination, paradaId, pair.DestinationParadaId,
+            contexts.Select(x => x.Pattern.LinhaId).ToHashSet(), new HashSet<Guid> { sentidoId },
+            contexts.Select(x => x.Pattern.PadraoOperacionalId).ToHashSet(), new HashSet<Guid>(),
+            TremSentinelPurpose.Dynamic, 0, "Manual published station/direction pair", false,
+            TremSentinelState.Dormant), "resolved");
     }
 }
