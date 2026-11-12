@@ -127,11 +127,7 @@ builder.Services.AddSwaggerGen(options =>
         options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
     }
 
-    options.TagActionsBy(api =>
-    {
-        var controller = api.ActionDescriptor.RouteValues["controller"];
-        return [string.IsNullOrWhiteSpace(controller) ? "Outros" : controller];
-    });
+    options.TagActionsBy(NoPonto.API.SwaggerGroups.Tags);
 
     options.DocInclusionPredicate((docName, apiDesc) =>
     {
@@ -207,7 +203,9 @@ builder.Services.AddOptions<TremCrossSentinelOptions>()
 builder.Services.AddOptions<RailRealtimeOptions>()
     .Bind(builder.Configuration.GetSection(RailRealtimeOptions.SectionName));
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<ITrensRjRequestBudget, ProcessLocalTrensRjRequestBudget>();
+builder.Services.AddSingleton<ProcessLocalTrensRjRequestBudget>();
+builder.Services.AddSingleton<ITrensRjRequestBudget, NoPonto.Data.Repositories.TrensRjRedisRequestBudget>();
+builder.Services.AddSingleton<NoPonto.Application.TremRealtime.ITrensRjRefreshStore, NoPonto.Data.Repositories.TrensRjRefreshRedisStore>();
 builder.Services.AddSingleton<TremRealtimeMetrics>();
 builder.Services.AddSingleton<ITremPairSingleFlight, TremPairSingleFlight>();
 builder.Services.AddSingleton<ITremStructuralLookupSource, EfTremStructuralLookupSource>();
@@ -229,7 +227,9 @@ builder.Services.AddSingleton<ITremPublishedTopologyCache, TremPublishedTopology
 builder.Services.AddSingleton<TremCrossSentinelMetrics>();
 builder.Services.AddSingleton<ITremCrossSentinelObserver, TremCrossSentinelObserver>();
 builder.Services.AddSingleton<IRailRealtimeEngine, RailRealtimeEngine>();
-builder.Services.AddScoped<ITremRealtimeCanaryCycle, TremRealtimeCanaryCycle>();
+builder.Services.AddScoped<TremRealtimeCanaryCycle>();
+builder.Services.AddScoped<ITremRealtimeCanaryCycle>(services => services.GetRequiredService<TremRealtimeCanaryCycle>());
+builder.Services.AddScoped<NoPonto.Application.TremRealtime.TrensRjManualRefreshService>();
 builder.Services.AddHostedService<TremRealtimeCanaryWorker>();
 builder.Services.AddHttpClient<ITrensRjRealtimeClient, TrensRjRealtimeClient>((services, client) =>
 {

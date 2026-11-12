@@ -1,3 +1,4 @@
+using NoPonto.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using NoPonto.Application.DTOs.Compartilhado;
 using NoPonto.Application.DTOs.EstruturaV2;
@@ -9,6 +10,92 @@ namespace NoPonto.Data.Repositories;
 public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
     : IEstruturaLeituraV2Repository
 {
+    public async Task<PaginacaoRespostaDTO<ParadaConsultaV2Dto>> ListarParadasAsync(
+        string? nome, Guid? modalId, string? codigoLinha, Guid? sentidoId,
+        int pagina, int tamanhoPagina, CancellationToken ct)
+    {
+        if (pagina < 1 || tamanhoPagina is < 1 or > 100 || (long)(pagina - 1) * tamanhoPagina > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(pagina));
+        var atuais = OcorrenciasAtuais(db.OcorrenciasParadasPadroes.AsNoTracking());
+        var query = FiltrarParadas(db.Paradas.AsNoTracking(), atuais, nome, modalId, codigoLinha, sentidoId);
+        var total = await query.CountAsync(ct);
+        var itens = await ProjetarParadas(PaginarParadas(query, pagina, tamanhoPagina)).ToListAsync(ct);
+        if (itens.Count > 0)
+        {
+            var ids = itens.Select(x => x.Id).ToArray();
+            var vinculos = await ProjetarVinculos(atuais.Where(x => ids.Contains(x.ParadaId))).Distinct().ToListAsync(ct);
+            var porParada = vinculos.ToLookup(x => x.ParadaId);
+            itens = itens.Select(x => CompletarParada(x, porParada[x.Id])).ToList();
+        }
+        return new() { Pagina = pagina, TamanhoPagina = tamanhoPagina, TotalRegistros = total,
+            TotalPaginas = total == 0 ? 0 : (int)Math.Ceiling((double)total / tamanhoPagina), Itens = itens };
+    }
+
+    internal static IQueryable<OcorrenciaParadaPadrao> OcorrenciasAtuais(IQueryable<OcorrenciaParadaPadrao> query) =>
+        query.Where(x => x.PadraoVersao.PadraoOperacional.VersaoAtualId == x.PadraoVersaoId);
+
+    internal static IQueryable<Parada> FiltrarParadas(IQueryable<Parada> query,
+        IQueryable<OcorrenciaParadaPadrao> atuais, string? nome, Guid? modalId, string? codigoLinha, Guid? sentidoId)
+    {
+        if (!string.IsNullOrWhiteSpace(nome))
+        {
+            var filtro = nome.Trim().ToLowerInvariant();
+            query = query.Where(x => x.Nome.ToLower().Contains(filtro));
+        }
+        var vinculos = atuais;
+        if (modalId.HasValue) vinculos = vinculos.Where(x => x.PadraoVersao.PadraoOperacional.Sentido.Linha.ModalId == modalId.Value);
+        if (!string.IsNullOrWhiteSpace(codigoLinha))
+        {
+            var codigo = codigoLinha.Trim();
+            vinculos = vinculos.Where(x => x.PadraoVersao.PadraoOperacional.Sentido.Linha.Codigo == codigo);
+        }
+        if (sentidoId.HasValue) vinculos = vinculos.Where(x => x.PadraoVersao.PadraoOperacional.SentidoId == sentidoId.Value);
+        if (modalId.HasValue || !string.IsNullOrWhiteSpace(codigoLinha) || sentidoId.HasValue)
+        {
+            var somenteModal = string.IsNullOrWhiteSpace(codigoLinha) && !sentidoId.HasValue;
+            query = query.Where(x => vinculos.Any(v => v.ParadaId == x.Id)
+                || somenteModal && modalId.HasValue && x.ModalId == modalId);
+        }
+        return query;
+    }
+
+    internal static IQueryable<Parada> PaginarParadas(IQueryable<Parada> query, int pagina, int tamanho) =>
+        query.OrderBy(x => x.Nome).ThenBy(x => x.Id).Skip((pagina - 1) * tamanho).Take(tamanho);
+
+    internal static IQueryable<ParadaConsultaV2Dto> ProjetarParadas(IQueryable<Parada> query) =>
+        query.Select(x => new ParadaConsultaV2Dto(x.Id, x.Codigo, x.Nome, x.Localizacao.Y, x.Localizacao.X)
+        {
+            Modais = x.ModalId.HasValue
+                ? new[] { new ModalParadaV2Dto(x.ModalId.Value, x.Modal!.Nome) }
+                : Array.Empty<ModalParadaV2Dto>()
+        });
+
+    internal sealed record VinculoParada(Guid ParadaId, Guid LinhaId, string Codigo, string Nome,
+        Guid SentidoId, string Sentido, Guid ModalId, string Modal);
+
+    internal static IQueryable<VinculoParada> ProjetarVinculos(IQueryable<OcorrenciaParadaPadrao> query) =>
+        query.Select(x => new VinculoParada(x.ParadaId, x.PadraoVersao.PadraoOperacional.Sentido.LinhaId,
+            x.PadraoVersao.PadraoOperacional.Sentido.Linha.Codigo,
+            x.PadraoVersao.PadraoOperacional.Sentido.Linha.Nome,
+            x.PadraoVersao.PadraoOperacional.SentidoId, x.PadraoVersao.PadraoOperacional.Sentido.Nome,
+            x.PadraoVersao.PadraoOperacional.Sentido.Linha.ModalId,
+            x.PadraoVersao.PadraoOperacional.Sentido.Linha.Modal.Nome));
+
+    internal static ParadaConsultaV2Dto CompletarParada(ParadaConsultaV2Dto parada, IEnumerable<VinculoParada> vinculos)
+    {
+        var rows = vinculos.ToArray();
+        return parada with
+        {
+            Linhas = rows.GroupBy(x => new { x.LinhaId, x.Codigo, x.Nome, x.ModalId })
+                .OrderBy(x => x.Key.Codigo).ThenBy(x => x.Key.LinhaId)
+                .Select(g => new LinhaParadaV2Dto(g.Key.LinhaId, g.Key.Codigo, g.Key.Nome, g.Key.ModalId,
+                    g.Select(x => new SentidoEstruturalResumoDto(x.SentidoId, x.LinhaId, x.Sentido)).Distinct()
+                        .OrderBy(x => x.Nome).ThenBy(x => x.Id).ToArray())).ToArray(),
+            Modais = parada.Modais.Concat(rows.Select(x => new ModalParadaV2Dto(x.ModalId, x.Modal)))
+                .Distinct().OrderBy(x => x.Nome).ThenBy(x => x.Id).ToArray()
+        };
+    }
+
     public async Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
         string? codigo, string? nome, Guid? modalId, string? tipoRota,
         string? excluirTipoRota, int pagina, int tamanhoPagina, CancellationToken ct)

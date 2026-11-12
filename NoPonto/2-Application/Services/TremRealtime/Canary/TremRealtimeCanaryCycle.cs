@@ -46,9 +46,20 @@ public sealed class TremRealtimeCanaryCycle(
     IExpectedRunService? expectedRuns = null,
     RailScheduleFirstRuntimeState? scheduleFirstState = null,
     RailScheduleFirstMetrics? scheduleFirstMetrics = null,
-    IRailScheduleGate? scheduleGate = null) : ITremRealtimeCanaryCycle
+    IRailScheduleGate? scheduleGate = null,
+    ITrensRjRefreshStore? refreshStore = null) : ITremRealtimeCanaryCycle
 {
+    // Shared across scopes: binding read/modify/write and publication must not interleave.
+    internal static readonly SemaphoreSlim AcquisitionGate = new(1, 1);
+
     public async Task RunOnceAsync(CancellationToken ct)
+    {
+        await AcquisitionGate.WaitAsync(ct);
+        try { await RunOnceCoreAsync(ct); }
+        finally { AcquisitionGate.Release(); }
+    }
+
+    private async Task RunOnceCoreAsync(CancellationToken ct)
     {
         var runtime = runtimeOptions.Value;
         var canary = canaryOptions.Value;
@@ -138,139 +149,9 @@ public sealed class TremRealtimeCanaryCycle(
             var requestStartedAtUtc = clock.GetUtcNow();
             var result = await client.GetNextAsync(item.Query.PairKey, ct);
             metrics.Result(result.Status);
-            var observations = result.Status == TrensRjClientStatus.Success && result.Value is not null
-                ? await normalizer.NormalizeAsync(result.Value, item.Query.PairKey, requestStartedAtUtc, ct)
-                : [];
+            var observations = await ProcessResultAsync(item.Query, result, requestStartedAtUtc,
+                catalogQueries, ct);
             metrics.Departures(observations.Count);
-            if (scheduleOptions.Enabled) expectedRunBindingMetrics?.ObserveIngress(observations);
-            var receivedAtUtc = clock.GetUtcNow();
-            scheduler.ObserveResult(receivedAtUtc, item.Query, observations, result.Status, catalogQueries,
-                requestStartedAtUtc);
-            ImmutableArray<TrackedObservationAcceptance> accepted = [];
-            TremRealtimeTrackerSnapshot? trackerSnapshot = null;
-            try
-            {
-                accepted = tracker.ObserveBatch("TRENS_RJ", item.Query.Id, observations);
-                trackerSnapshot = tracker.CaptureSnapshot();
-                var trackerCounters = trackerMetrics.Capture();
-                logger.LogInformation(
-                    "TremTrackerSummary active={Active} stale={Stale} tracked={Tracked} new_total={NewTotal} repeated_total={RepeatedTotal} untrackable_total={UntrackableTotal} train_code_external_line_transition_total={ExternalLineTransitions}",
-                    trackerSnapshot.Active, trackerSnapshot.Stale, trackerSnapshot.Trains.Length,
-                    trackerCounters.NewTrains, trackerCounters.RepeatedTrains, trackerCounters.UntrackableMissingCode,
-                    trackerCounters.TrainCodeExternalLineTransitionTotal);
-            }
-            catch (Exception ex)
-            {
-                trackerMetrics.Failure();
-                logger.LogError(ex, "Trem realtime tracker failed open for sentinel={SentinelId}", item.Query.Id);
-            }
-            if (accepted.Length > 0 && trackerSnapshot is not null)
-            {
-                IReadOnlyList<ExpectedRunBindingResult> bindingResults = [];
-                if (scheduleOptions.Enabled && expectedRunBinding is not null)
-                {
-                    try
-                    {
-                        bindingResults = await expectedRunBinding.ObserveBatchAsync("TRENS_RJ", item.Query, accepted, ct);
-                        if (expectedRunBindingMetrics is not null)
-                        {
-                            var binding = expectedRunBindingMetrics.Capture();
-                            logger.LogInformation(
-                                "RailBindingSummary observations={Observations} trackable={Trackable} no_candidate={NoCandidate} single_candidate={SingleCandidate} ambiguous={Ambiguous} provisional={Provisional} confirmed={Confirmed} rejected_temporal={RejectedTemporal} cross_midnight={CrossMidnight} short_start={ShortStart} failures={Failures}",
-                                binding.Observations, binding.Trackable, binding.NoCandidate,
-                                binding.SingleCandidate, binding.Ambiguous, binding.Provisional,
-                                binding.Confirmed, binding.RejectedTemporal, binding.CrossMidnight,
-                                binding.ShortStart, binding.Failures);
-                        }
-                    }
-                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                    catch (Exception ex)
-                    {
-                        expectedRunBindingMetrics?.Failure();
-                        logger.LogError(ex,
-                            "ExpectedRun binding failed open for sentinel={SentinelId}", item.Query.Id);
-                    }
-                }
-                try
-                {
-                    var topology = await topologyCache.GetAsync(ct);
-                    if (scheduleEstimator is not null && scheduleEstimateState is not null)
-                        foreach (var bindingResult in bindingResults.Where(x =>
-                                     x.Binding?.Status == ExpectedRunBindingStatus.Confirmed))
-                        {
-                            var run = bindingResult.Candidates.Select(x => x.ExpectedRun)
-                                .FirstOrDefault(x => x.ExpectedRunId == bindingResult.Binding!.ExpectedRunId);
-                            if (run is not null)
-                            {
-                                var estimate = scheduleEstimator.Estimate(run,
-                                    bindingResult.Binding!, topology, receivedAtUtc);
-                                schedulePublicationState?.Observe(run, bindingResult.Binding!, estimate,
-                                    topology, TimeSpan.FromSeconds(scheduleOptions.StaleAfterSeconds));
-                                scheduleFirstState?.ObserveConfirmed(run, bindingResult.Binding!, estimate, topology);
-                                if (scheduleEstimateState.Set(estimate))
-                                    logger.LogInformation(
-                                        "RailScheduleEstimate train_code={TrainCode} expected_run_id={ExpectedRunId} binding_state={BindingState} anchors={Anchors} delay_seconds={DelaySeconds} previous_stop={PreviousStop} next_stop={NextStop} segment_progress={SegmentProgress} mapping={Mapping} spatial={Spatial} evidence_age_seconds={EvidenceAgeSeconds} is_estimated=true origin=SCHEDULE_REALTIME_ESTIMATE",
-                                        estimate.TrainCode, estimate.ExpectedRunId,
-                                        bindingResult.Binding!.Status,
-                                        bindingResult.Binding.Anchors.Length, estimate.DelaySeconds,
-                                        estimate.PreviousScheduledStop?.ParadaId,
-                                        estimate.NextScheduledStop?.ParadaId,
-                                        estimate.SegmentProgress, estimate.ScheduleMappingStatus,
-                                        estimate.SpatialPosition is not null,
-                                        estimate.EvidenceAge.TotalSeconds);
-                            }
-                        }
-                    try
-                    {
-                        crossSentinelObserver.Observe(item.Query, accepted, topology, requestStartedAtUtc, receivedAtUtc,
-                            trackerSnapshot.Trains.Select(x => x.TrackerId).ToHashSet());
-                        var evidence = crossSentinelObserver.CaptureSnapshot();
-                        var counters = crossSentinelMetrics.Capture();
-                        logger.LogInformation(
-                            "TremSpatialEvidenceSummary tracked={Tracked} evidence={Evidence} correlated={Correlated} compatible={Compatible} unresolved={Unresolved} no_common_pattern={NoCommonPattern} ambiguous={Ambiguous} conflicts={Conflicts}",
-                            evidence.Trackers, evidence.Count, counters.Correlated, counters.Compatible,
-                            counters.UnresolvedTopology, counters.NoCommonPublishedPattern, counters.Ambiguous, counters.Conflicts);
-                    }
-                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                    catch (Exception ex)
-                    {
-                        crossSentinelMetrics.Failure();
-                        logger.LogError(ex, "Trem cross-sentinel observer failed open for sentinel={SentinelId}", item.Query.Id);
-                    }
-                    try
-                    {
-                        IReadOnlyList<TrackedObservationAcceptance> railAccepted = item.Query.IsScannerProbe
-                            ? accepted.Where(x => TremScannerObservationFilter.IsTarget(item.Query, x.Observation)).ToArray()
-                            : accepted;
-                        railRealtimeEngine.Observe(item.Query, railAccepted, topology, requestStartedAtUtc, receivedAtUtc);
-                    }
-                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                    catch (Exception ex) { logger.LogError(ex, "Rail realtime estimator failed open for sentinel={SentinelId}", item.Query.Id); }
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                catch (Exception ex)
-                {
-                    crossSentinelMetrics.Failure();
-                    logger.LogError(ex, "Trem published topology failed open for sentinel={SentinelId}", item.Query.Id);
-                }
-            }
-            if (item.Query.IsScannerProbe && adaptiveTracking is not null)
-            {
-                try
-                {
-                    var topology = await topologyCache.GetAsync(ct);
-                    var targetAccepted = accepted.Where(x =>
-                        TremScannerObservationFilter.IsTarget(item.Query, x.Observation)).ToArray();
-                    adaptiveTracking.Observe(item.Query, targetAccepted,
-                        railRealtimeEngine.CaptureSnapshot(), topology, catalogQueries, receivedAtUtc,
-                        result.Status, observations.Count);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Rail adaptive tracking failed open for sentinel={SentinelId}", item.Query.Id);
-                }
-            }
             foreach (var observation in observations)
                 if (observation.ProviderLinhaId is { } linha && !item.Query.ObservedProviderLinhaIds.Contains(linha) && state.MarkNewProviderLine(item.Query.Id, linha)) metrics.NewProviderLine();
 
@@ -389,6 +270,160 @@ public sealed class TremRealtimeCanaryCycle(
                 satellite.ScannerBackoffAppliedTotal, satellite.ScannerBackoffResetTotal,
                 satellite.ScannerMaxBackoffReachedTotal, rail.RailPositionAvailable);
         }
+    }
+
+    internal IReadOnlyList<TremRealtimeObservation> CaptureRecentEvidence(TremSentinelPairKey pair) =>
+        tracker.CaptureSnapshot().Trains.Select(x => x.LastObservation.Observation)
+            .Where(x => x.OriginExternalStationId == pair.OriginExternalStationId
+                && x.DestinationExternalStationId == pair.DestinationExternalStationId).ToArray();
+
+    // Callers must hold AcquisitionGate through acquisition and processing; cached inputs keep original timestamps.
+    public async Task<IReadOnlyList<TremRealtimeObservation>> ProcessResultAsync(
+        TremSentinelQuery query, TrensRjClientResult<TrensRjNextEnvelope> result,
+        DateTimeOffset requestStartedAtUtc, IReadOnlyList<TremSentinelQuery> catalogQueries,
+        CancellationToken ct = default, DateTimeOffset? originalReceivedAtUtc = null)
+    {
+        var scheduleOptions = scheduleRuntimeOptions?.Value ?? new RailScheduleRuntimeOptions();
+        var observations = result.Status == TrensRjClientStatus.Success && result.Value is not null
+            ? await normalizer.NormalizeAsync(result.Value, query.PairKey, requestStartedAtUtc, ct)
+            : [];
+        if (scheduleOptions.Enabled) expectedRunBindingMetrics?.ObserveIngress(observations);
+        var receivedAtUtc = originalReceivedAtUtc ?? clock.GetUtcNow();
+        scheduler.ObserveResult(receivedAtUtc, query, observations, result.Status, catalogQueries,
+            requestStartedAtUtc);
+        ImmutableArray<TrackedObservationAcceptance> accepted = [];
+        TremRealtimeTrackerSnapshot? trackerSnapshot = null;
+        try
+        {
+            accepted = tracker.ObserveBatch("TRENS_RJ", query.Id, observations);
+            trackerSnapshot = tracker.CaptureSnapshot();
+            var trackerCounters = trackerMetrics.Capture();
+            logger.LogInformation(
+                "TremTrackerSummary active={Active} stale={Stale} tracked={Tracked} new_total={NewTotal} repeated_total={RepeatedTotal} untrackable_total={UntrackableTotal} train_code_external_line_transition_total={ExternalLineTransitions}",
+                trackerSnapshot.Active, trackerSnapshot.Stale, trackerSnapshot.Trains.Length,
+                trackerCounters.NewTrains, trackerCounters.RepeatedTrains, trackerCounters.UntrackableMissingCode,
+                trackerCounters.TrainCodeExternalLineTransitionTotal);
+        }
+        catch (Exception ex)
+        {
+            trackerMetrics.Failure();
+            logger.LogError(ex, "Trem realtime tracker failed open for sentinel={SentinelId}", query.Id);
+        }
+        if (accepted.Length > 0 && trackerSnapshot is not null)
+        {
+            IReadOnlyList<ExpectedRunBindingResult> bindingResults = [];
+            if (scheduleOptions.Enabled && expectedRunBinding is not null)
+            {
+                try
+                {
+                    bindingResults = await expectedRunBinding.ObserveBatchAsync("TRENS_RJ", query, accepted, ct);
+                    if (expectedRunBindingMetrics is not null)
+                    {
+                        var binding = expectedRunBindingMetrics.Capture();
+                        logger.LogInformation(
+                            "RailBindingSummary observations={Observations} trackable={Trackable} no_candidate={NoCandidate} single_candidate={SingleCandidate} ambiguous={Ambiguous} provisional={Provisional} confirmed={Confirmed} rejected_temporal={RejectedTemporal} cross_midnight={CrossMidnight} short_start={ShortStart} failures={Failures}",
+                            binding.Observations, binding.Trackable, binding.NoCandidate,
+                            binding.SingleCandidate, binding.Ambiguous, binding.Provisional,
+                            binding.Confirmed, binding.RejectedTemporal, binding.CrossMidnight,
+                            binding.ShortStart, binding.Failures);
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    expectedRunBindingMetrics?.Failure();
+                    logger.LogError(ex,
+                        "ExpectedRun binding failed open for sentinel={SentinelId}", query.Id);
+                }
+            }
+            try
+            {
+                var topology = await topologyCache.GetAsync(ct);
+                if (scheduleEstimator is not null && scheduleEstimateState is not null)
+                    foreach (var bindingResult in bindingResults.Where(x =>
+                                 x.Binding?.Status == ExpectedRunBindingStatus.Confirmed))
+                    {
+                        var run = bindingResult.Candidates.Select(x => x.ExpectedRun)
+                            .FirstOrDefault(x => x.ExpectedRunId == bindingResult.Binding!.ExpectedRunId);
+                        if (run is not null)
+                        {
+                            var estimate = scheduleEstimator.Estimate(run,
+                                bindingResult.Binding!, topology, receivedAtUtc);
+                            schedulePublicationState?.Observe(run, bindingResult.Binding!, estimate,
+                                topology, TimeSpan.FromSeconds(scheduleOptions.StaleAfterSeconds));
+                            scheduleFirstState?.ObserveConfirmed(run, bindingResult.Binding!, estimate, topology);
+                            if (scheduleEstimateState.Set(estimate))
+                                logger.LogInformation(
+                                    "RailScheduleEstimate train_code={TrainCode} expected_run_id={ExpectedRunId} binding_state={BindingState} anchors={Anchors} delay_seconds={DelaySeconds} previous_stop={PreviousStop} next_stop={NextStop} segment_progress={SegmentProgress} mapping={Mapping} spatial={Spatial} evidence_age_seconds={EvidenceAgeSeconds} is_estimated=true origin=SCHEDULE_REALTIME_ESTIMATE",
+                                    estimate.TrainCode, estimate.ExpectedRunId,
+                                    bindingResult.Binding!.Status,
+                                    bindingResult.Binding.Anchors.Length, estimate.DelaySeconds,
+                                    estimate.PreviousScheduledStop?.ParadaId,
+                                    estimate.NextScheduledStop?.ParadaId,
+                                    estimate.SegmentProgress, estimate.ScheduleMappingStatus,
+                                    estimate.SpatialPosition is not null,
+                                    estimate.EvidenceAge.TotalSeconds);
+                        }
+                    }
+                try
+                {
+                    crossSentinelObserver.Observe(query, accepted, topology, requestStartedAtUtc, receivedAtUtc,
+                        trackerSnapshot.Trains.Select(x => x.TrackerId).ToHashSet());
+                    var evidence = crossSentinelObserver.CaptureSnapshot();
+                    var counters = crossSentinelMetrics.Capture();
+                    logger.LogInformation(
+                        "TremSpatialEvidenceSummary tracked={Tracked} evidence={Evidence} correlated={Correlated} compatible={Compatible} unresolved={Unresolved} no_common_pattern={NoCommonPattern} ambiguous={Ambiguous} conflicts={Conflicts}",
+                        evidence.Trackers, evidence.Count, counters.Correlated, counters.Compatible,
+                        counters.UnresolvedTopology, counters.NoCommonPublishedPattern, counters.Ambiguous, counters.Conflicts);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    crossSentinelMetrics.Failure();
+                    logger.LogError(ex, "Trem cross-sentinel observer failed open for sentinel={SentinelId}", query.Id);
+                }
+                try
+                {
+                    IReadOnlyList<TrackedObservationAcceptance> railAccepted = query.IsScannerProbe
+                        ? accepted.Where(x => TremScannerObservationFilter.IsTarget(query, x.Observation)).ToArray()
+                        : accepted;
+                    railRealtimeEngine.Observe(query, railAccepted, topology, requestStartedAtUtc, receivedAtUtc);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex) { logger.LogError(ex, "Rail realtime estimator failed open for sentinel={SentinelId}", query.Id); }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                crossSentinelMetrics.Failure();
+                logger.LogError(ex, "Trem published topology failed open for sentinel={SentinelId}", query.Id);
+            }
+        }
+        if (query.IsScannerProbe && adaptiveTracking is not null)
+        {
+            try
+            {
+                var topology = await topologyCache.GetAsync(ct);
+                var targetAccepted = accepted.Where(x =>
+                    TremScannerObservationFilter.IsTarget(query, x.Observation)).ToArray();
+                adaptiveTracking.Observe(query, targetAccepted,
+                    railRealtimeEngine.CaptureSnapshot(), topology, catalogQueries, receivedAtUtc,
+                    result.Status, observations.Count);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Rail adaptive tracking failed open for sentinel={SentinelId}", query.Id);
+            }
+        }
+        if (refreshStore is not null)
+        {
+            var useful = observations.Where(x => TrensRjEvidence.IsUseful(x, clock.GetUtcNow())).ToArray();
+            if (useful.Length > 0)
+                try { await refreshStore.WriteAsync(query.PairKey, new(useful)); }
+                catch (Exception ex) { logger.LogWarning(ex, "TrensRJ evidence cache unavailable; runtime evidence preserved."); }
+        }
+        return observations;
     }
 
     internal static bool IsCanaryCandidate(TremRealtimeOptions runtime, TremRealtimeCanaryOptions canary,

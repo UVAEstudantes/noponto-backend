@@ -188,12 +188,81 @@ def radar_release(args):
             raise
         print('Radar release confirmado; somente API alterada. Tickets nao confirmam entrega.')
 
+def ci_release(args):
+    """Promote one digest using the same frozen configuration, lock and API rollback."""
+    import fcntl
+    global ROOT, STATE
+    assert re.fullmatch(r'ghcr\.io/guilhermedesales/noponto-api@sha256:[a-f0-9]{64}', args.image or '')
+    assert re.fullmatch('[a-f0-9]{40}', args.commit or '')
+    assert args.sequence and re.fullmatch('[1-9][0-9]{0,19}', args.sequence)
+    STATE = ROOT = pathlib.Path(args.state)
+    radar_private(STATE, directory=True)
+    os.umask(0o077)
+    # --check does not create a lock file or any other remote artifact.
+    with (STATE / 'deploy.lock').open('r+' if args.check else 'a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        metadata_path = STATE / 'active.manual.json'; radar_private(metadata_path)
+        metadata = json.loads(metadata_path.read_text())
+        config = pathlib.Path(metadata['configuration']); radar_private(config)
+        original = json.loads(config.read_text()); before = inspect()
+        # Manual releases may have replaced only the image since the last metadata update.
+        original['services']['api']['image'] = before['Image']
+        radar_assert_running(original, before)
+        api = original['services']['api']
+        assert not api.get('build') and not api.get('command') and not api.get('entrypoint')
+        assert api.get('environment', {}).get('ASPNETCORE_ENVIRONMENT') == 'Production'
+        actual = dict(item.split('=', 1) for item in before['Config']['Env'])
+        for prefix in ('PhysicalEta__', 'HistoricalEtaShadow__'):
+            select = lambda env: {k: str(v) for k, v in env.items() if k.replace(':', '__').lower().startswith(prefix.lower())}
+            assert select(actual) == select(api.get('environment', {}))
+        # Freeze image defaults and manually injected variables too, not only Compose entries.
+        api['environment'] = actual
+        for volume in api.get('volumes', []):
+            if volume['target'] in RADAR_FILES: radar_private(pathlib.Path(volume['source']))
+        marker = STATE / 'active.run'
+        previous_sequence = marker.read_text() if marker.exists() else None
+        if previous_sequence is not None:
+            assert re.fullmatch('[0-9]+', previous_sequence.strip())
+            assert int(args.sequence) > int(previous_sequence)
+        if args.check:
+            print('CI preflight aprovado: composicao ativa, mounts, Radar, PhysicalEta e Shadow preservados.'); return
+        # Keep rollback bytes locally even if the previous registry reference has changed.
+        run(['docker', 'image', 'inspect', '--format', '{{.Id}}', before['Image']])
+        run(['docker', 'image', 'tag', before['Image'], 'noponto-api:rollback-' + before['Image'][7:]])
+        run(['docker', 'pull', args.image], 300)
+        image_id = run(['docker', 'image', 'inspect', '--format', '{{.Id}}', args.image]).strip()
+        assert re.fullmatch('sha256:[a-f0-9]{64}', image_id)
+        candidate = copy.deepcopy(original); candidate['services']['api']['image'] = args.image
+        radar_save('ci-previous.json', original)
+        path = radar_save('ci-active.json', candidate)
+        import signal
+        def interrupted(signum, frame): raise RuntimeError('CI release interrupted')
+        for signum in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM): signal.signal(signum, interrupted)
+        try:
+            up(path); healthy(image_id); radar_assert_running(candidate, inspect())
+            radar_save('active.manual.json', {'mode': 'ci', 'commit': args.commit, 'image': image_id,
+                'configuration': str(path), 'digest': args.image, 'at': time.time()})
+            temporary = STATE / 'active.run.tmp'
+            temporary.write_text(args.sequence + '\n'); temporary.chmod(0o600); temporary.replace(marker)
+        except BaseException:
+            restored = STATE / 'ci-previous.json'
+            up(restored); healthy(before['Image']); radar_assert_running(original, inspect())
+            radar_save('ci-active.json', original)
+            radar_save('active.manual.json', metadata)
+            if previous_sequence is not None:
+                temporary = STATE / 'active.run.tmp'; temporary.write_text(previous_sequence); temporary.replace(marker)
+            else: marker.unlink(missing_ok=True)
+            raise
+        print('CI release confirmado; somente API atualizada.')
+
+
 def main():
     import fcntl
     parser = argparse.ArgumentParser(); parser.add_argument('mode', choices=['activate', 'rollback-flag', 'restore-base',
-        'radar-activate', 'radar-disable', 'radar-restore'])
+        'radar-activate', 'radar-disable', 'radar-restore', 'ci'])
     parser.add_argument('--commit'); parser.add_argument('--config'); parser.add_argument('--image')
-    parser.add_argument('--radar-overlay'); parser.add_argument('--check', action='store_true'); args = parser.parse_args()
+    parser.add_argument('--state'); parser.add_argument('--sequence'); parser.add_argument('--radar-overlay'); parser.add_argument('--check', action='store_true'); args = parser.parse_args()
+    if args.mode == 'ci': return ci_release(args)
     if args.mode.startswith('radar-'): return radar_release(args)
     assert not (args.config or args.image or args.radar_overlay or args.check), 'Radar arguments require a Radar mode'
     os.umask(0o077)

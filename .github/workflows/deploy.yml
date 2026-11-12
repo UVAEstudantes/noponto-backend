@@ -55,14 +55,21 @@ jobs:
       - name: Testes sem acesso à rede externa
         run: |
           filter=$(python3 -B .ci/offline_tests.py filter)
-          docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+          redis=$(docker run -d --network none redis:7-alpine)
+          trap 'docker rm -f "$redis" >/dev/null' EXIT
+          for attempt in $(seq 1 20); do
+            if docker exec "$redis" redis-cli ping | grep -q PONG; then break; fi
+            sleep 1
+          done
+          docker exec "$redis" redis-cli ping | grep -q PONG
+          docker run --rm --network "container:$redis" --cap-drop ALL --security-opt no-new-privileges \
             --user "$(id -u):$(id -g)" \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --volume "$RUNNER_TEMP/noponto-ci/results:/results" \
             --volume "$RUNNER_TEMP/noponto-ci/home:/ci-home" \
             --workdir /workspace \
             --env HOME=/ci-home --env DOTNET_CLI_HOME=/ci-home \
-            --env DOTNET_CLI_TELEMETRY_OPTOUT=1 --env "NOPONTO_TEST_FILTER=$filter" \
+            --env DOTNET_CLI_TELEMETRY_OPTOUT=1 --env NOPONTO_TRENSRJ_TEST_REDIS=127.0.0.1:6379 --env "NOPONTO_TEST_FILTER=$filter" \
             "$sdk" sh -ec 'sh .ci/check-volume-permissions.sh /results /ci-home && sh .ci/test-offline.sh /results'
 
       - name: Exige resultados aprovados de todas as classes selecionadas
@@ -152,12 +159,9 @@ jobs:
           SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
           TAILSCALE_OAUTH_CLIENT_ID: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           TAILSCALE_OAUTH_SECRET: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          NOPONTO_DEPLOY_ENV_FILE: ${{ vars.NOPONTO_DEPLOY_ENV_FILE }}
           NOPONTO_DEPLOY_STATE_DIR: ${{ vars.NOPONTO_DEPLOY_STATE_DIR }}
-          NOPONTO_PHYSICAL_ETA_OVERRIDE: ${{ vars.NOPONTO_PHYSICAL_ETA_OVERRIDE }}
-          NOPONTO_SHADOW_OVERRIDE: ${{ vars.NOPONTO_SHADOW_OVERRIDE }}
         run: |
-          for name in SERVER_TAILSCALE_IP SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_SECRET NOPONTO_DEPLOY_ENV_FILE NOPONTO_DEPLOY_STATE_DIR NOPONTO_PHYSICAL_ETA_OVERRIDE; do
+          for name in SERVER_TAILSCALE_IP SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_SECRET NOPONTO_DEPLOY_STATE_DIR; do
             if [ -z "${!name}" ]; then echo "Requisito ausente: $name" >&2; exit 1; fi
           done
       - name: Conecta no Tailscale
@@ -169,13 +173,11 @@ jobs:
       - name: Executa artefato versionado via SSH
         env:
           IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
-          RELEASE_SEQUENCE: ${{ github.run_number }}
+          RELEASE_SEQUENCE: ${{ github.run_id }}
+          RELEASE_COMMIT: ${{ github.sha }}
           SERVER_TAILSCALE_IP: ${{ secrets.SERVER_TAILSCALE_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
           SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
-          NOPONTO_DEPLOY_ENV_FILE: ${{ vars.NOPONTO_DEPLOY_ENV_FILE }}
           NOPONTO_DEPLOY_STATE_DIR: ${{ vars.NOPONTO_DEPLOY_STATE_DIR }}
-          NOPONTO_PHYSICAL_ETA_OVERRIDE: ${{ vars.NOPONTO_PHYSICAL_ETA_OVERRIDE }}
-          NOPONTO_SHADOW_OVERRIDE: ${{ vars.NOPONTO_SHADOW_OVERRIDE }}
         run: bash .deploy/ssh-deploy.sh

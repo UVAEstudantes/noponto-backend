@@ -1,0 +1,13 @@
+@host = http://localhost:5000
+@paradaId = 00000000-0000-0000-0000-000000000000
+@sentidoId = 00000000-0000-0000-0000-000000000000
+@instalacaoId = 00000000-0000-0000-0000-000000000000
+
+### Substituir IDs por contexto ferroviário válido. Instalação é identificador não autenticado.
+POST {{host}}/paradas/{{paradaId}}/trens/refresh
+Content-Type: application/json
+
+{
+  "sentidoId": "{{sentidoId}}",
+  "instalacaoId": "{{instalacaoId}}"
+}

@@ -393,6 +393,8 @@ public sealed class RadarEngineTests(ITestOutputHelper output)
                 Stops.Select(s => new OcorrenciaItinerarioDto(Guid.NewGuid(), 1, null, s, "Test", "Test", 0, 0, 0, 0)).ToArray()));
         }
         public IEnumerable<Guid> Stops = [RadarSamples.Stop];
+        public Task<PaginacaoRespostaDTO<ParadaConsultaV2Dto>> ListarParadasAsync(string? nome, Guid? modalId,
+            string? codigoLinha, Guid? sentidoId, int pagina, int tamanhoPagina, CancellationToken ct) => throw new NotSupportedException();
         public Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(string? a, string? b, Guid? c, string? d, string? e, int f, int g, CancellationToken ct) => throw new NotSupportedException();
         public Task<LinhaEstruturalResumoDto?> BuscarLinhaPorCodigoAsync(string codigo, CancellationToken ct) => throw new NotSupportedException();
         public Task<IReadOnlyList<SentidoEstruturalResumoDto>?> ListarSentidosAsync(string codigo, CancellationToken ct) => throw new NotSupportedException();
