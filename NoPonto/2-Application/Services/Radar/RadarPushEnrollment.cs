@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 
 namespace NoPonto.Application.Radar;
 
@@ -25,7 +26,8 @@ public sealed record RadarPushConfirmationRequest
 public sealed record RadarPushStatus(bool Registered, bool PossessionConfirmed, long Revision);
 
 public sealed class RadarPushEnrollment(IRadarStore store, RadarTokenProtector protector, IExpoPushGateway gateway,
-    RadarPushPolicy policy, IOptions<RadarPushOptions> options, TimeProvider clock, IOptions<RadarOptions> radarOptions)
+    RadarPushPolicy policy, IOptions<RadarPushOptions> options, TimeProvider clock, IOptions<RadarOptions> radarOptions,
+    ILogger<RadarPushEnrollment> logger)
 {
     private async Task<RadarStoreResult> Run(string authorization, string operation, object? data, CancellationToken ct)
     {
@@ -40,11 +42,17 @@ public sealed class RadarPushEnrollment(IRadarStore store, RadarTokenProtector p
     }
     public async Task IniciarAsync(string authorization, RadarPushEnrollmentRequest request, CancellationToken ct)
     {
+        var correlation = Guid.NewGuid().ToString("N");
+        logger.LogInformation("RadarPushEnrollment {Correlation} challenge_start", correlation);
+        var stage = "validate";
+        try
+        {
         if (request.EnrollmentId == Guid.Empty || request.ProjectId != options.Value.ProjectId
             || !RadarPushTokens.TokenValido(request.ExpoPushToken) || request.Capabilities is null
             || request.Capabilities.Length > 1 || request.Capabilities.Any(c => c != "native-v1"))
             throw new RadarException(400, "push_enrollment_invalido");
         var proof = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        stage = "challenge_store";
         await Run(authorization, "push-challenge", new { enrollmentId = request.EnrollmentId.ToString("D"),
             verifier = RadarTokenProtector.Fingerprint(proof), encrypted = protector.Protect(request.ExpoPushToken),
             fingerprint = RadarTokenProtector.Fingerprint(request.ExpoPushToken), maxPending = options.Value.MaxPendingReceipts,
@@ -53,23 +61,62 @@ public sealed class RadarPushEnrollment(IRadarStore store, RadarTokenProtector p
         var message = new ExpoRadarMessage(request.ExpoPushToken, policy.Public ? "NoPonto" : "NoPonto Dev", "Confirmando este aparelho para o Radar.",
             120, until.ToUnixTimeSeconds(), new { mode = "radar-enrollment", enrollmentId = request.EnrollmentId,
                 proof, projectId = request.ProjectId, validUntil = until });
+        stage = "expo_send";
         var result = await gateway.EnviarAsync(message, async token =>
         {
             try { await Run(authorization, "push-challenge-authorize", new { enrollmentId = request.EnrollmentId.ToString("D"), limit = options.Value.MaxRequestsPerMinute }, token); return true; }
             catch (RadarException e) when (e.Status is 401 or 409 or 429) { return false; }
         }, ct);
+        logger.LogInformation("RadarPushEnrollment {Correlation} expo_result category={Category}", correlation, result.Status);
+        stage = "challenge_result_store";
         await Run(authorization, "push-challenge-result", new { enrollmentId = request.EnrollmentId.ToString("D"),
             status = result.Status, ticket = result.TicketId ?? "" }, ct);
         if (result.Status != "ticket") throw new RadarException(503, "push_confirmacao_nao_enviada");
+        logger.LogInformation("RadarPushEnrollment {Correlation} challenge_accepted", correlation);
+        }
+        catch (RadarException e)
+        {
+            logger.LogWarning("RadarPushEnrollment {Correlation} challenge_failed stage={Stage} http={Status} code={Code}", correlation, stage, e.Status, SafeCode(e.Message));
+            throw;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            logger.LogWarning("RadarPushEnrollment {Correlation} challenge_failed stage={Stage} code=request_cancelled", correlation, stage);
+            throw;
+        }
+        catch (Exception e)
+        {
+            logger.LogError("RadarPushEnrollment {Correlation} challenge_failed stage={Stage} code={Code}", correlation, stage, e.GetType().Name);
+            throw;
+        }
     }
     public async Task<RadarPushTokenResponse> ConfirmarAsync(string authorization, RadarPushConfirmationRequest request, CancellationToken ct)
     {
+        var correlation = Guid.NewGuid().ToString("N");
+        logger.LogInformation("RadarPushEnrollment {Correlation} confirmation_arrived", correlation);
+        var stage = "validate";
+        try
+        {
         if (request.EnrollmentId == Guid.Empty || request.Proof.Length != 64 || request.Proof.Any(c => !Uri.IsHexDigit(c)))
             throw new RadarException(400, "push_confirmacao_invalida");
+        stage = "ack_store";
         var result = await Run(authorization, "push-confirm", new { enrollmentId = request.EnrollmentId.ToString("D"),
             verifier = RadarTokenProtector.Fingerprint(request.Proof) }, ct);
+        logger.LogInformation("RadarPushEnrollment {Correlation} confirmation_accepted", correlation);
         return new(true, long.Parse(result.Payload), policy.Public ? "public" : "experimental", true);
+        }
+        catch (RadarException e)
+        {
+            logger.LogWarning("RadarPushEnrollment {Correlation} confirmation_rejected stage={Stage} http={Status} code={Code}", correlation, stage, e.Status, SafeCode(e.Message));
+            throw;
+        }
+        catch (Exception e)
+        {
+            logger.LogError("RadarPushEnrollment {Correlation} confirmation_failed stage={Stage} code={Code}", correlation, stage, e.GetType().Name);
+            throw;
+        }
     }
+    private static string SafeCode(string message) => message.Length <= 64 && message.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-') ? message : "unclassified";
     public async Task<RadarPushStatus> ConsultarAsync(string authorization, CancellationToken ct)
     {
         var result = await Run(authorization, "push-status", null, ct);

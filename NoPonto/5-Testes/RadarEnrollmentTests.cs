@@ -29,7 +29,7 @@ public sealed class RadarEnrollmentTests : IAsyncLifetime
     private RadarPushPolicy Policy => new(new PushEnvironment("Development"), Options.Create(options));
     private RadarPushEnrollment Enrollment => new(store, protector,
         new ExpoPushGateway(new PushClientFactory(handler), Options.Create(options), Policy, new ExpoNoAccessToken(), TimeProvider.System,
-            new RadarPushDelay(TimeProvider.System), new RadarPushMetrics()), Policy, Options.Create(options), TimeProvider.System, Options.Create(radar));
+            new RadarPushDelay(TimeProvider.System), new RadarPushMetrics()), Policy, Options.Create(options), TimeProvider.System, Options.Create(radar), NullLogger<RadarPushEnrollment>.Instance);
     private IDatabase Db => redis!.GetDatabase();
     private static string Key(string kind, Guid owner) => RadarRedisStore.Prefix + kind + ":" + owner.ToString("N");
     private static string Auth(RadarRegistroResponse owner) => "Bearer " + owner.Credencial;
@@ -328,7 +328,7 @@ public sealed class RadarEnrollmentTests : IAsyncLifetime
         var id = Guid.NewGuid(); options.AllowedInstallationIds = [id];
         var enrollment = new RadarPushEnrollment(new UnavailableStore(), protector,
             new ExpoPushGateway(new PushClientFactory(handler), Options.Create(options), Policy, new ExpoNoAccessToken(), TimeProvider.System,
-                new RadarPushDelay(TimeProvider.System), new RadarPushMetrics()), Policy, Options.Create(options), TimeProvider.System, Options.Create(radar));
+                new RadarPushDelay(TimeProvider.System), new RadarPushMetrics()), Policy, Options.Create(options), TimeProvider.System, Options.Create(radar), NullLogger<RadarPushEnrollment>.Instance);
         var error = await Assert.ThrowsAsync<RadarException>(() => enrollment.IniciarAsync("Bearer " + id.ToString("N") + "." + new string('A', 64),
             Request() with { ProjectId = options.ProjectId }, default));
         Assert.Equal(503, error.Status); Assert.Equal("radar_temporariamente_indisponivel", error.Codigo); Assert.Empty(handler.Bodies);
