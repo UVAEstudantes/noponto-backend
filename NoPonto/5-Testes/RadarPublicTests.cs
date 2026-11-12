@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging.Abstractions;
 using NoPonto.Application.Radar;
 using Xunit;
 
@@ -110,7 +111,7 @@ public sealed class RadarPublicTests
         // Protetor sintético em RAM: este teste não acessa chave/Redis/Expo reais.
         using var protector = new RadarTokenProtector();
         var enrollment = new RadarPushEnrollment(store, protector, gateway, Policy(settings), Options.Create(settings),
-            TimeProvider.System, Options.Create(new RadarOptions { Enabled = true, PushEnabled = true }));
+            TimeProvider.System, Options.Create(new RadarOptions { Enabled = true, PushEnabled = true }), NullLogger<RadarPushEnrollment>.Instance);
         var request = new RadarPushEnrollmentRequest { EnrollmentId = Guid.NewGuid(), ProjectId = settings.ProjectId,
             ExpoPushToken = "ExpoPushToken[synthetic-public]" };
         await enrollment.IniciarAsync(store.Authorization, request, default);
@@ -143,7 +144,7 @@ public sealed class RadarPublicTests
         var radar = new RadarOptions { Enabled = true };
         using var protector = new RadarTokenProtector();
         var enrollment = new RadarPushEnrollment(store, protector, gateway, Policy(settings), Options.Create(settings),
-            TimeProvider.System, Options.Create(radar));
+            TimeProvider.System, Options.Create(radar), NullLogger<RadarPushEnrollment>.Instance);
         var request = new RadarPushEnrollmentRequest { EnrollmentId = Guid.NewGuid(), ProjectId = settings.ProjectId,
             ExpoPushToken = "ExpoPushToken[synthetic-public]" };
         Assert.Equal(404, (await Assert.ThrowsAsync<RadarException>(() => enrollment.IniciarAsync(store.Authorization, request, default))).Status);

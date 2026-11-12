@@ -1,5 +1,20 @@
 # Histórico de alterações
 
+## 2026-11-12 — Diagnóstico seguro de enrollment push
+
+### Objetivo e alteração
+
+Adicionar logs estruturados, com correlação aleatória por requisição, para início/etapa/resultado do challenge Expo e chegada/resultado do ACK. Os registros incluem somente etapa, categoria, código HTTP/código sanitizado ou tipo de exceção; nenhum identificador ou segredo do push é registrado. Não houve alteração de regras, prazos ou contratos.
+
+### Arquivos
+
+- `NoPonto/2-Application/Services/Radar/RadarPushEnrollment.cs`: eventos de challenge e confirmação.
+- `NoPonto/5-Testes/RadarPublicTests.cs`, `NoPonto/5-Testes/RadarEnrollmentTests.cs`: injeção de logger nulo nos testes unitários.
+
+### Verificação e limite
+
+Logging padrão de produção está em `Information`, portanto `Information`, `Warning` e `Error` são visíveis. Testes direcionados pendentes nesta entrada.
+
 Registro incremental do trabalho efetivamente realizado. Acrescentar novas entradas sem substituir as anteriores. Não registrar credenciais ou dados sensíveis.
 
 Cada entrada deve conter: data, objetivo, problema identificado, arquivos modificados, alterações implementadas, decisões técnicas e justificativas, testes e resultados, pendências e limitações.
