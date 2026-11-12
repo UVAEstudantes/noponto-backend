@@ -2104,3 +2104,18 @@ Allowlist offline ampliada com TremRealtimePhase4ATests, TrensRjRefreshRedisTest
 ### Validação do PR88 no Actions — correção direcionada de sincronização do teste
 
 Primeira CI Linux passou scripts/deploy, restore/build e1207/1208testes; falhou BusHandoff_PublicationWakesNormalRestWithoutConsumingOrAcknowledging ao ler ActiveTimers antes da limpeza assíncrona de WaitAsync terminar (esperado0, real1). Ajustado apenas fake HandoffTimerClock/teste para sinalizar Dispose por TaskCompletionSource e aguardar essa notificação antes da mesma asserção. Sem alteração do polling produtivo, frequência, timeout ou exclusão/retry de testes. CI usa Redis7 real, sem testes ignorados. Validação local específica:152aprovados/0falhas/0ignorados, release-handoff.trx; nova CI acompanhada no PR.
+
+## 2026-11-11 — Atualização da action Tailscale no deploy CI
+
+### Objetivo e problema
+
+Corrigir a autenticação OAuth do deploy GitHub Actions, cuja versão `tailscale/github-action@v2` falhava com `oauth authkeys are in experimental status`.
+
+### Arquivos modificados e decisão
+
+- `.github/workflows/deploy.yml`: atualizar somente a action para `tailscale/github-action@v4`, preservando secrets OAuth, `tag:ci`, SSH, preflight e rollback.
+- `NoPonto/HISTORICO.md`: registrar a alteração conforme as regras permanentes do repositório.
+
+### Validação e limitações
+
+YAML e diff validados localmente; não executados Actions, merge ou deploy manual nesta alteração.
