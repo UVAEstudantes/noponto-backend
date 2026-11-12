@@ -8,6 +8,16 @@ namespace NoPonto.API.Controllers;
 [Route("linhas")]
 public sealed class EstruturaLinhasController(IEstruturaLeituraV2Repository repository) : ControllerBase
 {
+    /// <summary>Consulta compacta dos vínculos vigentes, sem grafos de navegação.</summary>
+    [HttpGet("{linhaId:guid}/paradas")]
+    [ProducesResponseType(typeof(IReadOnlyList<ParadaLinhaCompactaDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Relacoes(Guid linhaId, [FromQuery] Guid? sentidoId, CancellationToken ct)
+    {
+        var rows = await repository.ListarParadasDaLinhaAsync(linhaId, sentidoId, ct);
+        return rows is null ? NotFound() : Ok(rows);
+    }
+
     [HttpGet]
     [ProducesResponseType(typeof(PaginacaoRespostaDTO<LinhaEstruturalResumoDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Listar([FromQuery] string? codigo, [FromQuery] string? nome,
