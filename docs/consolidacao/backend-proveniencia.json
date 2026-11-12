@@ -1,0 +1,3681 @@
+[
+  {
+    "path": "NoPonto/NoPonto.csproj",
+    "source": "network-27/source.zip",
+    "sha256": "30ff09497d5d39c6b44eafe0aea8094126da9a871850f1b70fb0252740a4c518",
+    "git_content_sha256": "07ec0baf87dbdbce0f2daec5bfe4e6a9106abd6f2fbd39b5e013d0aca1f50532"
+  },
+  {
+    "path": "NoPonto/Program.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d0f1cbc770cf26a64dcb8774992ce73476512f0c582fd7a39c8a414f32e210a8",
+    "git_content_sha256": "38abc1d60172548260b8a508b05ec40ce5282b8ba313e245ab53c6c812f494e4",
+    "transformation": "network-27 Program.cs + exactly the three DI registrations from 823057c"
+  },
+  {
+    "path": "NoPonto/1-API/Configuration/DatabaseStartupPolicy.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3b423eb04a36341e00f244af109baff5f7adfd6402ba868afb64d89d9b685de9",
+    "git_content_sha256": "0a7eea0e00799930aba09cb50e697b3fd4b874d9da91f7c1f7cd8c6bdebead2b"
+  },
+  {
+    "path": "NoPonto/1-API/Configuration/EnvironmentIsolationConfiguration.cs",
+    "source": "network-27/source.zip",
+    "sha256": "153b56e2698f3fd5b9d0882e54c673d431aa875e88c80eec1e8b6aa189ed3722",
+    "git_content_sha256": "4e987480216304d231a2a7f62cfbfd565af52c44ffaca266d3afd9bf652a36e6"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/EstruturaLinhasController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "840fd560c20de20219e60d51d5f8ddb625db1e51fd1f056b6e791281285f4d84",
+    "git_content_sha256": "ab4a751ae2d6b6b908a00f1294aaa7a75076d5539ad1e3b3bb4409d5474535dc"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/EstruturaParadasController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "eede61c6ec789f77c6a464f67b29bd1d640c316bd49a7b41511456d47203f8c4",
+    "git_content_sha256": "6750834ca38dc11003a466312776452a33544337f92d47e934ec5b570bb3286c"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/EstruturaSentidosController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "51a533fb81cd9e2b49fd5c553a363ec075ebe224e686bd890a74d67fc384c13d",
+    "git_content_sha256": "5d589498f6ae81a4ab095e8ed0d82564f2d6262fbd20e0fc92835dafcf3d5a58"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/EventosParadaController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8160b8512fdc21082d4dc346fac34b8b2da69287dc39df833d7ae2c8d97582f1",
+    "git_content_sha256": "8160b8512fdc21082d4dc346fac34b8b2da69287dc39df833d7ae2c8d97582f1"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/FormasPagamentoController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "552e3279cbee260ea51955b9c9a02ab1da5f0d300366d309ad29d8b71bd9ae1d",
+    "git_content_sha256": "0f543aa11d1ab9b1dd089e65b93a6721149f415f1457e44cd2c46e1a0db650a9"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/ItinerariosController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "decb4eda33abcf7cdb6131826145c4aa9b3d33d101e9065446005152e2fc96c8",
+    "git_content_sha256": "9abb44cbd7b57463697274ca1cc07386d68864da512aa09a787cc3b2ff822d9b"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/LinhasController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "56dfa5b5cd1c53094891419c00f9bc8af44b82e771a63a33a8956cdc8dfce039",
+    "git_content_sha256": "e02e8a2b81b73b17c32e01d162b147963d5183e2b57d7afbe1a5683789b8cfe9"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/ModaisController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2d445a9491dae85220c0d7337612b36faa8190177d0ea85d21ce53a35107ebda",
+    "git_content_sha256": "e78c9d4bd63a2f27aaa3a19e28bee0349505e56475be1561b9d52405bff94700"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/PadroesVersoesController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "dfae66cfd10ec9783c8291c49df4d542253bc3fee8462b13653b0a97ead6eb20",
+    "git_content_sha256": "b0894bbf049da572b0647bb23d2720ec9adf7910722dafadea51090d31c59764"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/ParadasController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e75e91e974c8e5042991578961ebb07538844d477e43404fe6ffc261391f19ab",
+    "git_content_sha256": "f35365d3f7affe915d2876bbd7d43bed84ace3c4194f571d87754a2cffd0c95f"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/PoisController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3d5be5c98126d6f726ab49e56ddbbdbb1ef9fef637e5ece740e50ba67c309786",
+    "git_content_sha256": "1e5e55ec092e43999dc149574348781e64e2f379bf71381319de192fb9c2207b"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/RailVehiclesController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1121ef79d4b3070b167f46f4dbe359a68717225781ec440e2adf5579e44b0c81",
+    "git_content_sha256": "0e9f00faf938793007ced19e985028a3f560ca9f4eafd4fcb4f9415ecdc2ba23"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/RelacionamentoController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2ad91846fcce48e00b66e311136824b8448acd3c7399c4756a4d2aae2d2c4314",
+    "git_content_sha256": "d2ceacc8d74a5d28d02c12b21fa96d9b012e19ba1200967945ad97139e0a42a5"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/SentidosController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fabf3d41f160d592521b77e2ddb21cec21cecbe03bbbada032943e0f858066ea",
+    "git_content_sha256": "1e57b123d45873361e2b6be0010d790f50a3f103111ebf3424c8b004c3ac4a52"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/TarifasController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6777bf4e31338647b0491c4a8e964af4c69a14bc30743b85845933a9ce58ad32",
+    "git_content_sha256": "e8a7b1112923fe875b4a41426db6a9828a2c5a2bfe6c2657e577e5a1917364ed"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/UnifiedLocationController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "353cddf450f4c1701d23e6166d8fe1b32a39075c182b5194848921805293653d",
+    "git_content_sha256": "64dee9ffddc30521b81cbe4518a844bc74ab27ff49469a42ca71deb0e037ea7c"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/VeiculosController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9174d479d69266e6ef319497b6637acafdc65066615bd75347029de6ec91d0d0",
+    "git_content_sha256": "33a9cd2f1eb58469c25c9ee1a701f23bd013c8ff2b21aaaecf771bdf8f29dee5"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/Admin/AdminBrtController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8dbbf2298d8819d72e53f37982b938f8a4c70e4a671ff1afef8cad551c83cc10",
+    "git_content_sha256": "bbc0fbb8ad82ec9d2e6758b2ba7dd50d88ddc2eb2c04f5c012a73625480ac2bb"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/Admin/AdminConfiguracoesController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0732b7daef12a030947cb23bf5780aeb2248bb3b73f619674fff0c91c73d8acd",
+    "git_content_sha256": "0cd1c92e577dbf24fe07a2f42e9a66f91d71784a308308dda0a5a41257e0e527"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/Admin/AdminDashboardController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "29af1f632ec3ec264a01344c927b490db678ff4e3eb7653b25abaaa2c0e65bed",
+    "git_content_sha256": "0f30755a20d95cf06e6d9a452648b600ecb09a51f098abf4ed4a6fe6c3e3efab"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/Admin/AdminLinhasController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1ce8c69de29e06a44a42a01ea1d2a0b7a18c969a6b3b0b5fb7c99f3bfc94c00a",
+    "git_content_sha256": "1c5572d48c79100826176de96aeb7b00de3fca70352b5cc082bacc4384d29569"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/Admin/AdminMlController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "51717b3b8e027269fa4b40af591cbb82afd1631bf051411b0fbafaf1e0073da6",
+    "git_content_sha256": "5b56c7fd21f79c57378070f27324c6ee7e5b6bb7d86b4b949447b14b067f750c"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/Admin/AdminParadasController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "225635864ecb10cb4c959e19c5618369ac94b39f4c53a5b6f4db5746d2f1cf58",
+    "git_content_sha256": "26bf9aed9249aad383211f68dcba7e2e14ab75a4b414fa681897416102540024"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/Admin/AdminPoisController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "82f9e0e707dca3dd9f5debc50ccdf4fa4aa196e916b741a55750a5d482cd2b7c",
+    "git_content_sha256": "23e9e95b76b4cfa4fc86140e8c77d4543aab0ec9bce9aec2c2e4890926b1aa47"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/Admin/AdminSistemaController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "26bc6e76c571e108182d67f88d4dc75359693058fdccbd833292b2f474a27e82",
+    "git_content_sha256": "086f7b5d9d4e8d994c91162194d889a4f51984ce4b6aa747811def31e1d13bdb"
+  },
+  {
+    "path": "NoPonto/1-API/Controllers/Admin/AdminTremController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4378e4218f71f0c70fb21c988e3c79cba94b8cfc63167408aaa71d236c9ce865",
+    "git_content_sha256": "7b24df255d74d76263313775d1dcbdffec6283c7fa7824c6aa903b24e1f2bf18"
+  },
+  {
+    "path": "NoPonto/1-API/Hubs/GpsHub.cs",
+    "source": "network-27/source.zip",
+    "sha256": "12af1aa42fe9838d000a69b9b7f3c60169df207843201fb70a50f0e2739c2197",
+    "git_content_sha256": "0a109a1bc85c628235e1beebdcb8ac7f2404a2c40995e4e32b7aa36b3d076766"
+  },
+  {
+    "path": "NoPonto/1-API/LegacyCompatibility/Controllers/FrontendLegacyMapaController.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9bab026c06bde3a375c5c79b9bfe81790cf622f003d7873bab012b9af298a869",
+    "git_content_sha256": "28a650acbc0038cf6a7a282874650510bd20f7516c82b72efbdaa1df82886131"
+  },
+  {
+    "path": "NoPonto/1-API/Middlewares/ExceptionMiddleware.cs",
+    "source": "network-27/source.zip",
+    "sha256": "41e6b99f3ca1b9caf971dc24627be1c7d01bbb90080a69d8b856854ef7311c02",
+    "git_content_sha256": "e6406e17049ececf34c13939448b2824e85fe7eb3b57a025a5e410873c6dc2e6"
+  },
+  {
+    "path": "NoPonto/2-Application/Constantes/MensagemErro.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e91a38c73f80f089bad1d41893ddc2fd451ae03264b0663fb9e9e41c32c40bb5",
+    "git_content_sha256": "435984fda551eb4c4ff094ac364cce8da6b5c051ebabfa6eb22fe3ded71bc4a1"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/EnriquecimentoRotaDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f15fc33adc2061f6d76f00db80111bd33273d895b6db0c5815972584979787f6",
+    "git_content_sha256": "ad12812674038b6d913be2850a8e37e9318b6f741d2a07acf43a5974580fdc0e"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/PosicaoApiDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "61bc2c2acc62730d1db8a6b872694e96c0575b8b0024085ae6c7c55edc4efab7",
+    "git_content_sha256": "80010b5e81f6b12814ee3d777a86609814364dfbcb50baeab62996be7a716230"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Configuracoes/AdminConfiguracoesDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4b191adc1c2ea2705a7f6c275346c57474966abdc50a2d08d770d977090f68a2",
+    "git_content_sha256": "40dda669d7b3e8b5947f02101b8a02df5aa1f1db94199eb9f7f9f1f885a348a3"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Configuracoes/AdminConfiguracoesUpdateDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9971ce2365947f038eaf0ab3889da45e2e2bed8c9813068ebac5a14a19488f7f",
+    "git_content_sha256": "a5a2c29a236ae322433f8e754adaad6081e88a86c3849f49da4820e0a640bd81"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Dashboard/AdminDashboardAlertDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7e826e3d8d049d0a0981b81efe993bb850585a85e1d0ee0fa685eb6e01e4639a",
+    "git_content_sha256": "99ea90122ba4796f77334806b9f262c2ecc67d13a8f1ad87e4e4103ee735f4f6"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Dashboard/AdminDashboardStatsDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6f8dad6a3c1d775a73a4873023d3941103eb53ec9a60dcc3bdf2f702b2c4019b",
+    "git_content_sha256": "b811fc55fc80c0bb1bc3cf9a24a6923f7d7a1b68d0f1c52ac5ab07757d5b3ca2"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Linhas/AdminLinhaDetalhesDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "67b94a8034483be0b3b70ad013374f6838c5a49cfafd1013ba18f871d9e3b613",
+    "git_content_sha256": "30a70ae042b3ade6b8f2a34c550397fd51f0370beda6edb406aa4e88f7706eef"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Linhas/AdminLinhaListItemDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bb2f9f5c5ca254c7e42cf3a61f5004b639dfb889d12aab565f9fe2c836c7f831",
+    "git_content_sha256": "014121388629665680455be7431fa7ef44f9c79a83ac607cf6305c7db142a8b0"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Linhas/AdminLinhaUpdateDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "48489e7edd0acea8ba4c87198d86f12f34889ea5e6fbcd346c7847777d066b96",
+    "git_content_sha256": "6a0cba07d99b042553af34dd719f6df4284fe42d0bd298cc1416d7d64a74ad78"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Ml/AdminHistoricoStatsDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c3aaf039df434bf34f67509f6646a3e6778e92ccacc1ecc5148a0cb4caa76e5f",
+    "git_content_sha256": "3c95b918f0111150d7551754d7b411c4fbf3c2d22fd65e262f61fc26c189f652"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Ml/AdminMlStatsDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4ffcb1bc9971a7ea249a91a65c1b95540af2da23be0bf75a6c76a6f5057a713b",
+    "git_content_sha256": "c9b66af738b77cf62faceb6fa2f60e742ec2f1da0ad692d1cde39515f7e26292"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Paradas/AdminParadaListItemDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8d6ffe53014a957fe9acaa2064e875bf2516c5162761affb018e70b5c5c4b079",
+    "git_content_sha256": "af7cd95866ef54d8973d6c69a974424b0192f429b93af48454593f1007079a13"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Paradas/AdminParadaUpdateDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5e621314fef9afb71f5edd241365c4b6b05cf15c41d02198964afda0e27806fb",
+    "git_content_sha256": "4d9b4839f4eb4f538fb00e2c5bd633ebdbd5df5009759529244b5f7efbd43da6"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Pois/AdminPoiListItemDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "352191150542f942b10fb1f7b2db5e87e2f9089335ce992fecb620860f4de820",
+    "git_content_sha256": "0332dc65fd0c2eb7d2dae2b52d79d1e3658c07e1b28d86f64c32f379c87ccbba"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Pois/AdminPoiUpdateDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "47e8eef84c1d07776627053c4d66ee9e6b0224813b4a6a8c9c9c79c73682f0b7",
+    "git_content_sha256": "a8c02f1967f01fd4e934a305ddb40a56f063be6cb0aac832853b2c20442dacbf"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Sistema/AdminContainerDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "36d8729cd851023a241957d77ee5f1073c526ce59314abea016a3d49a3705b68",
+    "git_content_sha256": "0cb6c18564c2da9add809234be947242f553f13700e76a80a2f7ef72c46da259"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Admin/Sistema/AdminSistemaMetricasDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "95b8822e487cb54abc7e0334269de5214e2d1774704b805a56a3ee9a4c6687f2",
+    "git_content_sha256": "112bc8c58efb919f87aad5529dba554ff72e44df55a7147bda35c537038ab9c8"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Compartilhado/ErroRespostaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "07198602fc2fc6eabc47623359ce815783979fe6b87776b916bc9fa489a044d7",
+    "git_content_sha256": "f46bcd5539e05319d46bb1d07b3c4cc7e06e5010889c7074ea06bc2a50a0df33"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Compartilhado/PaginacaoRespostaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8ddae1bc682c640edc1dd12f8b3b7ff4f7cd7e5ff26a8deb3aea91ee118dd2db",
+    "git_content_sha256": "6ca3202f002c28088dbf8a15851341c88aa0aef957e3b3cb0c8bc1b00fe45e4b"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/EstruturaV2/EstruturaLeituraDtos.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ad37de6a452e71170d59bf59e3a56242ec983a8f1712053922b45463b5636627",
+    "git_content_sha256": "b23f620b6cf2a57d7528376307d8c6b4f41999ea8b94260bd320c80bacf221e2"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/EventosParada/EventoParadaDto.cs",
+    "source": "network-27/source.zip",
+    "sha256": "60cfe6f7ebf0bfc6c631c1f0d66d2d50d86a5254b96ff1a6d6bf824a23999782",
+    "git_content_sha256": "60cfe6f7ebf0bfc6c631c1f0d66d2d50d86a5254b96ff1a6d6bf824a23999782"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Itinerarios/ItinerarioMapaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "28fd905af393a6945609b57881530f0f183ffeddea28be179b9e51a5b3b12b70",
+    "git_content_sha256": "b6fa640f635d90077e96799471585a5093b5be0b0dbdce5a2bbcedbf955fef67"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Itinerarios/ItinerarioMapaLinhaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e9c27aec897e4640802645a19e619157969b7282d9f04ad5db41822b626266d3",
+    "git_content_sha256": "c580b73919449a1ce5ec72666d61c3908c4e2410b294356e3ac0395632fa4d9b"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Itinerarios/ItinerarioPorLinhaConsultaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fc7ebb53646d27423418ca1c54f847e06e4c9a1502af8b16071901578c97c2c5",
+    "git_content_sha256": "7cfcb6cd42bef5975bf22e43c77137451681bbafb29fadfea4e149c69f0d4093"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Linhas/LinhaConsultaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ecd8f6278c90c246843c7e0f90e10bc4be1612a37ad92c4a7beaa6a4554893ce",
+    "git_content_sha256": "e14e3785c96be818141dd1a88bb4d13a9f3e864b3a35a59aa929bfbca16f0137"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Linhas/LinhaDetalhesDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f24b4f274e838905771a9a385ea23c261680f27637dd0782dab3d55209789f3f",
+    "git_content_sha256": "792b08cfd9e0ee0e7e2ddee3f9bbda7e924e0f54c48441c85a781c841364cec7"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Linhas/LinhaPorParadaConsultaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ec9521929bf283f8900b1370d6e1d417a6e8c2092311b411352e9a7fd5db3210",
+    "git_content_sha256": "ce4a7b10a548094a624178cf61f3037ac4ec814c5aec3d7f22bd83d2ae8a3fba"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Modais/ModalConsultaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "66603f2f5e1a5d51bc091bdc7cb5dc074b092ece613ecd66c58c347a0ecf29f4",
+    "git_content_sha256": "3bc0ae5208f2606daf22bb7e06fa6fc4feb186daf4117ac147194049cd26b8f5"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Paradas/ParadaConsultaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f6ed89620903b6493b990c57a24543ebefc7083c581d88cc32dfe071ebfca108",
+    "git_content_sha256": "5d543a95bb27a204926fff72180ee885b30681ef069e1d7dc91d5aaa3765a8fc"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Paradas/ParadaGeoJsonDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0a3431fe0fed8e2a5ff436ca220d2ac9e34a15a975ba9f170e14d5f6cfe8fdc5",
+    "git_content_sha256": "5b283f2cf5525306d8955afdc1d8a8217d9ed21f8a3a8ecb5778d92287c55389"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Paradas/ParadaItinerarioPosicaoDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4781d453290983e0954805686096ae67b30eef8783b737871f75b399cee2e94b",
+    "git_content_sha256": "1c7b66fdf64558b8ba583742163ba6c132ca68b05cf0ba7a23c60d42f0402893"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Paradas/ParadaLinhaConsultaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0c738456dea1a0fa6e089e5046178dfca0cc8c6c3f3e8f8849f77d504aad68ed",
+    "git_content_sha256": "9e2403a7402ba38dd9e46f1c7f7120dea0376109c9a2c39efa4e65fd927876f8"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Paradas/ParadaPorItinerarioConsultaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "30b3213373cbf062b7c27cc60e9b3d50c4b48e5c245a9a664180e94a090fbab4",
+    "git_content_sha256": "30dc7273cbaae8bab3ac07c4d85e8254e461e44e7a9457fba796c00aa6a6f1e1"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Paradas/ParadaProximaConsultaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e33aa54615c9224f7cf197d69d32d7e7f989ec90ace5a98a7415001d4d089c62",
+    "git_content_sha256": "cf2c1644f11b022596b00bf15590412ed8b1304d42be61ce8dc4ea10abbbe05c"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Paradas/ParadaProximoVeiculoDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4d867e00d4a563252b01cdc137b53f254129873526d4391bd0b5e69168df41e8",
+    "git_content_sha256": "e5dd3dface5260d735e6176887eb57fbb9ac12ee739f2ece07c849536390217e"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Pois/PoiConsultaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1b5b678eaceb98af101f6d86fa92df7753dd8316a5c561718d9249f0babd5beb",
+    "git_content_sha256": "a97b714f75ecc4d6ac55ea10b58fc0a56955f1cb7370ea0bdf047382de9b6da2"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Pois/PoiContagemPorItinerarioDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8c733d68292a9197ed883fde35283f7d173e7c9075ec84047459b23b196a4083",
+    "git_content_sha256": "54b83dd80dd9d5f6470ce6bb563343db2878949d0ea892fe0d55fd1637600ce0"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Pois/PoiImportadoDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "823499c3eb7a5735db0a4180e70d19373332e4986175b86102aac05b9d58d5b5",
+    "git_content_sha256": "1730793d7d13a7808ead5299d3833b815693c316b695a4cf4d8deeb393eeb7e1"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Pois/PoiPorIitinerario.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8f3022621eb53419d1d87dd4c706b5a6be37a814a4d21a8f10f97491184caa02",
+    "git_content_sha256": "5b32aa8de40ba7f7f941b000c03aa777f5308d51de38e5ea8653fb4667eca516"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Pois/PoiPorParadaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9572d07618190e8b1ab964407990efcd856f7f0a319b0af69e6d2e9da58b3997",
+    "git_content_sha256": "2d4443b9e6f15d2f2970bfb080662fc1682a8da2aa3c993b9d125b302d549f11"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Sentidos/SentidoConsultaDTO.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9aac589b02355a61f0d7fbecf79ef5ed9c4bfa6cbc75ee7997d2f4b1e885bd96",
+    "git_content_sha256": "4412c6abdad45ac7a9de6563069fdee52999e4dfba896f29b56e723bfaa53ff2"
+  },
+  {
+    "path": "NoPonto/2-Application/DTOs/Tarifas/TarifasContratos.cs",
+    "source": "network-27/source.zip",
+    "sha256": "45c34da03ef53ace3859dba016e7713e8c66ad654eb5380582db9fea8fb40b59",
+    "git_content_sha256": "2ae48c6ee5addf9a1685ea23a8e5b536139f8ded8834e8c62393bd86e85f89cd"
+  },
+  {
+    "path": "NoPonto/2-Application/Exceptions/BusinessException.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d18c66ca7c0d80a2e1c5804b7d07157b806cf4dc59bbfd853b00c16c272f1fa5",
+    "git_content_sha256": "5992367d45e8c5a73d051b550727c0416a20e6a5fce4003a54946f37eb1b07f4"
+  },
+  {
+    "path": "NoPonto/2-Application/Exceptions/NotFoundException.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2d27ab4e4de2d48f9fe7ce58d5c2615e39e43dfad7803859458ada52bc89bef3",
+    "git_content_sha256": "789630731a159840b859616f9f1a28f0fe871be47bce08453c133a17c813e59c"
+  },
+  {
+    "path": "NoPonto/2-Application/Exceptions/ValidationException.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1d2a0fcb8abac1ca9f1c20c1f68b4038bb58c6029cc38447c8b96d89a14b59f0",
+    "git_content_sha256": "3087e657e4eecd04b61878743c7a0cd5c8a50f73840373548b76f3ca6463575c"
+  },
+  {
+    "path": "NoPonto/2-Application/Helper/OrdenacaoHelper.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e058019e4f5ffa1220cc0ca74af4e39682313793f4f7e928bc03fb190e8cc8d3",
+    "git_content_sha256": "c5fc6adec076c8a33423651d6a0ad8baf16d0ffd3fd54a5b9b3754fb82ae33cb"
+  },
+  {
+    "path": "NoPonto/2-Application/Interfaces/IItinerarioService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9649c1e06bf7343b9764cf996a0569ba5660e4323a89fed2da6e7183e303ecaa",
+    "git_content_sha256": "a309cfff56b291260df99188cb3e99765b72e285326f8ae339f064b68b12cd5f"
+  },
+  {
+    "path": "NoPonto/2-Application/Interfaces/ILinhaService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b641f8f86bd8fda7f02cafa7d2b1d6e13d18b09ae5de1fb4a8dade508cffa3c6",
+    "git_content_sha256": "c5df999ce8e56a298bf1ff3c1483752f5c75a7f4c337737c4838559f3cde5067"
+  },
+  {
+    "path": "NoPonto/2-Application/Interfaces/IModalService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3d94d0a09d881a40cde79ab54e906350a9500f5874445c49162d7ca5ed69e88e",
+    "git_content_sha256": "7e80947acd1e7e92591bf957d8f1743aecfab2be58fa5223ad269d8e3a3f7f88"
+  },
+  {
+    "path": "NoPonto/2-Application/Interfaces/IParadaService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a888a8878f827b40de79e526c8adad391501b164ef772c0d3242afd648dcc6c8",
+    "git_content_sha256": "653b397e71a6b20b90339528fd5c82619935e2fd98d0435cc8dc8d46378db9d5"
+  },
+  {
+    "path": "NoPonto/2-Application/Interfaces/IPoiService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "df5eeccaedccedbcb8595d0bbb6303022cb78b9b1d6b20819e37c4400f11f240",
+    "git_content_sha256": "95f55c126659826fca25c0dc38f17ce6fa489577720c586a70e1612f5a46ddab"
+  },
+  {
+    "path": "NoPonto/2-Application/Interfaces/ISentidoService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b4da387d9275010627dc14dcaca15e20014fe5107b1f95cb6b9ff036a9a66433",
+    "git_content_sha256": "3b4641ca474b2977f87b3e69ee134fe93d6975e68f3435041e4feebde5911aff"
+  },
+  {
+    "path": "NoPonto/2-Application/LegacyCompatibility/DTOs/FrontendLegacyDtos.cs",
+    "source": "network-27/source.zip",
+    "sha256": "074b0798571b0ec87c9c860644135b1bf379c64b0757edc5a0c8e2696733cdae",
+    "git_content_sha256": "72a4e7f13f944838a1f551ad2fe733a36d818936f1e7b413f386cf0eaa30f576"
+  },
+  {
+    "path": "NoPonto/2-Application/LegacyCompatibility/Services/FrontendLegacyMapaService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "cea9669fd933504359a1f5e5550c9e1d4750d1e65d7f05028f262ce0561226b4",
+    "git_content_sha256": "3f85786d90397708029561587f75e424d5e2896d2326e2e4a85866ed8e9657f0"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/ItinerarioService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "12771a0719e5d11c6114f25b83ab91aeca893b89798208cfd0669793c7a1951a",
+    "git_content_sha256": "edf871cc7c03d1d8685a65fbb89a6312573461bffd51afb8904c314845ffefc1"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/LinhaService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d4c3eae7535f5205f700da2e272755678f825cb05cd3f043e65f0c045c0ed701",
+    "git_content_sha256": "c49556eb05b19d8b5b024b626fb12e770554f70842aef0154575019cbbc6a1b3"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/ModalService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "eecb51cee78cbc46306828ff111b1ea59229e8025c9aded316d2bcad2740a41b",
+    "git_content_sha256": "361f4454c5761b8a1a821283d8b84e41c856c80240d3f0248de56ec40b79a3dd"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/ParadaService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "359a3ec345337add057edce42cb757c8c92344a27f1c8501e7fea9da84c98e65",
+    "git_content_sha256": "261463f618c4b44a330641a258bcbb6091b1db55d2d55a54a39d25c09700523a"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PoiService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8ede98eb2d87ff52bfaf1f9c9a7a241fd002349184c96d29ee6016fbd8c2db88",
+    "git_content_sha256": "5125e2cb5b82efd76c2bf8f07d46d4c89455278c74cf55551b0af85e98bff016"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/SentidoService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c5a34576db5453cd2054a7e2f9b6732c28d44fa7b436b0fea3e9dd60f096480d",
+    "git_content_sha256": "706092f55ed3926a9e977e59d99cc9b852dcb3d3152970967dd05f9bacbceaea"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TarifaService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0fe603f88c37d7a385a910d0bfb9e88b83bcec38ac62936be9a0f8fa0f1343f4",
+    "git_content_sha256": "fd1fb13ab712e0991f00258be7cd3f9ecb46d188ecc309d9c4e455b47d950027"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/ArcGisClientService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "638a29f9e7d1317b9d698f1e4777f7852520e694f12780fa3136cb1f02db6588",
+    "git_content_sha256": "09bf3a87c72a6e15524f6796f7ab361a1f23af239ee70b1789bda94330c84da0"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/EtaV2BatchWorker.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9b7c3a1e8b5ae31df46860e19062d87570cce99c3a59378bd87bd5c9096f0dc4",
+    "git_content_sha256": "e1e4d5d1b29cdabff8ed4d0b6935f43a4eb2862e7c97c4692110d59e71d2a80e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/EtaV2MaintenanceWorker.cs",
+    "source": "network-27/source.zip",
+    "sha256": "de81e93f1ed60c477a20203ed8078bef41c9c9c9d1c4653af256985902e164e1",
+    "git_content_sha256": "b28ada5f16d2bd7129e6feef89bc9216077af2dcc9b070d3b4df6e5c18b13d16"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/HistoricoPassagemWorker.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f50b5d2aaf5b9d0353496172aaa1f06fc9ddcd4a73e5061779a3ea2c62453225",
+    "git_content_sha256": "9237d9250a886deeb77ce80a1949bf0bb7694acd28002a1691200db0a050dbbb"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/RelacionarParadasBrtJob.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3d13541795c07eb582ae5ee3b99dc75db2a51b70c6e589cb9d27d0e246977a6c",
+    "git_content_sha256": "17cc3f7cfda34219eeca9288661a4f62fad34fd159636ce461afb9413b48612a"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/RelacionarParadasItinerariosService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "65a88de5b33eb0b446fa1cf285e5bd61d4419d565670586910132b587996c4d1",
+    "git_content_sha256": "7a1adca7a639bd2da627016aac4a223b2a6699be6bef44fe765a1e0527ebff6e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/RelacionarParadasJob.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8a498fd010fd06da0f0a16a0c67455fb387c63eae00cbdfaf21139de2b294271",
+    "git_content_sha256": "43100b6ded8837897dffc73a2e2c43b0ed6520b71745abb4536559bffbe6b1a4"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/ShadowPosicaoMetricsReporter.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f571a6c3831d2155722ec78f9b5106cea389c7e823e3cae312be1323046d85cf",
+    "git_content_sha256": "1dba6443f44640de26cdd77c445ef52c09b7f7a296e3f5da7824080e88e07737"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/ShadowPosicaoRetentionService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b72d39c734bd2732dca3b1a21ca0691eebd0faf12d24fd49873ca700001edfd2",
+    "git_content_sha256": "4b210d831f29eca36457d24a47946d684b21f87b8c05ca6326cb9c990fe46554"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/ShadowPosicaoStreamPublisher.cs",
+    "source": "network-27/source.zip",
+    "sha256": "989fb2e4d9c59b9c0db7dd7ed51f0f23a01a8d10ea8171939367809c5d3eabaf",
+    "git_content_sha256": "9e2b5d191cb9a179b91424b658d2deb9f18222fb69f64bbae6bc9cbd68d9a144"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/ShadowPosicaoWorker.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2e6e5ed85f82f79695aef76d596a61cadbd587879d072dcfeac9f39daf454272",
+    "git_content_sha256": "d41fcf9158ed0ac4eae3a20d772d0d8e3003580dd2690fe32e47e78ba5d52b43"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/TelemetriaMlRetentionService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "69c1cdfaf97fd3485d99f1e24f003c230fc618579e54de3926b4008512766555",
+    "git_content_sha256": "35f3701edf4e0e24aa8190d77b1244637649c603c0c64e674a8b6126bb49b5b8"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/TelemetriaMlStreamPublisher.cs",
+    "source": "network-27/source.zip",
+    "sha256": "110d3f0628b10d9974bd1db1dcaa485e1d263e0462bf15b15d1824cb8b5d69a1",
+    "git_content_sha256": "f7396ac4ea4209f98b1f7d1e0458b60f6eac010bdba74458ef2ba9e79b12fa85"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/TelemetriaMlWorker.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fdce59888eb207bc960102e20ced8d7f048884e902facfcaa109c0905f78d6a1",
+    "git_content_sha256": "f9ab090dc8476ebb73346d508ffb0af71db944d6ac92c56c822eb14e4e9678b9"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/ViagemOutboxCleanup.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b25e6daf152e74f90e2e7fcc750f8b53204915e975740f9e5ef2c88884fd7a7f",
+    "git_content_sha256": "82fd07a940276f28c5a96e804a0978a4a80aa4e5ba5bccdbe7638ac6284e5b35"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/ViagemOutboxWorker.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0cadafa7367e2796c7093388b123dc436a50dff259ab0480ddabf2ddc99e380a",
+    "git_content_sha256": "3251bd7d54cb8462dc1d47194341e611d15775280fbfad37ac32ebb2f47ac019"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/Importacoes/ImportacaoItinerariosService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a54eb96405c2e3978f7dfb3d5bdb0a4013b9d1d790aef9b3cb138f2c12ed0ca4",
+    "git_content_sha256": "83f227d27f430dc7aa8e50b6b13ea158ff2c7d35d80c8560c9c7152894e02c8b"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/Importacoes/ImportacaoParadasBrtService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a2fdbc6e6bf47d505e8f5505a443fb395832f5c071a24682832d3cb4a5320c56",
+    "git_content_sha256": "f1835c27dd2ff0976b9f9b69270fe1aff0298f548b2e703c2e610ee5db2cbc34"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/Importacoes/ImportacaoParadasService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "79623c1f331d96f7b6ef7ae35e2f708b6815a7ba5385b46ef78d716275cc0e4c",
+    "git_content_sha256": "5bf4c89c2d46f410ef77f786b946428902246848ec6d9e450957ec0e5171d9ce"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/Importacoes/ImportacaoTremService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7322dace729072168461c1d77ad12919f0da57e1797c4f55661fe5896c3836f4",
+    "git_content_sha256": "108b1927b198894f81a871caf17e81f6804ea4e7b4b308fd16fe82d5951f65a3"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/POIs/OverpassClient.cs",
+    "source": "network-27/source.zip",
+    "sha256": "884b1d357d5ad6b017951478e5ae34cbf71933b72d1c27eb78c0f957354fffeb",
+    "git_content_sha256": "af7d466a8c8cc432159621b9fbc2c475acdc0a7dd9f5e81a1a45991e72138fa0"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/POIs/PopularPoisQueue.cs",
+    "source": "network-27/source.zip",
+    "sha256": "62ca38c0735c262bb4b00546bfa6e4e14ecfcc0b8eff416a6410608eb6fb7492",
+    "git_content_sha256": "52374c952bc6612ca218f8b1f71170e6d307f7362b03c312794673553d04e50b"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/POIs/PopularPoisService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fa394b27f18b6d2bfb57675efdaec5db48629785cde048ca7d12ef7e6580163e",
+    "git_content_sha256": "78e49fb21cdec93afb6926c883f2f65b6bb2fd6ed10c428cd8a741a80e1f3aa4"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/BackgroundServices/POIs/PopularPoisWorker.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5766363343a87de69ceb980846eb801f590d8821eb084be7f234f0582c160457",
+    "git_content_sha256": "9e2aeeaac28bd4dd0605bab2ffc49ca4f485b46a3af9d31b4a5a070ddb611dbd"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/EventosParada/RoadEtaDistances.cs",
+    "source": "network-27/source.zip",
+    "sha256": "dfffce4ca6c80c1a74e8333dea5bac30196a0b71f57d6ee0d824093dec95724c",
+    "git_content_sha256": "34268d0410dd7e1020775fee7421a3faa42c15eeb61e3a2c2a80bcd17b461e3d"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/CorrecaoTemporalPosicao.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2bbda1c0816a680826d3347f05e5a7d6be5f1e99c97f69521d4d555bd34c7435",
+    "git_content_sha256": "e94c23cea3b1743b8ae9a3e0d87481fca7fd29bd05c16dea80340adf8f44801a"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/CorrecaoTemporalPosicaoCoordinator.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a7c23c892269f7324b7a204f415d83ce5d5d7af406e1ccb262a72933e5eed13b",
+    "git_content_sha256": "4458042593f249f84d1e72fb17b18c1c3a775d81dba04508eaa973a0a6a569d2"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/CorrecaoTemporalPosicaoOptions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "25f6b9058ea3336f7edcc2e69c0b8d85590d99fe71b1b7cde724eff3bdc25808",
+    "git_content_sha256": "70be47c7f76910c1b9d91b908375657a8ef93ba8bc66222b7dd354779a461c53"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/EstadoCausalPosicaoCodec.cs",
+    "source": "network-27/source.zip",
+    "sha256": "967e88958fad8f12f61942a7e14b4140476d66eb5679896a25f38de1567af09e",
+    "git_content_sha256": "88db538295f02ecb4334b293a811895afb71b591042f2d970d584a8321180062"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/EstadoCausalPosicaoMetrics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "782395085748929ab22f40cd1f578d84f8c49270c69073ad2f644654bfad3c5b",
+    "git_content_sha256": "682e45e7bc2e8de8684d54991e37eefd7b86bdf410986ca9497a351e2390201e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/EtaDataset.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a54e5365226770393c335cb2b318a8582c80cdffe1900f76f863255ff86546ac",
+    "git_content_sha256": "baaf0233be4d3b615ce9c5e9b47eb3cfc4168f3c319dca6475ad9c6e1858e094"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/EtaV2Shadow.cs",
+    "source": "network-27/source.zip",
+    "sha256": "58c824bbf9b2f80796c0d50d9f0bda6ae8b98ac2e4aed3adf46e422b120d0722",
+    "git_content_sha256": "54d405daa08c5a5efa9616e248359a0ed1e5ce29efb277fc5cffe104a1cb6c35"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsBrtClient.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b23f343ecd63e1cf779adc0c6772b894d1183a210f5f9ae808c1ed6957343cc0",
+    "git_content_sha256": "bbb2db20fcc3fc702a1a92605ef1ae1c17b6a8d11e4c7e78cf76784d877a0743"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsBrtPollingGate.cs",
+    "source": "network-27/source.zip",
+    "sha256": "125488113a36befea714561b733ec9f81143e5613246dc6e11bf6537b60d481e",
+    "git_content_sha256": "d51be59ba410fbb2de79cbf6650ebb07f3f068c6ea716750f54bd56a1856ae96"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsCicloPerformance.cs",
+    "source": "network-27/source.zip",
+    "sha256": "976ac43b4f2666af827a06cfa5465d12de4c4875a23b913e756e51269e776de3",
+    "git_content_sha256": "cabab6ed4ed8ab158be1f2cbe1b191cbcb709020e28158a90c757e9d10e3bce5"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsCicloPerformance.Operacional.cs",
+    "source": "network-27/source.zip",
+    "sha256": "dadaac595eef1ad14b4977b8dcab85ca6ede71136a1558f969bf5ef70aed165b",
+    "git_content_sha256": "183ab10a1cfc305d9a2ee37eecd9f1d91e2a2384500df206f1bc7d770eea3032"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsCorrelatedDiagnostics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "74b2668b394d0778f7baacbf279608c918caf1c115f84f520e5a6b3a6cacc792",
+    "git_content_sha256": "c2d8b5ed518207f7930e79b584a2a46c6f6aeecd0408ffa3697f1a7662bee201"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsDatarioClient.Bounded.cs",
+    "source": "network-27/source.zip",
+    "sha256": "aff87827deb2a1f8505fef785250dafa9d6f1887db9d6ac45108918421db3cb7",
+    "git_content_sha256": "1c1ecf2ae41a72c0993a756efc9cbd801035769d651314dd19162afada2d8649"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsDatarioClient.cs",
+    "source": "network-27/source.zip",
+    "sha256": "949f1e753d01dd5699d1cba4a69c1321b436ec74f185053f7d14fc5129f24891",
+    "git_content_sha256": "98ad0080f28c6cb537fc3524bd8b6e3ae09e96f5bdc7c0dc032ddbb6b5b54c35"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsEnriquecimentoService.Batch.cs",
+    "source": "network-27/source.zip",
+    "sha256": "92f71436bedf89042b0159c463eb590d96c78df76eca8b53feceb4862d4d7ba0",
+    "git_content_sha256": "df3c1cae9adc2e9813b68438024129398d99f9df6200071c7a24e7499febc6aa"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsEnriquecimentoService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "46c38dacf88d68698d08b67bbf88ca77cb81b99f6a63574a996c1b63d08532ee",
+    "git_content_sha256": "1abc73bf9d485a1afe78d490fdf5de6834d49342d62b75f057d5e443a1c86ecc"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsEtaClient.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ed8ebfc7bb164577e6f7fd230966702a49d6f290c1444f06ec779fc51bd3d697",
+    "git_content_sha256": "82c9c4f3d3b1bd28744a673acdcdfbe43c9741c97ec192f91b3c1685b81e8edc"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsEtaOptions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "667f63416bc33b1845622fffe2e4f2d721d0000af2a92bf5c926b76396bf6592",
+    "git_content_sha256": "8b5e0a3853b2c449e25d4a60591b7a10bb9ab9f8acef4d81435e201b60b149c1"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsHistoricoOptions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "cc94f13d4b9e680630fa79bdd2353e9aa416dbf644d8e809f025ff38d60451c7",
+    "git_content_sha256": "ff92d5c8f024dd20153c033e8e5759ca9bf26868cee26ebfc1b8b27135541f5f"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsLeituraValidator.cs",
+    "source": "network-27/source.zip",
+    "sha256": "de71fcbd18ddab0bb72dcbe432cd8aee68c3a3ccfeab945ac7f557ef865d2f72",
+    "git_content_sha256": "7573949bc1790ee34e101551eea4890af920e534c3a732d7f11346d33334abb7"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsMatchingDiagnostics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "aed0c1e7c6ccc76955eec63850fd087ab90c11a10d76864a58b0fdac231cf069",
+    "git_content_sha256": "153cef5d70a570b80ee235728f4e59ca528428c94748ad565310fcc405d6bece"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsPhysicalPredecessor.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0bcaf421655ba99689e9ac2202686092f094ae7c347d3f7771b31225e1aa52bd",
+    "git_content_sha256": "0bcaf421655ba99689e9ac2202686092f094ae7c347d3f7771b31225e1aa52bd"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsPipelineTrace.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6cb12c8e9e2a37c2048205bb841bb0f3b360ed82356aaa77cac9cfd11f658959",
+    "git_content_sha256": "6cb12c8e9e2a37c2048205bb841bb0f3b360ed82356aaa77cac9cfd11f658959"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsPoolingOptions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fd8324b47458250f88ee16eeeeb14b121e0441f0c6ac5b18bf4d3cceee6f135c",
+    "git_content_sha256": "9752cc38c41f1cdd679ed57257d4c28fd8b2212007dc727e5cb10bf8d2880e09"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsRecenteCicloCache.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9410f7dde4c1c1604fded0b506d7a7e50c641934f81afe5643e63e71e2fb3acc",
+    "git_content_sha256": "8d27ba8ade7c88f409ccce8a8ac070bea8bf76c6d566a8ebc35704524c8ca6b2"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsSignalRPublisher.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f788337eb1140eb4247164b6454f2973facc04114ecdf0bebd3be3ee07a260d6",
+    "git_content_sha256": "f788337eb1140eb4247164b6454f2973facc04114ecdf0bebd3be3ee07a260d6"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsSourceAdapters.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3566e691d59731cfbe7d80fd57b3d9297c5dddb97acf3ad70e2220484b54efc8",
+    "git_content_sha256": "2a740a9c4a7fa2adfdcfe9de64981fcb5fc6e1f04f2b10712e71729e92afbde2"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsSourceContracts.cs",
+    "source": "network-27/source.zip",
+    "sha256": "27895c7097ce32a0f14b65389f3c69309217f9af328dd8cef06128a774f1e5c5",
+    "git_content_sha256": "29e3753ff1d3e36f507e3ecda36c86eb3f2bce2171e171da2213eb0861132457"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsSppoClient.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e366d5736c3633bcfa91dc659e92959e7ec58ddeff95b39d21b234e0bcaf1c98",
+    "git_content_sha256": "e803f15af1ec4d0016a1e3163ef5827bb1737e43b83cc2f37554b0dcb9f0a3ae"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsSppoCollectorMetrics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "babcbd0b9ecce7d19015e3880a94a56f6f2a1583df5910c5cf3e83279e371ddd",
+    "git_content_sha256": "babcbd0b9ecce7d19015e3880a94a56f6f2a1583df5910c5cf3e83279e371ddd"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsSppoCollectorOptions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c168ae063d5deeb65bfb3cbb2bea8eb56758563aa6fbd8ce790896b235fa405f",
+    "git_content_sha256": "d95498ca74338e1f2ae54f5d028f557115914aebfa30d5824ea03bcc4fa7b45b"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsSppoCollectorService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "cc7819149dabd1e850c8d175634202b6a9e8df2424960b220023eb0e0dd73688",
+    "git_content_sha256": "f449417d6edbc5ab40fefd3006e0757906d4d5825ea6a6f1a8ca72540ee2a088"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsSppoSnapshotStore.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b018cdd24e4da4bba752f474f8ff1c5e30dde4a586afc72b4f88bdae0defd565",
+    "git_content_sha256": "c76dda4a3f1cf3dae0cfa4a5ddd3043ad4d3a8f099b630fff60ccabc7282e307"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsStructuralHints.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9c63cc10a305b949c1ae3d4f3d6151ec56c23279ac8743e9103cd16f4eab8ca1",
+    "git_content_sha256": "ccf0720597453e820a3a1bb2485850ecfe1d0499682196040e15956412a12649"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsTimestampDeduplication.cs",
+    "source": "network-27/source.zip",
+    "sha256": "696e97f421742784d3d543ce803fc7e788327ebead34ac08124f84bceaf4887f",
+    "git_content_sha256": "7059238bea8c0d919a9aaa5321fe3ebfd8ae9a30604eab1147633c13c182ca0c"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GtfsRealtimeGps.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3faa7cb0cb899a22283fc801424b5eb9e1bc10ffe00d14412bb1fca3f97505bd",
+    "git_content_sha256": "81e0625190dfb6cb04e0ff5416a8d8da5b5fa43b68b8aebed6a91cb3a6c60c3a"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GtfsRealtimeGpsSource.cs",
+    "source": "network-27/source.zip",
+    "sha256": "180d9c4fc311153f143f815e949b1ba1931f937171fd35fb2ba4ec32cbeb58d1",
+    "git_content_sha256": "b4d892ba4706074fb995f493fdd0c81f9eaefc17a1e6e4d0ad5da2db885c20ca"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/HistoricalEtaModelPolicy.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b559a331d41a8fb5648d5968d3852ab99e7fb7002894d959c3b4c0290817cf4d",
+    "git_content_sha256": "7839985e8ccd6fd7a83cb486744d9ea8774fa73cce5b371ddefb96f150d372a9"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/HistoricalEtaOfflineExport.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7bbd129ab3117d3e0024b903967405fd1da2e1be9e86e9acf6baccf9cf02fed1",
+    "git_content_sha256": "cb97dd4678a1e7a274ba6b5978fb3dc5e3f49e1533a7e061b3d7a85ee21055a8"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/HistoricalEtaOperationalStatistics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d5509f9f7242253ccd567a44c47afdf1dbe97f1acf7b41c9913121eb967a335b",
+    "git_content_sha256": "c800530b61decbbf8f56afc994a227360e2b78a70275f25da96dee52f61f301b"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/HistoricalEtaRegistration.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0aac8e62602fb12f58f342f70a15d1e82f86a5e7c330861d5d68acf422039f9b",
+    "git_content_sha256": "43424a82e346ac31fef1d42d3aa29bf236b9de37fb17ca903723ea26b62213c7"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/HistoricalEtaShadow.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4f05d72275089bbce8b458467b7bbaf536f1e5f2fb3833f83281c585914575dc",
+    "git_content_sha256": "dc6f780975f1da23aa64a433fa7814cd2905b356ed055a121ca2b84f1e3b037c"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ItsCurrentGpsSource.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1932745bbf7f8abfe37a4674dca47e610c4395364d4889db3a69705ef277de98",
+    "git_content_sha256": "1932745bbf7f8abfe37a4674dca47e610c4395364d4889db3a69705ef277de98"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ItsCurrentOptions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f8981fb5d970390d989d8d491315635166316e2161268e8c14feb8bb4fee655b",
+    "git_content_sha256": "f8981fb5d970390d989d8d491315635166316e2161268e8c14feb8bb4fee655b"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ItsFallbackGpsSource.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5233390b571485e977427e6b0c8413557526bcd57ca4941c0544a12fd0138b39",
+    "git_content_sha256": "5233390b571485e977427e6b0c8413557526bcd57ca4941c0544a12fd0138b39"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ItsFallbackGpsSource.Hybrid.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9246e3d522422626401554fef37ab7b908d9caba6278043ee2fae2f480eb25cc",
+    "git_content_sha256": "9246e3d522422626401554fef37ab7b908d9caba6278043ee2fae2f480eb25cc"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ItsHybridGpsComposition.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e166adb8f0b439dfc7e8dcd177cce6ffc806db8bef6e688d4499ad52dcde04ea",
+    "git_content_sha256": "e166adb8f0b439dfc7e8dcd177cce6ffc806db8bef6e688d4499ad52dcde04ea"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/MatchingBatchPhaseDiagnostics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "07d1f2fe50d29a98dde36e20441bc09fb60beb37467317ef0836061aeb7030f5",
+    "git_content_sha256": "07d1f2fe50d29a98dde36e20441bc09fb60beb37467317ef0836061aeb7030f5"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/MatchingBatchStageProtection.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bffe7e1be7bc905749c4d3d390fcd70b37516f69fbfb5c80da4c5de705fadf4b",
+    "git_content_sha256": "be05c1162e8517de9f7cc7cc6198ed591375fe6e8c88ab64f3b1e0deb08417a6"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/MotorCorrecaoTemporalPosicao.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8dfab2a68bbbeaf31f80fb107c0eb07956e78839abc6f9380e273a2ee41226b2",
+    "git_content_sha256": "15d4d3d3fc71f3f691ee5c68a02bde05bf97b343923877b3d89c758261fbfcd4"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/PosicaoVeiculoCacheResultado.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2488b69588fa494ab42def1b80a1cc310b931984d7adf9c37af5ad40012c5132",
+    "git_content_sha256": "e4b5327ba342fb9f456e0728b28d181bf04a8db1a8e72e3054727872f2206f75"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/PosicaoVeiculoTsBootstrapper.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8efe1f4c59f41939667b3b2dc9fe8239ef8795c1531b2371eba1ea7dcab1f8d7",
+    "git_content_sha256": "3f0afcf71dbf6f860540fc32ee6d256ae630b7c8d48f416cc605d52c21ef8691"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/PositionCorrectionShadowChannel.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7bc74b032b5652be9b88432699bfb5833246d02b894e487ce1aebf668ece646a",
+    "git_content_sha256": "5d5e1f332d1062bb9da7bc7eee2f9ddb940aedbee5d5efe3d076f4a8ddabf7e2"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/PositionCorrectionShadowCodec.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1beff0cf09f13c9bd7f3cf4993e12be842fc9f5c431a9a80a402091ee052d1e7",
+    "git_content_sha256": "3fa1191d01419960ffec4d6bce057922cae739724204dc1ae19e37c3b857784e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/PositionCorrectionShadowMetrics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "259d6c407df6bd69920248b120564d031a07496ae77b16eab7192c1b81a262b3",
+    "git_content_sha256": "f9a20531350152906ca1821a9840a07f0be35ce261c6111efc1c85c51446f848"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/PositionCorrectionShadowPipelineOptions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e8c408e2748b208717f8eee96e40eb91dcd97d08d912cb10c73cc562557e6471",
+    "git_content_sha256": "3494932315c8a8cf9422074af2d5de1e877c2fadc8fa529f65d1fcfd9e692629"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ProjecaoOperacional.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c9517fe4001444ebd0d423a387967213d8d13732d44533fe9018a9af90ead994",
+    "git_content_sha256": "9810bb7969f6036031526553f4ea3b9060e77ce3e4b24a8c1cd2c8bbc2eb2d34"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ResultadoFonteGps.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9503a350e82cd213a9af9eff4d052178b4aded519c78d58f7dc80b9e9d02f47c",
+    "git_content_sha256": "8b27f74687ef9b1f6fe8d097d2c4a0634bb80f6535e87265f0f8ed412422498d"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/RetryOperacionalGps.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8d102effa5bf4af547d3a7eb632ba6e8bc19457bc2196c19af5f4c792443e8f3",
+    "git_content_sha256": "48af30a2a2e699e0a7a008f31af99c526490cf3577e8add3719e33a67ff30fde"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ShadowPosicao.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6811d8dd4643fb2cc82243485d7f1725ed5292a19782fdb2036e55eedc43764c",
+    "git_content_sha256": "82160c39d4f21eac34e1de6fb04d0ffd71a46b7157c65dd3d88c8f463e6de587"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/TelemetriaMl.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2ca21f4d453949e0da472258a18a39956fafcbb1257c59cd84744ddb1c8913e2",
+    "git_content_sha256": "cffaa38e15430f58d27ebd97e81041bdd7f054cf3d38ba2c30d6186f90a74188"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/TelemetriaMlMetrics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c86140956a6fecafa9d9d4bf0201359a287d21ed3f39415576fdcdd46b3c63a6",
+    "git_content_sha256": "3bac933ea71aecd0ba3696a1b6a5d6bc628248633bc8c3d813172101aee80b90"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/TelemetriaMlSampling.cs",
+    "source": "network-27/source.zip",
+    "sha256": "205cc92857708a08b53cfdd2a5622d203ed8c291f3d193f5de3950948ac32e0a",
+    "git_content_sha256": "4cbe72744e3a930af9ba86d3bf328c396f4b0c4f28ade70f8f2e106cf81601f3"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/VeiculosLinhaRuntimeReader.cs",
+    "source": "network-27/source.zip",
+    "sha256": "41aec17ece076e0a1c8d953a3f3cf53e9036281a42a123bae0db6384a417a3df",
+    "git_content_sha256": "b13562e401e9476b9a963a47e55d439c3ceeef49f859be2d0ed7f79a08ea78da"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ViagemObservadaService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a2624f0838ef88325780ea6eb65011d4c5090f47b13c276e8c5842207c4ee07e",
+    "git_content_sha256": "fa158e8959e17cac5edf3230f67586885439dc7fc0a94b7c121e8cb6489d5a1d"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ViagemObservadaState.cs",
+    "source": "network-27/source.zip",
+    "sha256": "62b0d57702749e304cacda7850382b79163df231512e14de12ea2c28db7c22ae",
+    "git_content_sha256": "168c46369be14013ae18ece922e1c552880bad384cbd11ade86a3628ad0eef94"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ViagemOperacional.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1d79acde999ff283d34f173afa6b2a8f4ed8b9a9cbdfda03bdb8a12206a87e53",
+    "git_content_sha256": "45e6f48c77639d3af977309ee303b4d36e03eccc7932d22c055a6f16358f402a"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ViagemOperacional.Integridade.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bdb0d3fc088fd1ef1dfa4ac6caf0489ed7ce9bdf6962f1c61c7c4855d627c798",
+    "git_content_sha256": "ad5c63ca4f12bae400dc5c5eef718a01ec8bb75822e928f8d54c9935ef1fd6e5"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/ViagemOperacional.Mudanca.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0539f63000ade3623d6ffd8393e951d429551a91f74419ed55458aa02bb86270",
+    "git_content_sha256": "9c0013bf07ff9736265bc99db5674c4d5a54332e96a90f8aacf1d5e690f5c586"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/ArcGisEstruturalRegularService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3230655250566c5ab320226c7d73e6028dd7c20dfc25a93aab73b822b9838cc7",
+    "git_content_sha256": "137721ba4db6833fbbe98dc2f6c3b3bbe61530f8d65be42b29f004779614bbe3"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/ArcGisEstruturalV23Service.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bc67accafc50ffa81072e6cae236a742e8566077f330980ba785a1665002965b",
+    "git_content_sha256": "97174aae26b83b9cc619a5711747e55cea4cbec36dbe249df5b1ff3784f5a3d5"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/ArcGisParadasReconciliador.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ab0d52ed9e68c0e9f6b803a179b10e8ecb8ded3a3192be320bb95ba0b2d5fd4c",
+    "git_content_sha256": "7facb378aa49e4d9fdda09e92589d7817bde6886e8cf7501d822b7ddd16665f8"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/CompetidorDirecionalV2.cs",
+    "source": "network-27/source.zip",
+    "sha256": "31585d93e96a3d28a468f8cb652b1d26f14fd2d24fb32b1adc27500d098acb82",
+    "git_content_sha256": "8b20583cd92612e105e39a5738d18ddafef39fd0059e7522b85d9fe4ce754480"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/EstruturaFinalRebuildService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0aeae247dc9c87d2ca307522f945e2ab749ea3a8556b6a4d5522319fb5691bf5",
+    "git_content_sha256": "ac8f718e600fc6fe86fdbac1b12b578ea42380256c29fec68cc5394796d2149f"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/GtfsDatarioImportService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0274bf4eae8d48ddb2b7360ab0a5b2738e1f321fb2d0f8458549586ed6f5c8b4",
+    "git_content_sha256": "496089a353d08f427df4ed6b5e489160652c2a4df2b5cf5531626269737e444e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/GtfsEstruturalV22Service.cs",
+    "source": "network-27/source.zip",
+    "sha256": "85271942598b14b12d0f55803f2fdb91beaa9c6ccee46c434c1b5e50d3e2429e",
+    "git_content_sha256": "cb28d891c0cc3d63ae0b12abc2da01c9081d6c5d18d4ed660601799b00001146"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/GtfsFeedParser.cs",
+    "source": "network-27/source.zip",
+    "sha256": "77b9a7831510773a1cd6d68045385f534499d1561a71d3fdd802674f8866cd35",
+    "git_content_sha256": "d5ab43f7909db4c5c23b0aa4b43e9fb1cf8e7b41ea16b6030662d636c5552c82"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/GtfsLinhaModal.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9bf23308d1be80755bfeacf33457421fbba7eee9049ddaf1d5c5f690eb6dfd2c",
+    "git_content_sha256": "ec7468bcc3e2c9baeee00e8401a0ac2024eeea6e0f5d8eb19ded9a992165b7cc"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/GtfsParadaItinerarioDryRunService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f894e4614f7185880a47deb1da9bbdd076d81ce73d01ad2c9929263fe439477b",
+    "git_content_sha256": "96bddf03ee92e5842d6e8c03ffe360297558ec8938fb59c2e7a006635962936c"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/GtfsParadaItinerarioRebuildService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bf3e7f79be9b70fa77af1a44592b9810b0c350240e96a5bf8b3b08d913a5a892",
+    "git_content_sha256": "6aacf2473b24b5804f146b7b90914f4dcf3718045876a7ed930667e7ce3bca10"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/GtfsProjecaoService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e671300e7091a6ffba76de721644d63015b9a5e8e90c35042f191524c81e4c21",
+    "git_content_sha256": "7ff0dd8acfd0efaac9369cdb4097b4f601c14802d87e1a92db4cca94f7bdba22"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/GtfsRelacionamentoModels.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7168da18694c516b9299f0269719ad22d679a272f97c03f07d7af359aa7bf74c",
+    "git_content_sha256": "5416e539a019bbac7767d806304c15eb3effbd240c9006bf430dd64260dfcfb2"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/LegacyEstruturalV24Service.cs",
+    "source": "network-27/source.zip",
+    "sha256": "266c96d8680b9d1449f74ebc3680893cd5d744b921afdba08b3d427de0f469b7",
+    "git_content_sha256": "650d4e804792bb737bb11e6630f36b5908378a678ca2559d47e803e8b6caaba8"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/ReconciliadorSequencialV2.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9061fd55cd5f73f5db73cf566d6ef1aac24ce32e7fa004a4fa25f89c01df564c",
+    "git_content_sha256": "c7785aac4c01dfb1baf80d8a52dbe43300c65ccac1672d1e6ff8ba0526832d6e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/StructuralImportCommand.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ccad2e96e8f4ffb0907073c782089ea215731e57342efb270e689f3d721ef718",
+    "git_content_sha256": "d39bb78105b1858c126025bee544d91b49761fb674504a5469243f2e60ec18d0"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GTFS/SuporteSequencialPadroesIrmaosV2.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a829c759feddd470f1a358f62495bc3a00fb7228921c58a4ceaf29b14c52322c",
+    "git_content_sha256": "98a19b3b19bc5da164c696b344618cf2ad069daa250ad3f1d348e2c77e613408"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/AlternativePhysicalEvidence.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0296232e745de6037f067bc4fd946b812e4715c77a26ccc016df9b5d9ee2968f",
+    "git_content_sha256": "a5b8cc63ce919cf69a9559c031be6d9c9a723ede59486f25fcda70bf9ebb4742"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/CanonicalPhysicalLocation.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ec1c853cefc9c3190037f8c67d38fc9ef7910b701ebeb56dd25d530da3e5fb91",
+    "git_content_sha256": "ce68e14800ec3c823ae451171208f29ca4ed113c55490d3cdcc3b7135bebe399"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/CanonicalPhysicalStore.cs",
+    "source": "network-27/source.zip",
+    "sha256": "56e8f122bf15f775fb1164f190dd30cd026203b349866ea3dd63d716a7d59d8c",
+    "git_content_sha256": "5325d037d563c9bc001bda3cd2435bc1ccd9c2856216f29077524d70aaa3dbc0"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/CanonicalRedisProbe.cs",
+    "source": "network-27/source.zip",
+    "sha256": "324952aaabdedd2d11b7ced2a134763ab0fc7fbbdf61e69e1d878a1d576996ef",
+    "git_content_sha256": "7f1195d50e5dcbb8f7a077b7d5642f40270f15bb6e770e8f18e735df3a23899a"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/FacilityClassifier.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e4a58918056025ce7fa61e42830a25e60fa1a32bfaa033ad826a0728d3dc8b6b",
+    "git_content_sha256": "e4a58918056025ce7fa61e42830a25e60fa1a32bfaa033ad826a0728d3dc8b6b"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/ItsAcquisitionPlanner.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e2cdeeb67b7bfb3108b113d4930ed7eb7e6a1489577d5930faaa9ac95e7d04f3",
+    "git_content_sha256": "e2cdeeb67b7bfb3108b113d4930ed7eb7e6a1489577d5930faaa9ac95e7d04f3"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/ItsCurrentPhysicalAdapter.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6a79355e572e76af115cf64109b9b675b331aaba0577dc2eb6fd5fc32a15139c",
+    "git_content_sha256": "08ea579e155467e5867ccf06ddb87e2880e0522b5b070b75c20345f7cd6fccf4"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/ItsQueryHistory.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a57fc6f1cca16dec1fa5db1e92f68039cfcc17f6715c9cf8ade302a8f438568a",
+    "git_content_sha256": "9d242d5be938e2975809a4c7541fa15faca06fd8cefc2e1a10b56346902ef594"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/MulticohortPhysicalShadow.cs",
+    "source": "network-27/source.zip",
+    "sha256": "21ecd4a1ed3fa92da1ef155cdaf0e7172840eeacab1d8243e6848d2f0acd7b0f",
+    "git_content_sha256": "21ecd4a1ed3fa92da1ef155cdaf0e7172840eeacab1d8243e6848d2f0acd7b0f"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/PhysicalDiagnostics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "52750b6544c97f18d08ca0f960171c1223408d78738c5f3d50fa7b38e282c45d",
+    "git_content_sha256": "4d5ed480cfdfc8993505a46f8ea49bce2b68b1a091da7b008bbcf664dbcf857a"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/PhysicalLocationShadow.cs",
+    "source": "network-27/source.zip",
+    "sha256": "700d95bbabb5a6e3470d301723e55543e6b2c7c92db6b33e58e3b47d52b19c33",
+    "git_content_sha256": "08e54802fb174b5deeb5f680fbe5f68ca733dcbf06b6c40082c40432a31ef97e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/PhysicalNetworkEvaluation.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9e787c2971c3e958e2954d6b7f3d717d7bf88597b3a090ec9ec3842d1b09cea3",
+    "git_content_sha256": "3b496181b1e628f999e12b74157fb96c61bfa043ed182b81af3eb5bc5b2659d4"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/PhysicalOfficialIdentity.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4b519d757d27174bd69ae7a0e858aac915de6fd53c6d8722c368d15af1d44d9e",
+    "git_content_sha256": "ca2803b0b5fe65b540e067ecaccd6d15b37af0478a3ab99317e1a90ebdd47a1f"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/PhysicalPresenceMvp.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f1c13e895962231396b7b346bb8665c5af069a9ff960fb4943d1744982e3805c",
+    "git_content_sha256": "855c2c1b8de9bfb1bee46e5620c139dc5b41f437351eff0dcac8b9cc7b9fd35d"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/PhysicalPresenceObservation.cs",
+    "source": "network-27/source.zip",
+    "sha256": "11863d4c5981304c1096047c8fd69c36a5f7a1a5a172294b0a64bffd9f4e381e",
+    "git_content_sha256": "11863d4c5981304c1096047c8fd69c36a5f7a1a5a172294b0a64bffd9f4e381e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/PhysicalPresenceStore.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c44c0fa29495ccf9af151bf162caa28fa5a0455e448b743f7f50b46ae794beaa",
+    "git_content_sha256": "7dcd77a75568cd6cda9b89c3f1c6dc0cf075cde7a52e73b2bab44b035a90ce67"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/SharedPhysicalEvidence.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1b9a12872e06c8054a729379430d8fad08cb6d19e7812934c8fb5d8593fe2b88",
+    "git_content_sha256": "1b9a12872e06c8054a729379430d8fad08cb6d19e7812934c8fb5d8593fe2b88"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/SharedPhysicalSweep.cs",
+    "source": "network-27/source.zip",
+    "sha256": "57b9c0aea415b8a6b358c363a229bf5d8adff40c37e666192ffd367ae3df2b8a",
+    "git_content_sha256": "57b9c0aea415b8a6b358c363a229bf5d8adff40c37e666192ffd367ae3df2b8a"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/UnifiedLocation.cs",
+    "source": "network-27/source.zip",
+    "sha256": "67e11f73bb5548b9aeca4b97a5852ee67419181900a951b41376aa2b826834bf",
+    "git_content_sha256": "7c22b4972781c6232b795747e5833ad6ca2ba43ed98a3fcca22bb5e68184dd47"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/PhysicalPresence/UnifiedVehicleProjection.cs",
+    "source": "network-27/source.zip",
+    "sha256": "cb07613537aa714e46e7bc51b4d041a71f88b9c73e1d23d67ef0e8dfed699afd",
+    "git_content_sha256": "139a14fb9b612e74c5fa17ea973517b638ba3aafd992f38e64e149a8dffb428f"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/Tarifas/ArcGisTarifasClient.cs",
+    "source": "network-27/source.zip",
+    "sha256": "da3952ad9039b952be4c1f9b5bb248cc82a214b05ca7f5a019e89b9aabb9d6a6",
+    "git_content_sha256": "def4c5ab6ffaccbb51ca7529fa0ce3d4d81f1f4bc66239f76c7e384602a4b26e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/Tarifas/ArcGisTarifasImportador.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1aba94662b698c13d23387561bc23324fef56823608c412d63e79da3c8de813f",
+    "git_content_sha256": "cfbfeb9c32f4bcd344ddfe9ef3bba48bf2639fa5ceef6d9ed79b976acb719063"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/Tarifas/TarifasImportCommand.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6e25e9f7a69ab772740642145f41622eafa32a5b4b0006565dda5b1818409b5c",
+    "git_content_sha256": "04baf90c11d073e7b0eb811718923a5511ef0256608e90cb3fc1f23797fc5845"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Canary/TremRealtimeCanaryCycle.cs",
+    "source": "network-27/source.zip",
+    "sha256": "075b34078cf240c30616152d740c3f31d155dd66b7279bcb80010c862dd5c032",
+    "git_content_sha256": "8d4f057518334a25ca4af83aa3cefdeb2c94ee301c65a03f1cac60ee58164f4b"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Canary/TremRealtimeCanaryMetrics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6f18e0d78f6b97302c5b136a44153a90f736407c1e4b5bfa02f666003b492e66",
+    "git_content_sha256": "393d4870f6316ffc65dc65be32e59147357c45a453b24020328f0f48541f5792"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Canary/TremRealtimeCanaryState.cs",
+    "source": "network-27/source.zip",
+    "sha256": "558571574e368db8e03fdd5874b3b4c36bb248ae94e931081b760726090f35e2",
+    "git_content_sha256": "855d3fae0351a3283e9548bea523e328674147315f8e42c48cd23c945177f876"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Canary/TremRealtimeCanaryWorker.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fdb0befef091c7a45710f6e5bf49288c3577c1dd6ec1649ba1358c744933731a",
+    "git_content_sha256": "e80acff3ef185ebe97b9b629f3cb38c8d036d9e707749bf4751f4060c0cdee66"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Contracts/TrensRjContracts.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ebeb718515e6d85b3071e5d1395c8e22a788c482db5e8a2bd60ad4d63df5afca",
+    "git_content_sha256": "1f067297beb91294e0f0afdeb2b68b9f00481ec03c2d5774f4e8d4ee3b9436e3"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Correlation/TremCrossSentinelObserver.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0cde2b56832b6f17312e6c30a1733bea68529e939224e2954ccdc2892654e95a",
+    "git_content_sha256": "f3d1cb973a5778e9584bb08e8a5b423b98bf4567c8971645afeece170c490df4"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Normalization/TremRealtimeNormalizer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "abf61c9840077ace6cda6796367f34dc1f096e35fbf169ae23b74afffd84a018",
+    "git_content_sha256": "930b14d98e8bad8c5fef5c7e8c30d4bb8815e22ab96e8841bc43054a6db3aad3"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Options/TremRealtimeOptions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b78d1f5251dd26cb8e91c0340cb2380f0dcb22dbd239115c014100ceb2eedbdd",
+    "git_content_sha256": "61e65739c8e98db984a1d1b72f0df3a61cca162badc18299c517adb82d735e16"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Provider/TremRealtimeMetrics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "514eb52352232f64ae67e56336ae630f48d54b23a45550ddceb8f631ef3ac065",
+    "git_content_sha256": "8c216e8042c72794f1c474a06e758cf181e21970eea61eab686008740cb189b4"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Provider/TrensRjClients.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3eebbb707c8949966a5942e561f583d93d524f9377f2d11dc1bf5d3dfbe49c7e",
+    "git_content_sha256": "b9e2e9a4e8a6f0724a11ee17f4058a9183caf28db6a918defa279c52734f0b17"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Provider/TrensRjRequestInfrastructure.cs",
+    "source": "network-27/source.zip",
+    "sha256": "39628a2e92131930ac6460131fc15b690a3a614eca9267ea128ba8c6e596817f",
+    "git_content_sha256": "b47df483d90159b050f8b12432291c88e953bfc3c84089b0238f0c5d3057d72f"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/RailRuntime/RailPositionEstimator.cs",
+    "source": "network-27/source.zip",
+    "sha256": "584011c2346ac5ae2f0fb3a53e51ffe78ed0ecf0c631b316da3bba5955c529b1",
+    "git_content_sha256": "39f134c36519029d41bc265512903f0a206d35b5d66393d23f568cb0768c954e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/RailRuntime/RailRealtimeEngine.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4398cc24a0568b94ac17e8a8fe9eabaf73c7ee59601efa9134617b9b843cd9dd",
+    "git_content_sha256": "fa80b44e891f1c2ff4d586dab4189aea2dfcddf81c44d58cce6fa519536b8f94"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/RailRuntime/RailRealtimeModels.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ab6de7b6e91150fe26fe5d660bd2d1e88efd2a369212f0c6f07ec7cc26b1c36b",
+    "git_content_sha256": "9df15c22d6d24258fa1faa9424f58a6c30cf43e24b53053d1ab13b6552a1bc62"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/RailRuntime/RailRealtimeOptions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "05ce1e01aabff06f9344322a7ac95a86521544ce0ec58a77c93648389074e7d4",
+    "git_content_sha256": "c8500a7f7a8f0292ad8e8a75349f581554d7ae7d31909837d335a3e68ecf1f2f"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/RailRuntime/RailRealtimeReadDtos.cs",
+    "source": "network-27/source.zip",
+    "sha256": "75c7d34067cc7ab697ada919700254ab430b3b6fa441d2de7ced3de030fdc75d",
+    "git_content_sha256": "28e2b94a40b00901871755a32b57526952a3aab42b530f4360237119850f9912"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/RailRuntime/RailServiceWindowEvaluator.cs",
+    "source": "network-27/source.zip",
+    "sha256": "493b8e4929c7945def1f2b771535a226357d38e66536911ad227ad4f2ed2a9b1",
+    "git_content_sha256": "430a285b6dc3aa8d05b2be466a2307d7496bcfc2ab9cb928a8d9714a5db6634e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/RailRuntime/RailTemporalPredictor.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c83cfaa6b5dbfb94f3ce12b1fe3e22c09c4ab859d3b7bf2bf98859200c560698",
+    "git_content_sha256": "c83cfaa6b5dbfb94f3ce12b1fe3e22c09c4ab859d3b7bf2bf98859200c560698"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/RailRuntime/SantaCruzTemporalProfileFactory.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9a1ab664393e33cb6a49713123888f08954e28cc78f45c059a0d5d133a26a5e4",
+    "git_content_sha256": "9a1ab664393e33cb6a49713123888f08954e28cc78f45c059a0d5d133a26a5e4"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Scheduling/RailAdaptiveTrackingCoordinator.cs",
+    "source": "network-27/source.zip",
+    "sha256": "62f0ac6367ba17a02b002ff53ed021eae9426063fb87393dcd775050fab91696",
+    "git_content_sha256": "62f0ac6367ba17a02b002ff53ed021eae9426063fb87393dcd775050fab91696"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Scheduling/RailScheduleGate.cs",
+    "source": "network-27/source.zip",
+    "sha256": "49648258bd1da57c11d470c47f9fd2326d5757e0fb18b25123779e3eb9f25b72",
+    "git_content_sha256": "49648258bd1da57c11d470c47f9fd2326d5757e0fb18b25123779e3eb9f25b72"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Scheduling/TremAdaptiveScannerProbeFactory.cs",
+    "source": "network-27/source.zip",
+    "sha256": "099182d0c26b578735dd09cceaec40974b5bf589191d59d4c36f723d1ebd9a96",
+    "git_content_sha256": "08cc4f36646ac180987a1d6d05b8dedcdd105c4b8edb3aa402a38f208a5dff29"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Scheduling/TremDemandRegistry.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e664efc62898a3094c645f1c2c89510cd0b79b1c7154a76e264b8796eb6ced50",
+    "git_content_sha256": "67b1cb288442052208357893d1d8d55693d0c67cd0b6bc6f3871e0a6b17e36b5"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Scheduling/TremScannerObservationFilter.cs",
+    "source": "network-27/source.zip",
+    "sha256": "273218b40acf67cd5a8706d4f06f3349ac11dfd91fab04299e64482570cf3d4d",
+    "git_content_sha256": "b8e860da1271f03a4d5c77a58236ffde2a0073ccb9536c2c92d7bc65378f1812"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Scheduling/TremScheduleCache.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2bc5e6d5222a35f9d8c02cf457737e229469be9d6314f3dc1f7b636dde6511dd",
+    "git_content_sha256": "e3ce9227df27b8ac588548b40468da5e0b973cf41b69af0d37ec285f4204775a"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Scheduling/TremSentinelCatalog.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b4f670a1950b97a7cb86cc2e37f3c3a479c2e2ca822c9594328118aa254105a5",
+    "git_content_sha256": "4474ac3460eea6c696ccdf2ac8ac3f9625b4f608bfdc422e69beeffe19e294ce"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Scheduling/TremSentinelModels.cs",
+    "source": "network-27/source.zip",
+    "sha256": "39a9a944d984ae596122975e086c90cf5295a20610c66a9763a052ab0f3bd853",
+    "git_content_sha256": "0fbbb4f4de18bb7b2b16aaaa162583d992ca81456fa19d75d6ad0b22070c5927"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Scheduling/TremSentinelSchedulerEngine.cs",
+    "source": "network-27/source.zip",
+    "sha256": "83136a43b80526e0d16d9f5a5579b43e76deb3491488b7874baaf328659ab35d",
+    "git_content_sha256": "13aa7a5527574dce5bac754ada68d7409d6df04b3462b56e6ce9c5174fce148e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Structural/TremStructuralLookup.cs",
+    "source": "network-27/source.zip",
+    "sha256": "421bb98626369542a54569c1d269e2c62f9d40959d706b061df69265f8f0cf43",
+    "git_content_sha256": "eea51e434c71f0940cb20560d0f3301fa74f40bfbbe9bd46b20e9826506b3549"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Topology/TremPublishedTopology.cs",
+    "source": "network-27/source.zip",
+    "sha256": "67e9749176e675e357179205da2ad0096fb3ffc7e3f9ac5045651e448a18be71",
+    "git_content_sha256": "ebfd16079f6750e4b592897e7b8b98d7ab590e57edc0ec0b07ffd963c7524a30"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Tracking/TremRealtimeTracker.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a416b32f9264fb653fbbc5aee0d46c9182c73e7292e7493b12d04ed13efc660d",
+    "git_content_sha256": "bf70ac1239e86b0c85212e726858bd6f11780bdfd008f06d523a20d6e40a0e3c"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Tracking/TremRealtimeTrackerMetrics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "700bd3654d6933c23a00f9db55b51a37f52a90b4059732198f5689ae1cd91662",
+    "git_content_sha256": "772d10528e2c1e2cbb2fc7a0f798a162e9b561b096480641096a1f65ade5ca58"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Tracking/TremRealtimeTrackerModels.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4742dbf5d0ef5bac7d698d899c86e98453245fc902f59878d155bbd7057cba76",
+    "git_content_sha256": "d3e2379dbb03b8df01de7b15bad7bbca7e0a4613905394c38c8a21eebbeebdd4"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremRealtime/Tracking/TremRealtimeTrackerOptions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6f3fa6c079a2035501afdad56ebd82e9831bef4c803321597c5c0ce082ed560c",
+    "git_content_sha256": "1c2e246f64aec6ccf4d377763b430c788df73c988f8450f847cd452e2dd5d216"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremSchedule/ExpectedRunBindingService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "80025a70913a1af89bcccee4c6df01b309de86ba2d1492b2ecf4e6a818b6fbb4",
+    "git_content_sha256": "b10f4a7671f1c0b20ad4061702a85a95360926584b3f1bd28d5134cbd264abac"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremSchedule/ExpectedRunService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d7f817e4f4d8c532f5ea4656766d444e24acdbd2782d7961066c3d37938df13f",
+    "git_content_sha256": "1e60f4a875949066bf92daa2473cc4e4742647cf160bd6f7b971cf09ce514739"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremSchedule/RailScheduleFirstRuntime.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fdf6a9d84d8b3ee7a45a567a7faa828236ccbe33967789c2c2a2d01569c5e8bc",
+    "git_content_sha256": "fdf6a9d84d8b3ee7a45a567a7faa828236ccbe33967789c2c2a2d01569c5e8bc"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremSchedule/RailScheduleImport.cs",
+    "source": "network-27/source.zip",
+    "sha256": "11121915ae0de7e9c663e87ec2a579630ec33270a3d2ac646f458745f7ef7fba",
+    "git_content_sha256": "f58b5294325f9043f2a16637786bdba9a4dec781c8d6a6f5b98f57d2a4939226"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremSchedule/RailScheduleImportCommand.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ffda958515fb0e78a6df2a36cec29aae84059b35e2c39094d2d1ac50f2f03887",
+    "git_content_sha256": "6168c3cbd7d834335643adf606feeaa8b2ce993766cd818248f4a3ac298260e9"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremSchedule/RailSchedulePublication.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bf205d4f232941fd00c5d6a7b7b1176d63696dda787ffc19d242867f7a430d2f",
+    "git_content_sha256": "cbba30baab57fd13602a3701163376abb1554a269e2472d1cc55af31a10c77d1"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremSchedule/RailScheduleRuntime.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c191daf3b9b9c73c481a996205458f2d9e726d3b9592bd77c0dc613a860bc2bf",
+    "git_content_sha256": "7797f24cce24ae4c1cf871d027a8711ff5edf76f361ef018866b8023c7d05776"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremV2/TremStructuralImportCommand.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c80cec499349bff20a36f9e47c8a49c476ccd26c324161fa7a82ed321863fdd5",
+    "git_content_sha256": "31cb403fe61cb2cdf7ca55cb578c310a27c72c6ba18f65599301e232fe25f74e"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremV2/TremStructuralImportService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "caf41a707de248b1f9840f1c4fd2dbcc745bffc21d5e19f10de16e7789d8375b",
+    "git_content_sha256": "c2d4acb2696f119c0a7566ce1e5d4ea9538c46b7eac8a6fa520f3e09bfab57a3"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/TremV2/TremStructuralSnapshot.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3ab9a7aa19390fe842c9e50d1ee3b308c9063134b4e6d7d5b97cc648746d24c3",
+    "git_content_sha256": "6fd77c91fb077c0ff5c20d7de9eeb5a8db415c28d795c184a44fa8a63dc3870d"
+  },
+  {
+    "path": "NoPonto/2-Application/Trem/SuperviaApiClient.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c7f8beede1b3574eeb74e024e5748ce00fe073aae7aed6a690bd5395cb455bef",
+    "git_content_sha256": "ec4d7a94c051928261175e2b3aced315a9f885472be14e5b807f6460bf8c56e4"
+  },
+  {
+    "path": "NoPonto/2-Application/Trem/TremSimulacaoService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1406ef0c942ed6ec43c6ab5af830b14f4fff3bd1fef1dd7b5ecd406369b2d52e",
+    "git_content_sha256": "f2aafdf26eef1b04e075f6e8f34fcd7eb53f5230027746b4acbaca7ef7bcfebc"
+  },
+  {
+    "path": "NoPonto/2-Application/Trem/TremSimulacaoWorker.cs",
+    "source": "network-27/source.zip",
+    "sha256": "45b955c99bba6c6ed3526c0f2680854ca3164da701c4b897ddc90483556e8b63",
+    "git_content_sha256": "e78af3ae0c9f3cedc3c2047a8ed629224119783a78dae4dc3fc902c27b951dcd"
+  },
+  {
+    "path": "NoPonto/2-Application/Util/PaginacaoUtil.cs",
+    "source": "network-27/source.zip",
+    "sha256": "60d301f2ccc9e221b7c1d6d140a9b4b4bf2e16b682477dfa2f1c583af4d39523",
+    "git_content_sha256": "b750cf374ab164f62b345bac141de009f07674bab17f09f035b2002a4246f8e9"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/baseEntity.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b3123b02e4a81ba30f336589c8cf1c13af4461f112949b1f15d77db75c2938c5",
+    "git_content_sha256": "fcd440e22010a2c415721280c91adb50a78fde675a13e7fe52c902997997e2f4"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/estruturaTransporteV21.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d86495899d2a2758e3eba9d84295a1e71fa2a0f9b3cf3f7e7861937677df71b2",
+    "git_content_sha256": "adc52c6724ca9f12689b87dd7e9dfeb5e871800c8c81da4ef882f341cfc30cc0"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/EventoViagemPersistido.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1f575a41b6ab96df3f124592e6adb12cc7a307224bf03f84ad82ba1bbdf1b4c2",
+    "git_content_sha256": "1dba0c9754672afc0888bbf0b7e483a9e2b40c136a7f8ebced58908a7bdc1424"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/FormaPagamento.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c4eb2ebad564e110cfff977a2e3b32939476da0ac55058de76e24e3d2906f1e5",
+    "git_content_sha256": "7b51c26d52281fcddc3763ad07ef418b4922eff1ff2f63d2092b1508224eb56d"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/historicoPassagem.cs",
+    "source": "network-27/source.zip",
+    "sha256": "23ad49ba4d5e13d86f84f883328d5282cb5d4de1ae1c197b7e57777c1303f64b",
+    "git_content_sha256": "28b886154819f6142bf72a604b39ab8758056374f31248b0cc0193d343732625"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/itinerario.cs",
+    "source": "network-27/source.zip",
+    "sha256": "dabe609c82235b0b1f34e87ee437c4e822905df7186f816dea96b6ca9238ae71",
+    "git_content_sha256": "b23733d2837113079379d1d83e237d4a499f318ea03f3fe9e80897ed6233ac35"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/linha.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d5cf92750b05fe18e719cf9749d74e8b2f8aaa64b29d2f3f66c21e490d8b92e6",
+    "git_content_sha256": "c1ab2bc4f1a3508ef8df6c08e69af477932c7b42492f4566103dd1aa3ab42e72"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/modal.cs",
+    "source": "network-27/source.zip",
+    "sha256": "77ae91d77b1628012fe1e0d95ef6d94b04e37e34bc9d27ee3fa5da0e4ebcb0b0",
+    "git_content_sha256": "01b1a897d0a8e32833540f8bc8e6ffa4e022069c5166a76b47de733cff2253d6"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/parada.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1439ec182188b9d63b8398e500e4fd433ffca59a017eb14cd95c1fff61792095",
+    "git_content_sha256": "aeb82620091fe6c3c96362feef5f2d4111a65c57ffe1c1d1b022438ffcda61e9"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/paradaItinerario.cs",
+    "source": "network-27/source.zip",
+    "sha256": "67cc5d5f6fb94b688ab44dfb9e9bc2f7029b1d976e8cd2c0b94b6784afd26244",
+    "git_content_sha256": "6063f8e54baa73b039367ca3ab4b5ca703eb32da6aa60b1dd6d09e4b4721af4d"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/poi.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0a8f31af44a5cabb5f22d775a3c9e9792bd72f842c6c5ec41a46b02f49911f19",
+    "git_content_sha256": "594e4bc29e753d22ff66d35608e83080c7bcb9f6f03c62e32e24ee53480f93c5"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/poiParada.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a0648af7640bd90906fabd37a460df15b38800b5f8c002346fa21bf8df69db86",
+    "git_content_sha256": "f50f36f50629104cfebee428ddde6ba6e828e9d6f619933f09091d0601936562"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/posicaoVeiculo.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d6f869078aaa74b17abe06b4e33039d0581e2a82ba866a2203c99fc49b8bc564",
+    "git_content_sha256": "5270a4a118f4192d6a3e5ccc7d17c4b0ec2affe2dce0d5be65239868107dc965"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/PositionCorrectionShadowOrigin.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f86308ed6aa06f7e154d6ae4bf6b529e0120f8ba28b5e4f7601c424fc39925da",
+    "git_content_sha256": "c007d0af81e17d38f6f538c4a7f7531741d716beb10cdeed9de219a687548877"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/previsaoEtaV2.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a1187d89540001b065c644596271d761927583d9fc3725eeaae48bf1953f66a0",
+    "git_content_sha256": "4ecacff0b981808b8e6324ba309db9469ac7f1d0de4d2ad4eacc71045647e776"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/railSchedule.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7a8e5413ee3817820aaa336f0b37bf495400d2efe7018b39cb6a48afd5f41b5f",
+    "git_content_sha256": "14fa1e5c19273646f56705aeb028970ddd3c564ea09f5763a31e7b73fdfd1123"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/sentido.cs",
+    "source": "network-27/source.zip",
+    "sha256": "488b80362de265f3eb222f732459afa04e08b948082a8272f442e65ed63206b5",
+    "git_content_sha256": "aefde3bfebef1b03c61798196595401356f3aa6eb4640220ff1eeec30a685466"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/tarifa.cs",
+    "source": "network-27/source.zip",
+    "sha256": "94ab463aec121dbcb1eb85da17f7f6f6e8443287f0181f73e6f56f0ebfdd1f15",
+    "git_content_sha256": "331299cda2e1504a748108e1885804f901606161f9fdcd56cae63b7e296a954c"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/telemetriaVeiculoMl.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4216e2ac8f2a0870d824093e963ffa2a9206f93954a5d8e4c89895500169d0e4",
+    "git_content_sha256": "7f540372edaac47c01f10e1e2900eaad9abfda4f2f3069c60467bfc4e496af32"
+  },
+  {
+    "path": "NoPonto/3-Domain/Entities/veiculo.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2a4e2299f901b65523952775da0c8d020d9ee3360c9a3fd68de4b27148b78dc7",
+    "git_content_sha256": "32b3a8c78d4e508c26e03cca1f00422b3ff75769d5601122649378efe33aaff0"
+  },
+  {
+    "path": "NoPonto/3-Domain/Tarifas/RegrasTarifarias.cs",
+    "source": "network-27/source.zip",
+    "sha256": "300339c23eb4586a1fcf6e40756adc86785e6409115d3b97807b893bf01ca092",
+    "git_content_sha256": "f70a37f2e1b014dbfdaf1e3b4a1b5973cf79bc2e05e97bfabffcdcf10b51f312"
+  },
+  {
+    "path": "NoPonto/4-Data/Configuration/PositionCorrectionShadowPipelineRegistration.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c9f267afecfd5de6a5b96e3a9e3effb322ca9c9cc0767c9df95df3c215696025",
+    "git_content_sha256": "0d507df1f5232f7a247372d4f5a973bb409a28a613c531c2dc80f51a96ca14df"
+  },
+  {
+    "path": "NoPonto/4-Data/Configuration/PostgresServiceCollectionExtensions.cs",
+    "source": "network-27/source.zip",
+    "sha256": "070aab1966b42c8ea10098adf713c34ceb702dfceac82a02f1b003ec01ac31e7",
+    "git_content_sha256": "af0e254e476a768ed5fe9e3eec30fd23b41d100cc2426359f9c2b1ea23b80e0d"
+  },
+  {
+    "path": "NoPonto/4-Data/Context/DbContext.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6b06ca2078ccb20ba73d3b057d850c4430b95ca616f1d7f88f23dff7dc35aaf3",
+    "git_content_sha256": "762ac3da820df5e70180c89219a8a7e26df699b6574a8433ef599b35fe1c1de5"
+  },
+  {
+    "path": "NoPonto/4-Data/Context/TransporteDesignTimeFactory.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fc0291e43ae976d48256e96656f728d05d4b82d9c7930b207c133da3ca6b0fc4",
+    "git_content_sha256": "376f4d32e9eec3977cb2be67876c0e454a8b0e1a42a23d113f7a485a37055472"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/IEstadoCausalPosicaoRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f70e88e27459e7f55246fd0df3b3f2416b7823c39320056af0f479f0f112ead6",
+    "git_content_sha256": "2f66988cff57598124a5f401c03fca7bec8acfe6b5ca0c6e0749c7f36a06ca18"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/IGpsItinerarRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b5453f153292888cf058bbc91c754617a68ccbcee44d9e19e6b9b678be77eb28",
+    "git_content_sha256": "6860bf798298e43160a3122e5589f37a8f32d3521ad80a4b95663688c839ea91"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/IItinerarioRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a1470ac5d53dd3e85fa4fa1e03877d14015f828f5c2f0d6f48f5011924d6307e",
+    "git_content_sha256": "8c2c06b951b6bd2b6e8dec6edaf60bb0c9fa3d967401d14bb5f75011040c6548"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/ILinhaRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3c61e38944cecd072b4832f943c62d37c5a0dfff78e7c31db61795e976800ac9",
+    "git_content_sha256": "75a4ae4ab24686d6e7a3189d29a73fc0d392221e54a914e098b24e7d7ee92e37"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/IModalRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9b14485f3ab6603b5ee7d7490f54236ce31dc9a404cef7bb9ae866f998d466ce",
+    "git_content_sha256": "05e331fde9f6ab364ffa028ba25818f3db44dfca6357bf646612098ad7750f72"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/IOcorrenciaParadaRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e646edcd1b17a0a0a7527f1403380ac0a9473e3090d7b5c470400dd4dba5162b",
+    "git_content_sha256": "5ca2f3d5e045d21656935cc5c41e447a204493fa644d9a004096ad220ace17ac"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/IParadaRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "43f3a27127e65491975d0914b819d41a25091cb6e9391a63048396dc816a7483",
+    "git_content_sha256": "63fb60e058ec24f1fe2989c111ab61c9dcc7d1f2458a51d3e0e289c94f843f44"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/IPoiRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e24f06ace0fb972dc2882f78595bf87299323268549ffa1eacbf2e25dd4bbfd9",
+    "git_content_sha256": "8fa7d448a6b7477c89c177f1b06386ae36a030ceff2079f1100bf70df2165546"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/IPosicaoVeiculoCacheRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "230fe69eef47a54b91edb874b5f6562056efc56537d03db85c713afe3302165f",
+    "git_content_sha256": "bfe2d47e2f792d1b50db16c5824f3bcc93c0167b54b7d3da3160a47d14de7892"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/IPosicaoVeiculoPayloadWriter.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b48209a4d56e911be079378a31cd0921e596289ff480d32265f638a8874a49d9",
+    "git_content_sha256": "97a994f8e35712dfefea6874b79d363f1a187ddaadba765b81f9da5034e2fd7b"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/ISentidoRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8918de2a6ec2b975634df4f428e90713e15783f3b4f97707e0be92a2fd4d8b04",
+    "git_content_sha256": "6b0f7fa53eeb931d5b5b91176e67e22fee542209d49a8f840719365b80d0008d"
+  },
+  {
+    "path": "NoPonto/4-Data/Interfaces/IViagemObservadaRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "146cb10532c703adc64497d8285363d44c47334a42ea072b5971321607997dab",
+    "git_content_sha256": "71907b69e84d540075b1da989ee4ea41a5e34e698d00a45e20d0fb55812ac7af"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/EstadoCausalPosicaoRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "78e34ced5ed5da0859346fdf5f99803b2843c903c66ec7021841dd150b026fe5",
+    "git_content_sha256": "eb2c58dfb1c96648453675c83411b90881fdb08aa63403d8e3b406b247151925"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/EstruturaLeituraV2Repository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "18abefbd9f00c53f909ff69e9ec87411398b74a721a872c9eb5641d153f7f830",
+    "git_content_sha256": "39d8d5091e4826cf7252ca72d57e7f79ebac14049a2a235665236361a6cf8e87"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/EtaV2Repository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c0732ad2dd935d2cdb36dc454d4e34229be2a3f9416a467ef0ee4d4c803e1806",
+    "git_content_sha256": "da670106b87481199150acc4580263c953ca7773f4f8454aa0507dd0ef071b68"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/GpsItinerarioRepository.Batch.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bfa77cf47733b43e623bbbb35ceb7c59e7400faea8af4bd43b32feffc62abcb7",
+    "git_content_sha256": "bfa77cf47733b43e623bbbb35ceb7c59e7400faea8af4bd43b32feffc62abcb7"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/GpsItinerarioRepository.CombinedSetBased.cs",
+    "source": "network-27/source.zip",
+    "sha256": "464aa3bd9098735e705c62eef0cf844a32caca618ee90a55b47efb1ada7a2c72",
+    "git_content_sha256": "4a087f47fb44fd177e7d678d13c16ec5bf430725fa64be3865db8c31e5739a94"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/GpsItinerarRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "37fc0933e4e330c1cc3d8ba56ccd6fb6ae9d39e64f666fcaeaa9578c311ee83d",
+    "git_content_sha256": "c08e7ed7bde382f719837f078564c6b598377769aaa32b5896ef67665db5b707"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/GpsStructuralHintLookup.cs",
+    "source": "network-27/source.zip",
+    "sha256": "51b06e38990c18e3650a40014bcdd7ad7a8ab80e3e92c94b07b4e1913c7de493",
+    "git_content_sha256": "be44b25c3fc7586535c97e534051d160478a537f70095d57d5fb7b0e860e9ead"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/GtfsDatarioPlanPersister.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a5dd79fbfec48751b5980c84afc9aab0f3d7bdb2e38c22e7e78cde41452c7431",
+    "git_content_sha256": "488c2948ff858d34da1a642d7480691b2d91cee5aa329adca312a9a71b6bb690"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/GtfsDatarioPublicationService.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9c88f3c96e8e2707d1e94337a2e11633978b7ca4019e787e1693ee85de0e7c94",
+    "git_content_sha256": "899cadd87264db247ec4e42c942fb4b60278317c66d345b03700648b519bd47c"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/GtfsRealtimeRouteLookup.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d16bb82a830a7b58bd6911cba5d845e9b6e34e03ef61d2b17d53ecf6230be35a",
+    "git_content_sha256": "f281a4639049cee02b9a1bab214be56c5aa0e497342c6e5461157273ff1cc730"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/HistoricoEventoRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ea28fcebd99dad5907fc6627f16fdb16725e5072e1961230d7ce383a6a2e63bf",
+    "git_content_sha256": "c0870779f12ffb9d4166516200dafabfbe2d822fbffb209350effe38c408b01b"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/ItinerarioRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "01747aef3c54d7bda6f8e6b6e588fb297c3e44ac21cd2e41d38cec7f0b14fb91",
+    "git_content_sha256": "a5bf8fb414454e66e3624d41cc9d0826d1e163d71334e460ff299153d58e562a"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/LinhaRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "136258525ede9a6d81c2cf52571366aae116fafc61b59543d084b60e50eeabb5",
+    "git_content_sha256": "c4b96a18ffdd6b8e18ba16f64f25a33346249e91276e6e194a6c125623b9cd28"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/ModalRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d5dc8121891aeeb322628594d8814c25063751f7ebb0100e2fb83b726a24951d",
+    "git_content_sha256": "6b78979813d778edbdbd18d9caa4be9f8aabcc3958a584a00cd39dffc47f5016"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/OcorrenciaParadaRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e3b0a1347411d29e8a549eef84fa3e298c4e4026679b144abccbae2f38eb1c2e",
+    "git_content_sha256": "6bdb34c1d8db942e40950e332c121d8e3c6e54fa714d0ac277541716e54e4c53"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/ParadaRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5bf5fb44fdcb815403ad1e3f88cb153ce4672408987be11d12b791dc7daefee5",
+    "git_content_sha256": "b38c4fe9e35bcc5ef21525d26a9a2b6a57bd374fa481449ed0cd2da66675a5fa"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/PendenciaOperacionalGpsRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c5d8beb66a81e5460858c26b3f160fdfd836ba838de63009079bcb6fe5883315",
+    "git_content_sha256": "c5d8beb66a81e5460858c26b3f160fdfd836ba838de63009079bcb6fe5883315"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/PoiRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "abf7ba55c519baac09e1ddc46300b1be7a94083e18b5a5c8a40ca46296929b26",
+    "git_content_sha256": "5426bb7cb71f8670ed8116bf87abda67ad2ef0889218ec79677a35408ce9faa7"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/PosicaoVeiculoCacheRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7d61a1aec5dae23ef53ab8c94371ee59f7098027d1639d52faea7f3de2ca902b",
+    "git_content_sha256": "e306e2ff07877d81812712b72ac900accf3494e50da74af3756dfce54609f7d1"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/PosicaoVeiculoPayloadWriter.cs",
+    "source": "network-27/source.zip",
+    "sha256": "25444811aa5ea3f2cf456b8663aa68455bb6d8c26da87bcad3d852fdf104bb99",
+    "git_content_sha256": "f0c434cd0bc2818c58a4c81bd55225d25616785b8a81f3145be4434b3d813e17"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/PositionCorrectionShadowRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "978392a85cf7fc84064383e566e8b58b3ccbfb8ebe1d406ff919240f8c48b39f",
+    "git_content_sha256": "30a7b10a6989be59173943448d214fb9d5f4ce5569d42fd5a76fced132c09501"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/RailScheduleRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fab7f1ef64e715eb8c57f45b3825400512aa735dd6b253c3d1f74441d1b08652",
+    "git_content_sha256": "ab86533bf08358234e24a80054f30f074146e151e36102764336cbcf0675fcc1"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/SentidoRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7a8cbe9c8d4900071403f263ab826c1f6efc1dfee37ded46f9451bb100eef728",
+    "git_content_sha256": "01082c23bfbf5b9acb8a0d5e63691a3bc14d3c08c265c68f5a11dba406d0ea3f"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/TelemetriaMlRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "cd4a610debf05e2d5e09b958cf9807e9e16564773579c12f10b49b1a182c9507",
+    "git_content_sha256": "d1f9ed0e9efef2c24f56c1fb74acfb30892e98f85ee38853ef9ff794e5a930fc"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/ViagemObservadaRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b369e815b3367df6e1087da36f81a54f5e8911aa306ffc06dbe608e989d0b72f",
+    "git_content_sha256": "d24ae2a36ec1d58ac9859c7ab4e2e00941eb075c6cec1f58a9ed4cbb0e8968d5"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/ViagemOperacionalCodec.cs",
+    "source": "network-27/source.zip",
+    "sha256": "dc9646e7f138f15ebe6e34b140a1e28fcee7dd35b707727d7a45c8e8ad8cb144",
+    "git_content_sha256": "277fb7edabcfbeb9aad10ae2916e5dd293614364001368182ee2d1615eb4b68f"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/ViagemOperacionalRedisScript.cs",
+    "source": "network-27/source.zip",
+    "sha256": "db365a0b39f852a657d17539185b58edc90c246d830c41e196ebd6c85437c80c",
+    "git_content_sha256": "28edefbc9d70ddbde86bb6130e3640420dcf7565b2e5bb98df4dd97e6403c552"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/ViagemOperacionalRepository.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f84c7bafb2acfa48890c999859415223fee9cc4b9683849546aca718db3b453c",
+    "git_content_sha256": "331a582d508f2dad43142c98cf42f698673df521c46fde5ecdc04757e296ee69"
+  },
+  {
+    "path": "NoPonto/4-Data/Repositories/ViagemOperacionalRepository.Integridade.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a253b50923970c4bb98117712599a15028f324555d096caf5bbaf4d6bd4833cd",
+    "git_content_sha256": "a253b50923970c4bb98117712599a15028f324555d096caf5bbaf4d6bd4833cd"
+  },
+  {
+    "path": "NoPonto/4-Data/Tarifas/TarifasModelConfiguration.cs",
+    "source": "network-27/source.zip",
+    "sha256": "058c3752d14f933dc64186d79831bf625aa3075e22836853313600b884e77555",
+    "git_content_sha256": "e293381f67b61632f71a82682d2ed3b58f87ca1f2fa25a4e544c8a5933179c8a"
+  },
+  {
+    "path": "NoPonto/4-Data/Tarifas/TarifasStore.cs",
+    "source": "network-27/source.zip",
+    "sha256": "52144ca3c04f5ab9c6b507b9a0b70d2393c8e5c8bfde933396f53be0944d6290",
+    "git_content_sha256": "9024218c58c286a46ed72ee5057a7a3e2725a5031dc59df5a21e6754f758164a"
+  },
+  {
+    "path": "NoPonto/5-Testes/AdminDependencyCleanupTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "016cdddc30ae60f52d8244d51c3f10e7c727c38462eb106c9d76466786d8ca7d",
+    "git_content_sha256": "be2bafb827e1992650558cbf1f5b44f7b599976a08c8d8d37af112c065281b6c"
+  },
+  {
+    "path": "NoPonto/5-Testes/ArcGisEstruturalRegularTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e8e1285fb278fd00a78d1a213ccaa0f6a66f0c3a1554f9c248405684e17c5d79",
+    "git_content_sha256": "806b2726a9ae3091dd609a7bc05b7b337f92d68f2442f4bcb571e80713519b6c"
+  },
+  {
+    "path": "NoPonto/5-Testes/ArcGisEstruturalV23Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "14bb5d567fc451f9d5210300581612bd418e5c9107cab5f1809b4efb5bae5673",
+    "git_content_sha256": "b7518ad6e865071b18efe25ab70f48b8de98df13f2a39462736162c6c6e27bb9"
+  },
+  {
+    "path": "NoPonto/5-Testes/ArcGisParadasReconciliadorTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6abe0a17ed22e7737176d3dca92b1108a376d36828118b8b9243e7514cf8b684",
+    "git_content_sha256": "ef929ddb7acae95cf6c6e94b9dc2cefa2f7fef5a6d4bf5d000f5e724bb49ec47"
+  },
+  {
+    "path": "NoPonto/5-Testes/ArcGisTremHttpClientTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "106d4d635e0301826375fd50459aa3c9c3422dfd682e6a46eca29462a778d485",
+    "git_content_sha256": "e3539ad897ca20d137826a7efd77d755ab6a8b390f20bde689d2eea2a554e77e"
+  },
+  {
+    "path": "NoPonto/5-Testes/CancelamentoCandidatoCursorTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2c1ac1669ba73a3b46e103fcb3d526a611126ff7a0b687484c2f867f695f60b8",
+    "git_content_sha256": "2c1ac1669ba73a3b46e103fcb3d526a611126ff7a0b687484c2f867f695f60b8"
+  },
+  {
+    "path": "NoPonto/5-Testes/CanonicalPhysicalTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7e61fe6473dc03e2ef5c4a7ae688bfdbb7b792a0f209a2b31694a253797b5384",
+    "git_content_sha256": "760b8d3869402b91e458289f5beabe5792791c1cf1298773892c6f37c77dd9ef"
+  },
+  {
+    "path": "NoPonto/5-Testes/CompetidorDirecionalV2Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7b0f0e9f31831f5bbb9ed9787ac44f8714926095fe6ab2ed657080b6a854b580",
+    "git_content_sha256": "266e3c2e70bfdfcd97e801371a6042cbb7367b73c4f982acfd03f7238cc60387"
+  },
+  {
+    "path": "NoPonto/5-Testes/CorrecaoTemporalPosicaoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3f91e5e1cb0e49fd7bb6781976c2c4ba3fd2ed178fa7b42dbc532801248b6ae8",
+    "git_content_sha256": "3691622e0e8920a7a0b238a4f307e72d90ab5bbcc11cc2eb22407e6c97b544aa"
+  },
+  {
+    "path": "NoPonto/5-Testes/DatabaseStartupPolicyTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "14bad9b56bde523470c70625933f3a5126c50a677600e9573a853531b11aa5ea",
+    "git_content_sha256": "98471ec94edca56ebe87b128f705ba549bfee01fafe439c077d4ce7acb9c03af"
+  },
+  {
+    "path": "NoPonto/5-Testes/EnvironmentIsolationConfigurationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4ee5d1ca4ba566b89925f0e2d05dda221f6a30a8e567b0954f031b05df7d75a2",
+    "git_content_sha256": "bd31b632788e5d4e3a93c57aa01ab24f19deb5bb1955169b9602471f1a1cdd9b"
+  },
+  {
+    "path": "NoPonto/5-Testes/EstadoCausalPosicaoBenchmarkTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6b57512a01bfbbe7805b902eabba056bffd2f14201fb0bafbd667ec88f4e3955",
+    "git_content_sha256": "5e7e83df6d56f4e193a2eee976e02c77169977f4b6129894dd013d3d2d8336a0"
+  },
+  {
+    "path": "NoPonto/5-Testes/EstadoCausalPosicaoRedisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e923cb5c570a1e3e8a2a9449ece6f1fd4f436b392cb7d5cef80d318a52958b7e",
+    "git_content_sha256": "7bf79a8ba8daff6d6d6819a70f962da945c2b2d46957e4960f0cb436dd3f6f37"
+  },
+  {
+    "path": "NoPonto/5-Testes/EstadoCausalPosicaoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0c9f516bdb2b5be8fb37fbcfeec9610dfdddadc928911acb7a9c85a783ff2683",
+    "git_content_sha256": "ace4f5b988ba0e1ea480708a506da43d53af4119e8b00c1782903a595dcdda07"
+  },
+  {
+    "path": "NoPonto/5-Testes/EstruturaFinalEtapas12Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6b868950da5c65f8e476d0e9668af52e40664e772764a93ede5f0aac8a823b16",
+    "git_content_sha256": "3abdd33ca2a6f59f1bae448c486e55d3375d73c404af8ba114ed8b7ea090e00f"
+  },
+  {
+    "path": "NoPonto/5-Testes/EstruturaLeituraV2ControllerTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2bc8733795948a5889d004fc91b5b6ae081b7f1e09290cdb4f12f3ac36b90fdd",
+    "git_content_sha256": "6af7e40018bb94e314c5e42ba95bab4bacdbd38129127a5555f474dc93cc3662"
+  },
+  {
+    "path": "NoPonto/5-Testes/EstruturaLeituraV2PostgisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d887ed26b239ce2b8dffd871f34906d8e61531d338c5a4123b1b232539195d0d",
+    "git_content_sha256": "c1be9872dac6c28d3b2d360bd29d1ad4be0bc2522414b323eded078a6b12e236"
+  },
+  {
+    "path": "NoPonto/5-Testes/EstruturaTransporteV21Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c79a09b5aa14a563fd45d44f92ba2766ad2ed39f77ad1d50b18e72c11af5415b",
+    "git_content_sha256": "7d721245d047f1628e8eed16ecc744547196cf6bcb2c8851e6a68a86f0e7e5ae"
+  },
+  {
+    "path": "NoPonto/5-Testes/EtaDatasetPostgresTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b4bb0e281058fb3e9ec94f6f3288c15d0539a6864a95797f5bbaf8f6362c09f1",
+    "git_content_sha256": "b4bb0e281058fb3e9ec94f6f3288c15d0539a6864a95797f5bbaf8f6362c09f1"
+  },
+  {
+    "path": "NoPonto/5-Testes/EtaDatasetTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "257e42159c8ac92225d9e3a40b6a084bb9af80e178238ce0f17f9a977c258a04",
+    "git_content_sha256": "9bf84131fcd6c3612c83b8bb88ab53111e5dce31b8f0f4f5bb6bdd2293612784"
+  },
+  {
+    "path": "NoPonto/5-Testes/EtaFlagSafetyTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "aaf40585630a02c17117309a75a7f81fbfda7c9674d80e12b36af8844872ba6f",
+    "git_content_sha256": "be1c35886954e93bd4fd734878205a682b66c36802ef27df538b6ddcc31d481f"
+  },
+  {
+    "path": "NoPonto/5-Testes/EtaV2FoundationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c7d562801da4daaf3d1aa19dce50f5d67c7f371334dc14f2b18b613626033752",
+    "git_content_sha256": "74c799a5b02ff5f7c18ab50d3a70ec2f473f2fc89ae029ccdab0bcb1c3919b60"
+  },
+  {
+    "path": "NoPonto/5-Testes/EtaV2HardeningTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e7896014e9cfa5c1ceb7cc8b11a328588cf31ef1defd3a47431a4309c2d81bcf",
+    "git_content_sha256": "8a0142799387e4736848fc19da3ca1999aea1fc74e8288e785ffc339a67aeb9c"
+  },
+  {
+    "path": "NoPonto/5-Testes/EtaV2PostgresIntegrationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c1c0f7d18447106efca8c26b5dbf5e80646e3db0e5f4e736601b64cd1e561c21",
+    "git_content_sha256": "9aa4bb0ddb2d667ce47572dc459a353884f7bc4dc8080f7cebdbe128b6b014ef"
+  },
+  {
+    "path": "NoPonto/5-Testes/EventosParadaProjectionTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a565d4649bce60125ec83cf14556f6eefbae5192b5a94cbe169b764e9a17e606",
+    "git_content_sha256": "a565d4649bce60125ec83cf14556f6eefbae5192b5a94cbe169b764e9a17e606"
+  },
+  {
+    "path": "NoPonto/5-Testes/FixtureShadowModelPolicy.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bd320d2cc99154101ec60a945c5e39569c3f2aee96edd6847d5b01004f43dff8",
+    "git_content_sha256": "f06f0f831b29536585f611a38a2dabb94f3f5ddd02e464733d478af45245e07d"
+  },
+  {
+    "path": "NoPonto/5-Testes/FormaPagamentoAparenciaTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "eadb9b74c0d2896ec562c7f4006297dbdccebf8f3f37d379c905c50b288ce14b",
+    "git_content_sha256": "eadb9b74c0d2896ec562c7f4006297dbdccebf8f3f37d379c905c50b288ce14b"
+  },
+  {
+    "path": "NoPonto/5-Testes/FormaPagamentoEdicaoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1960b2dddeded880b594e4f83215a39a58a818b476a1804ac346e190eab8aef1",
+    "git_content_sha256": "1960b2dddeded880b594e4f83215a39a58a818b476a1804ac346e190eab8aef1"
+  },
+  {
+    "path": "NoPonto/5-Testes/FrontendLegacyCompatibilityTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e93c26616570252910d81d8c1065a9f8dc47638c156653e3db240d090adafd14",
+    "git_content_sha256": "376b430f8505a296a62f0b17bd5beb4a4bd69b768f40b19e359f6bbb3b43c4b4"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsBaselineMissingDiagnosticTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "570dbaba9174ac47d3e873d8c82421755d1c55a0682ca6c30bd92b9de10c1879",
+    "git_content_sha256": "ec222ff73db54f8518ca706687bae4df1fb5d4adf70775d5c18384dd19efb525"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsBrtTelemetriaTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2fca483ea5d120adb979644b0581b652d11b3b40045e0591097c0745b01f5f6b",
+    "git_content_sha256": "efa7df75b32e5ec58e03f9b1658e92ca5a798958344ad176771083e6b86fb5f3"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsCircularNextOccurrencePostgisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ea62998fffe67681368101505f7d7ea8a9c66d6089cf332cf5cf8d65df13a641",
+    "git_content_sha256": "03e3abf9328350c5d67e58ab94eaef16fcfe8d4e4ff36168313f7c62ae92f807"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsCombinedDeferredLengthPostgisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d9c91d15b5b9f86210f1f07056d90d26257919fafed8aa472ecaad8d83bc56ec",
+    "git_content_sha256": "d9c91d15b5b9f86210f1f07056d90d26257919fafed8aa472ecaad8d83bc56ec"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsCorrelatedDiagnosticsTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1849ddb214723e9df0107819e7d3c8259713596c26805fcbd4ad23e30c07e3a9",
+    "git_content_sha256": "8a8c884437651b88cdfec65e820c80f040e1290c8380a8751f8462ff705009fd"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsCursor4C8Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c9b123fafd48d9f4f1b5c84f1a7f1f1b2ac224c19d9bdfbd6184d3e1e83002d9",
+    "git_content_sha256": "c22088f520f02337163de6e561472ebad8e7977c35c0118fe3888e5a166dae9d"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsCursor4C9Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ddc1a09ab9cdfd13128acf18746d1848f29b9ec3ad531aadb1136463837a2599",
+    "git_content_sha256": "6a11ca9a7dce53d5a59f0f1cc07db87bdeaa4fc9030a231d159e29a82a7d976f"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsDatarioClientTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e6b4c8506af6689deec307c9466420ddd3e9bcf359b8089fa783903a5940c288",
+    "git_content_sha256": "710d45d003564aea37a42590fa609825aaf94e4cc79afa319aaa7bc11fe08a5d"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsDatarioShadowAuditTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e33debda302858bd0324d5a5a6616e160313ce7aa37640a5715c1d094725a1fb",
+    "git_content_sha256": "a2f1b3cb7ed6edd8b8f61c2ef1fd42047c86187a8b95b9769120319bff72be21"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsDiagnosticSourceCollector.cs",
+    "source": "network-27/source.zip",
+    "sha256": "703d121c0408d4c5fde4e00cdc3e65b0c958d195544eef0fe40ef9ced117b16d",
+    "git_content_sha256": "8727927c75b1d1eebd7cbf480bb21ce9e894d1abb54fdefd2f74b3177ab0a1f6"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsDiagnosticSourceCollectorTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0d2c393ec071f4816def37aeaf41df229c88d85387f2229cc59aeda6e0936dc4",
+    "git_content_sha256": "9b5aab4c74d65fdb682eed2925fb2b9e5270ebe162ae97e7c0e84b5ce6e532b7"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsEnriquecimentoServiceTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "94d465f00d9cb1cd9d8a8ad1e52b2e038fd2798a7d71e40f73185daa0755ed4d",
+    "git_content_sha256": "bd74c1aace1d86d96728bf88e4b195863fea044d9e76ca03cd8707d52b884e1f"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsEtaClientTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "08b1bd17cf75200a075969ea3783f52d87d3103561ce9af3c1fb56bccb93972f",
+    "git_content_sha256": "e389cf6fab1442b01067d2291cb22fa8fddd37a49b9dc13d743fe721d80fef7c"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsFunilLogsTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f08ece498ee4f1008e786b1bd4c14203a9751fa7cddadf16f5346878c2cf802d",
+    "git_content_sha256": "6250608b806825d0160455b2af21880b8c0028e8df61adbe0285e8dde3579c77"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsFunilOperacionalTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4f401e190a08019cf96969648066e7086e78423a5bbd2d81a190a74f9858828e",
+    "git_content_sha256": "3068749a9d0e63a524bca7cb048152ec724d585c51cfc588a9871846b2f6a6d2"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsIndicesCacheTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1c3f2c0fe2e7dba4c07c0b1e06713d02fd4ccca8826a8c7560db82ea603eba8b",
+    "git_content_sha256": "385eeac6e3d836abcaa39db9af46917a34f267dee4b27e69d9fe56d7855cdd34"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsIntegrationEvidenceRecordTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "126fb46fb148d407840a62a0f2a1fa7df4e5a54243706e830004a9e6c0a3cd15",
+    "git_content_sha256": "126fb46fb148d407840a62a0f2a1fa7df4e5a54243706e830004a9e6c0a3cd15"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsItinerarioRepositoryPostgisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e4226624d6ddec8fb82760c959c624166d8afb4b298d00f8583215c1c5b3c551",
+    "git_content_sha256": "02f8823eddd1b8464ac67c1cbb70283aca1c2fefb50f8e6bbceb80d4480eb9dc"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsItineraryContinuityDiagnosisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "68babd60255b3cdee7f8c1387ece45756d389b3732d9f6ebcf72f18b0da8b81a",
+    "git_content_sha256": "68babd60255b3cdee7f8c1387ece45756d389b3732d9f6ebcf72f18b0da8b81a"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsLeituraValidatorTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "166d09420a34f38faf1ce70f091c81a2da9e0606f4e5a62534065838214fb833",
+    "git_content_sha256": "bd2c58cc8eaff54225b02bb74fc76e95cf0132f1e0e429f91e02d668f937788a"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsMatchingBatchOrquestracaoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3c33d446407a8838b944b566721fd22988a2c73ef1e50ffd2d0d5d4f6686a30e",
+    "git_content_sha256": "45e5f3cf9272db28ef4d93b6d1d808d97b3babe0debc0ae2b307e8c5eef3a7cc"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsMatchingBenchmarkTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "70b398f5168043d267fbf846804294ae1c6943ac9e82967c736f8923e19b6cba",
+    "git_content_sha256": "0e534f7477f028cc727f334e08f5130983775e5d2c158b97269a6adbda046eb6"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsMatchingCombinadoDiferencialPostgisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ace9b5c5007d83539b3b280202a5b224b894c8e7ebb965cc3d4360d2eea2df6a",
+    "git_content_sha256": "fcfb59558ea0c51902204277119449d82de1c8bb1d13f97693060d4d00035c61"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsMatchingCombinadoSetBasedCandidate.cs",
+    "source": "network-27/source.zip",
+    "sha256": "30541ee12b1a24124bd8739d3d516d5640deed29fa9429314272efed9ff41b1c",
+    "git_content_sha256": "8c42cacb24c72a88f5195fb7815cc34e713ad72c7c2070e5f5452ca6af9fbaf4"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsMatchingDiagnosticsTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "10d6ffe846c681241ba28ae14e68ac1387cdf3d15c2710095d43709b22834bfe",
+    "git_content_sha256": "737e5e30688ac27a66f77981832f9e32d2539c188538dfa7b6206a6be7fddd47"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsMatchingDifferentialHarnessTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b5dcd30d4f460998f4a1c7ffeafbbc14bca148baf9156e70607b1e5588e7a09d",
+    "git_content_sha256": "37a85b3052cd450b04ed4782e7054d2582d5336d8c3fb71188aebe035ac53273"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsMatchingGlobalSetBasedCandidate.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ca8a0bc188ecc535e05adf63921867fc4b6675beb215ea038a350c46e5d5099a",
+    "git_content_sha256": "b6d266fee08bdf738db0b93b068630732e47c6cf566c3db13da0901e431432a2"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsMatchingLotePostgisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8d56b1df9c9296b4ef8bf29b4d60b125ad93c6ed6ca5e55eb798898a3310fde9",
+    "git_content_sha256": "dc9d6f57730c74159d84249aa50518ca5a83b66548b78bf7f4a9d143a6c1c56b"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsMatchingRepresentativeValidationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "44e3b66965e4830ba0b2ac5fbefeee990e40de1e3a0666cf30b23139076280a1",
+    "git_content_sha256": "dff1c8bfe744931c66477a2befc31dcb665e1bccbae5855b6d224e1c3e7924c2"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPassagens4C6Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7ec8ceb446d5e558489dec43113689a4a7e9b6b0d153002964b7dfa276720f8f",
+    "git_content_sha256": "a08795d705b07c785393934bff568ed3fe4199d8e053a992b69a206db334ba1a"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPerformanceMetricsTests.BatchPhases.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6830ca6d269e8ebb56e4e627b5277a91a7746864ba9641598dde26ce4c714b72",
+    "git_content_sha256": "6830ca6d269e8ebb56e4e627b5277a91a7746864ba9641598dde26ce4c714b72"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPerformanceMetricsTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c75d6bcacaa86104e02346eb308a830efdca3e94506a1760733b8ec988ad777a",
+    "git_content_sha256": "58b9bd4b6e7e85db44e2cd56736be20c62eee8bb7d3ffdaa7ed7fde4f1341388"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPhysicalPredecessorTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c629ba84b4355471fa6f56af2f17e1e77c58bb926674c435c10fbe746d868ed2",
+    "git_content_sha256": "c629ba84b4355471fa6f56af2f17e1e77c58bb926674c435c10fbe746d868ed2"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPinnedVersionProjectionPostgisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "19344886e7a0f4661e7ac1a790039887a9bb9d5b9a0a9133016337d571575a6a",
+    "git_content_sha256": "a470933d92320ee80b4fca9f015095198754f7f09c59ef0d6703321f0a6684b7"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "af1ef517488de21a51ee5ad145ba57f7e036f92dc40bcf70c2b7085a1b7e4a6b",
+    "git_content_sha256": "af1ef517488de21a51ee5ad145ba57f7e036f92dc40bcf70c2b7085a1b7e4a6b"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.EvidenceContinuity.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d2906ff7787b7a0c195747f41d64653182b062d660611fd705300217dda3dece",
+    "git_content_sha256": "d2906ff7787b7a0c195747f41d64653182b062d660611fd705300217dda3dece"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.EvidenceIngress.cs",
+    "source": "network-27/source.zip",
+    "sha256": "eb40e7cdb5188767eb533c41983a65cd9fd72c07189d23da48a1699f669237ba",
+    "git_content_sha256": "eb40e7cdb5188767eb533c41983a65cd9fd72c07189d23da48a1699f669237ba"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.Infrastructure.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d5fa42f2846e0f74a95da69b7507c6543c0d6598acf1e2b8c45d6906e2c7b1ba",
+    "git_content_sha256": "d5fa42f2846e0f74a95da69b7507c6543c0d6598acf1e2b8c45d6906e2c7b1ba"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalEnd.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6515c42aee61bf06e22cc3e54c62a52b0855f3c8817cebc3698db84aa07fd4a1",
+    "git_content_sha256": "6515c42aee61bf06e22cc3e54c62a52b0855f3c8817cebc3698db84aa07fd4a1"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalPolicy.cs",
+    "source": "network-27/source.zip",
+    "sha256": "75044d133d393492f0d3dc776ec545a6c42c47fe40b43bebfa0bf29fcb679998",
+    "git_content_sha256": "75044d133d393492f0d3dc776ec545a6c42c47fe40b43bebfa0bf29fcb679998"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.OperationalRecovery.cs",
+    "source": "network-27/source.zip",
+    "sha256": "18ba2957b38c8bd7a684ddb05ce3bc6c8fc7a5c38ea0c4fac9b227310e082686",
+    "git_content_sha256": "18ba2957b38c8bd7a684ddb05ce3bc6c8fc7a5c38ea0c4fac9b227310e082686"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.Removals.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b1e6ae93e41dbae374126add10beea37d308e98971a2341805d88029bd75fe6d",
+    "git_content_sha256": "b1e6ae93e41dbae374126add10beea37d308e98971a2341805d88029bd75fe6d"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPipelineDisposableIntegrationTests.Status.cs",
+    "source": "network-27/source.zip",
+    "sha256": "96d6827ffce597dc7c89426ce7446fedea7483b9530ee3002c102621202dd098",
+    "git_content_sha256": "96d6827ffce597dc7c89426ce7446fedea7483b9530ee3002c102621202dd098"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPipelineTraceTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "938a4d5483e682f4c1cf2c7e0a58202c14a56a427389894e925c359c15f38ecd",
+    "git_content_sha256": "7cf2b5c4736ca1cf57b6bc62bf4dc94e0c36f92b8fd208757cb83d872c435226"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPollingCadenciaTests.BusAcquisition.cs",
+    "source": "network-27/source.zip",
+    "sha256": "06535c99b8b785f374762b12ef87d43780e2423528aca2fed37e2cd4d2b17b4e",
+    "git_content_sha256": "06535c99b8b785f374762b12ef87d43780e2423528aca2fed37e2cd4d2b17b4e"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPollingCadenciaTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "64ceca3688ffc0546f035e4fc92837268bd550daa783fb1caaa5c08564afdd1e",
+    "git_content_sha256": "47c753846df9208b83ec9ab9f198c3c91df3b6ff6eca1d96f0f398bed833a003"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPollingCadenciaTests.Gtfs.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4b620a319ba7104e98bffca511bd4c8cdf6c68f9faf78698297eaaf2274aafda",
+    "git_content_sha256": "4b620a319ba7104e98bffca511bd4c8cdf6c68f9faf78698297eaaf2274aafda"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPollingCadenciaTests.Handoff.cs",
+    "source": "network-27/source.zip",
+    "sha256": "45b789bbcbd69a1ba0570460277b78d5d1fc4a1d48025805feae7ec993dbb17a",
+    "git_content_sha256": "45b789bbcbd69a1ba0570460277b78d5d1fc4a1d48025805feae7ec993dbb17a"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPollingCadenciaTests.Http304.cs",
+    "source": "network-27/source.zip",
+    "sha256": "468c7024fff03f08e0545d5b7620818ef1f38f19ed8f68828cd70d7b3dca281a",
+    "git_content_sha256": "468c7024fff03f08e0545d5b7620818ef1f38f19ed8f68828cd70d7b3dca281a"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPollingCadenciaTests.Outages.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7967b315a78d73acde9996cc1ee19dc15edf70e32458e9c73adc2a39917e2732",
+    "git_content_sha256": "7967b315a78d73acde9996cc1ee19dc15edf70e32458e9c73adc2a39917e2732"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsPollingFontesTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6984af1e6b58fb443972ba2c0cf11a86d385a6d2fa1d848504d6fd15c3ee9413",
+    "git_content_sha256": "21ca9fd2fd5d9c698135b6116bdbb2c9765a9ddcdbc9740791170fb91c269b58"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsRouteShadowEnforcedAudit.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6b5b59273e77c5438667b8c2c1e8a49bee71a804a322fa44399956f95f6f8099",
+    "git_content_sha256": "fb8a9153f7acdea0b83562535db96e049f33e22f818273cda0b4b22ebb5c7999"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsRouteShadowEnforcedTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "99ef295531e3bf3fe52ed10b156a0b50d8df071174b2e1859a10338e918ef471",
+    "git_content_sha256": "f9d186495c81f8cf89a9ed96880c6f94dc97babe526309baf2b2e82423aa95d1"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsSignalRPublisherTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "37ee7f086ec5733327fd684e1146244695a92e9cd47efd9c0e0777accc5c1b78",
+    "git_content_sha256": "37ee7f086ec5733327fd684e1146244695a92e9cd47efd9c0e0777accc5c1b78"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsSourceAbstractionTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d2d7de0b912ad03190aa34e6203f16a48f6eb1ce201b74f75c28f4ea96c518d9",
+    "git_content_sha256": "332259325f97eb29b01e6fc16fb6abf35c3ec49485a2d0db7138f232ddbd90f9"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsSppoClientTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8446f498fd3ccb40f8177b53ca8787a867c9442cd469b5bd590e6a6bb6bea4ae",
+    "git_content_sha256": "4fa0255bfdb4b340eb6bf7e92ab46284da3559e049f8ce587413c9281003d1fe"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsSppoCollectorTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "31f96ca876d091d57b7a376ff8b31eb36196fec92d47f1500242baf49d689e28",
+    "git_content_sha256": "4e3cae4526a6949f4b1ce344eeb628965f4ed1a9deb7a07cc31fe9e586fe9d53"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsStructuralHintAuditAggregator.cs",
+    "source": "network-27/source.zip",
+    "sha256": "09fa001dc7315c553e6c1af9d14f0a86069e17023008e058536a3e84d9cd95fa",
+    "git_content_sha256": "a7d9e146ac54991ff4a81995e69af3f4b3c3c49264da54c1756c6744625a3a63"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsStructuralHintAuditAggregatorTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "05f0f8eabafb474728681a6295dcd3011c401701ca848fb3b8869b206f73c43b",
+    "git_content_sha256": "20cff96fc58f3bb098fd2c37f68d888751cc0e43480582a1dc4719520e003bdd"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsStructuralHintShadowAuditTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5aae55136701a333800d06a8514271903dadeb7617b01887bd75084b718ad591",
+    "git_content_sha256": "df859cea270bddcf91b84ac022da76e364760b609322a4ff8f0d02fd2e0205a6"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsStructuralHintsTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b82d4458ed05e6d4789ddb6c72a418689dcf5841f34ed746adeeba3edb152ff2",
+    "git_content_sha256": "c35f5f82268f6b03a2e6d5d56d503d9c5bdf147fc280ca7417226419b841407d"
+  },
+  {
+    "path": "NoPonto/5-Testes/GpsTimestampDeduplicationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3047f2acc00932869f5500024dc6f6d8a8a4bd59cf9b504372a87613c2610b72",
+    "git_content_sha256": "bf7706ec9aa2e4419a780d0f891129f13e8a8b0611d909ccae572355a34c573d"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsDatarioImportTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "607499ad4ac055ac2523d6091ee91db6ecc2f073e31fa5f7d9f998c593824a3e",
+    "git_content_sha256": "fd9f52f3f0af83173d98ee8f4b607b5477f0820fb2921a06ac21cd98b9e7a696"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsDatarioPersistenceIntegrationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "32e16c579b5a04906ee3191a5fbf644ecc275ab13aecba81bcd929f10c8cb7f8",
+    "git_content_sha256": "d6b692c11f8c280705b53c8d0e1f6e9f06f3c5ddddbddab8ed50b46fb82a7098"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsDatarioPublicationIntegrationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "50c346823ab114e287ca9644ba959a9f1aed2cf3afabb3744f7c5dd06292bfce",
+    "git_content_sha256": "e5f9c281058492363e12cb798613932ea6af6ae859a116e34963da7240f54c22"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsEstruturalV22Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a226b9e14f644fc8a14938ad3a5a10beb7eec312f919635791d75e5413772e71",
+    "git_content_sha256": "a172154a33aa3f52bc76dc533e9d2f729c9d97986437882128fb809e8634c52d"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsLinhaModalTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "22324cbbb478a96a3476a182715ca2af8fcee3d4f9f0f9aefbbaf6290110c7e3",
+    "git_content_sha256": "a7254692a5d9294847495ed6bc759cd07e1ba75f79250cbfd76740bc9fd8da88"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsRealtimeCrosswalkPostgresTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "89fec46c3e777cd5be5bfa9589314d2db3e681b5cc27a837181bffcdf69c78fc",
+    "git_content_sha256": "cd94182a71b84321a0ce89b3cedd2fefc42f06e22b6e70764a38fe9fbadf97bf"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsRealtimeGpsTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "43fd4b74c16d802b2856c668a38f1ac86b5801a872aaaca3e3688f17eb67ac4f",
+    "git_content_sha256": "94c824fab12a3d266b098cb66d32dfb7fb973f84989ea91ec282a8ad9e464c37"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsRealtimeIntegratedTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "759470400670514fd084f4b1193455ec942b5f0281c491106ce9966c5a746fda",
+    "git_content_sha256": "82de8b8656d59763e1738cf8f76a0e178db04952f6c92d6da2dd467ac7791de3"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsRealtimePerformanceTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e24eb8e91399d3c1a411e4e57fec366e1ce203f538e8e0c29fa328b98c0cf5f4",
+    "git_content_sha256": "817d24dfd52f3577d1d91d9d71e451d3f70afb416f532e417fc3a7a8966d558d"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsRebuildTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6e95f6ed36d5ec5356ef1d453ac7bfe33547a0d9e26a8c9b7e946d95dd76a016",
+    "git_content_sha256": "d21e7f35d720b5e4972d7301596fca5091fbac14320451db411feec0d34dee36"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsRelacionamentoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9484b582615355ace7210985f9f262fdb8b8ebdc30afc39211f3a8aae265d562",
+    "git_content_sha256": "f668597c19017f5e769243c177b509f744905962be8f3c619131cf7cddeffb6d"
+  },
+  {
+    "path": "NoPonto/5-Testes/GtfsRouteEvidenceTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "87d7e20fec844fb2460a7f8488871be80f0acee140dfb6b9a2e3195b5d3d18fb",
+    "git_content_sha256": "615683dfe83ec94f53bf059d6a1c9f3fa4c511d75e8849f56c3490059301177e"
+  },
+  {
+    "path": "NoPonto/5-Testes/HistoricalEtaDisposableIntegrationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "100e511185a3a08a8228ead4ebb03b4c579623d82e2423f8a60e0cdbfbccab1a",
+    "git_content_sha256": "12f0888a0f5dc1629a7037d936e091353a8d784762ed3a0e18f40c7ffaeadc5b"
+  },
+  {
+    "path": "NoPonto/5-Testes/HistoricalEtaGtfsPollingTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f3f9b8b1f1c59e4f906abb24fc6a51cae0c975e08158dbd27993f1b3a1f3324b",
+    "git_content_sha256": "a73801817114288c0eccee9d6a62cd35ac4fc4748bc76ecf2f3e20d102dc1834"
+  },
+  {
+    "path": "NoPonto/5-Testes/HistoricalEtaOfflineExportTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "68307a186f5dc4a019c765cd08ed1251cf3974fb58a9fc7d9542109354ddf3e3",
+    "git_content_sha256": "5450386c0cb7ead44b73ce7ec7300f6f9dfb4d101e706e5703c96bb67ea6183e"
+  },
+  {
+    "path": "NoPonto/5-Testes/HistoricalEtaRuntimeTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f438125ce446a05655be78f6a554febfbd271f45df2c14b1183b3003ca32fc35",
+    "git_content_sha256": "1ad971f252e3d061b05992b97c5d421eb514a4c30a1fceac3c8d088d4202c52f"
+  },
+  {
+    "path": "NoPonto/5-Testes/HistoricalEtaShadowTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "75657a360ae37f2480bd71856dd9528ce51f9e1905d5e96b76c677ba18036d5e",
+    "git_content_sha256": "65a440df4bc62a33a67f3b3be013d1a964d6a66cb4ef1a455293e3ad6a294365"
+  },
+  {
+    "path": "NoPonto/5-Testes/IntegridadeCircularPostgresTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bc5501b99dc44cf643b14358a151a61e350d94bdf4b0cced5dc7871de4f56f82",
+    "git_content_sha256": "bc5501b99dc44cf643b14358a151a61e350d94bdf4b0cced5dc7871de4f56f82"
+  },
+  {
+    "path": "NoPonto/5-Testes/IntegridadeCircularRegraTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0f7faa82652cd74747ab30646a8925b794fb243f4ffe1d32d28b64fb9f755eb6",
+    "git_content_sha256": "b66846e2ca84944f9ec7573ce61c4184b840184788de12b7bb3f55963cd7d7aa"
+  },
+  {
+    "path": "NoPonto/5-Testes/ItsCurrentGpsSourceTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "700b0187f0c11058c1b893f28dfee2a297bd47c857895757fa871fa43ed7562a",
+    "git_content_sha256": "700b0187f0c11058c1b893f28dfee2a297bd47c857895757fa871fa43ed7562a"
+  },
+  {
+    "path": "NoPonto/5-Testes/ItsCurrentGpsSourceTests.Decoupled.cs",
+    "source": "network-27/source.zip",
+    "sha256": "350ead444303e378d2b6ba3021ef39364e1cd625e4eea100846667236e13d83c",
+    "git_content_sha256": "350ead444303e378d2b6ba3021ef39364e1cd625e4eea100846667236e13d83c"
+  },
+  {
+    "path": "NoPonto/5-Testes/ItsCurrentGpsSourceTests.Diagnostics.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b5f74fb211b74456e8b156634f52d4c50466e3ec8d4f29d59a5423b94f8269f4",
+    "git_content_sha256": "1d00e4c4f741aa9801db9c817ce7b8cff9f61e2b73da53b8e4effdd6a8655a10"
+  },
+  {
+    "path": "NoPonto/5-Testes/ItsCurrentGpsSourceTests.Fallback.cs",
+    "source": "network-27/source.zip",
+    "sha256": "781579b81da2f0fd3fe08f6e003a1071380c7de516b1e297e69d8968903a016a",
+    "git_content_sha256": "781579b81da2f0fd3fe08f6e003a1071380c7de516b1e297e69d8968903a016a"
+  },
+  {
+    "path": "NoPonto/5-Testes/ItsCurrentGpsSourceTests.GtfsFallback.cs",
+    "source": "network-27/source.zip",
+    "sha256": "19f503bd5233390251b26d217381c852aa38f8876df7a12b5e0c9f82900b6e8c",
+    "git_content_sha256": "19f503bd5233390251b26d217381c852aa38f8876df7a12b5e0c9f82900b6e8c"
+  },
+  {
+    "path": "NoPonto/5-Testes/ItsCurrentGpsSourceTests.Hybrid.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5aec6cf1f0baea9767c9badf14c3dc52211cd570ba9e7b0b98cfeffd33293a4f",
+    "git_content_sha256": "5aec6cf1f0baea9767c9badf14c3dc52211cd570ba9e7b0b98cfeffd33293a4f"
+  },
+  {
+    "path": "NoPonto/5-Testes/ItsCurrentPhysicalAdapterTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "edcc64557ec793a8c2de6f8fbb07c9f71dc052895585aee9dbcd3bb666c64049",
+    "git_content_sha256": "40b387541879cd17be5652dd876db30d674b640c9c4298954072c71485c86f95"
+  },
+  {
+    "path": "NoPonto/5-Testes/LegacyEstruturalV24Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0023a2f78608f9ee8ea4ab1594c7a065a014420a47b25186bfee35a305391e79",
+    "git_content_sha256": "8ac15d432f459de8e98a9ca1c847955b722890b21d6be3c8230fb31bbd68a39b"
+  },
+  {
+    "path": "NoPonto/5-Testes/LegacyHistoryRegistrationCleanupTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "941c3c61e30e8fdb320819d4c007f6a4b34f524510ebd03f1dcadb9d13bffec5",
+    "git_content_sha256": "3beaf6b86b0de676a2b0fe113a55d3063bb6399647dd7d5f5a43b9f21f71cb37"
+  },
+  {
+    "path": "NoPonto/5-Testes/MatchingPipelineLatencyPostgisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4fff4faa69f5b7263695044af8f7569d2ebb3efe5fb2109881fd0bb38e5681ca",
+    "git_content_sha256": "4fff4faa69f5b7263695044af8f7569d2ebb3efe5fb2109881fd0bb38e5681ca"
+  },
+  {
+    "path": "NoPonto/5-Testes/MotivoFimEventoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a4d9059d7ee51aaec758c18cce539ec1e776ac67aaa669440328f05042b4b738",
+    "git_content_sha256": "a4d9059d7ee51aaec758c18cce539ec1e776ac67aaa669440328f05042b4b738"
+  },
+  {
+    "path": "NoPonto/5-Testes/MudancaOperacionalIntegracaoLogicaTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5b6aab86896bfff572fd6e4c49a7719bada021d65a7b9034b144d1e67ee2357e",
+    "git_content_sha256": "5b6aab86896bfff572fd6e4c49a7719bada021d65a7b9034b144d1e67ee2357e"
+  },
+  {
+    "path": "NoPonto/5-Testes/MudancaOperacionalPontaAPontaTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "dfddf1c7f29e408345ee9d3994c85c3fcfb63c8194bb17ebcff7b9a571af60bb",
+    "git_content_sha256": "e774f15ee2facfbfde9ba40867d3576df84bf9e9839edae516b029a5541a6281"
+  },
+  {
+    "path": "NoPonto/5-Testes/MudancaOperacionalRegraTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8123a18e505b982192f4745ea28d8f3f8a83e154c783907acaa9b5e6340b1097",
+    "git_content_sha256": "8123a18e505b982192f4745ea28d8f3f8a83e154c783907acaa9b5e6340b1097"
+  },
+  {
+    "path": "NoPonto/5-Testes/MulticohortPhysicalShadowTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f0caec943217f4fa8e1dd0b72d582900997b4ccd35dc246d41b2814901c657f6",
+    "git_content_sha256": "f0caec943217f4fa8e1dd0b72d582900997b4ccd35dc246d41b2814901c657f6"
+  },
+  {
+    "path": "NoPonto/5-Testes/OcorrenciaParadaTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "222117a82b54a840e68a390def71db820b76d1b310a40d3f1883774ec113b27c",
+    "git_content_sha256": "152b3bb525b3dd68718cccf446d3b4bd1638ef270e346c49048cd8ff76fb47a8"
+  },
+  {
+    "path": "NoPonto/5-Testes/PhysicalEtaCausalDiagnosticsTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8bf88dfb2103905b0e2ca4311ab1f00c717b30a6781fe7c51a6f06647fb56e1d",
+    "git_content_sha256": "a8c0bc692e4322c53515aca3aefb7b4f38ca99d71c5f4d1b081644dbea60aa15"
+  },
+  {
+    "path": "NoPonto/5-Testes/PhysicalEtaIntermittenceTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7b425459fa78113d6f69cd609c7e0d56a7e59a71b64413e3e98d49e591cc3a37",
+    "git_content_sha256": "7ca3cff076c007493aac6c8dc85a56ee8ea2d48e2b7a15afdea0878091b55a4f"
+  },
+  {
+    "path": "NoPonto/5-Testes/PhysicalEtaSelectedStopTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "71b5dd8570dfa2611aa1d6b639599ff8c465cbc2d391447a06adb556cb06774a",
+    "git_content_sha256": "b93f13a8fabbd19442a134a124d27243892b1156ce15c53ccf886e0729e4cd4f"
+  },
+  {
+    "path": "NoPonto/5-Testes/PhysicalGlobal25Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "da80312653d152c7fb1e5385b0f99aba35e69e9568eb0a1791ba57f666dff7ec",
+    "git_content_sha256": "922da0a2d90cfc94f69161b78b8b24329733c82695c3706a137ba5d4d1025805"
+  },
+  {
+    "path": "NoPonto/5-Testes/PhysicalLocationShadowTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "cab4a529752498d87f4ef168030c9d04061d53b679fe5941e25146b008f76944",
+    "git_content_sha256": "cab4a529752498d87f4ef168030c9d04061d53b679fe5941e25146b008f76944"
+  },
+  {
+    "path": "NoPonto/5-Testes/PhysicalPresenceMvpTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "643e6aacf66ac24c89ac4f28dddccfb6b4c6019744503a13927dda7d973c0093",
+    "git_content_sha256": "22144a28bd2fe47240fac7fb1d12b591fc17a30c0f5c9d336982d14e023f3136"
+  },
+  {
+    "path": "NoPonto/5-Testes/PhysicalPresenceTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b74aa9b2e98450af3778d8037594f8dd7f34e637ea2352152fc1dcc622de86c3",
+    "git_content_sha256": "b74aa9b2e98450af3778d8037594f8dd7f34e637ea2352152fc1dcc622de86c3"
+  },
+  {
+    "path": "NoPonto/5-Testes/PosicaoVeiculoCacheRepositoryTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5397bf06e15a6fac776b0a8ec9952b1fad2a1c0a1810ecdac55699444f3f0a30",
+    "git_content_sha256": "455a2646b50e1d2a5ef118a000867a399b0ec9f0b4c86516072335e9125f8b23"
+  },
+  {
+    "path": "NoPonto/5-Testes/PositionCorrectionShadowInfrastructureTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b4ac0075d6c07dbf2c8bc4ec207a8003a2df71a9e2c67d76f6e494232eba4abd",
+    "git_content_sha256": "a1a446b64cad0b851bc277561d282286dfa21377d9e5c5f547d21042a8fe2686"
+  },
+  {
+    "path": "NoPonto/5-Testes/PositionCorrectionShadowPostgresTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5915fd8db34fb1453c5fa69f4fb50c4b59149f21616a2a2f88fae11ed3bdb87a",
+    "git_content_sha256": "6081469946f1184a5766b8fa941a823c930dc54fbe53929214b15a202b4a7933"
+  },
+  {
+    "path": "NoPonto/5-Testes/PostgisGpsFixture.cs",
+    "source": "network-27/source.zip",
+    "sha256": "278ffc2972d6b9da544572b9ddc7b5e8eaef8414c03268f955338a383781b56b",
+    "git_content_sha256": "c9b1456a65d06d376547cdbcfb7b646f08b0d640033a02f8753dbca0d158e6dd"
+  },
+  {
+    "path": "NoPonto/5-Testes/PostgresEstabilidadeGeometriaTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f1e390f355398d6466e021be492404b433f0ab44c20aaab989bed3a53ac257a8",
+    "git_content_sha256": "070419319cabf21db0f9fc21952e0dfc2a3531b6ee352bb62fea3043a4f3ecf7"
+  },
+  {
+    "path": "NoPonto/5-Testes/PostgresEstabilidadeTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4f5c7733dff7b3a2b101e435bab9bea8808aeeeeb0f71e7029c6c80bc347c039",
+    "git_content_sha256": "0cc335383707a83864f44af0b5febb21a91efb3e6139ef5ae0e4fb1fb0f76cfd"
+  },
+  {
+    "path": "NoPonto/5-Testes/RailScheduleImportTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fec747a5338cb772a39940bcda90005ef00e09dbb164c1d5e852ab062e8cb3f5",
+    "git_content_sha256": "a928ade1054d2a2b2846ea27e0577e792d4d4afa9678692d7806a86d33dd9c7b"
+  },
+  {
+    "path": "NoPonto/5-Testes/ReconciliadorSequencialV2Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "39d845c5700d811e83dde285b9363d9ab80c96fbd784b41cb7489b0d17869c60",
+    "git_content_sha256": "1814b7a2474294b581ff0527c24b0475b2838b6f0b798a633bfe4459ed6f0fc3"
+  },
+  {
+    "path": "NoPonto/5-Testes/RedisStreamBoundedTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4de8ed5948e23458c484983df867f38d3259e763265efee1fa1170d9843eab7f",
+    "git_content_sha256": "8464afa1892b0496a78913847916e98e49e78128fc195f136c0489f8cae5370e"
+  },
+  {
+    "path": "NoPonto/5-Testes/RetryOperacionalGpsRedisIntegracaoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "12813bb93e37c68fdd0499cffa5a3c993e757d29bb62bd5aa8775c37c9271765",
+    "git_content_sha256": "12813bb93e37c68fdd0499cffa5a3c993e757d29bb62bd5aa8775c37c9271765"
+  },
+  {
+    "path": "NoPonto/5-Testes/RetryOperacionalGpsTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "da6c66ffaee35569f1a5936cc68b33597cc7d17c953504949e61311436058880",
+    "git_content_sha256": "6496d814636d6b05d83c2f44c297109788b090293c5f137c541513e72e600aa4"
+  },
+  {
+    "path": "NoPonto/5-Testes/SequenciaParadasFake.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3172abc0d07b94c1432a6eccd4817d880765edbef9a555ec9a9dd8770d196b1b",
+    "git_content_sha256": "bb89df3a7db74e566df145b7c6cebed5efe8f8da6b536cc42be02b30b4ff115f"
+  },
+  {
+    "path": "NoPonto/5-Testes/ShadowCanonicalRedisCollection.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f25b312e64791ec9744e210c64637147f25efbe959b4943d72ee4cb823fcfcc9",
+    "git_content_sha256": "012a3bbaf982e2fb873222ceca6d16a207cdc11539fa18e1c62814390ac512d8"
+  },
+  {
+    "path": "NoPonto/5-Testes/ShadowPosicaoBenchmarkTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f3201a67102a69ad2b1a347eb10953866b636df283ffce8c3f0e833120cf15a1",
+    "git_content_sha256": "36bc4107cec86d6d1f2f29c5fca065f7acde1038986a69ddff14481fe8b04293"
+  },
+  {
+    "path": "NoPonto/5-Testes/ShadowPosicaoPipelineIntegrationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3b0fb0af264f9903ccb55482ab4c2446f507798393c76cab002f9786efa9bb43",
+    "git_content_sha256": "b42717c5ec470cb0ec1144c751fa964e14651b260c84d6df3334c5c7eebf7164"
+  },
+  {
+    "path": "NoPonto/5-Testes/ShadowPosicaoPipelineUnitTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "28a1154ad047aa5d77f55509a6c7a58a3b0c3e9cd06110e54c4e5e5b16ddce49",
+    "git_content_sha256": "fa28bd9784825928cd2b01221f350c8286cba66f79cfd5275a128d5faaa10eb9"
+  },
+  {
+    "path": "NoPonto/5-Testes/ShadowPosicaoRetentionDiTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a1dfa61e982b754177af7ea7c14f0652d9e2009a5a8efa343b4a5a59c7914910",
+    "git_content_sha256": "1be135cf7c37ab0b338144155f87561f52632d012a3c4ddc2883b72022412668"
+  },
+  {
+    "path": "NoPonto/5-Testes/ShadowPosicaoRetentionTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "336b8355117f987899545eff70e1630718e832340bddec274b81e4cc5b7475b9",
+    "git_content_sha256": "0a146cfd3fe6daf01a0de3c2a476a928ae9c75a7d066af1034255c446f276748"
+  },
+  {
+    "path": "NoPonto/5-Testes/ShadowPosicaoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d0ac032dcdff75e37b424aded9377f65562328333ed2823261f888c328053e56",
+    "git_content_sha256": "c803a34fd2a8bcdc42f4a59e00ba5e38aa2841cc18e93266b68e0555a9b69fe6"
+  },
+  {
+    "path": "NoPonto/5-Testes/StructuralImportCommandTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "501a55e41166171c5465b65fa280f04283f0796f186eaac15922e44f706a1bb9",
+    "git_content_sha256": "540c8b6de9b62c1d1e60a0ab72760c16f97f6673e9debbeef2d2a109e72fbca4"
+  },
+  {
+    "path": "NoPonto/5-Testes/SuporteSequencialPadroesIrmaosV2Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c50cefdef48aa76b72d5649452cfe2c5b363b6ce94e72a3126dabebe248f8170",
+    "git_content_sha256": "7b875243675b22835a4d23800b56a1e69be42f11d841731550d4c409ed8b1b15"
+  },
+  {
+    "path": "NoPonto/5-Testes/TarifasPostgresTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4b40d3eea4a83335d0a6cda6d764eee92aa214dca20865ccb4d378eb4c1eb68d",
+    "git_content_sha256": "19659b8959566fb4dbb9aa250bd54857be7ff0a5ba2ab3f58e1548c67acc265a"
+  },
+  {
+    "path": "NoPonto/5-Testes/TarifasRegrasTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "43008d4770aab5ac4a1a302a92dfaae8950457d15004d55fd2b69e7bb2dd8857",
+    "git_content_sha256": "42fb1102ce87296dd4aca945a313f696888e95ed92b2392b2ecfed64e61a8e10"
+  },
+  {
+    "path": "NoPonto/5-Testes/TelemetriaMlIdentidadeTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b5ba6e63565963f6013adbddd252b407695613531614f2c3e83917cb3dc5a519",
+    "git_content_sha256": "b5ba6e63565963f6013adbddd252b407695613531614f2c3e83917cb3dc5a519"
+  },
+  {
+    "path": "NoPonto/5-Testes/TelemetriaMlIntegracaoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ff34f7029dcc5538c1de544f676a55f0af35fa6600c2ec53cbd5df1a97a8eb18",
+    "git_content_sha256": "b66a6563de8ded768f652e9ab324c0d2722e762ce4138ba80ed6fea44b86b0dd"
+  },
+  {
+    "path": "NoPonto/5-Testes/TelemetriaMlRetentionTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1ce1e644b15b097de4692046b867b70d5088fc7f5f25e58c67a3f1e5c2d26cb7",
+    "git_content_sha256": "ac54204b6967dc6397234d5e047bd1bab119d2ac9cd33ee0b27f259f8008c251"
+  },
+  {
+    "path": "NoPonto/5-Testes/TelemetriaMlSamplingTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "44383309f0aef9ccb52c24c6de0c640b64383a6f2fbe5aca9dadc813b977e4bd",
+    "git_content_sha256": "49522425638a55dd30454a8c84ff49d50b8ba6f143257035fdd639f1d08a9a4a"
+  },
+  {
+    "path": "NoPonto/5-Testes/TelemetriaMlTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4cd17a6ec7f7acef8a73505edc5127c420ec7a53215b37ebd6ba3f2bfc565953",
+    "git_content_sha256": "9d125704ea36f5baa1d908c2facf3ae30229af6e54d377486d3d92fae06aedca"
+  },
+  {
+    "path": "NoPonto/5-Testes/TerminalPresenceContractTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3a15dab8f3f3685b764504b425acad969a55cd885f9698520250291e4fd06f99",
+    "git_content_sha256": "b2486bf82db1afc6fd9f2c6349e43bd4953f6ba7e6d620319c5f73ceecaafa9b"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremPublishedTopologyPostgisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "cf33f0d6c722e40312714481328f5f36c6d2c03a5c67df783a39f577498ba3cb",
+    "git_content_sha256": "0b2c96c3ce8f1596a3b672071bbf3bb50942d92c5a014785038b864c814f2fbe"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremStructuralImportTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "69e23b2a2ec8c62158404c2e708acfde7bb698a78c99946186a3604e4c433d64",
+    "git_content_sha256": "d4a8117f09efc7505bc2e675b027962596ad6d158d903b0d90696ebd0b440288"
+  },
+  {
+    "path": "NoPonto/5-Testes/UnifiedCohortsTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "997782257608e229ef3a5a2d90c567a236d10cc42123fb67d0e95fea2dc10fe6",
+    "git_content_sha256": "ac5fbd7ecf26db2d56fd2260af578a05997bcb9f375b813c716e06bfc24717f7"
+  },
+  {
+    "path": "NoPonto/5-Testes/UnifiedLocationRedisTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7f2af3757508b7228b059031223f3d506719ec4dfbed51c4af97773a10d684d9",
+    "git_content_sha256": "7f2af3757508b7228b059031223f3d506719ec4dfbed51c4af97773a10d684d9"
+  },
+  {
+    "path": "NoPonto/5-Testes/UnifiedLocationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "53df93874135998b2657178ede4e1a48cd38ba8d04da3c5984ed323073ae80a7",
+    "git_content_sha256": "53df93874135998b2657178ede4e1a48cd38ba8d04da3c5984ed323073ae80a7"
+  },
+  {
+    "path": "NoPonto/5-Testes/VeiculosLinhaRuntimeReaderTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "402766a910e0ca9b6d1d23769f65dcea41f1ccf20db4fa96803beb19b6442cd8",
+    "git_content_sha256": "402766a910e0ca9b6d1d23769f65dcea41f1ccf20db4fa96803beb19b6442cd8"
+  },
+  {
+    "path": "NoPonto/5-Testes/ViagemDuravelPostgresTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "745bcfcf72b47635faf719f302dafe1f081d4dbf78325c6eba5faa0c85753419",
+    "git_content_sha256": "838a2adb19642d12fe9192bc664635873f828cf0a008242a0f0ef85242cbd0c0"
+  },
+  {
+    "path": "NoPonto/5-Testes/ViagemObservadaRepositoryTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "791918e459ceb7880b15c526edc2b2331f2dee82e94fcdd23d41b7813a641642",
+    "git_content_sha256": "cc6ac4c3a6667c19e9f8cf9806b40dab22e04b2b01a86788121473d440378d2e"
+  },
+  {
+    "path": "NoPonto/5-Testes/ViagemObservadaServiceTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "05dacec08d141ee074b0ea0c9269fa91d5705a11dfd371b92403bcf151a2f16f",
+    "git_content_sha256": "392bf8f665ca66a9a0623d95bf5433198baa1db131c8a7567de9d18455b69d89"
+  },
+  {
+    "path": "NoPonto/5-Testes/ViagemOperacionalCodecCompatibilidadeTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5edbc0dbf5a3cb80159dc09346abbf43b784b9bc15770bf7fd20689ae7dec0f0",
+    "git_content_sha256": "5edbc0dbf5a3cb80159dc09346abbf43b784b9bc15770bf7fd20689ae7dec0f0"
+  },
+  {
+    "path": "NoPonto/5-Testes/ViagemOperacionalFixture.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2490fbbd87e07dfdeb92ee7f28f0992b31ff331c0bc13bdd65955c6a8d6d7236",
+    "git_content_sha256": "142ecafb8b3d0d1dfafe010c37622975106beb42f18ba93224380ff9653bf38d"
+  },
+  {
+    "path": "NoPonto/5-Testes/ViagemOperacionalIntegracaoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c74bd4bfd4b148e9164eeb1de46d189f781c47a81e27b893a5c83cb6eae65590",
+    "git_content_sha256": "4fba5c7aacf19f8d17959bdf91bee9099ea63e210dfebe53231c160b7b063297"
+  },
+  {
+    "path": "NoPonto/5-Testes/ViagemOperacionalRegraTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "21fdeb91e104adf1a59dacc6ff4ddeb1d344b93490be8ca33b73fe5b917e1ead",
+    "git_content_sha256": "4adac00561ce881d26570d7bf0271d6948df6ac582fcc0330b702b51333abe14"
+  },
+  {
+    "path": "NoPonto/5-Testes/ViagemOutboxBatchTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4278eeb57981d9e3d8e813e23509b572459bcd481e450766dc9e45b1156f7598",
+    "git_content_sha256": "47dc7cb3efffbcd9b365a2923e6e39de5c8d78d73a80c954850e03911bee0a5f"
+  },
+  {
+    "path": "NoPonto/5-Testes/ViagemOutboxCleanupPolicyTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "084b5c742b28414ba65a0a0c15f228487ad39c0b7b9df152de3fa59f4cd83af2",
+    "git_content_sha256": "9b00cad5b0bc43be83627ce232efdc1e8ba82157cdbd4551548f8c8185e5752a"
+  },
+  {
+    "path": "NoPonto/5-Testes/WrapDuranteCandidatoIntegracaoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bb5c23c4703dccdc1a87f0940fdfe71c4c3ab365f2e2d7d0c9c3e7cd2038fe1c",
+    "git_content_sha256": "bb5c23c4703dccdc1a87f0940fdfe71c4c3ab365f2e2d7d0c9c3e7cd2038fe1c"
+  },
+  {
+    "path": "NoPonto/5-Testes/WrapDuranteCandidatoTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4798e8fdc276051ff84090b74491d9647b3090b5d1bfae5976b426afec3fb042",
+    "git_content_sha256": "4798e8fdc276051ff84090b74491d9647b3090b5d1bfae5976b426afec3fb042"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/ExpectedRunBindingTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8b98c2705f4a8e104403aff2816f5cd86ea0447da5294c944e99068176a26165",
+    "git_content_sha256": "ae9599c7faadf3ba668afa1079e27c05debd320861cadded2b02a1a29b1db5a8"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/RailRealtimeVerticalSliceTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1f866c279aaf4ed2989550cf8dafc60f151d1545ab4054ede9bbb716f1c4704c",
+    "git_content_sha256": "e4dfcb6f375a3cf9a05936e95bd7f5336ce165fc67c08a57939036cdfbcfc2ec"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/RailScheduleFirstPublicationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c875e665f04ff90baa522b66b24f903f5f780add030c0726afd8a947fb762d08",
+    "git_content_sha256": "c875e665f04ff90baa522b66b24f903f5f780add030c0726afd8a947fb762d08"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/RailScheduleGateTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "48d3c02cc18ffb9dc69cb9c32364b8c5744f653fe748b24c0bb82cbd75e2dfe8",
+    "git_content_sha256": "48d3c02cc18ffb9dc69cb9c32364b8c5744f653fe748b24c0bb82cbd75e2dfe8"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/RailSchedulePublicationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a6adef930236d0916de21d6158c4beb05e6182b25edcdc3f08fab2c2b9869b6d",
+    "git_content_sha256": "06b2e1cff8d371417ca0ef0ae4846d5bb890c110d8273a54090a428ecad6dfa8"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/RailScheduleRuntimeTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "da0ee198b2b6dfca4486f4165f7c74567c3f286f3201e5eee1e43330f06d5044",
+    "git_content_sha256": "9270755cc9cb2f909e44984ed2fad34a2410e1e337613494f4dd2578dfae3642"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/RailVehiclesControllerTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "3ecfb34f80d93277fe6373a7befa62fde2a26fcef3773c28631c131afa5808f8",
+    "git_content_sha256": "331ca5e89ee54a417f6f1fe341ba1bbc8d8aef29eb77f1f8b1cdbe6c5a15171f"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimeConfigurationTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "cf51805f4ae1c606ccfd3e6a6161b20e0908610fac4d1e755296871b13479dfb",
+    "git_content_sha256": "49f02de3269878cd11d0b6304a8278a86d39c9c2ad841162c421d1efb426144f"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimePhase1Tests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9e60cb7bcd5b3602c707aed91dc3e7b9dd40a822a733fc53e030e6add77183b5",
+    "git_content_sha256": "e70a6a6e4b26a75c9d034eb4ab1ca3dcb9b5799bc7afcfb38ab596fe901bddf2"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimePhase2ATests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e1b063cfa969ad2e364894df3c394391047048f586f9076dda64726c16f8e531",
+    "git_content_sha256": "a0b24374ebe7d2e45fe3b5328ee099df4e822853acbf7755be384c16cb0be6c3"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimePhase2BTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "b7f45f8b6d8e7c91816a9d588b63663e7b07b54004021931d9b30ba1dcf7a6e0",
+    "git_content_sha256": "9f520771b43aaddf4d159a6de97fad09a30614193a7dad717b641720d1900155"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimePhase3TrackerTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6fd6787d6419c820b9e314601f050a2a609cae6558ca3686c795dd904e8e3781",
+    "git_content_sha256": "81e6545de128fbd451acdcfaeccc496eacfd1b519ab7e1dc1db6eb5a5bf48295"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimePhase4ATests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d031554b1e917e8c1e30d3190b9ce8b497d3a980665cab0ecd8f9d9ebe4a9647",
+    "git_content_sha256": "75b7469415b60443813f8deb6b29fece1e9728811a0dba46786dedd7a28abecf"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimePhase4CTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7317cc36d4198d1f74179b8e19010d5f879734072af0a025d1bc8e3365622e91",
+    "git_content_sha256": "c19ee85ae90c0cf0d90165fe045d3f4432b7c1cb86aa46bc5687538821fbac42"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimePhase4DTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f42ddd33a54a6a6ea8ee8752528111f31df3c1b0468ccb75e48c1ae7d4536283",
+    "git_content_sha256": "843b08573069a4d04cf3668c4fac81bdca34d11dd23e57e7115495fd41e465c6"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimePhase4ETests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5ad6a5efa7c07cea84c0d8b893ab7972b94be9b93911bd5a7b165a4d2a9be9b5",
+    "git_content_sha256": "d0c5bc5761a9d9f3e8ae30703c2a25212e92ad149cd81d99ab3d6fbe6d74e771"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimePhase4FGatesTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d3927caf5e49e1dc373d21fedef12d7f65bc93e35850857307972d0403a0ffdd",
+    "git_content_sha256": "d3927caf5e49e1dc373d21fedef12d7f65bc93e35850857307972d0403a0ffdd"
+  },
+  {
+    "path": "NoPonto/5-Testes/TremRealtime/TremRealtimePhase4FTests.cs",
+    "source": "network-27/source.zip",
+    "sha256": "75a7542068b41bbaa9bb55c0979419ed3dd6150b73d93b68ba86964e579d32e8",
+    "git_content_sha256": "75a7542068b41bbaa9bb55c0979419ed3dd6150b73d93b68ba86964e579d32e8"
+  },
+  {
+    "path": "NoPonto/Migrations/20260420171304_InitialMigration.cs",
+    "source": "network-27/source.zip",
+    "sha256": "41734bdfd17ed8d3c98dd1187c31e5b2134b3ad9d5a2ae20eff93e2213a67c62",
+    "git_content_sha256": "6db40cb9a2a01f04c962b60d3ca1d5d6fab944366b30062f2fd71f4ede5cc1c3"
+  },
+  {
+    "path": "NoPonto/Migrations/20260420171304_InitialMigration.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d0988504aeb3c9e1194517ed2c60f3e11731cf341f4aa71fdd55b62f52c216cc",
+    "git_content_sha256": "057477f1db72e81f53796561d0236a10b74017fd95ce53a16cdb9e48f159f942"
+  },
+  {
+    "path": "NoPonto/Migrations/20260420190554_AddParadaItinerarioRelacionamento.cs",
+    "source": "network-27/source.zip",
+    "sha256": "9347067d7d3eee6611d611e17f8eadd1c475e7949d8db6f6ffcce5c9bb205e7f",
+    "git_content_sha256": "1e269e517256c2e53bccafbc490ac798745dc143815728dec4efa623eaaf9433"
+  },
+  {
+    "path": "NoPonto/Migrations/20260420190554_AddParadaItinerarioRelacionamento.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "53c513c9cb84b5e8024a2187e78d9f021a12686157d362bc52638d6a8d99948c",
+    "git_content_sha256": "2e512d41fcc12017b1bab61472b0b8bc3d49b3b8e1759eba42da4d72b0a35226"
+  },
+  {
+    "path": "NoPonto/Migrations/20260422030346_PoiItinerarioNovosCampos.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c0fb9827f522736d6067a16ad5510bbed3eb305f57a438e608d29829f0368a33",
+    "git_content_sha256": "bd3bc0bc9794cac5634a4a675e62f9560cde87cba8731464f1900dda6e2aad7d"
+  },
+  {
+    "path": "NoPonto/Migrations/20260422030346_PoiItinerarioNovosCampos.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "46aac449be8eb9e7f2b89271c2df3605337eec6c046d528e8c5ea7be427baf03",
+    "git_content_sha256": "5ba739fcf4aa0520a19bf008e07785d749a11a3a4b7f1da3e8d6fd0a37e7fcd0"
+  },
+  {
+    "path": "NoPonto/Migrations/20260422035538_SubstituirPoiItinerarioPorPoiParada.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8f3e058f5ad2ff6b838c9b17ab09a1454e5c320cc216c91a77ef8b7c0cf3ae5a",
+    "git_content_sha256": "e8e56d46060c44872cff4e5b3fcee49da12f01d572e422d9874b9344d4ffb38b"
+  },
+  {
+    "path": "NoPonto/Migrations/20260422035538_SubstituirPoiItinerarioPorPoiParada.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "95b4fb16e441b715958e37a5c4710e6d6a9408db61ffbc0425f8590d13b3fe82",
+    "git_content_sha256": "ba41102e4ac60948a8f44c05204ee92539fd246ba1a29104be1f13b1402fdd32"
+  },
+  {
+    "path": "NoPonto/Migrations/20260422154814_PrioridadePOI.cs",
+    "source": "network-27/source.zip",
+    "sha256": "739c650d5a914a3268d23f693067284eb9f569501c4004e8730d9bff39122bd3",
+    "git_content_sha256": "200b51881bd39649023dad03206ba87fa8df37ad2a4a526ed09770e91cfe5d7e"
+  },
+  {
+    "path": "NoPonto/Migrations/20260422154814_PrioridadePOI.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c971727395dc7211efdb98659f1e575ebfb55b584157e9cc6a0c3aab466df8c5",
+    "git_content_sha256": "cbe842e3504e49c076699bf000d2cbeed1a63a3a02482c59a36eec70a68ea685"
+  },
+  {
+    "path": "NoPonto/Migrations/20260425231629_HistoricoLinhas.cs",
+    "source": "network-27/source.zip",
+    "sha256": "637fc50dcb83aeb3f02a489a9635091a929bb04589d4680c3bb5954ce9b982b7",
+    "git_content_sha256": "d6ff601aa35c8884adb4ad3edfcb01d13b8618eb67f4e48e5cd004f57ea13201"
+  },
+  {
+    "path": "NoPonto/Migrations/20260425231629_HistoricoLinhas.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e8134360f75cc8567f836099c2fa3757ba3594004c2b2691a083c9e132b950f2",
+    "git_content_sha256": "b1f64ce0b0d3c2bd3c249f2122e93c11ec48f6ebfc44d7760099722dad665cb7"
+  },
+  {
+    "path": "NoPonto/Migrations/20260504210322_tarifas.cs",
+    "source": "network-27/source.zip",
+    "sha256": "19e7cd5ff877f41bce3fa942f42081ec6bbabdacaa13722fcb6341c44b939b94",
+    "git_content_sha256": "a56a669a105826e74f74d3e632c535d0a23af4d7214db7c0ab9dfbba5c9be29b"
+  },
+  {
+    "path": "NoPonto/Migrations/20260504210322_tarifas.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "ba740f71002495306e8b9d49aa2865d6ffcb7a128cc445f851b9eae7e133ead0",
+    "git_content_sha256": "9213a18c4f0df66f79edfabe60ba8ebac9d0673744b88642505704c8f38cd740"
+  },
+  {
+    "path": "NoPonto/Migrations/20260510013245_AddTipoRotaETempoRealLinha.cs",
+    "source": "network-27/source.zip",
+    "sha256": "2b1b1065cfb2b6cfb0b890f9ec09cb4864553eaf9b2173b02d0471a6509e05a4",
+    "git_content_sha256": "b71b277fffdba1f6085e411214c79c3b51b6a597e40777300c694345cf8d715e"
+  },
+  {
+    "path": "NoPonto/Migrations/20260510013245_AddTipoRotaETempoRealLinha.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "73de6c1aa1bd9216039ef40ece335f50b262c47803adf14431b8a0f67fc70f47",
+    "git_content_sha256": "b70a0cbd7bd327cc197112867b541832e20e52a7796be19069c5fe9c4d1dd5e0"
+  },
+  {
+    "path": "NoPonto/Migrations/20260510023924_AddConsorcioLinha.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7bce6513e1708a71063a30eb3b0aa903084678523ec70c11c094e13857cde3c5",
+    "git_content_sha256": "628c809271377e4af846d5c7db83fa56727008ed62a81046a1fc0ee9890c5af6"
+  },
+  {
+    "path": "NoPonto/Migrations/20260510023924_AddConsorcioLinha.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "0b17a5c59bc1bb8b76d1c9551701bd73fdd3a88bb78c4d2f0354fe7bb383dd89",
+    "git_content_sha256": "bcb4db27b8a0fcce1a89793f99f8814df864b56862ac350be1cb360ab614a986"
+  },
+  {
+    "path": "NoPonto/Migrations/20260914180000_ViagemOperacionalOutbox.cs",
+    "source": "network-27/source.zip",
+    "sha256": "454e94b0ce125579611b49bbd783beef8b866942eeefda217a59de9a07ab3207",
+    "git_content_sha256": "100f0a11e9651b8d8565be3d52a9c70c697998b83205d4fbb3a827594adbd280"
+  },
+  {
+    "path": "NoPonto/Migrations/20260914180000_ViagemOperacionalOutbox.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "65b9090c5340608638977577c1024be7c5f360df71f22926cb80ec3986c00146",
+    "git_content_sha256": "3a76c683ace96ca859fdaaf82ee59cfe69fd199b634ce748ccbc813d1ff032df"
+  },
+  {
+    "path": "NoPonto/Migrations/20260916002042_TelemetriaMlContinua.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f6b961a0ac7df68b926afb8946d303a4649862231461353a6db4b815d14a00f3",
+    "git_content_sha256": "5785454769c1731bbc86ebe3d2a9ee2f39c587cf48cb7f47fdcc00f9b97efdd5"
+  },
+  {
+    "path": "NoPonto/Migrations/20260916002042_TelemetriaMlContinua.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d8b1aaa69a716594c597d5c2507f6a44f9420b603a4d9e9f11abbdb55a8ddd15",
+    "git_content_sha256": "be0e4720dafa99e04b9c3604f4150edb4fcf76615c9335c2a512002439af0601"
+  },
+  {
+    "path": "NoPonto/Migrations/20260921144201_PositionCorrectionShadowOrigins.cs",
+    "source": "network-27/source.zip",
+    "sha256": "5242f4f00b6b94a672083b09e75adf1a579da02b67be2118281d2edf24f97234",
+    "git_content_sha256": "a878a2edb516321715cfec804971fbdab01c403bf589b551b1f56957ed784dcf"
+  },
+  {
+    "path": "NoPonto/Migrations/20260921144201_PositionCorrectionShadowOrigins.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "07e3ee5e5d6dc67b2c0deac6f76720b22d0e00cce591c321b4a73269bf26fc1e",
+    "git_content_sha256": "0c4d3f37b88c3e77bf2815e285b2977f9b4b1cbac05eb69c2f6455e282d4f321"
+  },
+  {
+    "path": "NoPonto/Migrations/20260923002208_GtfsParadaItinerarioMvp.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1292e31b3f8548fba70e889a6b872f70cfe6ce2bd6b478cf70bd5f44b66882aa",
+    "git_content_sha256": "53d4e3d05b84ed2013d8593d414bcab071ac33609c1bf5d65d6928d55e62488f"
+  },
+  {
+    "path": "NoPonto/Migrations/20260923002208_GtfsParadaItinerarioMvp.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "8b2fe8c46a7df6d8402519146eefdcc1af2806460ac7b5c705fdfe77d7063b83",
+    "git_content_sha256": "f701f115da43db7977dcdba884ed3ef795c3a6a9f480ad5ab1d8477494d4875c"
+  },
+  {
+    "path": "NoPonto/Migrations/20260924013121_EstruturaTransporteV21.cs",
+    "source": "network-27/source.zip",
+    "sha256": "7d15b29459695f7b710c931c47abf714212a564753ab365701a1ae30f6b2c50f",
+    "git_content_sha256": "c21b110667ae38cec561da0517e4f513aa9e2c0fe01c59794f49e401287a2c62"
+  },
+  {
+    "path": "NoPonto/Migrations/20260924013121_EstruturaTransporteV21.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "bd87bea4a8f65332908d387f82f440b41a7edd4f9507de388cd0d607d0e772ba",
+    "git_content_sha256": "3544d7600af111fb23d53fcab46c02fca2d273deb485c6047b197e5757a42589"
+  },
+  {
+    "path": "NoPonto/Migrations/20260924190000_ViagemDuravelPostgres.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6a53ecfcc0c0bdbaab7053133149cc25f3f590ad327ecdf6b65988e0e03fbdb1",
+    "git_content_sha256": "1553e6b6e6e3acb59cc762e1de91f56de4f3bd245b222e84d4e3a1ecfab0f4ee"
+  },
+  {
+    "path": "NoPonto/Migrations/20260925175931_EstruturaFinalEtapas1e2.cs",
+    "source": "network-27/source.zip",
+    "sha256": "4ab94205e79a267246de100d09faf97b19ebc41ecbf61baa78eb852a9996b135",
+    "git_content_sha256": "fb5eaf029899bec55279ca1a837e7dd132c6f1b25dcac4167ae26922db5f4245"
+  },
+  {
+    "path": "NoPonto/Migrations/20260925175931_EstruturaFinalEtapas1e2.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "a44912d399423b4a67bcbfb009a0286460b027cedb8cbf1e77a02b7863475832",
+    "git_content_sha256": "f4bf9123c6f23b99880174ee1ae3500bbb835e012391019c58d81a4cb0564195"
+  },
+  {
+    "path": "NoPonto/Migrations/20260926011413_RuntimeEstruturalEtapa3.cs",
+    "source": "network-27/source.zip",
+    "sha256": "503becfacc28bf638848c16a0728b3f7dd063ef89c940e2d0bb3edfaea6f4dcf",
+    "git_content_sha256": "4c9b2e6cd6f1bf48e9b9837ea1cf1f9232a644c6b7b61f680434ccb8b89e8e24"
+  },
+  {
+    "path": "NoPonto/Migrations/20260926011413_RuntimeEstruturalEtapa3.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "368e834b18635ff4f8b777aa35c4ba28ea7acefad79d9a72582235e77b9cc0d1",
+    "git_content_sha256": "3e2580ebd15382a3be3620b00e57d36d94c225e736d54eb147312163ed55945f"
+  },
+  {
+    "path": "NoPonto/Migrations/20260926023401_RemoverLegadoEstruturalBusBrt.cs",
+    "source": "network-27/source.zip",
+    "sha256": "d50c978d7486e5307fcc1a43a547b22f0b3a256ab267127f96dcc56a46d9a2e7",
+    "git_content_sha256": "ddc4c69040104f16b874a12ba3b2c273cf50421481ae06cb299daa1192e6ee5d"
+  },
+  {
+    "path": "NoPonto/Migrations/20260926023401_RemoverLegadoEstruturalBusBrt.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "fef2fe6ddceaca2c395f2c3c352225351ee557883692bf2b241d0c3d0032f00c",
+    "git_content_sha256": "77693c6d8218fe99115baeacbc64a5e486ab45a95b9788a545ee28e86d319888"
+  },
+  {
+    "path": "NoPonto/Migrations/20260927220700_EtaV2Foundation.cs",
+    "source": "network-27/source.zip",
+    "sha256": "165d018b438731bd3f7df0ed513cfab345aa22c721a4a80acd7af19de51f49e0",
+    "git_content_sha256": "dd435aa1e8c6f44abf8e15c2eaac55050fb82e76dfbb5ce58e55e9c014c8ab4a"
+  },
+  {
+    "path": "NoPonto/Migrations/20260927220700_EtaV2Foundation.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "c2d53ba0e7c722e0e6ae716bb3b3789bdd77a09fdf95dd8d31181a86b66afbb9",
+    "git_content_sha256": "ac5a9808737e12592772c269d587aa4204dccd03c73407780a22dcd47d191574"
+  },
+  {
+    "path": "NoPonto/Migrations/20260930180000_RemoverIndiceAtualizadoEmUtcViagensOperacionais.cs",
+    "source": "network-27/source.zip",
+    "sha256": "1dab42c78bba00a85224b5f7721cb5579a26f934af1772d35ab28abf874e468e",
+    "git_content_sha256": "dc54aa09a558ff68f911e741c2c593d710119fa9493cb0ad148af4a0fa6bf67a"
+  },
+  {
+    "path": "NoPonto/Migrations/20261003211227_RailScheduleFoundation.cs",
+    "source": "network-27/source.zip",
+    "sha256": "690e079d1b51d75873015a13163342603733fbfef95ad5d5631de8543012072f",
+    "git_content_sha256": "ca21d1eb980c6763a382fef2ac45b6a4d2ad86588243318adb7d8c63cbe26d87"
+  },
+  {
+    "path": "NoPonto/Migrations/20261003211227_RailScheduleFoundation.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f4cea826473e3843261b7ff1c3f397a9bbf76954ad46a1bc7cf1f414337579c7",
+    "git_content_sha256": "a712fe3d048c9d0b1db75c7805a5e0a9e894d86a1bad320edfee1329721e0f8d"
+  },
+  {
+    "path": "NoPonto/Migrations/20261006180000_IntegridadeCircularDuravel.cs",
+    "source": "network-27/source.zip",
+    "sha256": "f6df0239a57ce157ae796f1381b051c5e99642813990af9152c8ee38042153a0",
+    "git_content_sha256": "f6df0239a57ce157ae796f1381b051c5e99642813990af9152c8ee38042153a0"
+  },
+  {
+    "path": "NoPonto/Migrations/20261010002416_TarifasPagamentosMvp.cs",
+    "source": "network-27/source.zip",
+    "sha256": "09d2decb5fc4cd37dbfe0d51d0226de6fd04e0d7cf89a0463ed1021afd3d56e8",
+    "git_content_sha256": "22b677afaea72768fab0aed45691b9f9ec7cbbe28f7087094602aea7e0396130"
+  },
+  {
+    "path": "NoPonto/Migrations/20261010002416_TarifasPagamentosMvp.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "62a3e35a0e89416bb8b3538e58d23601b5a72bb7e20f4ecbb6412c83b4a11e61",
+    "git_content_sha256": "19b0ec251ee43a415be4a570e3bcb9edf470316704fae2999d47a5d4279b9dd0"
+  },
+  {
+    "path": "NoPonto/Migrations/20261023014903_FormaPagamentoAparencia.cs",
+    "source": "network-27/source.zip",
+    "sha256": "6cf46ddb8f31768770b90e89a08275fb08f3b85be851483a0d771beb3a75dd5c",
+    "git_content_sha256": "ae8b4a7b4318edbf76fc442fc4b5f16718324ab3cf76b24e04d7ff03b6351711"
+  },
+  {
+    "path": "NoPonto/Migrations/20261023014903_FormaPagamentoAparencia.Designer.cs",
+    "source": "network-27/source.zip",
+    "sha256": "e242da511b6a02ec1b2885fadd59442de379014e65f672f77afff48d0717e4a0",
+    "git_content_sha256": "744f1a907fae922058495e386b5ef402b4b9bb1788efa0c466300f555c5d0884"
+  },
+  {
+    "path": "NoPonto/Migrations/TransporteDbContextModelSnapshot.cs",
+    "source": "network-27/source.zip",
+    "sha256": "af80750b1e76a095445bc5145293d9117ac7db80e2c76c4311bdbb91213dc311",
+    "git_content_sha256": "ad89cce3f3aa0063d5160208f74729e8d89bef4cc51d20624ff15771fed87272"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/EventosParada/EventosParadaService.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "1871ecaee5cdf0a3186f5b2be817a5f74026315dfc5c3c03d9435ecb29880560",
+    "git_content_sha256": "1871ecaee5cdf0a3186f5b2be817a5f74026315dfc5c3c03d9435ecb29880560"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/AdaptiveEtaShadow.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "b91063f0cc7e188ca8b9f578c1bab22e3a304e47d0649708d4fde836df0ab30a",
+    "git_content_sha256": "b91063f0cc7e188ca8b9f578c1bab22e3a304e47d0649708d4fde836df0ab30a"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/AdaptiveEtaShadowWorker.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "44aaa9e428cb4e06a81035c49ecabafb97a375c22b150fa949c3145917f212c7",
+    "git_content_sha256": "44aaa9e428cb4e06a81035c49ecabafb97a375c22b150fa949c3145917f212c7"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/DistanceAdaptiveEta.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "ea373b8bffbbf11ecc6b35821f6baf4bf303ee80f92584337491f60f0bf31fc9",
+    "git_content_sha256": "ea373b8bffbbf11ecc6b35821f6baf4bf303ee80f92584337491f60f0bf31fc9"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/EtaCausalTestDiagnostics.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "2725960fca280133c17d6fd834df7702c5d4557b39f203c545fba3f1e2969722",
+    "git_content_sha256": "2725960fca280133c17d6fd834df7702c5d4557b39f203c545fba3f1e2969722"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/GpsPollingService.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "99b73a6ca22f53be67a63774a01aa418980ed7e4288c6c4ade76f247546bb840",
+    "git_content_sha256": "99b73a6ca22f53be67a63774a01aa418980ed7e4288c6c4ade76f247546bb840"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/HybridEta.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "e9c1bc4ff2f93c2bb43458c12a170b120165db628b909597e6588dd36bfddec3",
+    "git_content_sha256": "e9c1bc4ff2f93c2bb43458c12a170b120165db628b909597e6588dd36bfddec3"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/HybridEtaPublication.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "7c2415b07b484823e26d58ba04262d33f736042fc44ab1299b92c8b86ca7288c",
+    "git_content_sha256": "7c2415b07b484823e26d58ba04262d33f736042fc44ab1299b92c8b86ca7288c"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/PhysicalEta.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "07a1a6221629085baef4a36a474aab2a453ed2fe89d36288f763608dc459db69",
+    "git_content_sha256": "07a1a6221629085baef4a36a474aab2a453ed2fe89d36288f763608dc459db69"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/RecentSpeedEstimator.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "f1f330fadaf07667e7cd4d9adaa71bd4bee50e862518c4a83f99578abb04158d",
+    "git_content_sha256": "f1f330fadaf07667e7cd4d9adaa71bd4bee50e862518c4a83f99578abb04158d"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/SustainedReferenceQualification.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "06ef073f0ee18343b820f967919a98cf158a76d26020e9f8d18cb2d841a515d2",
+    "git_content_sha256": "06ef073f0ee18343b820f967919a98cf158a76d26020e9f8d18cb2d841a515d2"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/SustainedReferenceSupport.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "99aca00f78cd6f6aa9ff3796c0d013e4b94042bf01cee714a806cac52e984a67",
+    "git_content_sha256": "99aca00f78cd6f6aa9ff3796c0d013e4b94042bf01cee714a806cac52e984a67"
+  },
+  {
+    "path": "NoPonto/5-Testes/AdaptiveEtaContinuityTests.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "8b50a5fb211a34aeeb5e47527a532f79232e530e9986ba1338d6d38332d18cf0",
+    "git_content_sha256": "8b50a5fb211a34aeeb5e47527a532f79232e530e9986ba1338d6d38332d18cf0"
+  },
+  {
+    "path": "NoPonto/5-Testes/AdaptiveEtaShadowTests.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "e051386bd59dd2e6f165f4356a0d8ac606991249a0d08f0e393ed94fc8776fd8",
+    "git_content_sha256": "e051386bd59dd2e6f165f4356a0d8ac606991249a0d08f0e393ed94fc8776fd8"
+  },
+  {
+    "path": "NoPonto/5-Testes/AdaptiveEtaShadowWorkerTests.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "d02e9d274ff9d6869097a5788da04b35452c9733df598364d181d920ebdb2e75",
+    "git_content_sha256": "d02e9d274ff9d6869097a5788da04b35452c9733df598364d181d920ebdb2e75"
+  },
+  {
+    "path": "NoPonto/5-Testes/DistanceAdaptiveEtaTests.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "a21433a1ad4110d29633357273e5002b309c6ed04bb6bca6f534107de1340d94",
+    "git_content_sha256": "a21433a1ad4110d29633357273e5002b309c6ed04bb6bca6f534107de1340d94"
+  },
+  {
+    "path": "NoPonto/5-Testes/EtaCausalReplay.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "3aa53b6ea832db340064b61a4a5c5a2de10c6942e7ad7405587ed3ecca6c10b6",
+    "git_content_sha256": "3aa53b6ea832db340064b61a4a5c5a2de10c6942e7ad7405587ed3ecca6c10b6"
+  },
+  {
+    "path": "NoPonto/5-Testes/HybridEtaPublicTests.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "e563ca6da04900e80425e20ba2abe8aa62355bcd5a07915b6585090a5f9cb38c",
+    "git_content_sha256": "e563ca6da04900e80425e20ba2abe8aa62355bcd5a07915b6585090a5f9cb38c"
+  },
+  {
+    "path": "NoPonto/5-Testes/HybridEtaTests.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "698e84ba65e6ef2ebbe141b7fe637f9e102ad0dfbf121e3642d0d23b42facdb4",
+    "git_content_sha256": "698e84ba65e6ef2ebbe141b7fe637f9e102ad0dfbf121e3642d0d23b42facdb4"
+  },
+  {
+    "path": "NoPonto/5-Testes/PhysicalEtaMvpTests.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "478b4c4752d197904d817e07aee8f959af460c18240c5040a61ef19a320a5b8f",
+    "git_content_sha256": "478b4c4752d197904d817e07aee8f959af460c18240c5040a61ef19a320a5b8f"
+  },
+  {
+    "path": "NoPonto/5-Testes/RecentSpeedEstimatorTests.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "9a49a13d8982e41de71311958557358c2f21d079536a90571c72e2c702c5776f",
+    "git_content_sha256": "9a49a13d8982e41de71311958557358c2f21d079536a90571c72e2c702c5776f"
+  },
+  {
+    "path": "NoPonto/5-Testes/SustainedReferenceQualificationTests.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "1ba9eb7ca5086266ca6b173a2b6488144f0d933b2a269f4d47358a1477b00f3c",
+    "git_content_sha256": "1ba9eb7ca5086266ca6b173a2b6488144f0d933b2a269f4d47358a1477b00f3c"
+  },
+  {
+    "path": "NoPonto/5-Testes/SustainedReferenceSupportTests.cs",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e",
+    "sha256": "f09da45d574007b9268995b91850b04f7e3fca7aaaa52b7c18ae3dcf3c4b9dbe",
+    "git_content_sha256": "f09da45d574007b9268995b91850b04f7e3fca7aaaa52b7c18ae3dcf3c4b9dbe"
+  },
+  {
+    "path": "NoPonto/2-Application/Services/GPS/Proto/gtfs-realtime.proto",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e (tracked resource)",
+    "sha256_git": "024ba347bc486949bc1c58b40ee98da5fcabb6aaee444bc43c88021753ffa586",
+    "git_content_sha256": "024ba347bc486949bc1c58b40ee98da5fcabb6aaee444bc43c88021753ffa586"
+  },
+  {
+    "path": "NoPonto/2-Application/Resources/Trem/trem-estrutura-v2.json",
+    "source": "823057cd2a885029904429ac6bb59e9ba1d5226e (tracked resource)",
+    "sha256_git": "abd2dde28c6e745f49a9b8eb40bcbb99302c5362396447cde10ed376800eb5b3",
+    "git_content_sha256": "abd2dde28c6e745f49a9b8eb40bcbb99302c5362396447cde10ed376800eb5b3"
+  }
+]

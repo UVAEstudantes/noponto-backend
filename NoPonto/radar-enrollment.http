@@ -1,0 +1,27 @@
+@baseUrl = http://127.0.0.1:8083
+@credential = <CREDENCIAL_DA_PROPRIA_INSTALACAO>
+@enrollmentId = aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+
+### Somente instalação aprovada na allowlist experimental; UUID gerado no Android antes do POST.
+POST {{baseUrl}}/radar/instalacao/push/confirmacoes
+Authorization: Bearer {{credential}}
+Content-Type: application/json
+
+{"enrollmentId":"{{enrollmentId}}","projectId":"ab3db7e8-2478-49d6-a339-e639dcce1a34","expoPushToken":"ExpoPushToken[SYNTHETIC_NOT_FOR_DELIVERY]","capabilities":["native-v1"]}
+
+# O campo capabilities é opcional; sem native-v1, o push usa title/body legado.
+
+### A prova vem exclusivamente pelo push ao aparelho. Nunca obtê-la por GET ou logs.
+POST {{baseUrl}}/radar/instalacao/push/confirmar
+Authorization: Bearer {{credential}}
+Content-Type: application/json
+
+{"enrollmentId":"{{enrollmentId}}","proof":"<PROVA_HEXADECIMAL_64_CARACTERES_RECEBIDA_NO_APARELHO>"}
+
+### Apenas metadados da associação da própria instalação.
+GET {{baseUrl}}/radar/instalacao/push
+Authorization: Bearer {{credential}}
+
+### Remoção idempotente de token e challenge pendente.
+DELETE {{baseUrl}}/radar/instalacao/push
+Authorization: Bearer {{credential}}

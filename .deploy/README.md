@@ -1,4 +1,52 @@
+# Deploy CI atual — composição congelada
+
+O GitHub Actions utiliza agora o modo `ci` de `eta-hybrid-release.py`, o mesmo executor
+API-only dos releases manuais. As seções abaixo sobre `deploy-api.sh` descrevem o
+executor anterior, mantido para compatibilidade; **não são o caminho do workflow atual**.
+
+O SSH transmite o executor por stdin. `NOPONTO_DEPLOY_STATE_DIR` deve apontar para o
+estado produtivo existente (`/home/guilherme/.noponto-deploy` verificado somente leitura).
+`active.manual.json.configuration` identifica a composição efetivamente publicada,
+com Radar, PhysicalEta, Shadow, mounts e demais serviços. Nenhum overlay do checkout
+é reaplicado. Antes do pull, valida configuração versus container (ambiente, mounts,
+portas, identidade Compose) sob o mesmo `deploy.lock`. Uma imagem manual posterior ao
+registro é aceita somente preservando essa configuração; o rollback captura o Image ID
+real. Todo ambiente efetivo também é congelado nos snapshots privados.
+
+Apenas a imagem de `services.api` muda para o digest GHCR aprovado. Reutiliza `up()`
+(`up -d --no-deps --no-build --pull never api`), saúde e validação de drift existentes.
+Redis, PostgreSQL e ML não recebem comandos de recriação. `ci-previous.json` guarda a
+configuração anterior com imagem local protegida por tag rollback. Erro/interrupção
+tratável restaura API, configuração e metadata; SIGKILL/queda do host exigem intervenção.
+Não há rollback de dados/schema. `active.manual.json` passa a apontar para `ci-active.json`.
+O contador `active.run` avança somente após sucesso e usa `github.run_id` (até20dígitos),
+evita o conflito do antigo run_number155 com o marcador produtivo166. Não resetar estado.
+
+PR somente valida. Push/main publica GHCR e, com `NOPONTO_DEPLOY_ENABLED=true`, tenta
+promover após validação. O gate já está ativo: **não mergear antes da revisão e do CI verde**.
+Continuam obrigatórios GHCR_USER/GHCR_TOKEN, SERVER_TAILSCALE_IP/SERVER_USER/SERVER_SSH_KEY/
+SERVER_SSH_KNOWN_HOSTS, TAILSCALE_OAUTH_CLIENT_ID/TAILSCALE_OAUTH_SECRET, além da variável
+NOPONTO_DEPLOY_STATE_DIR e permissões/approvals do environment production. Os antigos
+NOPONTO_DEPLOY_ENV_FILE/PHYSICAL_ETA_OVERRIDE/SHADOW_OVERRIDE não são mais necessários
+no workflow; os valores efetivos já estão na composição congelada.
+
+Preflight somente leitura: transmitir este executor a `python3 -I - ci --image <digest>
+--sequence <run_id> --state <estado> --commit <sha40> --check`, definindo `__file__` como
+`/dev/stdin`, como faz ssh-deploy.sh. Não faz pull, snapshots ou up; exige lock já existente.
+O digest é validado sintaticamente; acesso ao registry e boot só são comprovados na promoção.
+
+Testes offline agora incluem refresh/paradas/Swagger. Redis7 descartável com `--network none`
+compartilha somente loopback com o SDK; não há portas publicadas ou rede externa nos testes.
+A verificação TRX continua recusando classes ausentes, testes falhos ou ignorados.
+
+---
+
 # Deploy API MVP
+
+Radar N5-C2: o caminho manual com composição congelada foi estendido em
+`eta-hybrid-release.py` com modos `radar-*`, preflight e snapshot/rollback completos.
+Contrato e procedimento: [radar-n5c2-public.md](../docs/radar-n5c2-public.md).
+O executor CI abaixo não carrega automaticamente o overlay Radar; não usá-lo para essa ativação.
 
 Implementação baseada na auditoria 3A entregue na conversa: tres Compose obrigatorios, imagem por digest, API única, nenhuma recriação de dependências. Não chama `/home/guilherme/deploy.sh` nem envia Compose do Git ao servidor.
 

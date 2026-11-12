@@ -129,6 +129,8 @@ public sealed partial class GpsPollingCadenciaTests
         Assert.False(wait.IsCompleted);
         var batch = await PublishHandoff(store);
         await wait.WaitAsync(TimeSpan.FromSeconds(2));
+        // WaitAsync can finish before its timer cleanup continuation has returned.
+        await clock.TimerDisposed.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.Equal(6, clock.Seconds);
         Assert.Same(batch, store.Ler());
         Assert.Equal(0, clock.ActiveTimers);
@@ -322,13 +324,15 @@ public sealed partial class GpsPollingCadenciaTests
     private sealed class HandoffTimerClock : TimeProvider
     {
         private long _ticks;
+        private readonly TaskCompletionSource _timerDisposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task TimerDisposed => _timerDisposed.Task;
         private readonly List<HandoffTimer> _timers = [];
         public double Seconds => TimeSpan.FromTicks(_ticks).TotalSeconds;
         public int ActiveTimers => _timers.Count(t => !t.Disposed);
         public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch.AddTicks(_ticks);
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period)
         {
-            var timer = new HandoffTimer(callback, state, _ticks + due.Ticks);
+            var timer = new HandoffTimer(callback, state, _ticks + due.Ticks, () => _timerDisposed.TrySetResult());
             _timers.Add(timer);
             return timer;
         }
@@ -337,13 +341,13 @@ public sealed partial class GpsPollingCadenciaTests
             _ticks += TimeSpan.FromSeconds(seconds).Ticks;
             foreach (var timer in _timers.Where(t => !t.Disposed && t.Deadline <= _ticks).ToArray()) timer.Fire();
         }
-        private sealed class HandoffTimer(TimerCallback callback, object? state, long deadline) : ITimer
+        private sealed class HandoffTimer(TimerCallback callback, object? state, long deadline, Action disposed) : ITimer
         {
             public long Deadline => deadline;
             public bool Disposed { get; private set; }
             public void Fire() { if (!Disposed) { Disposed = true; callback(state); } }
             public bool Change(TimeSpan dueTime, TimeSpan period) => throw new NotSupportedException();
-            public void Dispose() => Disposed = true;
+            public void Dispose() { Disposed = true; disposed(); }
             public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
         }
     }

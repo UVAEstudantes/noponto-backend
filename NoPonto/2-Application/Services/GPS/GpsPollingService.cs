@@ -11,6 +11,7 @@ namespace NoPonto.Application.GPS;
 
 public sealed class GpsPollingService : BackgroundService
 {
+    private readonly AdaptiveEtaShadowWorker? _adaptiveShadow;
     private readonly GpsSppoSnapshotStore _snapshotSppo;
     private readonly IDistributedCache _cache;
     private readonly GpsSignalRPublisher _signalR;
@@ -68,7 +69,7 @@ public sealed class GpsPollingService : BackgroundService
         IRetryOperacionalGps? retryOperacional = null,
         GpsCorrelatedDiagnostics? correlatedDiagnostics = null,
         IOptions<PhysicalEtaOptions>? physicalEtaOptions = null,
-        HistoricalEtaShadow? historicalEtaShadow = null)
+        HistoricalEtaShadow? historicalEtaShadow = null, AdaptiveEtaShadowWorker? adaptiveShadow = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -101,6 +102,7 @@ public sealed class GpsPollingService : BackgroundService
         _correlatedDiagnostics = correlatedDiagnostics;
         _physicalEtaOptions = physicalEtaOptions;
         _historicalEtaShadow = historicalEtaShadow;
+        _adaptiveShadow = adaptiveShadow;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -530,6 +532,8 @@ public sealed class GpsPollingService : BackgroundService
         {
             var physicalNow = DateTimeOffset.UtcNow;
             var physicalOptions = _physicalEtaOptions?.Value ?? new PhysicalEtaOptions();
+            if ((physicalOptions.AdaptiveShadowEnabled || physicalOptions.HybridShadowEnabled || physicalOptions.HybridPublicEnabled) && _adaptiveShadow is not null)
+                _adaptiveShadow.TrySubmit(todosProcessados);
             todosProcessados = todosProcessados.Select(x => PhysicalEta.Apply(x, physicalNow, physicalOptions, capturePhysicalDiagnostic)).ToList();
         }
 

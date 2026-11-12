@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
+using NoPonto.Application.PhysicalPresence;
 
 namespace NoPonto.API.Hubs;
 
@@ -14,8 +15,16 @@ namespace NoPonto.API.Hubs;
 ///   PosicaoAtualizada(posicoes[])  — lista de PosicaoVeiculoDto da linha
 ///   LinhaEsvaziada({ codigoLinha }) — snapshot vazio da linha identificada
 /// </summary>
-public sealed class GpsHub : Hub
+public sealed class GpsHub(PhysicalPresenceMvp? physicalPresence = null, UnifiedLocation? unified = null) : Hub
 {
+    public async Task InscreverLocalizacaoUnificada(string codigoLinha)
+    {
+        if (unified is null || !unified.IsCohort(codigoLinha)) throw new HubException("Coorte indisponível.");
+        await Groups.AddToGroupAsync(Context.ConnectionId, UnifiedLocation.GroupFor(codigoLinha));
+        await Clients.Caller.SendAsync("LocalizacaoUnificadaAtualizada", await unified.SnapshotAsync(codigoLinha, Context.ConnectionAborted));
+    }
+    public Task CancelarLocalizacaoUnificada(string codigoLinha)
+        => unified?.IsCohort(codigoLinha) == true ? Groups.RemoveFromGroupAsync(Context.ConnectionId, UnifiedLocation.GroupFor(codigoLinha)) : Task.CompletedTask;
     // Rastreia quais linhas cada conexão assinou.
     // Chave: connectionId → conjunto de códigos de linha.
     private static readonly ConcurrentDictionary<string, HashSet<string>> _linhasPorConexao =
@@ -84,6 +93,25 @@ public sealed class GpsHub : Hub
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     public static string GrupoLinha(string codigoLinha) => $"linha:{codigoLinha}";
+
+    public static string GrupoPresencaFisica(string stopId) => $"presenca-fisica:{stopId}";
+
+    public async Task InscreverPresencaFisica(string stopId)
+    {
+        if (string.IsNullOrWhiteSpace(stopId) || stopId.Length > 64)
+            throw new HubException("Parada inválida.");
+        if (physicalPresence?.IsFacility(stopId) == true)
+            await Groups.AddToGroupAsync(Context.ConnectionId, GrupoPresencaFisica(stopId));
+        await Clients.Caller.SendAsync("PresencaFisicaAtualizada", physicalPresence?.Snapshot(stopId)
+            ?? new PhysicalPresenceSnapshotDto(stopId, 0, DateTimeOffset.UtcNow, []));
+    }
+
+    public Task CancelarPresencaFisica(string stopId)
+    {
+        if (string.IsNullOrWhiteSpace(stopId) || stopId.Length > 64)
+            throw new HubException("Parada inválida.");
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, GrupoPresencaFisica(stopId));
+    }
 
     /// <summary>
     /// Reconstrói _linhasAtivas a partir do estado real de _linhasPorConexao.

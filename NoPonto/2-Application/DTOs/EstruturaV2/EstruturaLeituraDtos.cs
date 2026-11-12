@@ -21,6 +21,19 @@ public sealed record ParadaEstruturalDto(Guid Id, string Codigo, string Nome,
     double Latitude, double Longitude, Guid? ModalId, string TipoLocal,
     Guid? ParadaPaiId, string? Plataforma);
 
+/// <summary>Parada com linhas, sentidos e modais conhecidos nas versões operacionais atuais.</summary>
+public sealed record ParadaConsultaV2Dto(Guid Id, string Codigo, string Nome, double Latitude, double Longitude)
+{
+    public IReadOnlyList<LinhaParadaV2Dto> Linhas { get; init; } = [];
+    public IReadOnlyList<ModalParadaV2Dto> Modais { get; init; } = [];
+}
+
+/// <summary>Linha e sentidos comprovados por ocorrências operacionais vigentes.</summary>
+public sealed record LinhaParadaV2Dto(Guid Id, string Codigo, string Nome, Guid ModalId,
+    IReadOnlyList<SentidoEstruturalResumoDto> Sentidos);
+/// <summary>Modal declarado na parada ou associado às linhas vigentes que a atendem.</summary>
+public sealed record ModalParadaV2Dto(Guid Id, string Nome);
+
 public sealed record GeometriaLinhaDto(string Tipo, IReadOnlyList<double[]> Coordenadas);
 
 public sealed record OcorrenciaItinerarioDto(Guid OcorrenciaId, int Ordem, int? Volta,
@@ -37,6 +50,8 @@ public sealed record ItinerarioPadraoVersaoDto(
 
 public interface IEstruturaLeituraV2Repository
 {
+    Task<PaginacaoRespostaDTO<ParadaConsultaV2Dto>> ListarParadasAsync(string? nome, Guid? modalId,
+        string? codigoLinha, Guid? sentidoId, int pagina, int tamanhoPagina, CancellationToken ct);
     Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
         string? codigo, string? nome, Guid? modalId, string? tipoRota,
         string? excluirTipoRota, int pagina, int tamanhoPagina, CancellationToken ct);

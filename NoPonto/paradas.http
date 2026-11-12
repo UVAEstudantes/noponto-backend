@@ -1,0 +1,10 @@
+@host = http://localhost:5000
+
+### Descobrir diretamente IDs de paradas e sentidos atendidos pela linha
+GET {{host}}/paradas?codigoLinha=838&page=1&pageSize=50
+
+### Nome parcial, sem distinguir caixa, combinado com linha
+GET {{host}}/paradas?nome=campo&codigoLinha=838&page=1&pageSize=20
+
+### Catálogo paginado, inclusive paradas sem vínculo vigente (linhas vazias)
+GET {{host}}/paradas?page=1&pageSize=100

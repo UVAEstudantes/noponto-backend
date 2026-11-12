@@ -1,3 +1,15 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Net;
+using System.Net.Http.Json;
+using NoPonto.API.Controllers;
+using NoPonto.Application.TremRealtime;
 using System.Collections.Immutable;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -18,6 +30,417 @@ namespace NoPonto.Tests.TremRealtime;
 public sealed class TremRealtimePhase4ATests
 {
     private static readonly DateTimeOffset T0 = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
+
+    [Theory]
+    [InlineData("updated", 200, "Updated")]
+    [InlineData("reused", 200, "Reused")]
+    [InlineData("invalid_context", 400, "InvalidContext")]
+    [InlineData("invalid_installation", 400, "InvalidContext")]
+    [InlineData("cooldown", 429, "RateLimited")]
+    [InlineData("provider_limit", 429, "RateLimited")]
+    [InlineData("redis_down", 503, "Unavailable")]
+    [InlineData("timeout", 503, "Unavailable")]
+    [InlineData("failure", 500, "Failed")]
+    public async Task RefreshController_MapsOutcomes_UsesConnectionIp_NotForwardingHeaders(
+        string scenario, int code, string status)
+    {
+        var query = Query("MANUAL", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var h = CycleHarness(true, true, false, status: scenario == "timeout" ? TrensRjClientStatus.Timeout
+            : scenario == "provider_limit" ? TrensRjClientStatus.RateLimited : TrensRjClientStatus.Success);
+        var value = Observation("T", null, null, null) with
+        { OriginExternalStationId = query.OriginExternalStationId, DestinationExternalStationId = query.DestinationExternalStationId,
+          ProviderLinhaId = query.StructurallyCoveredLinhaIds.Single(), SentidoId = query.StructurallyCoveredSentidoIds.Single() };
+        var store = new MemoryRefreshStore { RedisDown = scenario == "redis_down", Claimed = scenario == "cooldown",
+            Evidence = scenario == "reused" ? new([value]) : null };
+        var service = new TrensRjManualRefreshService(new ManualCatalog([query]),
+            new CountingCache(throws: scenario == "failure") { Snapshot = ManualTopology(query) }, h.Client, h.Cycle,
+            new ManualClock(), NullLogger<TrensRjManualRefreshService>.Instance, store, Options.Create(new TremRealtimeOptions()));
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("::ffff:203.0.113.10");
+        context.Request.Headers["X-Forwarded-For"] = "198.51.100.1";
+        context.Request.Headers["Forwarded"] = "for=198.51.100.2";
+        context.Request.Headers["X-Real-IP"] = "198.51.100.3";
+        var controller = new TrensRjRefreshController(service) { ControllerContext = new() { HttpContext = context } };
+        var installation = scenario == "invalid_installation" ? Guid.Empty : Guid.NewGuid();
+        var result = Assert.IsAssignableFrom<ObjectResult>(await controller.Refresh(
+            scenario == "invalid_context" ? Guid.NewGuid() : query.OriginParadaId,
+            new(query.StructurallyCoveredSentidoIds.Single(), installation), default));
+        Assert.Equal(code, result.StatusCode);
+        Assert.Equal(status, Assert.IsType<TrensRjRefreshResponse>(result.Value).Status);
+        Assert.Equal("no-store", context.Response.Headers.CacheControl.ToString());
+        if (store.Claims > 0)
+        {
+            Assert.Equal("203.0.113.10", store.LastCaller!.IpAddress);
+            Assert.Equal(installation, store.LastCaller.InstalacaoId);
+        }
+        var queried = scenario is "updated" or "timeout" or "provider_limit";
+        Assert.Equal(queried ? 1 : 0, h.Client.Requests);
+        Assert.Equal(queried || scenario == "cooldown" ? 1 : 0, store.Claims);
+        if (code == 429) Assert.Equal("300", context.Response.Headers.RetryAfter.ToString());
+    }
+
+    [Fact]
+    public async Task HttpPost_BindsPayload_UpdatesThenReusesWithoutQuota_RejectsInvalidContext()
+    {
+        var query = Query("MANUAL", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var store = new MemoryRefreshStore();
+        var h = CycleHarness(true, true, false, refreshStore: store);
+        h.Normalizer.Value = Observation("T", null, null, null) with
+        { OriginExternalStationId = query.OriginExternalStationId, DestinationExternalStationId = query.DestinationExternalStationId,
+          ProviderLinhaId = query.StructurallyCoveredLinhaIds.Single(), SentidoId = query.StructurallyCoveredSentidoIds.Single() };
+        var service = new TrensRjManualRefreshService(new ManualCatalog([query]),
+            new CountingCache { Snapshot = ManualTopology(query) }, h.Client, h.Cycle, new ManualClock(),
+            NullLogger<TrensRjManualRefreshService>.Instance, store, Options.Create(new TremRealtimeOptions()));
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
+        builder.Logging.ClearProviders();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Services.AddSingleton(service);
+        builder.Services.AddControllers().AddApplicationPart(typeof(TrensRjRefreshController).Assembly);
+        await using var app = builder.Build();
+        app.MapControllers();
+        await app.StartAsync();
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(app.Services.GetRequiredService<IServer>()
+                .Features.Get<IServerAddressesFeature>()!.Addresses.Single()) };
+            http.DefaultRequestHeaders.Add("X-Forwarded-For", "198.51.100.1");
+            var body = new TrensRjRefreshRequest(query.StructurallyCoveredSentidoIds.Single(), Guid.NewGuid());
+            var route = $"/paradas/{query.OriginParadaId}/trens/refresh";
+            using var first = await http.PostAsJsonAsync(route, body);
+            Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+            Assert.Equal("Updated", (await first.Content.ReadFromJsonAsync<TrensRjRefreshResponse>())!.Status);
+            Assert.Equal("127.0.0.1", store.LastCaller!.IpAddress);
+            using var second = await http.PostAsJsonAsync(route, body);
+            Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+            Assert.Equal("Reused", (await second.Content.ReadFromJsonAsync<TrensRjRefreshResponse>())!.Status);
+            Assert.Equal(1, store.Claims);
+            Assert.Equal(1, h.Client.Requests);
+            using var invalid = await http.PostAsJsonAsync($"/paradas/{Guid.NewGuid()}/trens/refresh", body);
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+            using var malformed = await http.PostAsync(route, new StringContent("{\"sentidoId\":\"invalid\"}",
+                System.Text.Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
+            Assert.Equal(1, h.Client.Requests);
+        }
+        finally { await app.StopAsync(); }
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task ManualRefresh_ReusesAutomaticOrManualEvidence_WithoutReplayingOrRedating(bool automatic, bool redisDown)
+    {
+        var query = Query("TRUNK_OUT", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var store = new MemoryRefreshStore();
+        var catalog = new ManualCatalog([query]);
+        var h = CycleHarness(true, true, false, refreshStore: store, catalog: catalog);
+        h.Normalizer.Value = Observation("T", null, null, null) with
+        { OriginExternalStationId = query.OriginExternalStationId, DestinationExternalStationId = query.DestinationExternalStationId, ProviderLinhaId = query.StructurallyCoveredLinhaIds.Single(), SentidoId = query.StructurallyCoveredSentidoIds.Single() };
+        if (automatic) await h.Cycle.RunOnceAsync(default);
+        else
+        {
+            var initial = new TrensRjManualRefreshService(catalog,
+                new CountingCache { Snapshot = ManualTopology(query) }, h.Client, h.Cycle, new ManualClock(),
+                NullLogger<TrensRjManualRefreshService>.Instance, store, Options.Create(new TremRealtimeOptions()));
+            Assert.Equal(TrensRjManualRefreshStatus.Updated,
+                (await initial.RefreshAsync(query.OriginParadaId, query.StructurallyCoveredSentidoIds.Single())).Status);
+        }
+        store.RedisDown = redisDown;
+        var original = Assert.Single(store.Evidence!.Observations);
+        var before = Assert.Single(h.Tracker.CaptureSnapshot().Trains);
+        var clock = new ManualClock(); clock.Advance(TimeSpan.FromSeconds(10));
+        var service = new TrensRjManualRefreshService(catalog,
+            new CountingCache { Snapshot = ManualTopology(query) }, h.Client, h.Cycle, clock,
+            NullLogger<TrensRjManualRefreshService>.Instance, store, Options.Create(new TremRealtimeOptions()));
+        var result = await service.RefreshAsync(query.OriginParadaId, query.StructurallyCoveredSentidoIds.Single());
+        Assert.Equal(TrensRjManualRefreshStatus.Reused, result.Status);
+        Assert.Equal(1, result.ObservationCount);
+        Assert.Equal(1, h.Client.Requests);
+        Assert.Equal(automatic ? 0 : 1, store.Claims);
+        Assert.Equal(T0, original.ObservedAtUtc);
+        var after = Assert.Single(h.Tracker.CaptureSnapshot().Trains);
+        Assert.Equal(before.ObservationCount, after.ObservationCount);
+        Assert.Equal(before.LastSeenUtc, after.LastSeenUtc);
+    }
+
+    [Fact]
+    public async Task ManualRefresh_SharedCache_IsReusedWithoutReplayingIntoAnotherRuntime()
+    {
+        var query = Query("MANUAL", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var h = CycleHarness(true, true, false);
+        var value = Observation("T", null, null, null) with
+        { OriginExternalStationId = query.OriginExternalStationId, DestinationExternalStationId = query.DestinationExternalStationId,
+          ProviderLinhaId = query.StructurallyCoveredLinhaIds.Single(), SentidoId = query.StructurallyCoveredSentidoIds.Single() };
+        var store = new MemoryRefreshStore { Evidence = new([value]) };
+        var service = new TrensRjManualRefreshService(new ManualCatalog([query]),
+            new CountingCache { Snapshot = ManualTopology(query) }, h.Client, h.Cycle, new ManualClock(),
+            NullLogger<TrensRjManualRefreshService>.Instance, store, Options.Create(new TremRealtimeOptions()));
+        var result = await service.RefreshAsync(query.OriginParadaId, query.StructurallyCoveredSentidoIds.Single());
+        Assert.Equal(TrensRjManualRefreshStatus.Reused, result.Status);
+        Assert.Equal("recent_evidence", result.Diagnostic);
+        Assert.Equal(0, h.Client.Requests);
+        Assert.Equal(0, store.Claims);
+        Assert.Empty(h.Tracker.CaptureSnapshot().Trains);
+        Assert.Equal(T0, Assert.Single(store.Evidence!.Observations).ObservedAtUtc);
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public async Task ManualRefresh_RedisFailureCooldownOrCanceledOwner_DoesNotStartSecondQuery(
+        bool redisDown, bool alreadyClaimed, bool cancelAfterAdmission)
+    {
+        var query = Query("MANUAL", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var h = CycleHarness(true, true, false, status: TrensRjClientStatus.Timeout);
+        var store = new MemoryRefreshStore { RedisDown = redisDown, Claimed = alreadyClaimed };
+        using var canceled = new CancellationTokenSource();
+        if (cancelAfterAdmission) h.Client.BeforeResult = () => { canceled.Cancel(); return Task.CompletedTask; };
+        var service = new TrensRjManualRefreshService(new ManualCatalog([query]),
+            new CountingCache { Snapshot = ManualTopology(query) }, h.Client, h.Cycle, new ManualClock(),
+            NullLogger<TrensRjManualRefreshService>.Instance, store, Options.Create(new TremRealtimeOptions()));
+        var first = await service.RefreshAsync(query.OriginParadaId, query.StructurallyCoveredSentidoIds.Single(), canceled.Token);
+        var second = await service.RefreshAsync(query.OriginParadaId, query.StructurallyCoveredSentidoIds.Single());
+        Assert.Equal(TrensRjManualRefreshStatus.Unavailable, first.Status);
+        Assert.Equal(TrensRjManualRefreshStatus.Unavailable, second.Status);
+        Assert.Equal(cancelAfterAdmission ? 1 : 0, h.Client.Requests);
+        Assert.Equal(cancelAfterAdmission ? 1 : 0, store.Releases);
+        Assert.Empty(h.Tracker.CaptureSnapshot().Trains);
+    }
+
+    [Theory]
+    [InlineData(-60, 2, true)]
+    [InlineData(1, 2, true)]
+    [InlineData(-10, 0, true)]
+    [InlineData(-10, 2, false)]
+    public void RecentEvidence_RejectsExpiredFuturePassedOrUnresolved(int age, int minutes, bool resolved)
+    {
+        var value = Observation("T", null, null, null) with { ObservedAtUtc = T0.AddSeconds(age),
+            MinutesUntil = minutes, ProviderLinhaId = Guid.NewGuid(), SentidoId = resolved ? Guid.NewGuid() : null };
+        Assert.False(TrensRjEvidence.IsUseful(value, T0));
+    }
+
+    [Theory]
+    [InlineData(TrensRjClientStatus.Success, false, TrensRjManualRefreshStatus.Updated)]
+    [InlineData(TrensRjClientStatus.Success, true, TrensRjManualRefreshStatus.Unavailable)]
+    [InlineData(TrensRjClientStatus.Timeout, false, TrensRjManualRefreshStatus.Unavailable)]
+    [InlineData(TrensRjClientStatus.NoService, false, TrensRjManualRefreshStatus.Unavailable)]
+    [InlineData(TrensRjClientStatus.ProviderError, false, TrensRjManualRefreshStatus.Unavailable)]
+    [InlineData(TrensRjClientStatus.InvalidPayload, false, TrensRjManualRefreshStatus.Unavailable)]
+    [InlineData(TrensRjClientStatus.Disabled, false, TrensRjManualRefreshStatus.Unavailable)]
+    [InlineData(TrensRjClientStatus.RateLimited, false, TrensRjManualRefreshStatus.Unavailable)]
+    public async Task ManualRefresh_UsesCatalogPairAndSharedPipeline(TrensRjClientStatus status,
+        bool empty, TrensRjManualRefreshStatus expected)
+    {
+        var h = CycleHarness(true, true, false);
+        var query = Query("MANUAL", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var topology = ManualTopology(query);
+        var cache = new CountingCache { Snapshot = topology };
+        var client = new FakeClient(status);
+        h.Normalizer.Empty = empty;
+        var service = new TrensRjManualRefreshService(new ManualCatalog([query]), cache,
+            client, h.Cycle, new ManualClock(), NullLogger<TrensRjManualRefreshService>.Instance, new MemoryRefreshStore(), Options.Create(new TremRealtimeOptions()));
+        var result = await service.RefreshAsync(query.OriginParadaId, topology.Patterns[0].SentidoId);
+        Assert.Equal(expected, result.Status);
+        Assert.Equal(status, result.ProviderStatus);
+        Assert.Equal(query.PairKey, client.LastPair);
+        Assert.Equal(1, client.Requests);
+        Assert.Equal(expected == TrensRjManualRefreshStatus.Updated ? 1 : 0, result.ObservationCount);
+        Assert.Equal(result.ObservationCount, h.Engine.Calls);
+        Assert.Equal(result.ObservationCount, h.Tracker.CaptureSnapshot().Trains.Length);
+    }
+
+    [Theory]
+    [InlineData("invalid", TrensRjManualRefreshStatus.InvalidContext, "rail_context_not_found")]
+    [InlineData("empty_id", TrensRjManualRefreshStatus.InvalidContext, "invalid_ids")]
+    [InlineData("missing", TrensRjManualRefreshStatus.Unavailable, "no_supported_pair")]
+    [InlineData("ambiguous", TrensRjManualRefreshStatus.Unavailable, "ambiguous_pairs")]
+    [InlineData("external_mismatch", TrensRjManualRefreshStatus.Unavailable, "no_supported_pair")]
+    [InlineData("reverse", TrensRjManualRefreshStatus.Unavailable, "no_supported_pair")]
+    [InlineData("wrong_line", TrensRjManualRefreshStatus.Unavailable, "no_supported_pair")]
+    public async Task ManualRefresh_InvalidOrUnsupportedContext_DoesNotQuery(string scenario,
+        TrensRjManualRefreshStatus expected, string diagnostic)
+    {
+        var h = CycleHarness(true, true, false);
+        var query = Query("MANUAL", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var topology = ManualTopology(query);
+        var sentido = topology.Patterns[0].SentidoId;
+        if (scenario == "external_mismatch") query = query with { PairKey = new("untrusted", "d") };
+        if (scenario == "reverse") topology = topology with { Patterns = [topology.Patterns[0] with
+            { Occurrences = [topology.Patterns[0].Occurrences[0] with { Order = 2 }, topology.Patterns[0].Occurrences[1] with { Order = 1 }] }] };
+        if (scenario == "wrong_line") topology = topology with { Patterns = [topology.Patterns[0] with { LinhaId = Guid.NewGuid() }] };
+        IReadOnlyList<TremSentinelQuery> queries = scenario == "missing" ? [] : scenario == "ambiguous"
+            ? [query, query with { Id = "OTHER" }] : [query];
+        var service = new TrensRjManualRefreshService(new ManualCatalog(queries),
+            new CountingCache { Snapshot = topology }, h.Client, h.Cycle, new ManualClock(),
+            NullLogger<TrensRjManualRefreshService>.Instance, new MemoryRefreshStore(), Options.Create(new TremRealtimeOptions()));
+        var result = await service.RefreshAsync(scenario == "empty_id" ? Guid.Empty : query.OriginParadaId,
+            scenario == "invalid" ? Guid.NewGuid() : sentido);
+        Assert.Equal(expected, result.Status);
+        Assert.Equal(diagnostic, result.Diagnostic);
+        Assert.Equal(0, h.Client.Requests);
+        Assert.Empty(h.Tracker.CaptureSnapshot().Trains);
+    }
+
+    [Fact]
+    public async Task ManualRefresh_ControlledFailure_ReleasesGateForNextRequest()
+    {
+        var h = CycleHarness(true, true, false);
+        var query = Query("MANUAL", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var topology = ManualTopology(query);
+        var cache = new CountingCache(throws: true);
+        var service = new TrensRjManualRefreshService(new ManualCatalog([query]), cache,
+            h.Client, h.Cycle, new ManualClock(), NullLogger<TrensRjManualRefreshService>.Instance, new MemoryRefreshStore(), Options.Create(new TremRealtimeOptions()));
+        var failed = await service.RefreshAsync(query.OriginParadaId, topology.Patterns[0].SentidoId);
+        Assert.Equal(TrensRjManualRefreshStatus.Failed, failed.Status);
+        Assert.Equal(0, h.Client.Requests);
+        var valid = new TrensRjManualRefreshService(new ManualCatalog([query]),
+            new CountingCache { Snapshot = topology }, h.Client, h.Cycle, new ManualClock(),
+            NullLogger<TrensRjManualRefreshService>.Instance, new MemoryRefreshStore(), Options.Create(new TremRealtimeOptions()));
+        Assert.Equal(TrensRjManualRefreshStatus.Updated,
+            (await valid.RefreshAsync(query.OriginParadaId, topology.Patterns[0].SentidoId)).Status);
+    }
+
+    [Fact]
+    public async Task ManualRefresh_AndAutomaticCycle_SerializeAcquisitionAcrossScopes()
+    {
+        var manual = CycleHarness(true, true, false);
+        var automatic = CycleHarness(true, true, false);
+        var query = Query("MANUAL", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var topology = ManualTopology(query);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        manual.Client.BeforeResult = async () => { entered.SetResult(); await release.Task; };
+        var service = new TrensRjManualRefreshService(new ManualCatalog([query]),
+            new CountingCache { Snapshot = topology }, manual.Client, manual.Cycle, new ManualClock(),
+            NullLogger<TrensRjManualRefreshService>.Instance, new MemoryRefreshStore(), Options.Create(new TremRealtimeOptions()));
+        var refresh = service.RefreshAsync(query.OriginParadaId, topology.Patterns[0].SentidoId);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var cycle = automatic.Cycle.RunOnceAsync(default);
+        try
+        {
+            Assert.False(cycle.IsCompleted);
+            Assert.Equal(0, automatic.Client.Requests);
+            using var canceled = new CancellationTokenSource();
+            canceled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                service.RefreshAsync(query.OriginParadaId, topology.Patterns[0].SentidoId, canceled.Token));
+        }
+        finally { release.TrySetResult(); await Task.WhenAll(refresh, cycle).WaitAsync(TimeSpan.FromSeconds(10)); }
+        Assert.Equal(TrensRjManualRefreshStatus.Updated, (await refresh).Status);
+        Assert.Equal(1, manual.Client.Requests);
+        Assert.Equal(1, automatic.Client.Requests);
+        Assert.Equal(1, automatic.Engine.Calls);
+    }
+
+    private static TremPublishedTopologySnapshot ManualTopology(TremSentinelQuery query) => new(T0,
+        [new(Guid.NewGuid(), Guid.NewGuid(), query.StructurallyCoveredLinhaIds.Single(),
+            query.StructurallyCoveredSentidoIds.Single(),
+            [new(Guid.NewGuid(), 1, query.OriginParadaId) { ExternalStationId = query.OriginExternalStationId },
+             new(Guid.NewGuid(), 2, query.DestinationParadaId) { ExternalStationId = query.DestinationExternalStationId }])]);
+
+    private sealed class MemoryRefreshStore : ITrensRjRefreshStore
+    {
+        public TrensRjRecentEvidence? Evidence;
+        public bool RedisDown;
+        public bool Claimed;
+        public int Claims, Releases;
+        public TrensRjRefreshCaller? LastCaller;
+        public Task<TrensRjRecentEvidence?> ReadAsync(TremSentinelPairKey pair) => RedisDown
+            ? Task.FromException<TrensRjRecentEvidence?>(new InvalidOperationException("redis offline"))
+            : Task.FromResult(Evidence);
+        public Task WriteAsync(TremSentinelPairKey pair, TrensRjRecentEvidence evidence) { Evidence = evidence; return Task.CompletedTask; }
+        public Task<bool> TryClaimAsync(Guid parada, Guid sentido, string token, TimeSpan lease, TrensRjRefreshCaller? caller = null)
+        { LastCaller = caller; Claims++; if (Claimed) return Task.FromResult(false); Claimed = true; return Task.FromResult(true); }
+        public Task ReleaseAsync(Guid parada, Guid sentido, string token) { Releases++; return Task.CompletedTask; }
+    }
+
+    private sealed class ManualCatalog(IReadOnlyList<TremSentinelQuery> queries) : ITremSentinelCatalog
+    {
+        public Task<IReadOnlyList<TremSentinelQuery>> GetAsync(CancellationToken ct = default) => Task.FromResult(queries);
+        public Task ReloadAsync(CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task ProcessResult_WithoutPolling_PreservesOriginalTimestampsAndReachesRailEngine()
+    {
+        var h = CycleHarness(false, false, false);
+        var query = Query("MANUAL", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var started = T0.AddSeconds(-20);
+        var received = T0.AddSeconds(-10);
+        var result = new TrensRjClientResult<TrensRjNextEnvelope>(TrensRjClientStatus.Success,
+            new([], null, null, null, null, null, null, null, null, false));
+
+        var observations = await h.Cycle.ProcessResultAsync(query, result, started, [query],
+            originalReceivedAtUtc: received);
+
+        Assert.Equal(started, Assert.Single(observations).ObservedAtUtc);
+        Assert.Equal(started, Assert.Single(h.Tracker.CaptureSnapshot().Trains).LastSeenUtc);
+        Assert.Equal(1, h.Observer.Calls);
+        Assert.Equal(started, h.Observer.Started);
+        Assert.Equal(received, h.Observer.Received);
+        Assert.Equal(1, h.Engine.Calls);
+        Assert.Equal(started, h.Engine.Started);
+        Assert.Equal(received, h.Engine.Received);
+        Assert.Equal(0, h.Client.Requests);
+        Assert.Equal(0, h.CanaryMetrics.Capture().Requests);
+    }
+
+    [Theory]
+    [InlineData(TrensRjClientStatus.Success)]
+    [InlineData(TrensRjClientStatus.Timeout)]
+    [InlineData(TrensRjClientStatus.NoService)]
+    public async Task ProcessResult_EmptyOrFailure_PreservesPreviousEvidence(TrensRjClientStatus status)
+    {
+        var h = CycleHarness(true, true, false);
+        var query = Query("MANUAL", Guid.NewGuid(), Guid.NewGuid()) with
+        { StructurallyCoveredLinhaIds = new HashSet<Guid> { Guid.NewGuid() },
+          StructurallyCoveredSentidoIds = new HashSet<Guid> { Guid.NewGuid() } };
+        var success = new TrensRjClientResult<TrensRjNextEnvelope>(TrensRjClientStatus.Success,
+            new([], null, null, null, null, null, null, null, null, false));
+        await h.Cycle.ProcessResultAsync(query, success, T0, [query]);
+        var before = Assert.Single(h.Tracker.CaptureSnapshot().Trains);
+        h.Normalizer.Empty = true;
+
+        var observations = await h.Cycle.ProcessResultAsync(query,
+            new(status, status == TrensRjClientStatus.Success ? success.Value : null),
+            T0.AddSeconds(1), [query]);
+
+        Assert.Empty(observations);
+        var after = Assert.Single(h.Tracker.CaptureSnapshot().Trains);
+        Assert.Equal(before.TrackerId, after.TrackerId);
+        Assert.Equal(before.LastSeenUtc, after.LastSeenUtc);
+        Assert.Equal(before.ObservationCount, after.ObservationCount);
+        Assert.Equal(before.State, after.State);
+        Assert.Equal(before.LastObservation, after.LastObservation);
+        Assert.Equal(before.RecentObservations.ToArray(), after.RecentObservations.ToArray());
+        Assert.True(before.SeenSentinelIds.SetEquals(after.SeenSentinelIds));
+        Assert.Equal(1, h.Observer.Calls);
+        Assert.Equal(1, h.Engine.Calls);
+        Assert.Equal(0, h.Client.Requests);
+    }
 
     [Fact]
     public void Resolver_PreservesEveryOrderedRepeatedOccurrencePair()
@@ -334,7 +757,8 @@ public sealed class TremRealtimePhase4ATests
 
     private static CycleFixture CycleHarness(bool runtimeEnabled, bool canaryEnabled, bool throwingObserver,
         TrensRjClientStatus status = TrensRjClientStatus.Success, bool throwingCache = false, bool canceledCache = false,
-        CancellationTokenSource? cancellationSource = null)
+        CancellationTokenSource? cancellationSource = null, ITrensRjRefreshStore? refreshStore = null,
+        ITremSentinelCatalog? catalog = null)
     {
         var runtime = Options.Create(new TremRealtimeOptions { Enabled = runtimeEnabled });
         var canaryValue = new TremRealtimeCanaryOptions { Enabled = canaryEnabled, MaxRequestsPerMinute = 1, MaxConcurrency = 1, MaxRequestsPerRun = 1 };
@@ -344,14 +768,15 @@ public sealed class TremRealtimePhase4ATests
         var tracker = new TremRealtimeTracker(Options.Create(new TremRealtimeTrackerOptions()), clock, new());
         var cache = new CountingCache(throwingCache, canceledCache, cancellationSource);
         var observer = new CountingObserver(throwingObserver); var crossMetrics = new TremCrossSentinelMetrics(); var canaryMetrics = new TremRealtimeCanaryMetrics();
-        var cycle = new TremRealtimeCanaryCycle(runtime, canary, new FakeCatalog(), new TremSentinelSchedulerEngine(runtime), new TremDemandRegistry(runtime), client, new FakeNormalizer(), state, canaryMetrics, tracker, new(), cache, observer, crossMetrics, new NoopRailEngine(), clock, NullLogger<TremRealtimeCanaryCycle>.Instance);
-        return new(cycle, client, cache, observer, tracker, crossMetrics, canaryMetrics);
+        var normalizer = new FakeNormalizer(); var engine = new NoopRailEngine();
+        var cycle = new TremRealtimeCanaryCycle(runtime, canary, catalog ?? new FakeCatalog(), new TremSentinelSchedulerEngine(runtime), new TremDemandRegistry(runtime), client, normalizer, state, canaryMetrics, tracker, new(), cache, observer, crossMetrics, engine, clock, NullLogger<TremRealtimeCanaryCycle>.Instance, refreshStore: refreshStore);
+        return new(cycle, client, cache, observer, tracker, crossMetrics, canaryMetrics, normalizer, engine);
     }
-    private sealed record CycleFixture(TremRealtimeCanaryCycle Cycle, FakeClient Client, CountingCache Cache, CountingObserver Observer, TremRealtimeTracker Tracker, TremCrossSentinelMetrics CrossMetrics, TremRealtimeCanaryMetrics CanaryMetrics);
-    private sealed class CountingCache(bool throws = false, bool canceled = false, CancellationTokenSource? cancellationSource = null) : ITremPublishedTopologyCache { public int Loads; public Task<TremPublishedTopologySnapshot> GetAsync(CancellationToken ct = default) { Loads++; if (canceled) { cancellationSource!.Cancel(); return Task.FromCanceled<TremPublishedTopologySnapshot>(ct); } return throws ? Task.FromException<TremPublishedTopologySnapshot>(new InvalidOperationException("topology")) : Task.FromResult(TremPublishedTopologySnapshot.Empty); } public Task<TremPublishedTopologySnapshot> ReloadAsync(CancellationToken ct = default) => GetAsync(ct); }
-    private sealed class CountingObserver(bool throws) : ITremCrossSentinelObserver { public int Calls; public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc, IReadOnlySet<Guid> liveTrackerIds) { Calls++; if (throws) throw new InvalidOperationException("observer"); } public TremCrossSentinelSnapshot CaptureSnapshot() => new(ImmutableDictionary<Guid, ImmutableArray<TremSpatialObservationEvidence>>.Empty); }
-    private sealed class NoopRailEngine : IRailRealtimeEngine { public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc) { } public RailRealtimeSnapshot CaptureSnapshot() => RailRealtimeSnapshot.Empty(T0); }
-    private sealed class FakeClient(TrensRjClientStatus status) : ITrensRjRealtimeClient { public int Requests; public Task<TrensRjClientResult<TrensRjNextEnvelope>> GetNextAsync(TremSentinelPairKey pair, CancellationToken cancellationToken = default) { Requests++; return Task.FromResult(new TrensRjClientResult<TrensRjNextEnvelope>(status, status == TrensRjClientStatus.Success ? new([], null, null, null, null, null, null, null, null, false) : null)); } }
-    private sealed class FakeNormalizer : ITremRealtimeNormalizer { public Task<IReadOnlyList<TremRealtimeObservation>> NormalizeAsync(TrensRjNextEnvelope envelope, TremSentinelPairKey pair, DateTimeOffset observedAtUtc, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<TremRealtimeObservation>>([Observation("T", null, null, null)]); }
+    private sealed record CycleFixture(TremRealtimeCanaryCycle Cycle, FakeClient Client, CountingCache Cache, CountingObserver Observer, TremRealtimeTracker Tracker, TremCrossSentinelMetrics CrossMetrics, TremRealtimeCanaryMetrics CanaryMetrics, FakeNormalizer Normalizer, NoopRailEngine Engine);
+    private sealed class CountingCache(bool throws = false, bool canceled = false, CancellationTokenSource? cancellationSource = null) : ITremPublishedTopologyCache { public TremPublishedTopologySnapshot Snapshot = TremPublishedTopologySnapshot.Empty; public int Loads; public Task<TremPublishedTopologySnapshot> GetAsync(CancellationToken ct = default) { Loads++; if (canceled) { cancellationSource!.Cancel(); return Task.FromCanceled<TremPublishedTopologySnapshot>(ct); } return throws ? Task.FromException<TremPublishedTopologySnapshot>(new InvalidOperationException("topology")) : Task.FromResult(Snapshot); } public Task<TremPublishedTopologySnapshot> ReloadAsync(CancellationToken ct = default) => GetAsync(ct); }
+    private sealed class CountingObserver(bool throws) : ITremCrossSentinelObserver { public int Calls; public DateTimeOffset Started, Received; public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc, IReadOnlySet<Guid> liveTrackerIds) { Calls++; Started = requestStartedAtUtc; Received = receivedAtUtc; if (throws) throw new InvalidOperationException("observer"); } public TremCrossSentinelSnapshot CaptureSnapshot() => new(ImmutableDictionary<Guid, ImmutableArray<TremSpatialObservationEvidence>>.Empty); }
+    private sealed class NoopRailEngine : IRailRealtimeEngine { public int Calls; public DateTimeOffset Started, Received; public void Observe(TremSentinelQuery sentinel, IReadOnlyList<TrackedObservationAcceptance> accepted, TremPublishedTopologySnapshot topology, DateTimeOffset requestStartedAtUtc, DateTimeOffset receivedAtUtc) { Calls++; Started = requestStartedAtUtc; Received = receivedAtUtc; } public RailRealtimeSnapshot CaptureSnapshot() => RailRealtimeSnapshot.Empty(T0); }
+    private sealed class FakeClient(TrensRjClientStatus status) : ITrensRjRealtimeClient { public int Requests; public TremSentinelPairKey? LastPair; public Func<Task>? BeforeResult; public async Task<TrensRjClientResult<TrensRjNextEnvelope>> GetNextAsync(TremSentinelPairKey pair, CancellationToken cancellationToken = default) { Requests++; LastPair = pair; if (BeforeResult is not null) await BeforeResult(); return new TrensRjClientResult<TrensRjNextEnvelope>(status, status == TrensRjClientStatus.Success ? new([], null, null, null, null, null, null, null, null, false) : null); } }
+    private sealed class FakeNormalizer : ITremRealtimeNormalizer { public bool Empty; public TremRealtimeObservation? Value; public Task<IReadOnlyList<TremRealtimeObservation>> NormalizeAsync(TrensRjNextEnvelope envelope, TremSentinelPairKey pair, DateTimeOffset observedAtUtc, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<TremRealtimeObservation>>(Empty ? [] : [(Value ?? Observation("T", null, null, null)) with { ObservedAtUtc = observedAtUtc }]); }
     private sealed class FakeCatalog : ITremSentinelCatalog { public Task<IReadOnlyList<TremSentinelQuery>> GetAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<TremSentinelQuery>>([Query("TRUNK_OUT", Guid.NewGuid(), Guid.NewGuid())]); public Task ReloadAsync(CancellationToken ct = default) => Task.CompletedTask; }
 }

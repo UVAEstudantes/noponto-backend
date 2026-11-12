@@ -3,6 +3,11 @@ namespace NoPonto.Application.GPS;
 public sealed class PhysicalEtaOptions
 {
     public bool Enabled { get; set; }
+    public bool AdaptiveShadowEnabled { get; set; }
+    public bool HybridShadowEnabled { get; set; }
+    public bool HybridPublicEnabled { get; set; }
+    // Only fixed20 is supported in runtime; 25/30 remain internal replay alternatives.
+    public int HybridFixedReferenceKmh { get; set; } = 20;
     public int MaxAgeSeconds { get; set; } = 30;
     public bool Valid() => MaxAgeSeconds is >= 1 and <= 300;
 }
@@ -37,12 +42,19 @@ internal static class PhysicalEta
         return double.IsFinite(speed) && speed is >= 1 and <= 160 ? speed : null;
     }
     internal static ResultadoEnriquecimentoGps Apply(ResultadoEnriquecimentoGps input,
-        DateTimeOffset now, PhysicalEtaOptions options, bool captureDiagnostic = false)
+        DateTimeOffset now, PhysicalEtaOptions options, bool captureDiagnostic = false,
+        EtaCausalTestDiagnostics? testDiagnostics = null,
+        Action<ResultadoEnriquecimentoGps, PhysicalEtaReason>? speedShadow = null)
     {
         if (!options.Enabled)
+        {
+            testDiagnostics?.CaptureApply(input.Posicao, PhysicalEtaReason.physical_disabled);
             return captureDiagnostic ? input with { PhysicalCalculation = new(input.Posicao, PhysicalEtaReason.physical_disabled) } : input;
+        }
         var p = input.Posicao;
         var reason = Evaluate(input, now, options);
+        // Explicit caller-owned shadow also sees stationary/rejected samples; cannot change ETA.
+        speedShadow?.Invoke(input, reason);
         double? seconds = null;
         if (reason == PhysicalEtaReason.available)
         {
@@ -53,6 +65,7 @@ internal static class PhysicalEta
         }
         var quality = seconds.HasValue ? "estimativa_fisica" : reason == PhysicalEtaReason.gps_old ? "gps_desatualizado" : "previsao_indisponivel";
         var position = p with { EtaProximaParadaSegundos = seconds, EtaConfianca = Prefix + quality };
+        testDiagnostics?.CaptureApply(position, reason);
         return input with { Posicao = position, PhysicalCalculation = captureDiagnostic ? new(position, reason) : null };
     }
 

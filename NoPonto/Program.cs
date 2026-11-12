@@ -8,6 +8,7 @@ using NoPonto.API.Configuration;
 using NoPonto.API.Hubs;
 using NoPonto.API.Middlewares;
 using NoPonto.Application.GPS;
+using NoPonto.Application.PhysicalPresence;
 using NoPonto.Application.DTOs.EstruturaV2;
 using NoPonto.Application.Interfaces;
 using NoPonto.Application.Services;
@@ -33,6 +34,15 @@ using NoPonto.Application.TremRealtime.RailRuntime;
 using NoPonto.Application.TremSchedule;
 
 Env.NoClobber().Load();
+
+if (args is ["--canonical-redis-self-test"])
+{
+    var host = Environment.GetEnvironmentVariable("REDIS_HOST") ?? throw new InvalidOperationException("Redis host required.");
+    var port = int.Parse(Environment.GetEnvironmentVariable("REDIS_PORT") ?? throw new InvalidOperationException("Redis port required."));
+    using var connection = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions { EndPoints = { { host, port } } });
+    await CanonicalRedisProbe.RunAsync(connection);
+    return;
+}
 
 if (NoPonto.Application.Tarifas.TarifasImportCommand.IsRequested(args))
 {
@@ -87,6 +97,7 @@ if (!gpsHubRoute.StartsWith('/'))
     gpsHubRoute = $"/{gpsHubRoute}";
 
 builder.Services.AddControllers();
+NoPonto.API.Extensions.RadarRegistration.AddRadar(builder.Services, builder.Configuration);
 builder.Services.AddScoped<NoPonto.Data.Tarifas.TarifasStore>();
 builder.Services.AddScoped<NoPonto.Application.Tarifas.TarifaService>();
 
@@ -116,11 +127,7 @@ builder.Services.AddSwaggerGen(options =>
         options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
     }
 
-    options.TagActionsBy(api =>
-    {
-        var controller = api.ActionDescriptor.RouteValues["controller"];
-        return [string.IsNullOrWhiteSpace(controller) ? "Outros" : controller];
-    });
+    options.TagActionsBy(NoPonto.API.SwaggerGroups.Tags);
 
     options.DocInclusionPredicate((docName, apiDesc) =>
     {
@@ -196,7 +203,9 @@ builder.Services.AddOptions<TremCrossSentinelOptions>()
 builder.Services.AddOptions<RailRealtimeOptions>()
     .Bind(builder.Configuration.GetSection(RailRealtimeOptions.SectionName));
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<ITrensRjRequestBudget, ProcessLocalTrensRjRequestBudget>();
+builder.Services.AddSingleton<ProcessLocalTrensRjRequestBudget>();
+builder.Services.AddSingleton<ITrensRjRequestBudget, NoPonto.Data.Repositories.TrensRjRedisRequestBudget>();
+builder.Services.AddSingleton<NoPonto.Application.TremRealtime.ITrensRjRefreshStore, NoPonto.Data.Repositories.TrensRjRefreshRedisStore>();
 builder.Services.AddSingleton<TremRealtimeMetrics>();
 builder.Services.AddSingleton<ITremPairSingleFlight, TremPairSingleFlight>();
 builder.Services.AddSingleton<ITremStructuralLookupSource, EfTremStructuralLookupSource>();
@@ -218,7 +227,9 @@ builder.Services.AddSingleton<ITremPublishedTopologyCache, TremPublishedTopology
 builder.Services.AddSingleton<TremCrossSentinelMetrics>();
 builder.Services.AddSingleton<ITremCrossSentinelObserver, TremCrossSentinelObserver>();
 builder.Services.AddSingleton<IRailRealtimeEngine, RailRealtimeEngine>();
-builder.Services.AddScoped<ITremRealtimeCanaryCycle, TremRealtimeCanaryCycle>();
+builder.Services.AddScoped<TremRealtimeCanaryCycle>();
+builder.Services.AddScoped<ITremRealtimeCanaryCycle>(services => services.GetRequiredService<TremRealtimeCanaryCycle>());
+builder.Services.AddScoped<NoPonto.Application.TremRealtime.TrensRjManualRefreshService>();
 builder.Services.AddHostedService<TremRealtimeCanaryWorker>();
 builder.Services.AddHttpClient<ITrensRjRealtimeClient, TrensRjRealtimeClient>((services, client) =>
 {
@@ -321,10 +332,13 @@ foreach (var modal in new[] { GpsModalNames.Bus, GpsModalNames.Brt })
         var path = modal == GpsModalNames.Bus ? "onibus" : "brt";
         var client = new GtfsRealtimeGpsClient(
             sp.GetRequiredService<IHttpClientFactory>().CreateClient("GpsGtfsRealtime"),
-            new Uri($"https://dados.mobilidade.rio/gtfs/realtime/{path}/vehicle-positions"), options);
+            new Uri($"https://dados.mobilidade.rio/gtfs/realtime/{path}/vehicle-positions"), options,
+            diagnostics: modal == GpsModalNames.Bus ? sp.GetRequiredService<PhysicalDiagnostics>() : null);
         return new GtfsRealtimeGpsSource(modal, client,
             sp.GetRequiredService<IGtfsRealtimeRouteLookup>(), options,
-            sp.GetRequiredService<ILogger<GtfsRealtimeGpsSource>>());
+            sp.GetRequiredService<ILogger<GtfsRealtimeGpsSource>>(),
+            sp.GetRequiredService<PhysicalLocationShadow>(), sp.GetRequiredService<UnifiedLocation>(),
+            sp.GetRequiredService<PhysicalDiagnostics>(), sp.GetRequiredService<PhysicalNetworkEvaluation>());
     });
 }
 
@@ -560,24 +574,37 @@ builder.Services.AddHostedService<EtaV2MaintenanceWorker>();
 builder.Services.AddSingleton<IHistoricoEventoRepository, HistoricoEventoRepository>();
 builder.Services.AddHostedService<ViagemOutboxWorker>();
 
-builder.Services.AddSingleton<TelemetriaMlMetrics>();
-builder.Services.Configure<TelemetriaMlSamplingOptions>(
-    builder.Configuration.GetSection(TelemetriaMlSamplingOptions.Secao));
-builder.Services.AddSingleton<ITelemetriaMlSamplingPolicy, TelemetriaMlSamplingPolicy>();
-builder.Services.AddSingleton<TelemetriaMlBackpressureState>();
-builder.Services.AddHostedService<TelemetriaMlMetricsReporter>();
-builder.Services.AddSingleton<TelemetriaMlStreamPublisher>();
-builder.Services.AddSingleton<ITelemetriaMlIngress>(sp =>
-    sp.GetRequiredService<TelemetriaMlStreamPublisher>());
-builder.Services.AddHostedService(sp =>
-    sp.GetRequiredService<TelemetriaMlStreamPublisher>());
-builder.Services.AddSingleton<ITelemetriaMlRepository, TelemetriaMlRepository>();
-builder.Services.AddHostedService<TelemetriaMlWorker>();
-builder.Services.AddSingleton<TelemetriaMlRetentionMetrics>();
-builder.Services.AddHostedService<TelemetriaMlRetentionService>();
+builder.Services.AddTelemetriaMlCollection(builder.Configuration);
 
 builder.Services.AddSignalR();
+builder.Services.AddGpsSignalRTraffic(builder.Configuration);
 
+// Physical acquisition and publication are independently gated. Disabled by default.
+var physicalOptions = builder.Configuration.GetSection("PhysicalPresence")
+    .Get<PhysicalPresenceMvpOptions>() ?? new PhysicalPresenceMvpOptions();
+if (physicalOptions.Enabled && !physicalOptions.IsValid())
+    throw new InvalidOperationException("PhysicalPresence requires bounded acquisition and reviewed facility anchors.");
+builder.Services.AddSingleton(physicalOptions);
+builder.Services.AddSingleton<PhysicalDiagnostics>();
+builder.Services.AddSingleton<PhysicalNetworkEvaluation>();
+if ((physicalOptions.ShadowSelectionEnabled || physicalOptions.UnifiedLocationEnabled) && (!physicalOptions.AllowOfficialSppoIds || physicalOptions.ServiceCode != "838"))
+    throw new InvalidOperationException("Physical shadow requires the approved SPPO 838 pilot namespace.");
+builder.Services.AddSingleton<IPhysicalLineResolver, ConfiguredPhysicalLineResolver>();
+builder.Services.AddSingleton<IUnifiedLocationStore, RedisUnifiedLocationStore>();
+builder.Services.AddSingleton<MulticohortPhysicalShadow>();
+builder.Services.AddSingleton<ICanonicalPhysicalStore, RedisCanonicalPhysicalStore>();
+builder.Services.AddSingleton<CanonicalPhysicalLocation>();
+builder.Services.AddSingleton<UnifiedLocation>();
+builder.Services.AddSingleton(sp => new PhysicalLocationShadow(
+    sp.GetRequiredService<IPhysicalLineResolver>(), sp.GetRequiredService<TimeProvider>(),
+    physicalOptions.ShadowSelectionEnabled));
+builder.Services.AddSingleton<PhysicalPresenceStore>();
+builder.Services.AddSingleton<PhysicalPresenceMvp>();
+if (physicalOptions.Enabled) builder.Services.AddHostedService<PhysicalPresenceWorker>();
+
+builder.Services.AddSingleton<AdaptiveEtaShadow>();
+builder.Services.AddSingleton<AdaptiveEtaShadowWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<AdaptiveEtaShadowWorker>());
 builder.Services.AddSingleton<GpsSppoSnapshotStore>();
 builder.Services.AddOptions<GpsPipelineTraceOptions>().Bind(builder.Configuration.GetSection("GpsPipelineTrace"));
 builder.Services.AddSingleton<GpsPipelineTrace>();

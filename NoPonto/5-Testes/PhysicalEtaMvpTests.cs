@@ -85,6 +85,22 @@ public sealed class PhysicalEtaMvpTests
     }
 
     [Fact]
+    public void NoProgressWithPositiveMeanSpeed_OnlyForwardDepartureEnablesPrediction()
+    {
+        var f = Fixture();
+        var waiting = f with { Diagnostico = f.Diagnostico! with { PosicaoAnterior = f.Posicao.PosicaoNaRota } };
+        var blocked = PhysicalEta.Apply(waiting, T, On, captureDiagnostic: true);
+        Assert.Equal(PhysicalEtaReason.advance_insufficient, blocked.PhysicalCalculation!.Reason);
+        Assert.Null(blocked.Posicao.EtaProximaParadaSegundos);
+        Assert.Null(Assert.Single(EventosParadaService.ProjectRoadEvents(
+            [Stop(blocked.Posicao)], [blocked.Posicao], T, On)).EstimatedAt);
+
+        var departing = PhysicalEta.Apply(f, T, On, captureDiagnostic: true);
+        Assert.Equal(PhysicalEtaReason.available, departing.PhysicalCalculation!.Reason);
+        Assert.Equal(100d, departing.Posicao.EtaProximaParadaSegundos);
+    }
+
+    [Fact]
     public void PhysicalFormula_RoundTripCache_ElapsedTimeAndTargetIdentity()
     {
         var p = PhysicalEta.Apply(Fixture(), T, On).Posicao;

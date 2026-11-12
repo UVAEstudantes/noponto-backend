@@ -454,11 +454,11 @@ class DeployTests(unittest.TestCase):
                        'assert key.stat().st_mode & 0o777 == 0o600\n'
                        'assert "StrictHostKeyChecking=yes" in args\n'
                        'assert "BatchMode=yes" in args\n'
-                       'assert args[-1].endswith(" /fixture/state/historical-eta-shadow.override.yml")\n'
-                       'data=sys.stdin.read(); assert "flock -n 9" in data\n'
+                       'assert "python3 -I - ci --image ghcr.io/" in args[-1]\n'
+                       'data=sys.stdin.read(); assert "def ci_release(args):" in data\n'
                        'Path(os.environ["FIXTURE"],"ssh-key-path").write_text(str(key))\n')
         ssh.chmod(0o700)
-        env = dict(self.env, IMAGE_DIGEST='sha256:'+'c'*64, RELEASE_SEQUENCE='109',
+        env = dict(self.env, IMAGE_DIGEST='sha256:'+'c'*64, RELEASE_SEQUENCE='109', RELEASE_COMMIT='c'*40,
                    SERVER_TAILSCALE_IP='100.64.0.1', SERVER_USER='fixture',
                    SERVER_SSH_KEY='fake-only', SERVER_SSH_KNOWN_HOSTS='fake-only',
                    NOPONTO_DEPLOY_ENV_FILE='/fixture/runtime.env', NOPONTO_DEPLOY_STATE_DIR='/fixture/state',
@@ -467,7 +467,7 @@ class DeployTests(unittest.TestCase):
                                 cwd=ROOT.parent, text=True, capture_output=True, timeout=10)
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse(Path((self.path/'ssh-key-path').read_text()).exists())
-        env['NOPONTO_DEPLOY_ENV_FILE']='/fixture/$(touch injected)'
+        env['NOPONTO_DEPLOY_STATE_DIR']='/fixture/$(touch injected)'
         result = subprocess.run(['bash', str(ROOT/'ssh-deploy.sh')], env=env,
                                 cwd=ROOT.parent, capture_output=True, timeout=10)
         self.assertNotEqual(0, result.returncode)

@@ -1,3 +1,11 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Net;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
 using NoPonto.API.Controllers;
 using NoPonto.Application.DTOs.Compartilhado;
@@ -8,6 +16,62 @@ namespace NoPonto.Tests;
 
 public sealed class EstruturaLeituraV2ControllerTests
 {
+    [Theory]
+    [InlineData(0, 50)]
+    [InlineData(1, 0)]
+    [InlineData(1, 101)]
+    [InlineData(int.MaxValue, 100)]
+    public async Task ParadasRejeitamPaginacaoInvalidaSemConsultarRepositorio(int page, int size)
+    {
+        var repo = Scenario();
+        Assert.IsType<BadRequestObjectResult>(await new EstruturaParadasController(repo)
+            .Listar(null, null, null, null, page, size));
+        Assert.Null(repo.LastStopSearch);
+    }
+
+    [Fact]
+    public async Task GetParadasCombinaFiltrosEPreservaRotasEContratosUsadosPeloFrontend()
+    {
+        var repo = Scenario();
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
+        builder.Logging.ClearProviders();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Services.AddSingleton<IEstruturaLeituraV2Repository>(repo);
+        builder.Services.AddControllers().AddApplicationPart(typeof(EstruturaParadasController).Assembly);
+        await using var app = builder.Build();
+        app.MapControllers();
+        await app.StartAsync();
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(app.Services.GetRequiredService<IServer>()
+                .Features.Get<IServerAddressesFeature>()!.Addresses.Single()) };
+            var modal = Guid.NewGuid();
+            var page = await http.GetFromJsonAsync<PaginacaoRespostaDTO<ParadaConsultaV2Dto>>(
+                $"/paradas?nome=terminal&codigoLinha=838&sentidoId={repo.SentidoId}&modalId={modal}&page=2&pageSize=15");
+            Assert.NotNull(page);
+            Assert.Equal(("terminal", (Guid?)modal, "838", (Guid?)repo.SentidoId, 2, 15), repo.LastStopSearch!.Value);
+            Assert.Equal(repo.ParadaId, Assert.Single(page.Itens).Id);
+            Assert.Equal("838", Assert.Single(page.Itens[0].Linhas).Codigo);
+            var details = await http.GetFromJsonAsync<ParadaEstruturalDto>($"/paradas/{repo.ParadaId}");
+            Assert.Equal(repo.ParadaId, details!.Id);
+            Assert.Equal("P001", details.Codigo);
+            var linhas = await http.GetFromJsonAsync<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>>("/linhas?nome=006&page=1&pageSize=20");
+            Assert.Equal(repo.LinhaId, Assert.Single(linhas!.Itens).LinhaId);
+            var sentidos = await http.GetFromJsonAsync<SentidoEstruturalResumoDto[]>("/linhas/006/sentidos");
+            Assert.Equal(repo.SentidoId, Assert.Single(sentidos!).Id);
+            var padroes = await http.GetFromJsonAsync<PadraoOperacionalResumoDto[]>($"/sentidos/{repo.SentidoId}/padroes");
+            Assert.Equal(repo.VersaoId, Assert.Single(padroes!).VersaoAtualId);
+            var itinerary = await http.GetFromJsonAsync<ItinerarioPadraoVersaoDto>($"/padroes-versoes/{repo.VersaoId}/itinerario");
+            Assert.Equal(repo.ParadaId, itinerary!.Ocorrencias[0].ParadaId);
+            using var invalid = await http.GetAsync("/paradas?modalId=invalid");
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+            using var tooLarge = await http.GetAsync("/paradas?pageSize=101");
+            Assert.Equal(HttpStatusCode.BadRequest, tooLarge.StatusCode);
+            Assert.Equal(0, repo.MutationCount);
+        }
+        finally { await app.StopAsync(); }
+    }
+
     [Fact]
     public void ContratoLinha_BrtMantemModalRealETipoRotaExplicito()
     {
@@ -125,7 +189,18 @@ public sealed class EstruturaLeituraV2ControllerTests
 
         private LinhaEstruturalResumoDto Linha => new(LinhaId, "006", "Castelo - Silvestre",
             "regular", null, Guid.NewGuid(), "Ônibus");
-        public Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
+            public (string? Nome, Guid? Modal, string? Codigo, Guid? Sentido, int Page, int Size)? LastStopSearch;
+        public Task<PaginacaoRespostaDTO<ParadaConsultaV2Dto>> ListarParadasAsync(string? nome, Guid? modalId,
+            string? codigoLinha, Guid? sentidoId, int pagina, int tamanhoPagina, CancellationToken ct)
+        {
+            LastStopSearch = (nome, modalId, codigoLinha, sentidoId, pagina, tamanhoPagina);
+            var line = Linha;
+            return Task.FromResult(new PaginacaoRespostaDTO<ParadaConsultaV2Dto> { Pagina = pagina,
+                TamanhoPagina = tamanhoPagina, TotalRegistros = 1, TotalPaginas = 1,
+                Itens = [new(ParadaId, "P001", "Terminal", -22.9, -43.2) { Linhas = [new(line.LinhaId,
+                    codigoLinha ?? line.Codigo, line.Nome, line.ModalId, [new(SentidoId, LinhaId, "IDA")])] }] });
+        }
+    public Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
             string? codigo, string? nome, Guid? modalId, string? tipoRota,
             string? excluirTipoRota, int pagina, int tamanhoPagina, CancellationToken ct)
         {

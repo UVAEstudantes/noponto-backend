@@ -1,6 +1,7 @@
 using NoPonto.Application.EventosParada;
 using NoPonto.Application.GPS;
 using NoPonto.Application.Services.EventosParada;
+using NoPonto.Application.TremRealtime.RailRuntime;
 using Xunit;
 using System.Text.Json;
 
@@ -151,6 +152,35 @@ public sealed class EventosParadaProjectionTests
         Assert.False(EventosParadaService.ShouldExposeRailEvent(PapeisEstacaoEvento.Destination));
     }
 
+    [Fact]
+    public void TremSemSnapshotSustentadoPelaGradeEhProgramado()
+    {
+        Assert.Equal(RailOperationalStatus.Scheduled,
+            EventosParadaService.ResolveRailOperationalStatus(null, RadarSamples.Now));
+    }
+
+    [Fact]
+    public void TremAoVivoExigeEvidenciaRecenteEFresca()
+    {
+        var now = RadarSamples.Now;
+        var snapshot = RailSnapshot(now.AddSeconds(-15), now.AddSeconds(15), RailOperationalStatus.Live);
+
+        Assert.Equal(RailOperationalStatus.Live, EventosParadaService.ResolveRailOperationalStatus(snapshot, now));
+        Assert.Equal(RailOperationalStatus.Estimated, EventosParadaService.ResolveRailOperationalStatus(
+            snapshot with { FreshUntilUtc = now }, now));
+        Assert.Equal(RailOperationalStatus.Scheduled, EventosParadaService.ResolveRailOperationalStatus(
+            snapshot with { LastRealtimeEvidenceUtc = now.AddSeconds(1) }, now));
+    }
+
+    [Fact]
+    public void TremEstimadoPermaneceEstimadoMesmoAposPerderFreshnessDoRuntime()
+    {
+        var now = RadarSamples.Now;
+        var snapshot = RailSnapshot(now.AddSeconds(-45), now.AddSeconds(-1), RailOperationalStatus.Live);
+
+        Assert.Equal(RailOperationalStatus.Estimated, EventosParadaService.ResolveRailOperationalStatus(snapshot, now));
+    }
+
     private static EventosParadaService.StopContext Context(Guid id, int order) => new(id,
         Guid.NewGuid(), order, .5, 500, Guid.NewGuid(), 1000, Guid.NewGuid(), Guid.NewGuid(),
         Guid.NewGuid(), "1", "Ônibus", "regular");
@@ -160,4 +190,10 @@ public sealed class EventosParadaProjectionTests
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "A",
             null, null, "A", null, scheduled, estimated, null, "RealtimeEstimated",
             "OperationalEstimate", DateTimeOffset.UtcNow, true);
+
+    private static RailVehiclePublicSnapshot RailSnapshot(DateTimeOffset evidence, DateTimeOffset freshUntil,
+        RailOperationalStatus status) => new(Guid.NewGuid(), Guid.NewGuid(), "T-1", Guid.NewGuid(), Guid.NewGuid(),
+        Guid.NewGuid(), RailRunState.InSegment, null, Guid.NewGuid(), 100, RadarSamples.Now, 500,
+        RadarSamples.Now.AddMinutes(2), "destino informado", null, null, RailPositionSource.RealtimeEstimated,
+        RailPositionQuality.RealtimeAnchored, freshUntil, true, false, evidence, OperationalStatus: status);
 }

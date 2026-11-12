@@ -49,6 +49,7 @@ public sealed partial class GpsDatarioClient
                 ?? throw new JsonException("null_response");
             parseMs = clock.GetElapsedTime(phaseStart).TotalMilliseconds;
             complete = true;
+            page.ResponseBytes = bytes;
             return page;
         }
         finally

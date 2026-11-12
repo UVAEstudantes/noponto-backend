@@ -148,38 +148,89 @@ public sealed class GtfsDatarioPlanPersister(TransporteDbContext db) : IGtfsData
             .Select(x=>x.ExternalId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         db.LinhasIdentidadesExternas.AddRange(ext.Where(x=>!identities.Contains(x)).Select(x=>new LinhaIdentidadeExterna
         {Id=Guid.NewGuid(),LinhaId=map[x].Id,FonteEstruturalId=source.Id,Tipo="ROUTE_ID",ExternalId=x}));
-        // Agency belongs to the versioned static source, not the commercial service type.
-        // A route-scoped key avoids conflating multiple lines belonging to the same agency.
-        var agencyKeys = routes.Values.Where(x => !string.IsNullOrWhiteSpace(x.AgencyId))
-            .ToDictionary(x => x.RouteId, x => $"{x.RouteId}:{x.AgencyId}");
-        var existingAgency = await db.LinhasIdentidadesExternas.Where(x =>
-            x.FonteEstruturalId == source.Id && x.Tipo == "ROUTE_AGENCY"
-            && agencyKeys.Values.Contains(x.ExternalId)).ToArrayAsync(ct);
-        foreach (var route in agencyKeys)
-        {
-            var identity = existingAgency.SingleOrDefault(x => x.ExternalId == route.Value);
-            if (identity is not null && identity.LinhaId != map[route.Key].Id)
-                throw new InvalidDataException("Route agency identity belongs to another line.");
-            if (identity is null) db.LinhasIdentidadesExternas.Add(new LinhaIdentidadeExterna
-            { Id = Guid.NewGuid(), LinhaId = map[route.Key].Id, FonteEstruturalId = source.Id,
-                Tipo = "ROUTE_AGENCY", ExternalId = route.Value });
-        }
-        var origins = routes.Values.Select(route => (Route:route, Origin:RealtimeOrigin(route) ?? "UNKNOWN")).ToArray();
-        var originKeys = origins.Select(x => $"{x.Route.RouteId}:{x.Origin}").ToArray();
-        var existingOrigins = await db.LinhasIdentidadesExternas.Where(x =>
-            x.FonteEstruturalId == source.Id && x.Tipo == "ROUTE_ORIGIN_V1"
-            && originKeys.Contains(x.ExternalId)).ToArrayAsync(ct);
-        foreach (var item in origins)
-        {
-            var key = $"{item.Route.RouteId}:{item.Origin}";
-            var identity = existingOrigins.SingleOrDefault(x => x.ExternalId == key);
-            if (identity is not null && identity.LinhaId != map[item.Route.RouteId].Id)
-                throw new InvalidDataException("Route origin identity belongs to another line.");
-            if (identity is null) db.LinhasIdentidadesExternas.Add(new LinhaIdentidadeExterna
-            { Id = Guid.NewGuid(), LinhaId = map[item.Route.RouteId].Id, FonteEstruturalId = source.Id,
-                Tipo = "ROUTE_ORIGIN_V1", ExternalId = key });
-        }
+        var lineIds = map.Values.Select(x => x.Id).ToArray();
+        var expectedKeys = routes.Values.SelectMany(r => EvidenceKeys(r)).Select(k => k.ExternalId).ToArray();
+        var existingEvidence = await db.LinhasIdentidadesExternas.AsNoTracking().Where(x => x.FonteEstruturalId == source.Id
+            && (x.Tipo == "ROUTE_AGENCY" || x.Tipo == "ROUTE_ORIGIN_V1")
+            && (lineIds.Contains(x.LinhaId) || expectedKeys.Contains(x.ExternalId))).ToArrayAsync(ct);
+        db.LinhasIdentidadesExternas.AddRange(PlanMissingRouteEvidence(routes.Values.ToArray(), source.Id,
+            map.ToDictionary(x => x.Key, x => x.Value.Id, StringComparer.Ordinal), existingEvidence));
         await db.SaveChangesAsync(ct); return(map,new(created,reused));
+    }
+
+    // Same evidence generator for full imports and the bounded repair of pre-evidence catalogs.
+    private static (string Type, string ExternalId)[] EvidenceKeys(GtfsRoute route) =>
+        (string.IsNullOrWhiteSpace(route.AgencyId) ? Array.Empty<(string, string)>()
+            : [("ROUTE_AGENCY", $"{route.RouteId}:{route.AgencyId}")])
+        .Append(("ROUTE_ORIGIN_V1", $"{route.RouteId}:{RealtimeOrigin(route) ?? "UNKNOWN"}")).ToArray();
+
+    internal static LinhaIdentidadeExterna[] PlanMissingRouteEvidence(IReadOnlyList<GtfsRoute> routes, Guid source,
+        IReadOnlyDictionary<string, Guid> bindings, IReadOnlyList<LinhaIdentidadeExterna> existing)
+    {
+        var missing = new List<LinhaIdentidadeExterna>();
+        foreach (var route in routes)
+        {
+            if (!bindings.TryGetValue(route.RouteId, out var line) || line == Guid.Empty)
+                throw new InvalidDataException("Route binding missing.");
+            foreach (var key in EvidenceKeys(route))
+            {
+                var peers = existing.Where(x => x.FonteEstruturalId == source && x.Tipo == key.Type
+                    && x.ExternalId.StartsWith(route.RouteId + ":", StringComparison.Ordinal)).ToArray();
+                if (peers.Length > 1 || peers.Any(x => x.ExternalId != key.ExternalId || x.LinhaId != line))
+                    throw new InvalidDataException("Conflicting route metadata; explicit review required.");
+                if (peers.Length == 0) missing.Add(new() { Id = Guid.NewGuid(), FonteEstruturalId = source,
+                    LinhaId = line, Tipo = key.Type, ExternalId = key.ExternalId });
+            }
+        }
+        return missing.ToArray();
+    }
+
+    public async Task<RouteEvidenceJournal> ReconcileRouteEvidenceAsync(IReadOnlyList<GtfsRoute> routes,
+        string feedSha256, bool apply, CancellationToken ct, Func<RouteEvidenceJournal, CancellationToken, Task>? prepareJournal = null)
+    {
+        if (routes.Count is < 1 or > 10 || routes.Select(r => r.RouteId).Distinct(StringComparer.Ordinal).Count() != routes.Count
+            || routes.Any(r => string.IsNullOrWhiteSpace(r.AgencyId) || RealtimeOrigin(r) is null)
+            || !System.Text.RegularExpressions.Regex.IsMatch(feedSha256, "^[a-f0-9]{64}$") || db.ChangeTracker.HasChanges() || apply && prepareJournal is null)
+            throw new InvalidDataException("Invalid bounded route evidence scope.");
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        if (!apply) await db.Database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY", ct);
+        await db.Database.ExecuteSqlRawAsync("SET LOCAL statement_timeout='3s'; SET LOCAL lock_timeout='500ms'", ct);
+        var source = await db.FontesEstruturais.AsNoTracking().SingleAsync(x => x.Codigo == SourceCode, ct);
+        var ids = routes.Select(x => x.RouteId).ToArray();
+        var links = await db.LinhasIdentidadesExternas.AsNoTracking().Include(x => x.Linha)
+            .Where(x => x.FonteEstruturalId == source.Id && x.Tipo == "ROUTE_ID" && ids.Contains(x.ExternalId)).ToArrayAsync(ct);
+        var bindings = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var route in routes)
+        {
+            var found = links.Where(x => x.ExternalId == route.RouteId).ToArray();
+            if (found.Length != 1 || found[0].Linha.Codigo != route.RouteShortName)
+                throw new InvalidDataException("Route/catalog binding absent or ambiguous.");
+            bindings.Add(route.RouteId, found[0].LinhaId);
+        }
+        // Prefix selection is bounded to at most ten explicit route identities, including wrong-owner evidence.
+        var parameter = System.Linq.Expressions.Expression.Parameter(typeof(LinhaIdentidadeExterna), "x");
+        System.Linq.Expressions.Expression predicate = System.Linq.Expressions.Expression.Constant(false);
+        foreach (var id in ids)
+            predicate = System.Linq.Expressions.Expression.OrElse(predicate,
+                System.Linq.Expressions.Expression.Call(System.Linq.Expressions.Expression.Property(parameter, nameof(LinhaIdentidadeExterna.ExternalId)),
+                    nameof(string.StartsWith), Type.EmptyTypes, System.Linq.Expressions.Expression.Constant(id + ":")));
+        var filter = System.Linq.Expressions.Expression.Lambda<Func<LinhaIdentidadeExterna, bool>>(predicate, parameter);
+        var before = await db.LinhasIdentidadesExternas.AsNoTracking().Where(x => x.FonteEstruturalId == source.Id
+            && (x.Tipo == "ROUTE_AGENCY" || x.Tipo == "ROUTE_ORIGIN_V1")).Where(filter).ToArrayAsync(ct);
+        var missing = PlanMissingRouteEvidence(routes, source.Id, bindings, before);
+        foreach (var row in missing) row.Justificativa = "GTFS_ROUTE_EVIDENCE_V1:" + feedSha256;
+        var journal = new RouteEvidenceJournal("GTFS_ROUTE_EVIDENCE_V1", feedSha256, source.Id, apply, routes.Select(r => r.RouteId).ToArray(),
+            before.Select(RouteEvidenceRow.From).ToArray(), missing.Select(RouteEvidenceRow.From).ToArray());
+        // Persist undo identities durably before committing; a prepared journal can safely
+        // describe a transaction that later rolls back (undo verifies every row).
+        if (prepareJournal is not null) await prepareJournal(journal, ct);
+        if (apply)
+        {
+            db.LinhasIdentidadesExternas.AddRange(missing);
+            await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        }
+        else await tx.RollbackAsync(ct);
+        return journal;
     }
 
     private async Task<(Dictionary<(string,string), Sentido> Map, GtfsDatarioEntityCounts Counts)> PersistDirectionsAsync(
@@ -288,3 +339,10 @@ public sealed class GtfsDatarioPlanPersister(TransporteDbContext db) : IGtfsData
         return null;
     }
 }
+
+public sealed record RouteEvidenceRow(Guid Id, Guid LinhaId, Guid FonteEstruturalId, string Tipo, string ExternalId)
+{
+    public static RouteEvidenceRow From(LinhaIdentidadeExterna row) => new(row.Id, row.LinhaId, row.FonteEstruturalId, row.Tipo, row.ExternalId);
+}
+public sealed record RouteEvidenceJournal(string Version, string FeedSha256, Guid SourceId, bool Applied,
+    string[] Routes, RouteEvidenceRow[] Before, RouteEvidenceRow[] Created);
