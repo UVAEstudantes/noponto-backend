@@ -58,7 +58,7 @@ public interface IEstruturaLeituraV2Repository
     Task<IReadOnlyList<ParadaLinhaCompactaDto>?> ListarParadasDaLinhaAsync(Guid linhaId, Guid? sentidoId, CancellationToken ct);
     Task<IReadOnlyList<LinhaParadaCompactaDto>?> ListarLinhasDaParadaAsync(Guid paradaId, Guid? sentidoId, CancellationToken ct);
     Task<PaginacaoRespostaDTO<ParadaConsultaV2Dto>> ListarParadasAsync(string? nome, Guid? modalId,
-        string? codigoLinha, Guid? sentidoId, int pagina, int tamanhoPagina, CancellationToken ct);
+        string? codigoLinha, Guid? sentidoId, int pagina, int tamanhoPagina, CancellationToken ct, Guid? paradaId = null, Guid? linhaId = null, string? nomeLinha = null, bool compacta = false);
     Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(
         string? codigo, string? nome, Guid? modalId, string? tipoRota,
         string? excluirTipoRota, int pagina, int tamanhoPagina, CancellationToken ct);

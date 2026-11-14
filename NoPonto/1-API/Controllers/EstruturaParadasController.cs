@@ -32,6 +32,32 @@ public sealed class EstruturaParadasController(IEstruturaLeituraV2Repository rep
         return Ok(await repository.ListarParadasAsync(nome, modalId, codigoLinha, sentidoId, page, pageSize, ct));
     }
 
+    /// <summary>Busca paginada somente com informações de paradas.</summary>
+    [HttpGet("busca")]
+    public async Task<IActionResult> Busca([FromQuery] Guid? paradaId, [FromQuery] string? nome,
+        [FromQuery] Guid? linhaId, [FromQuery] string? codigoLinha, [FromQuery] string? nomeLinha,
+        [FromQuery] Guid? modalId, [FromQuery] Guid? sentidoId,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default)
+    {
+        if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue) return BadRequest();
+        var resultado = await repository.ListarParadasAsync(nome, modalId, codigoLinha, sentidoId,
+            page, pageSize, ct, paradaId, linhaId, nomeLinha, compacta: true);
+        return Ok(new { items = resultado.Itens.Select(p => new { p.Id, p.Codigo, p.Nome, p.Latitude, p.Longitude }),
+            page, pageSize, total = resultado.TotalRegistros });
+    }
+
+    /// <summary>Consulta paginada de paradas com linhas e sentidos operacionais atendentes.</summary>
+    [HttpGet("consulta")]
+    public async Task<IActionResult> Consulta([FromQuery] Guid? paradaId, [FromQuery] string? nome,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default)
+    {
+        if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue) return BadRequest();
+        var resultado = await repository.ListarParadasAsync(nome, null, null, null, page, pageSize, ct, paradaId);
+        return Ok(new { items = resultado.Itens.Select(p => new {
+            parada = new { p.Id, p.Codigo, p.Nome, p.Latitude, p.Longitude }, linhas = p.Linhas }),
+            page, pageSize, total = resultado.TotalRegistros });
+    }
+
     [HttpGet("{paradaId:guid}")]
     [ProducesResponseType(typeof(ParadaEstruturalDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

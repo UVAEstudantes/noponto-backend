@@ -2163,3 +2163,21 @@ TransportSourceHealth registra resultados dos caminhos existentes: coletor SPPO 
 Defaults ajustáveis: warmup 120 s, 3 falhas consecutivas com tolerância desde sucesso anterior, degradação após 120 s, polling parado após 300 s; limites separados SPPO/BRT. Vazio válido é sucesso; GPS antigo/sem observações válidas sozinho não comprova fornecedor offline. Provedores desconhecidos permanecem unknown. Telemetria é por instância, protegida por lock, sem payloads/identificadores de veículos. HEALTH_STATUS.md detalha contrato, métricas, composição híbrida, limites, consequências de reinícios/réplicas, startup existente e comandos locais.
 
 Validação: 43 testes focados de health/instrumentação passaram; 342 testes de regressão dos módulos GPS envolvidos passaram (conjuntos com sobreposição). Testes HTTP em Kestrel isolado, dependências simuladas e recusa de conexão PostgreSQL apenas em loopback/porta 1. Compilação .NET 9 pelos testes, sem novos avisos atribuídos à implementação; diff verificado. Sem startup normal da aplicação, fornecedores reais, banco/Redis de produção, migrations, deploy, reinícios, Docker build ou alterações no frontend. Sucesso real de PostGIS/Redis e comportamento em múltiplas réplicas ainda não verificados em ambiente integrado.
+
+
+## 2026-11-13 — Auditoria de consumo ngrok, somente diagnóstico
+
+Adicionado `AUDITORIA_NGROK_NOPONTO.md`, sem implementar otimizações. Inspeção estática do frontend/backend e leituras SSH do agente ngrok, containers, flags operacionais e amostra limitada de logs. O agente informou 7.072 requisições; foram agregadas 6.673 capturas retidas entre 07/11 e 13/11, separando corpos HTTP de mensagens SignalR e de publicações sem destinatários conhecidos. Tamanhos, hashes e compressão offline foram calculados sem persistir capturas brutas ou informações sensíveis. Cinco GETs internos controlados verificaram contratos/tamanhos; nenhum acesso de auditoria ao domínio público do NoPonto.
+
+Relatório contém arquitetura, rankings, oportunidades com confiança/evidência, estimativas condicionais de capacidade, alternativas e roadmap. MCP ngrok encontrado na configuração, mas ferramentas não expostas nesta sessão; usado fallback da API oficial local do agente. Billing atual, reset específico da conta e bytes WebSocket entregues permanecem pendentes. Referência de 183,83 MB é a informada pelo usuário, sem confirmação atual na conta.
+
+Sem alterações de código funcional, infraestrutura, configurações, credenciais, branches, commits, deploys, reinícios, banco ou migrations. Não executados testes automatizados, builds, Android, testes de carga, replay ou envio de push. Validação documental: seções obrigatórias, aritmética e diff; artefatos não rastreados preexistentes preservados. Nenhum segredo registrado.
+
+
+## 2026-11-14 — Sprint integrada de otimizações beta
+
+Implementadas alterações localizadas: catálogo de modais compartilhado/expirável, reconciliações Radar pendentes deduplicadas sem juntar mutações, foco/AppState no mapa unificado, posição inicial sem marcador padrão, confirmação de remoção, transição do tutorial, estrela independente, borda branca real, painel de linhas por parada, cache persistente limitado de itinerários versionados, heads-up compacto e Rotinas demonstrativas. Backend acrescenta /paradas/consulta e /paradas/busca preservando rotas antigas, filtros opcionais e gzip JSON seletivo. Nenhuma migração/infra/túnel/deploy/push/commit.
+
+Branches feat/otimizacoes-beta a partir das bases remotas atualizadas. Arquivos locais backend preservados em .git/preservado-otimizacoes-beta com autorização; histórico conciliado por acréscimo. Backend22testes aprovados; frontend49testes direcionados aprovados, mais regressões específicas tutorial10/10, localização6/6 e Radar15/15. TypeScript e lint focado aprovados nas execuções concluídas. Suites amplas de UI bloqueadas por mocks GatewayStatus/tutorialMapContract desatualizados. Sem validação física Android ou screenshot; novos filtros ainda precisam de testes SQL específicos e compressão de medição local. Detalhes, contratos, limitações e roteiro no RELATORIO_SPRINT_OTIMIZACOES_BETA.md do backend. Sem dados sensíveis.
+
+Validação final consolidada:51/51testes frontend aprovados,0falhas/ignorados; TypeScript final e git diff --check aprovados. Backend22/22aprovados.

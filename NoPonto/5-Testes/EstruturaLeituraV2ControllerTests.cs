@@ -79,6 +79,14 @@ public sealed class EstruturaLeituraV2ControllerTests
             Assert.Equal(HttpStatusCode.NotFound, missingStop.StatusCode);
             using var invalidDirection = await http.GetAsync($"/linhas/{repo.LinhaId}/paradas?sentidoId=invalid");
             Assert.Equal(HttpStatusCode.BadRequest, invalidDirection.StatusCode);
+            var search = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/paradas/busca?nome=terminal&pageSize=1");
+            var compact = search.GetProperty("items")[0];
+            Assert.Equal(repo.ParadaId, compact.GetProperty("id").GetGuid());
+            Assert.False(compact.TryGetProperty("linhas", out _));
+            Assert.False(compact.TryGetProperty("modais", out _));
+            var consultation = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/paradas/consulta?nome=terminal");
+            Assert.Equal(repo.ParadaId, consultation.GetProperty("items")[0].GetProperty("parada").GetProperty("id").GetGuid());
+            Assert.Equal("006", consultation.GetProperty("items")[0].GetProperty("linhas")[0].GetProperty("codigo").GetString());
             Assert.Equal(0, repo.MutationCount);
         }
         finally { await app.StopAsync(); }
@@ -210,7 +218,7 @@ public sealed class EstruturaLeituraV2ControllerTests
             "regular", null, Guid.NewGuid(), "Ônibus");
             public (string? Nome, Guid? Modal, string? Codigo, Guid? Sentido, int Page, int Size)? LastStopSearch;
         public Task<PaginacaoRespostaDTO<ParadaConsultaV2Dto>> ListarParadasAsync(string? nome, Guid? modalId,
-            string? codigoLinha, Guid? sentidoId, int pagina, int tamanhoPagina, CancellationToken ct)
+            string? codigoLinha, Guid? sentidoId, int pagina, int tamanhoPagina, CancellationToken ct, Guid? paradaId = null, Guid? linhaId = null, string? nomeLinha = null, bool compacta = false)
         {
             LastStopSearch = (nome, modalId, codigoLinha, sentidoId, pagina, tamanhoPagina);
             var line = Linha;
