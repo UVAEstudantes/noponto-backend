@@ -2181,3 +2181,16 @@ Implementadas alterações localizadas: catálogo de modais compartilhado/expir�
 Branches feat/otimizacoes-beta a partir das bases remotas atualizadas. Arquivos locais backend preservados em .git/preservado-otimizacoes-beta com autorização; histórico conciliado por acréscimo. Backend22testes aprovados; frontend49testes direcionados aprovados, mais regressões específicas tutorial10/10, localização6/6 e Radar15/15. TypeScript e lint focado aprovados nas execuções concluídas. Suites amplas de UI bloqueadas por mocks GatewayStatus/tutorialMapContract desatualizados. Sem validação física Android ou screenshot; novos filtros ainda precisam de testes SQL específicos e compressão de medição local. Detalhes, contratos, limitações e roteiro no RELATORIO_SPRINT_OTIMIZACOES_BETA.md do backend. Sem dados sensíveis.
 
 Validação final consolidada:51/51testes frontend aprovados,0falhas/ignorados; TypeScript final e git diff --check aprovados. Backend22/22aprovados.
+
+
+## 2026-11-14 — Refinamento visual, UX e estabilização da sprint beta
+
+Continuação nas branches feat/otimizacoes-beta existentes. Confirmacao.tsx reutilizável (tema, variantes/ícone, processamento, bloqueio de duplo toque e Android Back) substitui Alert nas remoções de linha. Causa do espaço vazio: LinhaCard animava opacidade/escala antes de abrir a confirmação; removidos a animação prematura e o banner intermediário. Solicitação mantém card original; apenas confirmação muta seleção. Favoritos dourado, seleção visual exclusiva e seletor responsivo sem rolagem.
+
+Rotinas redesenhada com apresentação compacta, aviso discreto, explicação Planeje/Salve/Acompanhe/Receba avisos e estados locais preservados. Linhas da parada passa a botão circular no cabeçalho e Modal independente com scroll, loading/vazio/erro, cancelamento e catálogo compartilhado de modais. Seta usa SVG com stroke branco1.4px e cantos arredondados, sem mudar bearing. Heads-up limita badge a uma linha e largura88dp, ellipsize e texto essencial; expandido preservado. Sem homologação física.
+
+Fixtures de tutorial/carregamento inicial atualizadas para GatewayFooter, configuração recolhível, wrapper View, AppState/foco e regra vigente de ETA: ETA passado sozinho não comprova passagem; consulta vencida é descartada. Testes adicionais cobrem confirmação/cancelamento/última linha/repetição, filtros, foco e tradução Npgsql sem conexão. Backend mantém contratos aprovados; expressão de filtros extraída para teste e configuração de compressão compartilhada com teste HTTP loopback. Sem buffering adicional ou limiar de compressão: gzip pequeno continua possível. Testes e limites finais registrados no RELATORIO_REFINAMENTO_OTIMIZACOES_BETA.md do backend.
+
+Sem novas branches/clones/worktrees/commits/push/merge/PR/deploy, serviços reais, migrations, builds Android ou alterações ngrok/zrok. Trabalho anterior preservado. Sem Metro/preview nas portas locais usuais; revisão visual física continua pendente.
+
+Validação desta rodada:113testesfrontend aprovados+2responsivos aprovados;25backend aprovados+rechecagem de compressão1/1comq=0/JSONpequeno aprovada. TypeScript sem erros. ESLint focado não concluiu e os processos próprios foram encerrados após minutos sem diagnóstico. XML heads-up aprovado no self-check; sem validação visual/física. Detalhes no relatório de refinamento.

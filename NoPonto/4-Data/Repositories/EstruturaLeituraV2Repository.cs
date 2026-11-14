@@ -54,17 +54,7 @@ public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
             throw new ArgumentOutOfRangeException(nameof(pagina));
         var atuais = OcorrenciasAtuais(db.OcorrenciasParadasPadroes.AsNoTracking());
         var query = FiltrarParadas(db.Paradas.AsNoTracking(), atuais, nome, modalId, codigoLinha, sentidoId);
-        if (paradaId.HasValue) query = query.Where(p => p.Id == paradaId.Value);
-        if (linhaId.HasValue || !string.IsNullOrWhiteSpace(nomeLinha))
-        {
-            var filtro = nomeLinha?.Trim().ToLowerInvariant();
-            var vinculos = atuais.Where(v => (!linhaId.HasValue || v.PadraoVersao.PadraoOperacional.Sentido.LinhaId == linhaId)
-                && (filtro == null || v.PadraoVersao.PadraoOperacional.Sentido.Linha.Nome.ToLower().Contains(filtro))
-                && (!modalId.HasValue || v.PadraoVersao.PadraoOperacional.Sentido.Linha.ModalId == modalId)
-                && (codigoLinha == null || v.PadraoVersao.PadraoOperacional.Sentido.Linha.Codigo == codigoLinha.Trim())
-                && (!sentidoId.HasValue || v.PadraoVersao.PadraoOperacional.SentidoId == sentidoId));
-            query = query.Where(p => vinculos.Any(v => v.ParadaId == p.Id));
-        }
+        query = FiltrarParadasAdicionais(query, atuais, paradaId, linhaId, nomeLinha, modalId, codigoLinha, sentidoId);
         var total = await query.CountAsync(ct);
         var itens = await ProjetarParadas(PaginarParadas(query, pagina, tamanhoPagina)).ToListAsync(ct);
         if (!compacta && itens.Count > 0)
@@ -76,6 +66,24 @@ public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
         }
         return new() { Pagina = pagina, TamanhoPagina = tamanhoPagina, TotalRegistros = total,
             TotalPaginas = total == 0 ? 0 : (int)Math.Ceiling((double)total / tamanhoPagina), Itens = itens };
+    }
+
+    internal static IQueryable<Parada> FiltrarParadasAdicionais(IQueryable<Parada> query,
+        IQueryable<OcorrenciaParadaPadrao> atuais, Guid? paradaId, Guid? linhaId, string? nomeLinha,
+        Guid? modalId, string? codigoLinha, Guid? sentidoId)
+    {
+        if (paradaId.HasValue) query = query.Where(p => p.Id == paradaId.Value);
+        if (linhaId.HasValue || !string.IsNullOrWhiteSpace(nomeLinha))
+        {
+            var filtro = nomeLinha?.Trim().ToLowerInvariant();
+            var vinculos = atuais.Where(v => (!linhaId.HasValue || v.PadraoVersao.PadraoOperacional.Sentido.LinhaId == linhaId)
+                && (filtro == null || v.PadraoVersao.PadraoOperacional.Sentido.Linha.Nome.ToLower().Contains(filtro))
+                && (!modalId.HasValue || v.PadraoVersao.PadraoOperacional.Sentido.Linha.ModalId == modalId)
+                && (codigoLinha == null || v.PadraoVersao.PadraoOperacional.Sentido.Linha.Codigo == codigoLinha.Trim())
+                && (!sentidoId.HasValue || v.PadraoVersao.PadraoOperacional.SentidoId == sentidoId));
+            query = query.Where(p => vinculos.Any(v => v.ParadaId == p.Id));
+        }
+        return query;
     }
 
     internal static IQueryable<OcorrenciaParadaPadrao> OcorrenciasAtuais(IQueryable<OcorrenciaParadaPadrao> query) =>

@@ -135,6 +135,39 @@ public sealed class ParadasConsultaTests
         Console.WriteLine($"Compact payload fixture (100 occurrences): before={before} after={after} bytes");
     }
 
+    [Fact]
+    public void FiltrosAdicionaisPreservamIdLinhaNomeCombinacoesEDeduplicacao()
+    {
+        var f = Fixture();
+        var atuais = OcorrenciasAtuais(f.Ocorrencias);
+        var linha = atuais.First(x => x.PadraoVersao.PadraoOperacional.Sentido.Linha.Codigo == "838").PadraoVersao.PadraoOperacional.Sentido.LinhaId;
+        IQueryable<Parada> Query(Guid? id = null, Guid? line = null, string? nome = null, Guid? modal = null, Guid? sentido = null) =>
+            FiltrarParadasAdicionais(f.Paradas, atuais, id, line, nome, modal, "838", sentido);
+        Assert.Equal(f.A, Assert.Single(Query(id: f.A)).Id);
+        Assert.Empty(Query(id: Guid.NewGuid()));
+        Assert.Equal(f.SemLinha, Assert.Single(Query(id: f.SemLinha)).Id);
+        Assert.Equal(new[] { f.A, f.B }.Order(), Query(line: linha).Select(p => p.Id).Order());
+        Assert.Equal(new[] { f.A, f.B }.Order(), Query(nome: "  LINHA 838  ").Select(p => p.Id).Order());
+        Assert.Equal(f.A, Assert.Single(Query(line: linha, nome: "838", modal: f.Onibus, sentido: f.Ida)).Id);
+        Assert.Empty(Query(line: linha, modal: f.Trem));
+        Assert.Empty(Query(line: linha, sentido: f.SentidoTrem));
+        Assert.Equal(f.B, Assert.Single(PaginarParadas(Query(line: linha), 2, 1)).Id);
+    }
+
+    [Fact]
+    public void TodosFiltrosAdicionaisTraduzemSqlNpgsqlSemAbrirConexao()
+    {
+        using var db = new TransporteDbContext(new DbContextOptionsBuilder<TransporteDbContext>()
+            .UseNpgsql("Host=localhost;Database=not-opened", x => x.UseNetTopologySuite()).Options);
+        var atuais = OcorrenciasAtuais(db.OcorrenciasParadasPadroes);
+        var query = FiltrarParadas(db.Paradas, atuais, "campo", Guid.NewGuid(), "838", Guid.NewGuid());
+        query = FiltrarParadasAdicionais(query, atuais, Guid.NewGuid(), Guid.NewGuid(), "Linha", Guid.NewGuid(), "838", Guid.NewGuid());
+        var sql = ProjetarParadas(PaginarParadas(query, 2, 10)).ToQueryString();
+        Assert.Contains("EXISTS", sql); Assert.Contains("VersaoAtualId", sql);
+        Assert.Contains("LIMIT", sql); Assert.Contains("OFFSET", sql); Assert.Contains("lower(", sql);
+        Assert.Empty(db.ChangeTracker.Entries());
+    }
+
     private static IQueryable<Parada> Filtrar(Dados f, string? nome = null, Guid? modal = null,
         string? codigo = null, Guid? sentido = null) =>
         FiltrarParadas(f.Paradas, OcorrenciasAtuais(f.Ocorrencias), nome, modal, codigo, sentido);

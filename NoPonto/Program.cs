@@ -627,13 +627,7 @@ builder.Services.AddHostedService<GpsPollingService>();
 // BUILD
 // --------------------------------------------------------------------
 
-builder.Services.AddResponseCompression(options => {
-    options.EnableForHttps = true;
-    options.MimeTypes = ["application/json"];
-    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
-});
-builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(
-    options => options.Level = System.IO.Compression.CompressionLevel.Fastest);
+builder.Services.AdicionarCompressaoPublica();
 
 var app = builder.Build();
 
@@ -668,10 +662,7 @@ using (var scope = app.Services.CreateScope())
 // MIDDLEWARES
 // --------------------------------------------------------------------
 
-app.UseWhen(context => context.Request.Method == "GET"
-    && (context.Request.Path.StartsWithSegments("/padroes-versoes")
-        || context.Request.Path.StartsWithSegments("/paradas")),
-    pipeline => pipeline.UseResponseCompression());
+app.UsarCompressaoPublica();
 app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseSwagger();
