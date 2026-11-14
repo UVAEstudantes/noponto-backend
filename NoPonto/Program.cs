@@ -203,6 +203,14 @@ builder.Services.AddOptions<TremCrossSentinelOptions>()
 builder.Services.AddOptions<RailRealtimeOptions>()
     .Bind(builder.Configuration.GetSection(RailRealtimeOptions.SectionName));
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddOptions<NoPonto.Application.Health.HealthStatusOptions>()
+    .Bind(builder.Configuration.GetSection(NoPonto.Application.Health.HealthStatusOptions.Section))
+    .Validate(o => o.IsValid(), "Invalid health status limits.").ValidateOnStart();
+builder.Services.AddSingleton<NoPonto.Application.Health.TransportSourceHealth>();
+builder.Services.AddSingleton<NoPonto.Application.Health.BackendReadiness>();
+builder.Services.AddHealthChecks()
+    .AddCheck<NoPonto.Data.Health.PostgresReadinessCheck>("postgres", tags: ["ready"])
+    .AddCheck<NoPonto.Data.Health.RedisReadinessCheck>("redis", tags: ["ready"]);
 builder.Services.AddSingleton<ProcessLocalTrensRjRequestBudget>();
 builder.Services.AddSingleton<ITrensRjRequestBudget, NoPonto.Data.Repositories.TrensRjRedisRequestBudget>();
 builder.Services.AddSingleton<NoPonto.Application.TremRealtime.ITrensRjRefreshStore, NoPonto.Data.Repositories.TrensRjRefreshRedisStore>();
@@ -338,7 +346,8 @@ foreach (var modal in new[] { GpsModalNames.Bus, GpsModalNames.Brt })
             sp.GetRequiredService<IGtfsRealtimeRouteLookup>(), options,
             sp.GetRequiredService<ILogger<GtfsRealtimeGpsSource>>(),
             sp.GetRequiredService<PhysicalLocationShadow>(), sp.GetRequiredService<UnifiedLocation>(),
-            sp.GetRequiredService<PhysicalDiagnostics>(), sp.GetRequiredService<PhysicalNetworkEvaluation>());
+            sp.GetRequiredService<PhysicalDiagnostics>(), sp.GetRequiredService<PhysicalNetworkEvaluation>(),
+            sp.GetRequiredService<NoPonto.Application.Health.TransportSourceHealth>());
     });
 }
 

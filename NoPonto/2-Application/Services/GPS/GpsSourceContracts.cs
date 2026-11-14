@@ -67,12 +67,15 @@ internal interface IStatusGpsSource : IGpsSource
     Task<GpsSourceReadResult> GetResultAsync(CancellationToken cancellationToken);
 }
 
+// Health-only metadata distinguishes local reuse from a real HTTP acquisition (including valid 304).
 internal sealed record GpsSourceReadResult(
     StatusFonteGps Status,
     IReadOnlyList<GpsObservation> Observations,
     TimeSpan Duration,
     string? FailureReason = null,
-    DateTimeOffset? SourceWatermark = null);
+    DateTimeOffset? SourceWatermark = null,
+    bool FallbackUsed = false,
+    bool Reused = false);
 
 public enum GpsBusSupportMode { FullFallback, Hybrid }
 
