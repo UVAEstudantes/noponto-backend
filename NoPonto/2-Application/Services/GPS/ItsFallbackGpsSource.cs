@@ -53,7 +53,7 @@ internal sealed partial class ItsFallbackGpsSource(ISnapshotGpsSource primary, I
             var result = await ReadFallbackAsync(ct);
             logger?.LogInformation("BUS fallback acquisition: active_source={source}, status={status}, count={count}, healthy_probes={probes}",
                 fallback.Name, result.Status, result.Observations.Count, _healthyProbes);
-            return result with { Duration = clock.GetElapsedTime(started), SourceWatermark = null };
+            return result with { Duration = clock.GetElapsedTime(started), SourceWatermark = null, FallbackUsed = true };
         }
         finally { _gate.Release(); }
     }

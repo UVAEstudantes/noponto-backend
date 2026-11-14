@@ -2,11 +2,12 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using NoPonto.Application.Health;
 
 namespace NoPonto.Application.GPS;
 
 public sealed class ItsCurrentGpsSource(GpsDatarioClient client, IOptions<ItsCurrentOptions> options,
-    TimeProvider clock, ILogger<ItsCurrentGpsSource> logger) : ISnapshotGpsSource
+    TimeProvider clock, ILogger<ItsCurrentGpsSource> logger, TransportSourceHealth? health = null) : ISnapshotGpsSource
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Task<GpsDatarioPage>? _pendingIo;
@@ -64,7 +65,9 @@ public sealed class ItsCurrentGpsSource(GpsDatarioClient client, IOptions<ItsCur
                 positions.Count(x => x.Provider == "ZIRIX"), positions.Count(x => x.Provider == "CONECTA"),
                 providerVehicles["ZIRIX"].Except(providerVehicles["CONECTA"]).Count(),
                 providerVehicles["CONECTA"].Except(providerVehicles["ZIRIX"]).Count());
-            return new(status, positions, clock.GetElapsedTime(start), reason);
+            var result = new GpsSourceReadResult(status, positions, clock.GetElapsedTime(start), reason);
+            health?.Record(TransportFeed.Its, result);
+            return result;
         }
 
         try

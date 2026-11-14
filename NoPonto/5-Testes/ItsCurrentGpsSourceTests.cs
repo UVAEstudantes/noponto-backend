@@ -377,7 +377,8 @@ public sealed partial class ItsCurrentGpsSourceTests
 
     private static ItsCurrentGpsSource Source(Clock clock,
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send,
-        ItsCurrentOptions? options = null, bool advance = true)
+        ItsCurrentOptions? options = null, bool advance = true,
+        NoPonto.Application.Health.TransportSourceHealth? health = null)
     {
         var http = new HttpClient(new Handler((request, ct) =>
         {
@@ -385,7 +386,7 @@ public sealed partial class ItsCurrentGpsSourceTests
             return send(request, ct);
         })) { BaseAddress = new("https://fixture.invalid/"), Timeout = Timeout.InfiniteTimeSpan };
         return new(new(http, NullLogger<GpsDatarioClient>.Instance),
-            Options.Create((options ?? new() { RecentUtcWindows = 1 }) with { ProviderPendingRetries = 0 }), clock, NullLogger<ItsCurrentGpsSource>.Instance);
+            Options.Create((options ?? new() { RecentUtcWindows = 1 }) with { ProviderPendingRetries = 0 }), clock, NullLogger<ItsCurrentGpsSource>.Instance, health);
     }
 
     private static GpsSppoCollectorService Collector(ItsCurrentGpsSource source, out GpsSppoSnapshotStore store)

@@ -348,7 +348,8 @@ public sealed partial class GpsPollingCadenciaTests
 
     private static GpsPollingService CreateCadencePolling(IGpsSource source,
         IDistributedCache? cache = null, IPosicaoVeiculoCacheRepository? positionCache = null,
-        GpsEnriquecimentoService? enricher = null, GpsSppoSnapshotStore? store = null)
+        GpsEnriquecimentoService? enricher = null, GpsSppoSnapshotStore? store = null,
+        NoPonto.Application.Health.TransportSourceHealth? health = null)
     {
         var other = new EmptyCadenceSource();
         var isBus = source.Name is "GTFSRT_BUS" or GpsSourceNames.ItsCurrent;
@@ -358,7 +359,7 @@ public sealed partial class GpsPollingCadenciaTests
             BrtPrimarySource = isBus ? other.Name : source.Name,
         }));
         return new GpsPollingService(store ?? new GpsSppoSnapshotStore(), cache!, null!,
-            NullLogger<GpsPollingService>.Instance, null!, null!, enricher!, null!, resolver, positionCache!, null!);
+            NullLogger<GpsPollingService>.Instance, null!, null!, enricher!, null!, resolver, positionCache!, null!, health: health);
     }
 
     private sealed class CadenceClock : TimeProvider
@@ -382,6 +383,7 @@ public sealed partial class GpsPollingCadenciaTests
         public List<string[]> ConditionalEtags { get; } = [];
         public GtfsRealtimeGpsClient Client { get; }
         public GtfsRealtimeGpsSource Source { get; }
+        public NoPonto.Application.Health.TransportSourceHealth Health { get; }
         public Func<int, HttpResponseMessage, HttpResponseMessage>? ConfigureResponse { get; set; }
         private readonly HttpClient _http;
         private readonly string _modal;
@@ -390,6 +392,7 @@ public sealed partial class GpsPollingCadenciaTests
 
         public GtfsCadenceFixture(string modal, int headerLatencySeconds = 1, bool cacheControl = true)
         {
+            Health = new(Clock, Options.Create(new NoPonto.Application.Health.HealthStatusOptions()));
             _modal = modal;
             _headerLatencySeconds = headerLatencySeconds;
             _cacheControl = cacheControl;
@@ -402,7 +405,7 @@ public sealed partial class GpsPollingCadenciaTests
             _http = new HttpClient(new CadenceHandler(Send));
             Client = new GtfsRealtimeGpsClient(_http, new Uri("https://fixture.invalid/positions"), options, Clock);
             Source = new GtfsRealtimeGpsSource(modal, Client, new CadenceLookup(modal), options,
-                NullLogger<GtfsRealtimeGpsSource>.Instance);
+                NullLogger<GtfsRealtimeGpsSource>.Instance, health: Health);
         }
 
         private HttpResponseMessage Send(HttpRequestMessage request)
@@ -429,7 +432,7 @@ public sealed partial class GpsPollingCadenciaTests
                 read.Duration, read.FailureReason, read.SourceWatermark);
         }
 
-        public GpsPollingService CreatePolling() => CreateCadencePolling(Source);
+        public GpsPollingService CreatePolling() => CreateCadencePolling(Source, health: Health);
 
         public async Task<ResultadoFonteGps> ReadAsync(GpsPollingService polling, double seconds)
         {

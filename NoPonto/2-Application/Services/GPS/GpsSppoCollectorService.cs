@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NoPonto.Application.Health;
 
 namespace NoPonto.Application.GPS;
 
@@ -12,6 +13,7 @@ public sealed class GpsSppoCollectorService : BackgroundService
     private readonly IOptionsMonitor<GpsSppoCollectorOptions> _opcoesMonitor;
     private readonly ILogger<GpsSppoCollectorService> _logger;
     private readonly GpsSppoCollectorMetrics _metrics;
+    private readonly TransportSourceHealth? _health;
     private readonly SemaphoreSlim _coletaEmAndamento = new(1, 1);
     private DateTimeOffset? _watermarkConfirmado;
     // Only the immediately preceding published snapshot, never a historical watermark.
@@ -22,7 +24,7 @@ public sealed class GpsSppoCollectorService : BackgroundService
         GpsSppoSnapshotStore snapshot,
         IOptionsMonitor<GpsSppoCollectorOptions> opcoesMonitor,
         ILogger<GpsSppoCollectorService> logger,
-        GpsSppoCollectorMetrics? metrics = null)
+        GpsSppoCollectorMetrics? metrics = null, TransportSourceHealth? health = null)
     {
         _source = sourceResolver.GetPrimary(GpsModalNames.Bus);
         if (_source is not IWindowedGpsSource and not ISnapshotGpsSource)
@@ -31,6 +33,7 @@ public sealed class GpsSppoCollectorService : BackgroundService
         _opcoesMonitor = opcoesMonitor;
         _logger = logger;
         _metrics = metrics ?? new GpsSppoCollectorMetrics();
+        _health = health;
     }
 
     internal DateTimeOffset? WatermarkConfirmado => _watermarkConfirmado;
@@ -88,7 +91,11 @@ public sealed class GpsSppoCollectorService : BackgroundService
                 // Never overwrite an unacknowledged generation or perform historical catch-up.
                 if (_snapshot.Ler() is not null) return ResultadoFonteGps.Vazio(TimeSpan.Zero);
                 var started = DateTimeOffset.UtcNow;
-                var read = await snapshotSource.GetResultAsync(stoppingToken);
+                GpsSourceReadResult read;
+                try { read = await snapshotSource.GetResultAsync(stoppingToken); }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
+                catch (Exception) { _health?.Record(TransportFeed.Sppo, StatusFonteGps.Falha); throw; }
+                if (!read.Reused) _health?.Record(TransportFeed.Sppo, read);
                 var result = new ResultadoFonteGps(read.Status,
                     read.Observations.Select(x => GpsObservationMapper.ToPosition(x, "ONIBUS")).ToArray(),
                     read.Duration, read.FailureReason);
@@ -147,6 +154,7 @@ public sealed class GpsSppoCollectorService : BackgroundService
             }
             catch (OperationCanceledException) when (timeout.IsCancellationRequested)
             {
+                _health?.Record(TransportFeed.Sppo, StatusFonteGps.Falha, failureReason: "timeout_coletor");
                 cronometro.Stop();
                 _metrics.Timeout();
                 _logger.LogWarning(
@@ -155,8 +163,10 @@ public sealed class GpsSppoCollectorService : BackgroundService
                     opcoes.TimeoutSegundos, janelaInicio, janelaFim, watermarkAnterior);
                 return ResultadoFonteGps.Falha("timeout_coletor", cronometro.Elapsed);
             }
+            catch (Exception) { _health?.Record(TransportFeed.Sppo, StatusFonteGps.Falha); throw; }
 
             cronometro.Stop();
+            _health?.Record(TransportFeed.Sppo, leitura);
             var resultado = new ResultadoFonteGps(
                 leitura.Status,
                 leitura.Observations.Select(x => GpsObservationMapper.ToPosition(x, "ONIBUS")).ToArray(),

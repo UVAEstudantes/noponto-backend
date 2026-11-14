@@ -41,8 +41,12 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
         IGtfsRealtimeRouteLookup lookup, GtfsRealtimeGpsOptions options,
         ILogger<GtfsRealtimeGpsSource> logger,
         NoPonto.Application.PhysicalPresence.PhysicalLocationShadow? physicalShadow = null,
-        NoPonto.Application.PhysicalPresence.UnifiedLocation? unified = null, PhysicalDiagnostics? diagnostics = null, PhysicalNetworkEvaluation? evaluation = null)
-    { _diagnostics = diagnostics; _evaluation = evaluation; _modal = modal; _client = client; _lookup = lookup; _options = options; _logger = logger; _physicalShadow = physicalShadow; _unified = unified; }
+        NoPonto.Application.PhysicalPresence.UnifiedLocation? unified = null, PhysicalDiagnostics? diagnostics = null, PhysicalNetworkEvaluation? evaluation = null,
+        NoPonto.Application.Health.TransportSourceHealth? health = null)
+    { _health = health; _diagnostics = diagnostics; _evaluation = evaluation; _modal = modal; _client = client; _lookup = lookup; _options = options; _logger = logger; _physicalShadow = physicalShadow; _unified = unified; }
+
+    private readonly NoPonto.Application.Health.TransportSourceHealth? _health;
+    private bool _readReused;
 
     public async Task<IReadOnlyList<GpsObservation>> GetPositionsAsync(CancellationToken cancellationToken)
         => (await ReadAsync(cancellationToken)).Observations;
@@ -59,7 +63,7 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
         try
         {
             await _readGate.WaitAsync(budget.Token);
-            try { return (await ReadCoreAsync(budget.Token)) with { Duration = watch.Elapsed }; }
+            try { _readReused = false; return (await ReadCoreAsync(budget.Token)) with { Duration = watch.Elapsed, Reused = _readReused }; }
             finally { _readGate.Release(); }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -79,6 +83,12 @@ public sealed class GtfsRealtimeGpsSource : ISnapshotGpsSource
     private async Task<GpsSourceReadResult> ReadCoreAsync(CancellationToken ct)
     {
         var result = await _client.ReadAsync(ct);
+        _readReused = result.Acquisition == GtfsHttpAcquisition.LocalCache;
+        if (_modal == GpsModalNames.Bus && !_readReused)
+            _health?.Record(NoPonto.Application.Health.TransportFeed.GtfsRt,
+                result.Success ? StatusFonteGps.Sucesso : StatusFonteGps.Falha,
+                NoPonto.Application.Health.TransportSourceHealth.Latest(result.Snapshot?.Readings.Select(x => x.TimestampGps) ?? []),
+                result.Failure);
         var now = DateTimeOffset.UtcNow;
         if (_logger.IsEnabled(LogLevel.Information))
         {

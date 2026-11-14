@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NoPonto.API.Hubs;
 using NoPonto.Data.Repositories;
+using NoPonto.Application.Health;
 
 namespace NoPonto.Application.GPS;
 
@@ -23,6 +24,7 @@ public sealed class GpsPollingService : BackgroundService
         new(StringComparer.OrdinalIgnoreCase);
     private readonly GpsEtaClient _etaClient;
     private readonly IStatusGpsSource _brtSource;
+    private readonly TransportSourceHealth? _health;
     private readonly bool _gtfsRealtimeSelected;
     private readonly bool _gtfsBusSelected;
     private readonly bool _busSnapshotWakeup;
@@ -69,7 +71,8 @@ public sealed class GpsPollingService : BackgroundService
         IRetryOperacionalGps? retryOperacional = null,
         GpsCorrelatedDiagnostics? correlatedDiagnostics = null,
         IOptions<PhysicalEtaOptions>? physicalEtaOptions = null,
-        HistoricalEtaShadow? historicalEtaShadow = null, AdaptiveEtaShadowWorker? adaptiveShadow = null)
+        HistoricalEtaShadow? historicalEtaShadow = null, AdaptiveEtaShadowWorker? adaptiveShadow = null,
+        TransportSourceHealth? health = null)
     {
         _snapshotSppo = snapshotSppo;
         _cache = cache;
@@ -103,6 +106,7 @@ public sealed class GpsPollingService : BackgroundService
         _physicalEtaOptions = physicalEtaOptions;
         _historicalEtaShadow = historicalEtaShadow;
         _adaptiveShadow = adaptiveShadow;
+        _health = health;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -1010,7 +1014,11 @@ public sealed class GpsPollingService : BackgroundService
 
     private async Task<ResultadoFonteGps> BuscarResultadoBrtAsync(CancellationToken ct)
     {
-        var leitura = await _brtSource.GetResultAsync(ct);
+        GpsSourceReadResult leitura;
+        try { leitura = await _brtSource.GetResultAsync(ct); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception) { _health?.Record(TransportFeed.Brt, StatusFonteGps.Falha); throw; }
+        if (!leitura.Reused) _health?.Record(TransportFeed.Brt, leitura);
         return new ResultadoFonteGps(
             leitura.Status,
             leitura.Observations.Select(x => GpsObservationMapper.ToPosition(x, "BRT")).ToArray(),
