@@ -48,15 +48,26 @@ public sealed class EstruturaLeituraV2Repository(TransporteDbContext db)
 
     public async Task<PaginacaoRespostaDTO<ParadaConsultaV2Dto>> ListarParadasAsync(
         string? nome, Guid? modalId, string? codigoLinha, Guid? sentidoId,
-        int pagina, int tamanhoPagina, CancellationToken ct)
+        int pagina, int tamanhoPagina, CancellationToken ct, Guid? paradaId = null, Guid? linhaId = null, string? nomeLinha = null, bool compacta = false)
     {
         if (pagina < 1 || tamanhoPagina is < 1 or > 100 || (long)(pagina - 1) * tamanhoPagina > int.MaxValue)
             throw new ArgumentOutOfRangeException(nameof(pagina));
         var atuais = OcorrenciasAtuais(db.OcorrenciasParadasPadroes.AsNoTracking());
         var query = FiltrarParadas(db.Paradas.AsNoTracking(), atuais, nome, modalId, codigoLinha, sentidoId);
+        if (paradaId.HasValue) query = query.Where(p => p.Id == paradaId.Value);
+        if (linhaId.HasValue || !string.IsNullOrWhiteSpace(nomeLinha))
+        {
+            var filtro = nomeLinha?.Trim().ToLowerInvariant();
+            var vinculos = atuais.Where(v => (!linhaId.HasValue || v.PadraoVersao.PadraoOperacional.Sentido.LinhaId == linhaId)
+                && (filtro == null || v.PadraoVersao.PadraoOperacional.Sentido.Linha.Nome.ToLower().Contains(filtro))
+                && (!modalId.HasValue || v.PadraoVersao.PadraoOperacional.Sentido.Linha.ModalId == modalId)
+                && (codigoLinha == null || v.PadraoVersao.PadraoOperacional.Sentido.Linha.Codigo == codigoLinha.Trim())
+                && (!sentidoId.HasValue || v.PadraoVersao.PadraoOperacional.SentidoId == sentidoId));
+            query = query.Where(p => vinculos.Any(v => v.ParadaId == p.Id));
+        }
         var total = await query.CountAsync(ct);
         var itens = await ProjetarParadas(PaginarParadas(query, pagina, tamanhoPagina)).ToListAsync(ct);
-        if (itens.Count > 0)
+        if (!compacta && itens.Count > 0)
         {
             var ids = itens.Select(x => x.Id).ToArray();
             var vinculos = await ProjetarVinculos(atuais.Where(x => ids.Contains(x.ParadaId))).Distinct().ToListAsync(ct);

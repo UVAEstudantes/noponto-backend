@@ -274,7 +274,7 @@ internal sealed class RadarCatalog : IEstruturaLeituraV2Repository
         return Task.FromResult<ItinerarioPadraoVersaoDto?>(Invalid == "versaoAusente" ? null : dto);
     }
     public Task<PaginacaoRespostaDTO<ParadaConsultaV2Dto>> ListarParadasAsync(string? nome, Guid? modalId,
-        string? codigoLinha, Guid? sentidoId, int pagina, int tamanhoPagina, CancellationToken ct) => throw new NotSupportedException();
+        string? codigoLinha, Guid? sentidoId, int pagina, int tamanhoPagina, CancellationToken ct, Guid? paradaId = null, Guid? linhaId = null, string? nomeLinha = null, bool compacta = false) => throw new NotSupportedException();
     public Task<PaginacaoRespostaDTO<LinhaEstruturalResumoDto>> ListarLinhasAsync(string? a, string? b, Guid? c, string? d, string? e, int f, int g, CancellationToken ct) => throw new NotSupportedException();
     public Task<LinhaEstruturalResumoDto?> BuscarLinhaPorCodigoAsync(string codigo, CancellationToken ct) => throw new NotSupportedException();
     public Task<IReadOnlyList<SentidoEstruturalResumoDto>?> ListarSentidosAsync(string codigo, CancellationToken ct) => throw new NotSupportedException();
