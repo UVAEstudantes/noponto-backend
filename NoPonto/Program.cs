@@ -80,6 +80,8 @@ static int GetOptionalPositiveInt(string? value, int defaultValue, string key)
 }
 
 var builder = WebApplication.CreateBuilder(args);
+var externalApiEndpoints = new ExternalApiEndpoints(builder.Configuration);
+builder.Services.AddSingleton(externalApiEndpoints);
 
 var gpsApiBaseUrl = builder.Configuration["GPS:API:BASE_URL"]
     ?? "https://dados.mobilidade.rio/gps/sppo";
@@ -294,7 +296,7 @@ builder.Services.AddHttpClient<GpsBrtClient>(client =>
 // Shared Data.Rio contract. ITS_CURRENT opts into bounded acquisition; DATARIO keeps its legacy path.
 builder.Services.AddHttpClient<GpsDatarioClient>(client =>
 {
-    client.BaseAddress = new Uri("https://its.mobilidade.rio/");
+    client.BaseAddress = externalApiEndpoints.ItsBaseUrl;
     client.Timeout = TimeSpan.FromSeconds(gpsHttpTimeoutSeconds);
 });
 
@@ -337,10 +339,10 @@ foreach (var modal in new[] { GpsModalNames.Bus, GpsModalNames.Brt })
     builder.Services.AddSingleton<IGpsSource>(sp =>
     {
         var options = sp.GetRequiredService<IOptions<GtfsRealtimeGpsOptions>>().Value;
-        var path = modal == GpsModalNames.Bus ? "onibus" : "brt";
         var client = new GtfsRealtimeGpsClient(
             sp.GetRequiredService<IHttpClientFactory>().CreateClient("GpsGtfsRealtime"),
-            new Uri($"https://dados.mobilidade.rio/gtfs/realtime/{path}/vehicle-positions"), options,
+            modal == GpsModalNames.Bus ? externalApiEndpoints.BusVehiclePositionsUrl
+                : externalApiEndpoints.BrtVehiclePositionsUrl, options,
             diagnostics: modal == GpsModalNames.Bus ? sp.GetRequiredService<PhysicalDiagnostics>() : null);
         return new GtfsRealtimeGpsSource(modal, client,
             sp.GetRequiredService<IGtfsRealtimeRouteLookup>(), options,

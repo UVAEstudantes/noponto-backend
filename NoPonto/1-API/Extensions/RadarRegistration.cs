@@ -4,6 +4,7 @@ using NoPonto.API.Middlewares;
 using NoPonto.Data.Repositories;
 using NoPonto.Application.Services.BackgroundServices;
 using NoPonto.API.Controllers;
+using NoPonto.API.Configuration;
 
 namespace NoPonto.API.Extensions;
 
@@ -11,6 +12,7 @@ public static class RadarRegistration
 {
     public static IServiceCollection AddRadar(this IServiceCollection services, IConfiguration configuration)
     {
+        services.TryAddSingleton<ExternalApiEndpoints>(_ => new(configuration));
         services.AddOptions<RadarOptions>().Bind(configuration.GetSection("Radar"))
             .Validate(x => x.MaxLinhas is >= 1 and <= 50 && x.MaxContextos >= x.MaxLinhas
                 && x.MaxContextos <= 50 && x.MaxRegistrosPorDia is >= 1 and <= 5000
@@ -60,9 +62,9 @@ public static class RadarRegistration
         services.AddSingleton<IRadarPushDelay, RadarPushDelay>();
         services.AddSingleton<RadarPushMetrics>();
         services.AddTransient<ExpoExternalTransportBlocked>();
-        services.AddHttpClient(ExpoPushGateway.ClientName, client =>
+        services.AddHttpClient(ExpoPushGateway.ClientName, (sp, client) =>
         {
-            client.BaseAddress = new Uri("https://exp.host/--/api/v2/push/");
+            client.BaseAddress = sp.GetRequiredService<ExternalApiEndpoints>().ExpoPushBaseUrl;
             client.Timeout = TimeSpan.FromSeconds(5);
         }).ConfigurePrimaryHttpMessageHandler(sp => sp.GetRequiredService<RadarPushPolicy>().NetworkEnabled
             ? new SocketsHttpHandler { AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(5),

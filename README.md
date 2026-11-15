@@ -51,6 +51,10 @@ Consultas estruturais V2, veículos, eventos de parada, tarifas, snapshots ferro
 
 As integrações incluem fontes municipais de ônibus/BRT, ITS/GTFS-RT, TrensRJ e FCM para Radar remoto, conforme os módulos habilitados. Proteja endpoints mutáveis e credenciais ao expor a API; o projeto não deve ser presumido como uma superfície pública inteiramente autenticada.
 
+URLs de ITS, GTFS-RT ônibus/BRT e Expo Push podem ser sobrescritas por `ItsCurrent__BaseUrl`, `GtfsRealtimeGps__BusVehiclePositionsUrl`, `GtfsRealtimeGps__BrtVehiclePositionsUrl` e `Radar__Push__BaseUrl`. Trens RJ já utiliza `TremRealtime__BaseUrl`. Ausência das variáveis mantém os endpoints atuais; overrides devem ser URLs absolutas HTTP(S). Para bases ITS e Expo com prefixo de caminho, mantenha a barra final. Os caminhos relativos das APIs continuam os mesmos.
+
+O Compose versionado encaminha essas cinco variáveis com defaults compatíveis. Na produção congelada, editar `.env` não as aplica: uma promoção futura e controlada da configuração efetiva precisa encaminhá-las, preservando o restante do ambiente e dos mounts.
+
 ## Testes e validação
 
 Há testes xUnit no projeto e verificações Python/shell nas ferramentas. Integrações podem exigir PostgreSQL/PostGIS ou Redis descartáveis. A seleção offline utilizada pelo CI está em `.ci/offline-tests.json`; o workflow mostra o isolamento e a verificação dos resultados. Para execução manual, escolha o conjunto apropriado ao ambiente antes de iniciar testes.
