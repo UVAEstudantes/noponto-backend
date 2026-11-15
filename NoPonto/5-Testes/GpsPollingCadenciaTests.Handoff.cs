@@ -48,6 +48,7 @@ public sealed partial class GpsPollingCadenciaTests
             clock.Advance(5);
         }
         await wait.WaitAsync(TimeSpan.FromSeconds(2));
+        await clock.TimerDisposed.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.Equal(normal ? 15 : 20, clock.Seconds);
         Assert.Same(batch, store.Ler()); Assert.Equal(0, clock.ActiveTimers);
         Assert.True(store.Confirmar(batch.Geracao));
