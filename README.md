@@ -1,168 +1,72 @@
 # NoPonto Backend
 
-Backend do **NoPonto**, plataforma acadêmica de informação sobre mobilidade urbana desenvolvida no contexto de um Trabalho de Conclusão de Curso. Este repositório concentra estrutura de transporte, aquisição e tratamento de dados operacionais, APIs, processamento geoespacial, realtime e persistência utilizados pelo aplicativo móvel.
+Backend da plataforma acadêmica NoPonto, voltada à consulta de transporte público e ao acompanhamento de ônibus, BRT e trem. Reúne APIs, aquisição de dados, processamento geoespacial, estimativas e comunicação em tempo real para o aplicativo móvel.
 
-O núcleo vigente cobre ônibus, BRT e representação ferroviária. Rotas multimodais, Rotinas, notificações e metrô operacional permanecem planejados.
+## Funcionalidades e arquitetura
 
-## Estado do projeto
+Monólito modular em ASP.NET Core/.NET 9, com Entity Framework Core 9, Npgsql, NetTopologySuite, PostgreSQL/PostGIS, Redis e SignalR. Controllers e workers compartilham o processo da API.
 
-| Área | Estado |
-|---|---|
-| Estrutura de transporte V2 versionada | operacional |
-| GPS e matching de ônibus/BRT | operacional no backend |
-| Redis, snapshots e SignalR | operacional; estado efêmero |
-| Ferrovia schedule-first | operacional; posições inferidas, não GPS |
-| Aplicativo mobile | implementado; build distribuído não confirmado nesta baseline |
-| Telemetria e viagem operacional | implementadas |
-| ETA legado | cliente fail-open presente; serviço Python desligado |
-| ETA V2 | fundação experimental implementada; flags produtivas desligadas |
-| POIs e tarifas | parciais, sem fluxo produtivo completo comprovado |
-| Rotas, Rotinas, notificações e metrô | planejados |
+- Estrutura V2 versionada: modais, linhas, sentidos, percursos, paradas e ocorrências; consultas compactas e importação estrutural.
+- Ônibus/BRT: aquisição configurável (SPPO, BRT, ITS e GTFS-RT conforme configuração), normalização, deduplicação, matching PostGIS, viagem operacional e publicação de posições.
+- Trem: grades versionadas, viagens esperadas, consultas limitadas a provedores, refresh e posições inferidas sobre o percurso. Posição ferroviária estimada não equivale a GPS medido.
+- Eventos de parada, ETA, tarifas/formas de pagamento, telemetria e histórico. ETA avançado e modelos ML dependem de flags, dados e serviços próprios; sua presença no código não comprova ativação em produção.
+- Radar de Espera: sessões, monitoramento e integração push Android/FCM, condicionados à configuração e às permissões do cliente.
+- Saúde: `/health/live`, `/health/ready` e `/health/fontes`; disponibilidade da API e saúde das fontes são sinais distintos.
 
-## Funcionalidades principais
+## Organização
 
-- Catálogo V2 de modais, linhas, sentidos, padrões operacionais, versões de percurso, paradas e ocorrências ordenadas.
-- Importação estrutural com identidades externas, proveniência, hashes e publicação versionada.
-- Coleta configurável de GPS de ônibus/BRT, validação, deduplicação e estado causal.
-- Map matching em lote com PostgreSQL/PostGIS, continuidade, bearing, fração longitudinal e próxima ocorrência.
-- Viagem operacional durável, passagens de parada, eventos e outbox.
-- Snapshots Redis com TTL e CAS Lua, além de publicação SignalR por linha.
-- Schedules ferroviários versionados, expected runs em memória, scanner limitado por budget, binding, tracker e estimativa temporal/espacial.
-- Eventos de parada, histórico e telemetria para avaliação.
-- Fundação ETA V2 com baseline/shadow/canary, persistência e ground truth, atualmente desabilitada em produção.
+| Caminho | Responsabilidade |
+| --- | --- |
+| `NoPonto/1-API` | Controllers, hub, middleware e configuração HTTP |
+| `NoPonto/2-Application` | Serviços, workers, GPS, ferrovia, Radar e ETA |
+| `NoPonto/3-Domain` | Entidades de domínio |
+| `NoPonto/4-Data` | Persistência, repositórios, Redis e SQL/PostGIS |
+| `NoPonto/5-Testes` | Testes xUnit, incluindo integração |
+| `NoPonto/Migrations` | Evolução do schema |
+| `tools/`, `.ci/`, `.deploy/` | Ferramentas, validação e operação |
 
-## Arquitetura
+Alguns controllers e serviços legados estão excluídos no `NoPonto.csproj`; consulte os contratos compilados e o Swagger, não apenas os nomes de arquivos.
 
-O backend é um **monólito modular em camadas**, não um conjunto de microsserviços. Controllers REST, SignalR e workers internos executam no mesmo processo ASP.NET Core.
+## Desenvolvimento local
 
-```mermaid
-flowchart LR
-  APP[Aplicativo Expo] -->|HTTP e SignalR| API[API ASP.NET Core + workers]
-  API -->|SQL e PostGIS| PG[(PostgreSQL e PostGIS)]
-  API -->|RESP| RD[(Redis efêmero)]
-  API -->|HTTP| EXT[Providers externos]
-  API -.->|legado OFF| ML[ETA Python]
+Requer SDK .NET 9, PostgreSQL com PostGIS e Redis. Use instâncias locais isoladas. Docker/Compose é opcional; os arquivos existentes devem ser revisados antes de qualquer execução.
+
+Configure o ambiente a partir de `NoPonto/.env.local.example`, sem copiar valores reais para o Git. A aplicação carrega `.env` no diretório de execução sem sobrescrever variáveis já definidas; `.env.local` não deve ser presumido como carregado automaticamente.
+
+Variáveis essenciais: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `REDIS_HOST` e `REDIS_PORT`. Configure também `ASPNETCORE_ENVIRONMENT`, `CORS__ORIGINS__*`, provedores `GPS__*`/`GpsSources__*`, opções ferroviárias e Radar/FCM conforme os módulos utilizados. A configuração de isolamento valida os destinos de infraestrutura. Nunca use banco, Redis ou credenciais de produção no desenvolvimento.
+
+```sh
+cd NoPonto
+dotnet restore NoPonto.csproj
+dotnet run --project NoPonto.csproj
 ```
 
-- `1-API`: controllers, hubs, middleware e contratos de entrada HTTP.
-- `2-Application`: regras, GPS, ferrovia, ETA, importações e BackgroundServices.
-- `3-Domain`: entidades persistentes do domínio.
-- `4-Data`: DbContext, interfaces, repositories e SQL/PostGIS.
-- `5-Testes`: testes xUnit incorporados ao projeto.
+**Atenção ao startup:** em `Development`, o código aplica migrations automaticamente. Nos demais ambientes, verifica pendências e bloqueia o startup se necessário; depois executa o bootstrap Redis. Revise os destinos antes de iniciar. Workers podem consultar fontes externas conforme a configuração.
 
-Diagramas completos estão no [catálogo arquitetural](docs/07-diagramas/00-catalogo-convencoes-e-rastreabilidade.md).
+A URL local depende de `Properties/launchSettings.json` e do ambiente. O Swagger fica em `/swagger`, com documentos público e administrativo. A especificação gerada é a referência para as rotas disponíveis.
 
-## Tecnologias
+## APIs e integrações
 
-- .NET 9, ASP.NET Core e C#.
-- Entity Framework Core 9, Npgsql e NetTopologySuite.
-- PostgreSQL 16 e PostGIS 3.4.
-- Redis 7 e StackExchange.Redis.
-- SignalR e Swagger/OpenAPI.
-- Docker/Compose, GitHub Actions e GHCR.
-- Frontend relacionado: Expo 55, React Native 0.83 e MapLibre GL JS em WebView.
+Consultas estruturais V2, veículos, eventos de parada, tarifas, snapshots ferroviários e Radar são expostos via HTTP. O hub GPS usa `/hub/gps` por padrão (`GPS__HUB__ROUTE` configurável), com inscrições por linha e contratos de presença. Redis mantém estado operacional efêmero; PostgreSQL/PostGIS mantém dados duráveis.
 
-## Fluxos resumidos
+As integrações incluem fontes municipais de ônibus/BRT, ITS/GTFS-RT, TrensRJ e FCM para Radar remoto, conforme os módulos habilitados. Proteja endpoints mutáveis e credenciais ao expor a API; o projeto não deve ser presumido como uma superfície pública inteiramente autenticada.
 
-### Rodoviário
+## Testes e validação
 
-O collector consulta providers com janela e overlap, normaliza e deduplica observações. O polling aplica validação, matching PostGIS e correção causal. Posições aceitas atualizam Redis, viagem/outbox/telemetria conforme o estágio e são publicadas aos grupos SignalR.
+Há testes xUnit no projeto e verificações Python/shell nas ferramentas. Integrações podem exigir PostgreSQL/PostGIS ou Redis descartáveis. A seleção offline utilizada pelo CI está em `.ci/offline-tests.json`; o workflow mostra o isolamento e a verificação dos resultados. Para execução manual, escolha o conjunto apropriado ao ambiente antes de iniciar testes.
 
-### Ferroviário
+A limpeza documental foi validada somente por inspeções estáticas, hashes, referências, YAML e `git diff --check`; não foram executados builds ou suítes .NET.
 
-Grades versionadas materializam viagens esperadas. Gate, sentinelas e budgets controlam consultas; evidências são associadas a expected runs e usadas para inferir progresso e posição sobre a geometria. O frontend recebe snapshots HTTP com origem, qualidade e idade.
+## CI/CD e deploy
 
-### Persistência e ETA
+`.github/workflows/deploy.yml` executa validação em pull requests e pushes para `main`. Em push para `main`, após a validação, publica imagem `linux/amd64` no GHCR com tags `latest`, temporal/SHA e `build-N`.
 
-PostgreSQL/PostGIS é a autoridade durável. Redis guarda projeções, locks, TTLs e streams, mas está configurado sem RDB/AOF e não deve ser tratado como backup. O ETA legado falha sem interromper GPS; ETA V2 permanece experimental e desligado.
+O job de deploy exige push para `main` e `vars.NOPONTO_DEPLOY_ENABLED == 'true'`. Usa o digest publicado, ambiente `production`, Tailscale/SSH e scripts versionados em `.deploy/`, com verificações e rollback previstos nesses scripts. Não há `workflow_dispatch` nesse workflow. Um futuro push pode publicar imagem e realizar deploy; confirme a variável antes de enviar alterações. O workflow backend foi preservado nesta limpeza.
 
-## Estrutura do repositório
+## Limites e documentação
 
-```text
-noponto-backend/
-├── .github/workflows/       # build e deploy
-├── docs/                    # documentação técnica e acadêmica
-├── NoPonto.sln
-└── NoPonto/
-    ├── 1-API/
-    ├── 2-Application/
-    ├── 3-Domain/
-    ├── 4-Data/
-    ├── 5-Testes/
-    ├── Migrations/
-    ├── Program.cs
-    ├── Dockerfile
-    └── docker-compose.yml
-```
+A qualidade de posições e estimativas depende das fontes, idade dos dados e configuração. Rotinas demonstrativas do aplicativo não representam um motor de rotas multimodais concluído. Estado Redis não substitui persistência durável; testes offline não comprovam comportamento em produção ou em aparelhos físicos.
 
-## Execução em desenvolvimento
+Documentação técnica, auditorias, evidências e históricos estão no [noponto-docs](https://github.com/UVAEstudantes/noponto-docs), com [índice da organização documental](https://github.com/UVAEstudantes/noponto-docs/blob/main/INDICE.md). O arquivo `NoPonto/docs/ETA_ML_TREINO_3B.md` permanece como exceção técnica: `tools/eta_ml/test_audit_sql.py` extrai e verifica um gerador nele contido. Scripts/SQL anteriormente documentais foram preservados em `tools/auditoria/`; YAMLs auxiliares, em `.deploy/arquivo-documental/`. Resultados locais em `/artifacts/` são ignorados.
 
-### Pré-requisitos
-
-- .NET SDK 9.
-- PostgreSQL com PostGIS.
-- Redis 7.
-- Docker e Compose são opcionais para a infraestrutura local; o Docker Desktop local não representa a produção.
-
-Defina variáveis de ambiente com valores próprios. Não versione `.env`, senhas, tokens ou connection strings. Categorias relevantes:
-
-- `POSTGRES_*` e `REDIS_*`;
-- `CORS__ORIGINS__*`;
-- `GPS__*`, `GpsPolling__*` e seleção de sources;
-- `TremRealtime__*` e `RailScheduleRuntime__*`;
-- `EtaV2__*` e `TelemetriaMlSampling__*`;
-- URLs e parâmetros dos providers estruturais.
-
-Com PostgreSQL/Redis já disponíveis e a configuração preenchida:
-
-```bash
-dotnet restore NoPonto.sln
-dotnet run --project NoPonto/NoPonto.csproj
-```
-
-Para usar o Compose local, revise primeiro o override e forneça todas as variáveis exigidas:
-
-```bash
-docker compose -f NoPonto/docker-compose.yml -f NoPonto/docker-compose.override.yml up -d
-```
-
-O override publica a API localmente em `5000:8080`. A URL criada pelo perfil `dotnet run` pode variar conforme `launchSettings.json`; consulte a saída da aplicação.
-
-Migrations não são aplicadas automaticamente por este README. Execute-as somente em ambiente autorizado, após conferir alvo, backup e compatibilidade.
-
-## API e Swagger
-
-Swagger é exposto pela aplicação em `/swagger`; use a origem informada no startup. A superfície vigente inclui consultas estruturais V2, veículos, eventos de parada, snapshots ferroviários e contratos de compatibilidade necessários ao frontend. Controllers antigos de itinerários, POIs e administração estão total ou parcialmente excluídos da compilação e não devem ser usados como referência de API atual.
-
-O ambiente observado não demonstrou autenticação/autorização suficiente para promover operações mutáveis como API pública. Consulte [segurança](docs/05-infraestrutura/06-seguranca-e-superficie-de-exposicao.md).
-
-## Testes
-
-O projeto possui testes xUnit unitários e de integração para estrutura V2, PostGIS, GPS, Redis, viagem, ferrovia, telemetria e ETA. Alguns testes exigem dependências descartáveis ou configuração específica.
-
-```bash
-dotnet test NoPonto.sln
-```
-
-O comando não foi executado durante a atualização deste README. Antes de rodar, confira filtros, requisitos de PostgreSQL/Redis e isolamento; não direcione testes de integração à produção.
-
-## Build e deploy
-
-O workflow backend constrói imagem `linux/amd64` com Buildx e publica no GHCR como `latest`, tag temporal com SHA curto e `build-N`. O deploy ocorre somente por execução manual do workflow, via rede privada e script remoto. O Compose produtivo usa `latest`; pin por digest, smoke test e rollback automatizado não foram comprovados.
-
-## Documentação
-
-A [documentação completa](docs/README.md) reúne auditoria, projeto, arquitetura, fluxos, modelagem, infraestrutura, roadmap, diagramas e material acadêmico do TCC.
-
-## Limitações conhecidas
-
-- Redis operacional sem persistência em disco.
-- API e workers compartilham recursos no mesmo processo.
-- Backup/restore, RPO/RTO e observabilidade centralizada ainda não comprovados.
-- Rastreabilidade produtiva prejudicada pelo uso de tag mutável.
-- Segurança de portas, Docker socket e endpoints requer estabilização.
-- Resultados quantitativos de matching, ferrovia e ETA dependem de protocolo consolidado.
-
-## Autoria e licença
-
-Projeto acadêmico NoPonto. Não foi identificado arquivo de licença nesta baseline; nenhum direito de reutilização deve ser presumido sem autorização do responsável pelo projeto.
+[Aplicativo](https://github.com/UVAEstudantes/noponto-frontend) · [Releases](https://github.com/UVAEstudantes/noponto-backend/releases)

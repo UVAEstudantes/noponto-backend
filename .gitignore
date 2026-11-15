@@ -1,0 +1,5 @@
+# Resultados locais de testes e auditorias
+/artifacts/
+/TestResults/
+*.trx
+*.binlog
