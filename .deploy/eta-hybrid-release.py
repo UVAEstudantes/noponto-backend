@@ -72,7 +72,7 @@ def radar_candidate(base, overlay, image=None):
         'Radar__Push__ProjectId', 'Radar__Push__EncryptionKeyFile', 'Radar__Push__ExpoAccessTokenFile'}
     for key in env:
         if key.startswith('Radar__'):
-            assert key in allowed or re.fullmatch(r'Radar__Push__AllowedInstallationIds__(?:[0-9]|[1-9][0-9])', key)
+            assert key in allowed or key == 'Radar__Push__BaseUrl' or re.fullmatch(r'Radar__Push__AllowedInstallationIds__(?:[0-9]|[1-9][0-9])', key)
     for key, value in changes.get('environment', {}).items():
         assert key in allowed and isinstance(value, str)
         if key in RADAR_FLAGS: assert value in ('true', 'false')

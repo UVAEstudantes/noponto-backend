@@ -55,6 +55,12 @@ URLs de ITS, GTFS-RT ônibus/BRT e Expo Push podem ser sobrescritas por `ItsCurr
 
 O Compose versionado encaminha essas cinco variáveis com defaults compatíveis. Na produção congelada, editar `.env` não as aplica: uma promoção futura e controlada da configuração efetiva precisa encaminhá-las, preservando o restante do ambiente e dos mounts.
 
+Para essa promoção sem nova imagem, `.deploy/promote-external-urls.py --check` lê exclusivamente as cinco URLs de `/opt/stacks/noponto/.env`, valida a composição ativa e mostra apenas nomes/status. Sem `--apply`, não escreve arquivos nem recria containers. Execute no servidor com Python 3 e os dois scripts revisados (`promote-external-urls.py` e `eta-hybrid-release.py`) no mesmo diretório; não use este comando no ambiente Windows de desenvolvimento.
+
+Após autorização, `--apply` usa o lock do deploy, salva composição/metadados anteriores em um diretório privado `url-releases/<id>` dentro do estado do deploy e recria somente a API na mesma imagem, sem build/pull. A promoção altera apenas as cinco variáveis; preserva seletores, mounts, serviços auxiliares e `active.run`. Só após saúde e conferência do ambiente atualiza o ponteiro `active.manual.json`; o próximo CI preservará as URLs promovidas. O arquivo `ci-active.json` não é editado por esse comando.
+
+Falhas ou interrupções tratáveis tentam restaurar automaticamente a composição e os metadados anteriores. `--rollback /caminho/do/backup --check` simula o retorno e `--rollback /caminho/do/backup --apply` o executa, recusando alterações posteriores à promoção. `SIGKILL`, queda do host ou falha do próprio rollback exigem intervenção manual usando o backup; o script não declara restauração bem-sucedida nesses casos. O preflight não chama os provedores externos nem comprova a disponibilidade futura deles. As cinco chaves devem existir, sem duplicatas/aliases; URLs literais HTTP(S), sem interpolação, credenciais embutidas ou fragmentos.
+
 ## Testes e validação
 
 Há testes xUnit no projeto e verificações Python/shell nas ferramentas. Integrações podem exigir PostgreSQL/PostGIS ou Redis descartáveis. A seleção offline utilizada pelo CI está em `.ci/offline-tests.json`; o workflow mostra o isolamento e a verificação dos resultados. Para execução manual, escolha o conjunto apropriado ao ambiente antes de iniciar testes.
