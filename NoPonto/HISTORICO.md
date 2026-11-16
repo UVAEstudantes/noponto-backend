@@ -24,3 +24,11 @@ Históricos anteriores foram centralizados no repositório `noponto-docs` durant
 - Suavização do horário absoluto por fix distinto: peso 25% longe e 75% até 500 m, variação limitada a 60 s. Replay não renova previsão nem validade. Falha excepcional do resolvedor pode reutilizar somente distância já validada do mesmo fix/progresso/próxima ocorrência; rejeição SQL, fix novo, referência vencida ou incompatível continuam indisponíveis. Sem alteração do pipeline GPS, frontend ou ferrovia. Publicação híbrida não sobrescreve o novo estimador neste endpoint; shadow permanece.
 - Compilação e 49 testes direcionados aprovados (quatro novos cenários); seis avisos preexistentes. Primeira rodada: 48/49, corrigida tolerância de arredondamento da asserção e acrescentada regressão de replay sem avanço; rodada final 49/49. git diff --check limpo.
 - Deploy bloqueado pelo workflow existente: build/publicação/deploy somente em push na main, sem workflow_dispatch de branch. Rollback documentado em .deploy/deploy-api.sh (imagem anterior local, snapshots e health check), não exercitado. Sem push, merge, Docker, banco ou produção. Detalhes em noponto-docs/00-auditoria/2026-11-16/eta-operacional-minimo.md.
+
+
+## 2026-11-16 - Radar 8: estabilidade do ETA operacional
+
+- Mediana de progresso com dois intervalos validos nao e limitada por leitura instantanea lenta; suavizacao permanece ativa com avanco, inclusive abaixo de 5 km/h. Sem avanco continua indisponivel.
+- Distancia ausente conserva somente historico compativel e fisicamente valido, sem publicar ETA nessa resposta nem renovar TTL. Expiracao, regressao e proxima ocorrencia incompativel descartam referencia.
+- Validade mantida em 90 s: override/preflight fixam esse valor e PhysicalEta participa do polling GPS; ajuste isolado para 120 s nao foi realizado.
+- Compilacao e 53 testes direcionados aprovados (quatro casos novos); seis avisos preexistentes, diff check limpo. Regressao sintetica reproduziu salto de 1033 s por velocidade lenta e 2364 s apos perda de historico, antes da correcao. Sem frontend ou mudanca de geometria/GPS.

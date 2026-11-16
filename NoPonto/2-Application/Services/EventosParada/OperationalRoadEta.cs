@@ -13,8 +13,21 @@ public sealed class OperationalRoadEta : IDisposable
     private static string Key(PosicaoVeiculoDto p, Guid target) =>
         $"{p.Ordem}/{p.CodigoLinha}/{p.LinhaId}/{p.SentidoId}/{p.PadraoOperacionalId}/{p.PadraoVersaoId}/{target}";
 
-    internal void Forget(PosicaoVeiculoDto p, Guid target)
-    { lock (gate) cache.Remove(Key(p, target)); }
+    internal void MissingDistance(PosicaoVeiculoDto p, Guid target, DateTimeOffset now, PhysicalEtaOptions options)
+    {
+        lock (gate)
+        {
+            var key = Key(p, target);
+            if (!cache.TryGetValue<State>(key, out var old) || old is null) return;
+            // Keep history, not a public prediction; neither a miss nor a replay extends its lifetime.
+            if (!PhysicalEta.CapturedSpeed(p, now, options).HasValue
+                || (now - old.Position.TimestampGps).TotalSeconds > options.MaxAgeSeconds
+                || p.TimestampGps < old.Position.TimestampGps
+                || p.PosicaoNaRota < old.Position.PosicaoNaRota
+                || p.ProximaOcorrenciaParadaPadraoId != old.Position.ProximaOcorrenciaParadaPadraoId)
+                cache.Remove(key);
+        }
+    }
 
     internal double? Reference(PosicaoVeiculoDto p, Guid target, DateTimeOffset now, PhysicalEtaOptions options)
     {
@@ -58,12 +71,12 @@ public sealed class OperationalRoadEta : IDisposable
             var speed = speeds.Length >= 2
                 ? (speeds[(speeds.Length - 1) / 2] + speeds[speeds.Length / 2]) / 2
                 : options.OperationalReferenceKmh;
-            // Explicit slow observations must not receive the nominal fallback or optimistic smoothing.
-            if (p.Velocidade < 5) speed = Math.Min(speed, p.Velocidade);
+            // Only the nominal fallback is capped by an isolated slow reading, not measured progress.
+            if (speeds.Length < 2 && p.Velocidade < 5) speed = Math.Min(speed, p.Velocidade);
             if (speed < 1) { cache.Remove(key); return null; }
             speed = Math.Min(speed, 60);
             var arrival = p.TimestampGps.AddSeconds(distance * 3.6 / speed);
-            if (continuous && p.Velocidade >= 5)
+            if (continuous && (speeds.Length >= 2 || p.Velocidade >= 5))
             {
                 var weight = distance <= 500 ? .75 : .25;
                 var adjustment = (arrival - old!.Arrival).TotalSeconds * weight;

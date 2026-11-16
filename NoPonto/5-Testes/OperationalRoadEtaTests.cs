@@ -74,6 +74,63 @@ public sealed class OperationalRoadEtaTests
     }
 
     [Fact]
+    public async Task SlowInstantaneousReadingCannotOverrideRobustAdvanceOrDisableSmoothing()
+    {
+        using var estimator = new OperationalRoadEta();
+        var p = ValidVehicle(); var stop = PhysicalEtaMvpTests.Stop(p);
+        await Event(estimator, p, stop, T.AddSeconds(25), 1388);
+        p = p with { TimestampGps = T.AddSeconds(30), PosicaoNaRota = .22 };
+        await Event(estimator, p, stop, T.AddSeconds(55), 1263);
+        p = p with { TimestampGps = T.AddSeconds(60), PosicaoNaRota = .24 };
+        var before = await Event(estimator, p, stop, T.AddSeconds(85), 1138);
+        p = p with { TimestampGps = T.AddSeconds(90), PosicaoNaRota = .26, Velocidade = 3 };
+        var after = await Event(estimator, p, stop, T.AddSeconds(115), 1013);
+        Assert.NotNull(after.EstimatedAt);
+        Assert.InRange(Math.Abs((after.EstimatedAt.Value - before.EstimatedAt!.Value).TotalSeconds), 0, 60);
+        Assert.True(after.SecondsUntilEvent < 400);
+        Assert.Equal(p.TimestampGps.AddSeconds(90), after.PredictionValidUntilUtc);
+        var stopped = p with { TimestampGps = T.AddSeconds(120), Velocidade = 1 };
+        Assert.Null((await Event(estimator, stopped, stop, T.AddSeconds(145), 1013)).EstimatedAt);
+    }
+
+    [Fact]
+    public async Task MissingDistancePreservesRecentHistoryWithoutPublishingStalePrediction()
+    {
+        using var estimator = new OperationalRoadEta();
+        var p = ValidVehicle(); var stop = PhysicalEtaMvpTests.Stop(p);
+        await Event(estimator, p, stop, T, 2400);
+        p = p with { TimestampGps = T.AddSeconds(30), PosicaoNaRota = .23 };
+        var before = await Event(estimator, p, stop, T.AddSeconds(30), 2100);
+        var missingPosition = p with { TimestampGps = T.AddSeconds(60), PosicaoNaRota = .26 };
+        var missing = await Event(estimator, missingPosition, stop, T.AddSeconds(60), null);
+        Assert.Null(missing.EstimatedAt);
+        Assert.Null(missing.PredictionValidUntilUtc);
+        var next = p with { TimestampGps = T.AddSeconds(90), PosicaoNaRota = .29, Velocidade = 2 };
+        var after = await Event(estimator, next, stop, T.AddSeconds(90), 1500);
+        Assert.NotNull(after.EstimatedAt);
+        Assert.InRange(Math.Abs((after.EstimatedAt.Value - before.EstimatedAt!.Value).TotalSeconds), 0, 60);
+        Assert.True(after.SecondsUntilEvent < 500);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task MissingDistanceDoesNotPreserveExpiredOrRegressiveHistory(bool expired)
+    {
+        using var estimator = new OperationalRoadEta();
+        var p = ValidVehicle(); var stop = PhysicalEtaMvpTests.Stop(p);
+        await Event(estimator, p, stop, T, 2400);
+        p = p with { TimestampGps = T.AddSeconds(30), PosicaoNaRota = .23 };
+        await Event(estimator, p, stop, T.AddSeconds(30), 2100);
+        var missing = p with { TimestampGps = T.AddSeconds(60), PosicaoNaRota = expired ? .26 : .21 };
+        var now = T.AddSeconds(expired ? 121 : 60);
+        Assert.Null((await Event(estimator, missing, stop, now, null)).EstimatedAt);
+        var next = p with { TimestampGps = T.AddSeconds(90), PosicaoNaRota = .29, Velocidade = 2 };
+        var result = await Event(estimator, next, stop, expired ? now.AddSeconds(1) : T.AddSeconds(90), 1500);
+        Assert.True(result.SecondsUntilEvent > 2000);
+    }
+
+    [Fact]
     public async Task TimeoutReusesOnlySameValidFixAndOccurrenceNotSqlRejectionOrIncompatibleOrExpiredEvidence()
     {
         using var estimator = new OperationalRoadEta();

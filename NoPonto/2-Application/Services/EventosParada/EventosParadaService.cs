@@ -109,7 +109,7 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                 if (index < 0) continue;
                 var seconds = distances.TryGetValue((p.Ordem, target.Id), out var distance)
                     ? operationalEta.Predict(p, target.Id, distance, now, options) : null;
-                if (!distances.ContainsKey((p.Ordem, target.Id))) operationalEta.Forget(p, target.Id);
+                if (!distances.ContainsKey((p.Ordem, target.Id))) operationalEta.MissingDistance(p, target.Id, now, options);
                 events[index] = events[index] with {
                     EstimatedAt = seconds.HasValue ? now.AddSeconds(seconds.Value) : null,
                     SecondsUntilEvent = seconds.HasValue ? (long)Math.Round(seconds.Value) : null,
