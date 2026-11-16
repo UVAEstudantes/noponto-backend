@@ -12,7 +12,8 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
     IExpectedRunService expectedRuns, IRailPublishedSnapshotProvider railSnapshot,
     IOptions<PhysicalEtaOptions>? physicalEtaOptions = null,
     IRoadEtaDistances? roadEtaDistances = null,
-    EtaCausalTestDiagnostics? testDiagnostics = null, AdaptiveEtaShadow? adaptiveShadow = null)
+    EtaCausalTestDiagnostics? testDiagnostics = null, AdaptiveEtaShadow? adaptiveShadow = null,
+    OperationalRoadEta? operationalEta = null)
     : IEventosParadaService
 {
     public async Task<IReadOnlyList<EventoParadaDto>?> ListarAsync(Guid paradaId,
@@ -48,13 +49,14 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
         if (road.Length == 0) return [];
         var lineCodes = road.Select(x => x.CodigoLinha.ToUpperInvariant()).Distinct().ToArray();
         var positions = (await roadRuntime.ListarAsync(lineCodes, ct)).Posicoes;
-        return await ProjectRoadEventsAsync(road, positions, now, physicalEtaOptions?.Value, roadEtaDistances, ct, testDiagnostics, adaptiveShadow);
+        return await ProjectRoadEventsAsync(road, positions, now, physicalEtaOptions?.Value, roadEtaDistances, ct, testDiagnostics, adaptiveShadow, operationalEta);
     }
 
     internal static async Task<IReadOnlyList<EventoParadaDto>> ProjectRoadEventsAsync(
         StopContext[] road, IEnumerable<PosicaoVeiculoDto> positions, DateTimeOffset now,
         PhysicalEtaOptions? options, IRoadEtaDistances? resolver, CancellationToken ct,
-        EtaCausalTestDiagnostics? testDiagnostics = null, AdaptiveEtaShadow? adaptiveShadow = null)
+        EtaCausalTestDiagnostics? testDiagnostics = null, AdaptiveEtaShadow? adaptiveShadow = null,
+        OperationalRoadEta? operationalEta = null)
     {
         if (options?.Enabled != true) return ProjectRoadEvents(road, positions, now, options);
         var snapshot = positions.ToArray();
@@ -86,6 +88,9 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
+                    if (operationalEta is not null) foreach (var request in chunk)
+                        if (operationalEta.Reference(request.Position, request.TargetId, now, options) is { } reference)
+                            distances[(request.Position.Ordem, request.TargetId)] = reference;
                     if (outcomes is not null) foreach (var request in chunk)
                         outcomes[(request.Position.Ordem, request.TargetId)] =
                             ex is TimeoutException or OperationCanceledException
@@ -95,6 +100,24 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                 }
             }
         var events = ProjectRoadEvents(road, snapshot, now, options, distances).ToList();
+        if (operationalEta is not null)
+            foreach (var p in snapshot)
+            {
+                var target = SelectRoadTarget(road, p);
+                if (target is null || !Compatible(p, target)) continue;
+                var index = events.FindIndex(x => x.EventId == $"road:{p.Ordem}:{target.Id:D}");
+                if (index < 0) continue;
+                var seconds = distances.TryGetValue((p.Ordem, target.Id), out var distance)
+                    ? operationalEta.Predict(p, target.Id, distance, now, options) : null;
+                if (!distances.ContainsKey((p.Ordem, target.Id))) operationalEta.Forget(p, target.Id);
+                events[index] = events[index] with {
+                    EstimatedAt = seconds.HasValue ? now.AddSeconds(seconds.Value) : null,
+                    SecondsUntilEvent = seconds.HasValue ? (long)Math.Round(seconds.Value) : null,
+                    Quality = seconds.HasValue ? "estimativa_fisica" : events[index].Quality == "gps_desatualizado"
+                        ? "gps_desatualizado" : "previsao_indisponivel",
+                    PredictionValidUntilUtc = seconds.HasValue ? p.TimestampGps.AddSeconds(options.MaxAgeSeconds) : null,
+                    DistanciaRestanteMetros = seconds.HasValue ? distance : null };
+            }
         if ((options.AdaptiveShadowEnabled || options.HybridShadowEnabled || options.HybridPublicEnabled) && adaptiveShadow is not null)
             foreach (var p in snapshot)
             {
@@ -102,7 +125,7 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                 var evt = target is null ? null : events.FirstOrDefault(x => x.EventId == $"road:{p.Ordem}:{target.Id:D}");
                 var comparison = adaptiveShadow.Compare(p, target is not null && distances.TryGetValue((p.Ordem,target.Id),out var metres) ? metres : null,
                     evt?.EstimatedAt is { } at ? (at-now).TotalSeconds : null, now,options,target?.Id);
-                if (options.HybridPublicEnabled && evt is not null)
+                if (options.HybridPublicEnabled && operationalEta is null && evt is not null)
                 {
                     var candidate = comparison.Hybrid;
                     // Only replace an already eligible physical event. All capture/target/trip gates remain upstream.

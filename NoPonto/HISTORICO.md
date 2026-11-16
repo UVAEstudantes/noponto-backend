@@ -16,3 +16,11 @@ Históricos anteriores foram centralizados no repositório `noponto-docs` durant
 
 - Eventos f�sicos/h�bridos publicam PredictionValidUntilUtc ancorado no TimestampGps + PhysicalEta.MaxAgeSeconds; refresh e substitui��o h�brida preservam o instante. Campo opcional aditivo, sem mudar algoritmos, programa��o ou ferrovia.
 - RadarSelector remoto limita conte�do tamb�m pela expira��o publicada. Testes focados de ETA f�sico, endpoint h�brido e Radar; sem produ��o/deploy. Depend�ncia: frontend novo deve consumir o campo antes de alterar a configura��o temporal.
+
+
+## 2026-11-16 — ETA rodoviário operacional mínimo
+
+- EventosParadaService usa OperationalRoadEta singleton limitado a 2.000 referências. Mediana das velocidades de progresso entre fixes distintos (até seis pontos/120 s); referência inicial PhysicalEta:OperationalReferenceKmh=20 (validada entre 5 e 30). Preserva geometria/identidade/ocorrência, gates causais e MaxAgeSeconds existentes. Velocidades observadas abaixo de 5 limitam a referência; zero ou ausência de avanço não recebem ETA otimista.
+- Suavização do horário absoluto por fix distinto: peso 25% longe e 75% até 500 m, variação limitada a 60 s. Replay não renova previsão nem validade. Falha excepcional do resolvedor pode reutilizar somente distância já validada do mesmo fix/progresso/próxima ocorrência; rejeição SQL, fix novo, referência vencida ou incompatível continuam indisponíveis. Sem alteração do pipeline GPS, frontend ou ferrovia. Publicação híbrida não sobrescreve o novo estimador neste endpoint; shadow permanece.
+- Compilação e 49 testes direcionados aprovados (quatro novos cenários); seis avisos preexistentes. Primeira rodada: 48/49, corrigida tolerância de arredondamento da asserção e acrescentada regressão de replay sem avanço; rodada final 49/49. git diff --check limpo.
+- Deploy bloqueado pelo workflow existente: build/publicação/deploy somente em push na main, sem workflow_dispatch de branch. Rollback documentado em .deploy/deploy-api.sh (imagem anterior local, snapshots e health check), não exercitado. Sem push, merge, Docker, banco ou produção. Detalhes em noponto-docs/00-auditoria/2026-11-16/eta-operacional-minimo.md.

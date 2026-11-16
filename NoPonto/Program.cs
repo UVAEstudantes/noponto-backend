@@ -613,6 +613,7 @@ builder.Services.AddSingleton<PhysicalPresenceStore>();
 builder.Services.AddSingleton<PhysicalPresenceMvp>();
 if (physicalOptions.Enabled) builder.Services.AddHostedService<PhysicalPresenceWorker>();
 
+builder.Services.AddSingleton<NoPonto.Application.Services.EventosParada.OperationalRoadEta>();
 builder.Services.AddSingleton<AdaptiveEtaShadow>();
 builder.Services.AddSingleton<AdaptiveEtaShadowWorker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<AdaptiveEtaShadowWorker>());
