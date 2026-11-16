@@ -15,3 +15,8 @@ HistÃ³ricos anteriores foram centralizados no repositÃ³rio `noponto-docs` durant
 
 - 898 permanece no fluxo operacional: capabilities canônicas deixam de anunciá-la; snapshot direto e publicação canônica retornam enabled=false, sem ampliar identidades A2-... nem fazer fallback por lista vazia. Revisões e remoções das linhas cobertas são preservadas.
 - Regressão: CanonicalCoverageExcludes898WithoutChangingAuthoritativeEmpty838 e suítes UnifiedCohorts/CanonicalPhysical/UnifiedLocation. Sem configuração, dados ou deploy de produção. Relatório detalhado em noponto-docs.
+
+## 2026-11-15 — Etapa 1: validade física explícita de ETA
+
+- Eventos físicos/híbridos publicam PredictionValidUntilUtc ancorado no TimestampGps + PhysicalEta.MaxAgeSeconds; refresh e substituição híbrida preservam o instante. Campo opcional aditivo, sem mudar algoritmos, programação ou ferrovia.
+- RadarSelector remoto limita conteúdo também pela expiração publicada. Testes focados de ETA físico, endpoint híbrido e Radar; sem produção/deploy. Dependência: frontend novo deve consumir o campo antes de alterar a configuração temporal.

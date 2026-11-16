@@ -77,6 +77,7 @@ public sealed class HybridEtaPublicTests
             using var client=new HttpClient {BaseAddress=new Uri(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single())};
             var result=await client.GetFromJsonAsync<EventoParadaDto[]>($"/paradas/{Guid.NewGuid():D}/eventos");
             var evt=Assert.Single(result!);Assert.Equal("HybridFixed20",evt.Source);Assert.Equal(186L,evt.SecondsUntilEvent);
+            Assert.Equal(p.TimestampGps.AddSeconds(options.MaxAgeSeconds),evt.PredictionValidUntilUtc);
         }
         finally {await app.StopAsync();}
     }

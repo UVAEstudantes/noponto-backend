@@ -10,6 +10,20 @@ public sealed class RadarSelectorTests
 {
     private readonly RadarSelector selector = new(Options.Create(new PhysicalEtaOptions { MaxAgeSeconds = 90 }));
 
+    [Theory]
+    [InlineData("PhysicalCausal")]
+    [InlineData("HybridFixed20")]
+    [InlineData("HybridRecentEma")]
+    public void ContractExpiryOverridesHttpFreshnessAndRemainingArrival(string source)
+    {
+        var e = Event(0, 600) with { Source = source, PredictionValidUntilUtc = RadarSamples.Now.AddSeconds(10) };
+        var before = Select(RadarSamples.Session(), [e]);
+        Assert.Single(before.Itens); Assert.Equal(e.PredictionValidUntilUtc, before.ValidoAte);
+        var expired = selector.Selecionar(RadarSamples.Session(), "Test", [e],
+            RadarSamples.Now.AddSeconds(11), RadarSamples.Now.AddSeconds(11), 45);
+        Assert.Empty(expired.Itens);
+    }
+
     [Fact]
     public void PrioridadeReservaVagaSemEsconderChegadaMaisProxima()
     {

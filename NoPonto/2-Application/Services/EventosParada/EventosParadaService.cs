@@ -211,7 +211,9 @@ public sealed class EventosParadaService(TransporteDbContext db, IVeiculosLinhaR
                 null, estimated, seconds is null ? null : (long?)Math.Round(seconds.Value), source,
                 quality, position.TimestampGps, true, remaining,
                 stop.Ordem == 1 ? PapeisEstacaoEvento.Origin : PapeisEstacaoEvento.Intermediate,
-                stop.Ordem == 1 ? ModosProximosVeiculos.Departures : ModosProximosVeiculos.Arrivals));
+                stop.Ordem == 1 ? ModosProximosVeiculos.Departures : ModosProximosVeiculos.Arrivals,
+                PredictionValidUntilUtc: estimated.HasValue && physicalOptions?.Enabled == true && physicalOptions.Valid()
+                    ? position.TimestampGps.AddSeconds(physicalOptions.MaxAgeSeconds) : null));
         }
         return events;
     }
