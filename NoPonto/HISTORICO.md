@@ -24,3 +24,8 @@ Históricos anteriores foram centralizados no repositório `noponto-docs` durant
 - Revisão de integração da cobertura: teste direto do publicador canônico comprova 898 desabilitada, 838 habilitada e IDs A2-... não admitidos. 63 testes focados de integração/cobertura/ETA aprovados na rodada final.
 
 - Radar remoto preserva ScheduledAt independente quando o ETA físico do mesmo evento expira, alterando o rótulo para ScheduleOnly. 39 testes RadarSelector aprovados, incluindo o cenário programado e os três tipos físicos/híbridos.
+
+## 2026-11-15 - Organizacao dos diretorios e branches
+
+- Branch da Etapa 1 retomada no diretorio oficial; commits preservados. Politica permanente contra worktrees e copias adicionais registrada em AGENTS.md. Nenhum codigo funcional ou ambiente de producao alterado.
+- Verificacao: HEAD anterior conferido, arquivos locais preservados e remocao dos tres worktrees da Etapa 1 pelo Git.
