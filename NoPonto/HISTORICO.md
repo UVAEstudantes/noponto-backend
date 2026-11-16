@@ -29,3 +29,9 @@ Históricos anteriores foram centralizados no repositório `noponto-docs` durant
 
 - Branch da Etapa 1 retomada no diretorio oficial; commits preservados. Politica permanente contra worktrees e copias adicionais registrada em AGENTS.md. Nenhum codigo funcional ou ambiente de producao alterado.
 - Verificacao: HEAD anterior conferido, arquivos locais preservados e remocao dos tres worktrees da Etapa 1 pelo Git.
+
+
+## 2026-11-16 — Radar 2: diagnóstico limitado da geração de eventos
+
+- Testes offline reproduzem: perda temporária de padrão/progresso omite o evento; distância ausente mantém evento com ETA/validade nulos e qualidade previsao_indisponivel, permitindo alternância 4 → 14 → 4. Ausência de GPS novo apenas envelhece evidência; fallback ativo/recente preserva captura válida. Não foi comprovada a causa do episódio Android nem um defeito corrigível sem dados adicionais.
+- Doze testes direcionados aprovados em PhysicalEtaSelectedStopTests (três novos casos) e PhysicalEtaIntermittenceTests; sem Redis/Postgres/produção. Nenhuma alteração funcional. Diagnóstico detalhado centralizado em noponto-docs/00-auditoria/2026-11-16/radar2-diagnostico-eventos.md. Alterações anteriores deste histórico preservadas e excluídas do commit.
