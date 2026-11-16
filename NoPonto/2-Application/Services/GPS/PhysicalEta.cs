@@ -9,7 +9,9 @@ public sealed class PhysicalEtaOptions
     // Only fixed20 is supported in runtime; 25/30 remain internal replay alternatives.
     public int HybridFixedReferenceKmh { get; set; } = 20;
     public int MaxAgeSeconds { get; set; } = 30;
-    public bool Valid() => MaxAgeSeconds is >= 1 and <= 300;
+    public double OperationalReferenceKmh { get; set; } = 20;
+    public bool Valid() => MaxAgeSeconds is >= 1 and <= 300
+        && double.IsFinite(OperationalReferenceKmh) && OperationalReferenceKmh is >= 5 and <= 30;
 }
 
 // Same distance / causal speed formula as the historical physical baseline.
