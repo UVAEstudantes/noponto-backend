@@ -25,6 +25,16 @@ public sealed class RadarSelectorTests
     }
 
     [Fact]
+    public void ExpiredRoadForecastDoesNotEraseItsIndependentSchedule()
+    {
+        var e = Event(0, 600) with { PredictionValidUntilUtc = RadarSamples.Now.AddSeconds(-1),
+            ScheduledAt = RadarSamples.Now.AddSeconds(120) };
+        var item = Assert.Single(Select(RadarSamples.Session(), [e]).Itens);
+        Assert.Equal(e.ScheduledAt, item.PrevistoEm); Assert.Equal("ScheduleOnly", item.Quality);
+        Assert.Equal("ScheduledEstimated", item.Source);
+    }
+
+    [Fact]
     public void PrioridadeReservaVagaSemEsconderChegadaMaisProxima()
     {
         var s = RadarSamples.Session(RadarSamples.Stop, RadarSamples.Lines) with { LinhasPrioritarias = [RadarSamples.Lines[1]] };

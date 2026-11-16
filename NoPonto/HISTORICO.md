@@ -22,3 +22,5 @@ HistÃ³ricos anteriores foram centralizados no repositÃ³rio `noponto-docs` durant
 - RadarSelector remoto limita conteúdo também pela expiração publicada. Testes focados de ETA físico, endpoint híbrido e Radar; sem produção/deploy. Dependência: frontend novo deve consumir o campo antes de alterar a configuração temporal.
 
 - RevisÃ£o de integraÃ§Ã£o da cobertura: teste direto do publicador canÃ´nico comprova 898 desabilitada, 838 habilitada e IDs A2-... nÃ£o admitidos. 63 testes focados de integraÃ§Ã£o/cobertura/ETA aprovados na rodada final.
+
+- Radar remoto preserva ScheduledAt independente quando o ETA fÃ­sico do mesmo evento expira, alterando o rÃ³tulo para ScheduleOnly. 39 testes RadarSelector aprovados, incluindo o cenÃ¡rio programado e os trÃªs tipos fÃ­sicos/hÃ­bridos.

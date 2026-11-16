@@ -15,8 +15,16 @@ public sealed class RadarSelector(IOptions<PhysicalEtaOptions> physical)
         var eligible = new List<RadarItemCandidato>();
         var validity = new Dictionary<RadarItemCandidato, DateTimeOffset>();
         if (now >= consultadoEm && now - consultadoEm <= TimeSpan.FromSeconds(MaxEvidenceAgeSeconds))
-        foreach (var e in events)
+        foreach (var original in events)
         {
+            var e = original;
+            if (!IsRail(e.Modal) && e.Source is ("PhysicalCausal" or "HybridFixed20" or "HybridRecentEma")
+                && e.ScheduledAt.HasValue && (e.PredictionValidUntilUtc is { } deadline && now > deadline
+                    || e.LastRealtimeEvidenceUtc is not { } gps || gps > now
+                    || now - gps > TimeSpan.FromSeconds(Math.Min(MaxEvidenceAgeSeconds, physical.Value.MaxAgeSeconds))))
+                e = e with { EstimatedAt = null, SecondsUntilEvent = null, LastRealtimeEvidenceUtc = null,
+                    PredictionValidUntilUtc = null, Source = "ScheduledEstimated", Quality = "ScheduleOnly", IsEstimated = false };
+
             if (e.ParadaId != session.ParadaId || string.IsNullOrWhiteSpace(e.EventId)
                 || !session.LinhasSelecionadas.Contains(e.LinhaId)
                 || !session.Contextos.Any(c => c.LinhaId == e.LinhaId && c.SentidoId == e.SentidoId
