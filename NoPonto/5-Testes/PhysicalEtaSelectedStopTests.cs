@@ -34,6 +34,62 @@ public sealed class PhysicalEtaSelectedStopTests
         }
     }
 
+    private sealed class SelectiveDistance(bool omitNear) : IRoadEtaDistances
+    {
+        public Task<IReadOnlyList<double?>> ResolveAsync(IReadOnlyList<RoadEtaDistanceRequest> rows, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<double?>>(rows.Select(r =>
+                r.Position.Ordem == "NEAR" ? (omitNear ? (double?)null : 2400d) : 8400d).ToArray());
+    }
+
+    [Fact]
+    public async Task MissingDistanceTemporarilyRemovesFourMinutePredictionButNotItsEvent()
+    {
+        var options = new PhysicalEtaOptions { Enabled = true, MaxAgeSeconds = 90 };
+        var near = Vehicle() with { Ordem = "NEAR" };
+        var far = near with { Ordem = "FAR" };
+        var stop = Stop(near, 3);
+        var ids = new List<string>();
+        foreach (var (seconds, missing) in new[] { (0, false), (30, true), (60, false) })
+        {
+            var events = await EventosParadaService.ProjectRoadEventsAsync(
+                [stop], [near, far], T.AddSeconds(seconds), options, new SelectiveDistance(missing), default);
+            Assert.Equal(2, events.Count);
+            var next = EventosParadaService.Order(events).First(e => e.EstimatedAt.HasValue);
+            ids.Add(next.VehicleId!);
+            var same = Assert.Single(events, e => e.VehicleId == "NEAR");
+            Assert.Equal($"road:NEAR:{stop.Id:D}", same.EventId);
+            Assert.Equal(near.TimestampGps, same.LastRealtimeEvidenceUtc);
+            if (missing)
+            {
+                Assert.Null(same.EstimatedAt);
+                Assert.Null(same.PredictionValidUntilUtc);
+                Assert.Equal("previsao_indisponivel", same.Quality);
+                Assert.Equal(810L, next.SecondsUntilEvent);
+            }
+            else Assert.Equal(240L - seconds, same.SecondsUntilEvent);
+        }
+        Assert.Equal(new[] { "NEAR", "FAR", "NEAR" }, ids);
+    }
+
+    [Theory]
+    [InlineData("version")]
+    [InlineData("progress")]
+    public void MissingOperationalAssociationOmitsEventUntilSameAssociationReturns(string missing)
+    {
+        var near = Vehicle() with { Ordem = "NEAR" };
+        var far = near with { Ordem = "FAR" };
+        var stop = Stop(near, 3);
+        var partial = missing == "version" ? near with { PadraoVersaoId = null }
+            : near with { PosicaoNaRota = null };
+        var before = EventosParadaService.ProjectRoadEvents([stop], [near, far], T, On);
+        var during = EventosParadaService.ProjectRoadEvents([stop], [partial, far], T.AddSeconds(1), On);
+        var after = EventosParadaService.ProjectRoadEvents([stop], [near, far], T.AddSeconds(2), On);
+        Assert.Equal(2, before.Count);
+        Assert.Equal("FAR", Assert.Single(during).VehicleId);
+        Assert.Equal(before.Select(e => e.EventId), after.Select(e => e.EventId));
+        Assert.Equal(2, after.Count);
+    }
+
     [Fact]
     public async Task PredictionExpiryUsesConfiguredPhysicalAnchorNotRequestTime()
     {
