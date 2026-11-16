@@ -34,6 +34,22 @@ public sealed class PhysicalEtaSelectedStopTests
         }
     }
 
+    [Fact]
+    public async Task PredictionExpiryUsesConfiguredPhysicalAnchorNotRequestTime()
+    {
+        var options = new PhysicalEtaOptions { Enabled = true, MaxAgeSeconds = 90 };
+        var p = PhysicalEta.Apply(PhysicalEtaMvpTests.Fixture(), T, options).Posicao;
+        var stop = Stop(p, 3);
+        var first = Assert.Single(await EventosParadaService.ProjectRoadEventsAsync([stop], [p], T, options, new Distances(), default));
+        var repeated = Assert.Single(await EventosParadaService.ProjectRoadEventsAsync([stop], [p], T.AddSeconds(60), options, new Distances(), default));
+        Assert.Equal(p.TimestampGps.AddSeconds(90), first.PredictionValidUntilUtc);
+        Assert.Equal(first.PredictionValidUntilUtc, repeated.PredictionValidUntilUtc);
+        Assert.Equal(first.EstimatedAt, repeated.EstimatedAt);
+        var expired = Assert.Single(await EventosParadaService.ProjectRoadEventsAsync([stop], [p], T.AddSeconds(91), options, new Distances(), default));
+        Assert.Null(expired.EstimatedAt); Assert.Null(expired.PredictionValidUntilUtc);
+        Assert.Equal(p.Ordem, expired.VehicleId);
+    }
+
     [Theory]
     [InlineData(1,100)]
     [InlineData(2,240)]

@@ -10,3 +10,9 @@ HistÃ³ricos anteriores foram centralizados no repositÃ³rio `noponto-docs` durant
 
 - PromoÃ§Ã£o controlada das cinco URLs do `.env` para uma nova composiÃ§Ã£o congelada: simulaÃ§Ã£o sem escrita, aplicaÃ§Ã£o explÃ­cita na mesma imagem, backup privado e rollback automÃ¡tico/manual. CI existente preservado; Radar aceita a URL jÃ¡ promovida sem permitir editÃ¡-la pelo overlay de Radar. Nenhum arquivo de produÃ§Ã£o ou `.env` foi alterado durante a implementaÃ§Ã£o.
 - ValidaÃ§Ã£o da promoÃ§Ã£o: 22 testes novos e 10 regressÃµes de Radar/CI aprovados com fakes; preflight real de leitura aprovado, conferindo integridade dos arquivos protegidos e do container. AplicaÃ§Ã£o e rollback reais nÃ£o executados.
+
+
+## 2026-11-15 — Etapa 1: validade física explícita de ETA
+
+- Eventos físicos/híbridos publicam PredictionValidUntilUtc ancorado no TimestampGps + PhysicalEta.MaxAgeSeconds; refresh e substituição híbrida preservam o instante. Campo opcional aditivo, sem mudar algoritmos, programação ou ferrovia.
+- RadarSelector remoto limita conteúdo também pela expiração publicada. Testes focados de ETA físico, endpoint híbrido e Radar; sem produção/deploy. Dependência: frontend novo deve consumir o campo antes de alterar a configuração temporal.

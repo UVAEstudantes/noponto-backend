@@ -49,7 +49,8 @@ public sealed record EventoParadaDto(
     string? OperationalStatus = null,
     Guid? ScheduledStopId = null,
     string? DestinationName = null,
-    string? LineName = null);
+    string? LineName = null,
+    DateTimeOffset? PredictionValidUntilUtc = null);
 
 public interface IEventosParadaService
 {

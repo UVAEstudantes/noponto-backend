@@ -29,6 +29,11 @@ public sealed class RadarSelector(IOptions<PhysicalEtaOptions> physical)
                 or "StalePrediction" or "HistoricalFallback") continue;
             if (isPhysical && e.Quality is not ("estimativa_fisica" or "estimativa_recente" or "hipotese_nominal")) continue;
             var freshUntil = consultadoEm.AddSeconds(MaxEvidenceAgeSeconds);
+            if (isPhysical && e.PredictionValidUntilUtc is { } expiry)
+            {
+                if (now > expiry || e.LastRealtimeEvidenceUtc is null || expiry < e.LastRealtimeEvidenceUtc) continue;
+                freshUntil = Min(freshUntil, expiry);
+            }
             var isRail = IsRail(e.Modal);
             var estimatedRailRemainsPublished = isRail && e.OperationalStatus == "Estimated"
                 && e.ExpectedRunId is not null && e.ScheduledStopId is not null
