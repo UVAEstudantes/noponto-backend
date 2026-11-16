@@ -24,6 +24,21 @@ public sealed class UnifiedCohortsTests
     private static UnifiedLocation Create(Store store, Clock clock, Hub hub) =>
         new(Options, store, new ConfiguredPhysicalLineResolver(Options), clock, new Ops(), hub, NullLogger<UnifiedLocation>.Instance);
 
+    [Fact] public async Task CanonicalCoverageExcludes898WithoutChangingAuthoritativeEmpty838()
+    {
+        var options = Options;
+        options.CanonicalStateEnabled = true; options.CanonicalPublicationEnabled = true;
+        options.UnifiedCohorts.Add("898");
+        var service = new UnifiedLocation(options, new Store(), new ConfiguredPhysicalLineResolver(options),
+            new Clock(), new Ops(), new Hub(), NullLogger<UnifiedLocation>.Instance);
+        Assert.DoesNotContain("898", service.Capabilities().LineCodes);
+        Assert.Contains("838", service.Capabilities().LineCodes);
+        var unsupported = await service.SnapshotAsync("898", default);
+        Assert.False(unsupported.Enabled); Assert.Empty(unsupported.Vehicles);
+        var covered = await service.SnapshotAsync("838", default);
+        Assert.True(covered.Enabled); Assert.Empty(covered.Vehicles);
+    }
+
     [Fact] public async Task IndependentCohortsRehydrateWithoutOperationAndRejectGpsRegression()
     {
         var store = new Store(); var clock = new Clock(); var hub = new Hub(); var service = Create(store, clock, hub);

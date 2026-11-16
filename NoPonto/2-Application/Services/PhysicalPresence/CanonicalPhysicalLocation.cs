@@ -160,6 +160,8 @@ public sealed class CanonicalPhysicalLocation(PhysicalPresenceMvpOptions options
             .ToDictionary(g=>g.Key,g=>g.OrderByDescending(x=>x.TimestampGps).First(),StringComparer.OrdinalIgnoreCase);
         if(_draining&&Publishing)throw new InvalidOperationException("Canonical publication draining.");
         return rows.Select(row=>{
+            if(!UnifiedLocation.HasCanonicalCoverage(row.Code))
+                return new UnifiedSnapshotDto(1,false,row.Code,row.Revision,now,[]);
             var core=Core();core.Restore(row.Vehicles.Select(x=>x.State).ToArray());
             var vehicles=new List<UnifiedVehicleDto>();
             foreach(var entry in row.Vehicles)

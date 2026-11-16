@@ -10,3 +10,8 @@ Hist√≥ricos anteriores foram centralizados no reposit√≥rio `noponto-docs` durant
 
 - Promo√ß√£o controlada das cinco URLs do `.env` para uma nova composi√ß√£o congelada: simula√ß√£o sem escrita, aplica√ß√£o expl√≠cita na mesma imagem, backup privado e rollback autom√°tico/manual. CI existente preservado; Radar aceita a URL j√° promovida sem permitir edit√°-la pelo overlay de Radar. Nenhum arquivo de produ√ß√£o ou `.env` foi alterado durante a implementa√ß√£o.
 - Valida√ß√£o da promo√ß√£o: 22 testes novos e 10 regress√µes de Radar/CI aprovados com fakes; preflight real de leitura aprovado, conferindo integridade dos arquivos protegidos e do container. Aplica√ß√£o e rollback reais n√£o executados.
+
+## 2026-11-15 ó Etapa 1: cobertura canÙnica da 898
+
+- 898 permanece no fluxo operacional: capabilities canÙnicas deixam de anunci·-la; snapshot direto e publicaÁ„o canÙnica retornam enabled=false, sem ampliar identidades A2-... nem fazer fallback por lista vazia. Revisıes e remoÁıes das linhas cobertas s„o preservadas.
+- Regress„o: CanonicalCoverageExcludes898WithoutChangingAuthoritativeEmpty838 e suÌtes UnifiedCohorts/CanonicalPhysical/UnifiedLocation. Sem configuraÁ„o, dados ou deploy de produÁ„o. RelatÛrio detalhado em noponto-docs.

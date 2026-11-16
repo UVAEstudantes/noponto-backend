@@ -86,9 +86,12 @@ public sealed class UnifiedLocation(PhysicalPresenceMvpOptions options, IUnified
     private Dictionary<string, UnifiedLocation>? _children;
     private Dictionary<string, UnifiedLocation> Children { get { lock (_childrenGate) return _children ??= Cohorts.ToDictionary(c => c,
         c => new UnifiedLocation(options, store.ForService(c), lines, clock, operational, hub, logger, null, c, diagnostics), StringComparer.Ordinal); } }
+    // 898 uses A2-... GTFS identities, outside the canonical SPPO namespace.
+    // Keep its operational stream until canonical identity coverage is implemented and verified.
+    internal static bool HasCanonicalCoverage(string code) => code != "898";
     public bool Enabled => options.UnifiedLocationEnabled;
     public UnifiedCapabilitiesResponse Capabilities() => new(1, Enabled, options.CanonicalPublicationEnabled,
-        Enabled ? Cohorts.OrderBy(x=>x,StringComparer.Ordinal).ToArray() : [],600,60,600);
+        Enabled ? Cohorts.Where(c => !options.CanonicalPublicationEnabled || HasCanonicalCoverage(c)).OrderBy(x=>x,StringComparer.Ordinal).ToArray() : [],600,60,600);
     private readonly SemaphoreSlim _gate = new(1, 1);
     public async Task<IReadOnlyList<string>> RecoveryCandidatesAsync(CancellationToken ct)
     {
@@ -377,6 +380,8 @@ public sealed class UnifiedLocation(PhysicalPresenceMvpOptions options, IUnified
     public async Task<UnifiedSnapshotDto> SnapshotAsync(string code, CancellationToken ct)
     {
         if (!IsCohort(code)) throw new ArgumentException("Coorte indisponível.");
+        if (options.CanonicalPublicationEnabled && !HasCanonicalCoverage(code))
+            return new(1, false, code, 0, clock.GetUtcNow(), []);
         if (Enabled && options.CanonicalPublicationEnabled && canonical is not null)
             return (await canonical.SnapshotsAsync([code], ct)).Single();
         if (Multiline)
