@@ -98,6 +98,19 @@ public sealed class CanonicalPhysicalTests
         Assert.False(snapshot.Vehicles[0].MotionEligible);Assert.Null(snapshot.Vehicles[0].Operational);
         Assert.Equal(new[]{count,1},store.LineRequests);Assert.Equal(2,store.StateRequests.Count);
     }
+    [Fact] public async Task Unsupported898SnapshotIsDisabledEvenWhenCanonicalPublisherIsCalledDirectly()
+    {
+        var clock=new Clock();var options=Options();options.UnifiedCohorts.Add("898");
+        options.Lines.Add(new(){Modal=PhysicalModal.Sppo,ServiceCode="898",RouteId="official-898",LineId=Guid.NewGuid().ToString()});
+        var memory=new Memory(clock);var service=Create(options,clock,memory);
+        await service.ObserveAsync([Point(clock,"898","A2-001")],"test",default);
+        var result=await service.SnapshotsAsync(["898","838"],default);
+        Assert.False(result.Single(s=>s.LineCode=="898").Enabled);
+        Assert.Empty(result.Single(s=>s.LineCode=="898").Vehicles);
+        Assert.True(result.Single(s=>s.LineCode=="838").Enabled);
+        Assert.Empty(memory.Values);
+    }
+
     [Fact]
     public async Task TransferHasOneCanonicalStateAndAtomicallyRemovesOldLine()
     {
