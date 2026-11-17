@@ -45,3 +45,9 @@ Históricos anteriores foram centralizados no repositório `noponto-docs` durant
 - Validacao: build aprovado, 66 testes focados aprovados com PostgreSQL/Redis locais. Rodada ampliada final: 258/259; unico erro em teste preexistente de TTL (45,037 s para teto de 45 s), em revalidacao. Harness DI de push atualizado para o novo DbContext; snapshot sem mudancas pendentes. Deploy ainda pendente.
 
 - Validacao final desta etapa: 259/259 testes Radar aprovados no Linux, sem ignorados, incluindo PostgreSQL e Redis descartaveis; diferencas de relogio Windows/Linux e contador acumulado explicam falhas das repeticoes anteriores. Publicacao depende de validacao na main e migration antes da imagem.
+
+## 2026-11-16 - Semi-Rotinas v1: validacao para producao
+
+- Main integra exclusivamente os commits de calendario, schema e implementacao das Semi-Rotinas. Build Release completo aprovado (seis avisos preexistentes), 258/258 testes Radar aprovados no Linux, sem ignorados, com PostgreSQL e Redis reais descartaveis; snapshot EF sem diferencas pendentes.
+- SQL idempotente validado em duas aplicacoes locais. Migration 20261116180000_RadarProgramacoes aplicada manualmente em producao antes da troca de imagem, sob lock de deploy e com backup privado do schema. As 24 migrations anteriores foram preservadas; tabelas novas vazias e API anterior saudavel apos a aplicacao.
+- Publicacao segue o workflow existente da main; nenhum frontend, segredo, Compose ou configuracao de producao alterado nesta implementacao. Smoke posterior e identidade da imagem serao conferidos no workflow/servidor.
