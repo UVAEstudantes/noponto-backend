@@ -27,6 +27,12 @@ public sealed class RadarHttpFilter(IOptions<RadarOptions> options, RadarRateGat
 
     public Task OnExceptionAsync(ExceptionContext context)
     {
+        if (context.Exception is Npgsql.NpgsqlException or Microsoft.EntityFrameworkCore.DbUpdateException)
+        {
+            context.Result = Error(503, "radar_programacoes_indisponiveis");
+            context.ExceptionHandled = true;
+            return Task.CompletedTask;
+        }
         if (context.Exception is RadarException e)
         {
             if (e.Status == 401) context.HttpContext.Response.Headers.WWWAuthenticate = "Bearer realm=\"radar\"";

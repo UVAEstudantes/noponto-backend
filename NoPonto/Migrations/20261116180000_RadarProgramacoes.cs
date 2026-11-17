@@ -4,13 +4,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace NoPonto.Migrations;
 
-[DbContext(typeof(TransporteDbContext))]
-[Migration("20261116180000_RadarProgramacoes")]
-public sealed class RadarProgramacoes : Migration
+public sealed partial class RadarProgramacoes : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("""
         CREATE TABLE "RadarProgramacoes" (
-            "Id" uuid PRIMARY KEY,
+            "Id" uuid NOT NULL CONSTRAINT "PK_RadarProgramacoes" PRIMARY KEY,
             "InstalacaoId" uuid NOT NULL,
             "Nome" varchar(80) NOT NULL,
             "Configuracao" jsonb NOT NULL,
@@ -33,12 +31,13 @@ public sealed class RadarProgramacoes : Migration
         CREATE INDEX "IX_RadarProgramacoes_Vencimentos" ON "RadarProgramacoes" ("ProximaExecucaoUtc", "Id")
             WHERE "Estado" = 'ativa';
         CREATE TABLE "RadarProgramacaoExecucoes" (
-            "ProgramacaoId" uuid NOT NULL REFERENCES "RadarProgramacoes" ("Id") ON DELETE CASCADE,
+            "ProgramacaoId" uuid NOT NULL CONSTRAINT "FK_RadarProgramacaoExecucoes_RadarProgramacoes_ProgramacaoId" REFERENCES "RadarProgramacoes" ("Id") ON DELETE CASCADE,
             "OcorrenciaUtc" timestamptz NOT NULL,
-            "SessaoId" uuid NOT NULL UNIQUE,
+            "SessaoId" uuid NOT NULL,
             "Resultado" varchar(100) NOT NULL,
-            PRIMARY KEY ("ProgramacaoId", "OcorrenciaUtc")
+            CONSTRAINT "PK_RadarProgramacaoExecucoes" PRIMARY KEY ("ProgramacaoId", "OcorrenciaUtc")
         );
+        CREATE UNIQUE INDEX "IX_RadarProgramacaoExecucoes_SessaoId" ON "RadarProgramacaoExecucoes" ("SessaoId");
         """);
 
     protected override void Down(MigrationBuilder migrationBuilder) =>

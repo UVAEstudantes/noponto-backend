@@ -27,7 +27,12 @@ public static class RadarRegistration
             "Limites do worker Radar inválidos");
         services.AddSingleton<RadarRateGate>();
         services.AddScoped<RadarHttpFilter>();
-        services.AddScoped<IRadarService, RadarService>();
+        services.AddScoped<RadarService>();
+        services.AddScoped<IRadarService>(sp => sp.GetRequiredService<RadarService>());
+        services.AddScoped<RadarProgramacoesService>();
+        services.AddScoped<RadarProgramacoesExecutor>();
+        services.AddHostedService<RadarProgramacoesWorker>();
+        services.AddScoped<RadarProgramacoesRepository>();
         services.AddSingleton<IRadarStore, RadarRedisStore>();
         services.AddSingleton<RadarMonitorRedisStore>();
         services.AddSingleton<IRadarMonitorStore>(sp => sp.GetRequiredService<RadarMonitorRedisStore>());

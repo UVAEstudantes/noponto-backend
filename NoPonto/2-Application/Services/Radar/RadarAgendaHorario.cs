@@ -5,10 +5,12 @@ public sealed record RadarAgendaHorario(string Fuso, TimeOnly Hora, DateOnly? Da
 {
     public DateTimeOffset? Proxima(DateTimeOffset depois)
     {
-        if (!TimeZoneInfo.TryConvertIanaIdToWindowsId(Fuso, out _))
+        if (string.IsNullOrWhiteSpace(Fuso) || Fuso.Length > 100
+            || !TimeZoneInfo.TryConvertIanaIdToWindowsId(Fuso, out _))
             throw new RadarException(400, "fuso_iana_invalido");
         var zone = TimeZoneInfo.FindSystemTimeZoneById(Fuso);
-        if (Data.HasValue ? Dias.Length != 0 : Dias.Length == 0 || Dias.Any(d => (int)d is < 0 or > 6))
+        if (Dias is null || (Data.HasValue ? Dias.Length != 0 : Dias.Length == 0
+            || Dias.Length > 7 || Dias.Distinct().Count() != Dias.Length || Dias.Any(d => (int)d is < 0 or > 6)))
             throw new RadarException(400, "recorrencia_invalida");
         var inicio = Data ?? DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(depois, zone).DateTime);
         for (var i = 0; i < (Data.HasValue ? 1 : 15); i++)

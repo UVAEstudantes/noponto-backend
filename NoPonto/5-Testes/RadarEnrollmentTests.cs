@@ -217,6 +217,8 @@ public sealed class RadarEnrollmentTests : IAsyncLifetime
     {
         var owner = await Register();
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
+        builder.Services.AddScoped(_ => new TransporteDbContext(
+            new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<TransporteDbContext>().Options));
         builder.WebHost.UseUrls("http://127.0.0.1:0"); builder.Logging.ClearProviders();
         builder.Services.AddControllers().AddApplicationPart(typeof(NoPonto.API.Controllers.RadarPushEnrollmentController).Assembly);
         builder.Services.AddRadar(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>

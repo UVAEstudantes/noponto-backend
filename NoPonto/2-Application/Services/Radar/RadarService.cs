@@ -34,7 +34,8 @@ public sealed class RadarException(int status, string codigo) : Exception(codigo
 
 // Somente dados internos; nunca serializar este comando numa resposta ou log.
 public sealed record RadarCommand(string Operacao, Guid InstalacaoId, string Verificador,
-    string Payload = "", long Revisao = 0, Guid? SessaoId = null, int MaxRegistros = 500, int MaxSessoes = 2000);
+    string Payload = "", long Revisao = 0, Guid? SessaoId = null, int MaxRegistros = 500, int MaxSessoes = 2000,
+    long OcorrenciaMs = 0);
 public sealed record RadarStoreResult(int Status, string Payload);
 internal sealed record RadarStoredSession(Guid SessaoId, Guid InstalacaoId, Guid ParadaId,
     RadarContexto[] Contextos, Guid[] LinhasSelecionadas, Guid[] LinhasPrioritarias,

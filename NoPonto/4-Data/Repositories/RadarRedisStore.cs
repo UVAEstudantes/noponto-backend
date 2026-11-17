@@ -14,9 +14,11 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
         {
             var result = (RedisResult[])(await redis.GetDatabase().ScriptEvaluateAsync(Script,
                 [Prefix + "installation:" + command.InstalacaoId.ToString("N"),
-                 Prefix + "session:" + command.InstalacaoId.ToString("N"), Prefix + "stops", Prefix + "registrations", Prefix + "active"],
+                 Prefix + "session:" + command.InstalacaoId.ToString("N"), Prefix + "stops", Prefix + "registrations", Prefix + "active",
+                 Prefix + "occurrence:" + command.SessaoId?.ToString("N")],
                 [command.Operacao, command.InstalacaoId.ToString("D"), command.Verificador,
-                 command.Payload, command.Revisao, command.SessaoId?.ToString("D") ?? "", command.MaxRegistros, Prefix, command.MaxSessoes]))!;
+                 command.Payload, command.Revisao, command.SessaoId?.ToString("D") ?? "", command.MaxRegistros, Prefix, command.MaxSessoes,
+                 command.OcorrenciaMs]))!;
             return new((int)result[0], (string?)result[1] ?? "");
         }
         catch (RedisException)
@@ -81,6 +83,9 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
         end
         local stored = redis.call('HGET', KEYS[1], 'verifier')
         local expiry = tonumber(redis.call('HGET', KEYS[1], 'expires') or '0')
+        -- Operação interna do worker: nunca recebe credencial nem é exposta por endpoint.
+        local scheduled = op == 'scheduled-activate'
+        if scheduled then verifier = stored or '' end
         -- Comparação de comprimento fixo sem saída antecipada por byte.
         local difference = 0
         if stored and string.len(stored) == string.len(verifier) then
@@ -89,11 +94,25 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
             end
         else difference = 1 end
         if difference ~= 0 or expiry <= now then return {401, 'credencial_invalida'} end
+        local function finish(status, payload)
+            if scheduled then
+                redis.call('SET', KEYS[6], cjson.encode({status,payload}), 'EX', 604800)
+            end
+            return {status,payload}
+        end
+        if scheduled then
+            local previous = redis.call('GET', KEYS[6])
+            if previous then return cjson.decode(previous) end
+            if tonumber(ARGV[10]) > now or tonumber(ARGV[10])+3600000 <= now then
+                return finish(409,'ocorrencia_fora_da_janela')
+            end
+            op = 'activate'
+        end
         local minute = math.floor(now/60000)
         if redis.call('HGET', KEYS[1], 'minute') ~= tostring(minute) then
             redis.call('HSET', KEYS[1], 'minute', minute, 'requests', 0)
         end
-        if redis.call('HINCRBY', KEYS[1], 'requests', 1) > 120 then return {429, 'limite_de_operacoes'} end
+        if not scheduled and redis.call('HINCRBY', KEYS[1], 'requests', 1) > 120 then return {429, 'limite_de_operacoes'} end
         if op == 'installation' then return {200, tostring(expiry)} end
         if op == 'push-status' then
             return {200,cjson.encode({registered=redis.call('EXISTS',tokenKey)==1,
@@ -237,7 +256,7 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
             return {204, ''}
         end
         if op == 'activate' then
-            if s and s.estado == 'ativa' then return {409, 'sessao_ja_ativa'} end
+            if s and s.estado == 'ativa' then return finish(409, 'sessao_ja_ativa') end
             redis.call('ZREMRANGEBYSCORE', KEYS[5], '-inf', now)
             if redis.call('ZCARD', KEYS[5]) >= tonumber(ARGV[9]) then return {429, 'limite_de_sessoes'} end
         elseif op == 'update' then
@@ -249,6 +268,7 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
         local config = cjson.decode(ARGV[4])
         if s then removeIndex(s) end
         local created, expires, revision = now, now+3600000, 1
+        if scheduled then created, expires = tonumber(ARGV[10]), tonumber(ARGV[10])+3600000 end
         if op == 'update' then created, expires, revision = s.criadaEmMs, s.expiraEmMs, s.revisao+1 end
         s = {sessaoId=ARGV[6], instalacaoId=owner, paradaId=config.paradaId,
              contextos=config.contextos, linhasSelecionadas=config.linhasSelecionadas,
@@ -267,6 +287,6 @@ public sealed class RadarRedisStore(IConnectionMultiplexer redis) : IRadarStore
         -- A cadência de limpeza é limitada; sessões vencidas jamais são elegíveis por score.
         local stale = redis.call('ZRANGEBYSCORE', KEYS[3], '-inf', now, 'LIMIT', 0, 100)
         for _,id in ipairs(stale) do redis.call('ZREM', KEYS[3], id) end
-        return {op == 'activate' and 201 or 200, encoded}
+        return finish(op == 'activate' and 201 or 200, encoded)
         """;
 }

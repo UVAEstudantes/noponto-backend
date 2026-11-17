@@ -4,6 +4,8 @@ using NoPonto.Domain.Entities;
 
 public class TransporteDbContext : DbContext
 {
+    public DbSet<RadarProgramacao> RadarProgramacoes => Set<RadarProgramacao>();
+    public DbSet<RadarProgramacaoExecucao> RadarProgramacaoExecucoes => Set<RadarProgramacaoExecucao>();
 
     public TransporteDbContext(
         DbContextOptions<TransporteDbContext> options
@@ -45,6 +47,8 @@ public class TransporteDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyConfiguration(new NoPonto.Data.RadarProgramacaoMapping());
+        modelBuilder.ApplyConfiguration(new NoPonto.Data.RadarProgramacaoExecucaoMapping());
         ConfigurarEstruturaTransporteV21(modelBuilder);
         ConfigurarRailSchedule(modelBuilder);
 
